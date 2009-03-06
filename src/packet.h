@@ -3,7 +3,7 @@
 #include <cat/cat.h>
 #include <cat/cattypes.h>
 #include <stdio.h>
-#include "pkttools.h"
+#include "config.h"
 
 enum pktt_dltype_e {
 	PTDL_MIN =		0x1,
