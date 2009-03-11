@@ -1,23 +1,31 @@
 # Makefile for the paptools
 CC=gcc
-OPTS=-O3 
 CATLIB_ROOT=../../catlib
 INCS=-I${CATLIB_ROOT}/include
-LIBS=-L${CATLIB_ROOT}/lib -lcat -lpcap
+#OPTS=-O3 
+#LIBS=-L${CATLIB_ROOT}/lib -lcat -lpcap
+#DEFS=
+OPTS=-g
+LIBS=-L${CATLIB_ROOT}/lib -lcat_dbg -lpcap
 DEFS=
 BINDIR=../bin
 
 TARGETS=${BINDIR}/pcapin \
-	${BINDIR}/pcapout
+	${BINDIR}/pcapout \
+	${BINDIR}/testpp
 
 all: ${TARGETS}
 
-../bin/pcapin: pcapin.o packet.o
+${BINDIR}/pcapin: pcapin.o packet.o
 	${CC} -o ../bin/pcapin pcapin.o packet.o ${DEFS} ${OPTS} \
 		${INCS} ${LIBS}
 
-../bin/pcapout: pcapout.o packet.o
+${BINDIR}/pcapout: pcapout.o packet.o
 	${CC} -o ../bin/pcapout pcapout.o packet.o ${DEFS} ${OPTS} \
+		${INCS} ${LIBS}
+
+${BINDIR}/testpp: testpp.o testpp.o protoparse.o
+	${CC} -o ../bin/testpp testpp.o packet.o protoparse.o ${DEFS} ${OPTS} \
 		${INCS} ${LIBS}
 
 .c.o:
@@ -25,6 +33,6 @@ all: ${TARGETS}
 
 
 clean:
-	rm ${TARGETS}
+	rm -f ${TARGETS}
 	rm -f *.o
 
