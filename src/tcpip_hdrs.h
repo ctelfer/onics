@@ -1,0 +1,418 @@
+#ifndef __tcpip_hdrs_h
+#define __tcpip_hdrs_h
+#include <cat/cat.h>
+#include <cat/cattypes.h>
+
+/* -- Address Type Structures -- */
+struct ethaddr {
+  uint8_t       bytes[6];
+};
+
+struct ipv6addr {
+  uint8_t       bytes[16];
+};
+
+
+/* -- Ethernet definitions -- */
+struct eth2h { 
+  struct ethaddr dst;
+  struct ethaddr src;
+  uint16_t      ethtype;
+};
+#define ETHTYPE_IP              0x0800
+#define ETHTYPE_ARP             0x0806
+
+
+/* -- ARP definitions -- */
+struct arph {
+  uint16_t      hwfmt;          /* ARPT_* */
+  uint16_t      prfmt;          /* ETHTYPE_IP */
+  uint8_t       hwlen;
+  uint8_t       prlen;          /* 4 */
+  uint16_t      op;             /* ARPOP_* */
+};
+#define ARPOP_REQUEST           1 /* RFC 826 */
+#define ARPOP_REPLY             2 /* RFC 826,1868 */
+#define ARPOP_RREQUEST          3 /* RFC 903 */
+#define ARPOP_RREPLY            4 /* RFC 903 */
+#define ARPOP_DARP_REQUEST      5 /* RFC 1931 */
+#define ARPOP_DARP_RREPLY       6 /* RFC 1931 */
+#define ARPOP_DARP_RERROR       7 /* RFC 1931 */
+#define ARPOP_INARP_REQUEST     8 /* RFC 1293 */
+#define ARPOP_INARP_REPLY       9 /* RFC 1293 */
+#define ARPOP_NAK               10 /* RFC 1577 */
+
+#define ARPT_ETHERNET           1
+#define ARPT_EXETHERNET         2
+#define ARPT_AX25               3
+#define ARPT_PROTONET_TOKRING   4
+#define ARPT_CHAOS              5
+#define ARPT_IEEE802            6
+#define ARPT_ARCNET             7
+#define ARPT_HYPERCHANNEL       8
+#define ARPT_LANSTAR            9
+#define ARPT_AUTONET_SHORT      10
+#define ARPT_LOCALTALK          11
+#define ARPT_LOCALNET           12
+#define ARPT_PCNET              ARPT_LOCALENET
+#define ARPT_ULTRALINK          13
+#define ARPT_SMDS               14
+#define ARPT_FRAME_RELAY        15
+#define ARPT_ATM1               16
+#define ARPT_HDLC               17
+#define ARPT_FIBRE_CHANNEL      18
+#define ARPT_ATM2               19
+#define ARPT_SERIAL_LINE        20
+#define ARPT_ATM3               21
+#define ARPT_MILSTD188220       22
+#define ARPT_METRICOM           23
+#define ARPT_IEEE1394           24
+#define ARPT_MAPOS              25
+#define ARPT_TWINAXIAL          26
+#define ARPT_EUI64              27
+#define ARPT_HIPARP             28
+#define ARPT_ISO7816_3          29
+#define ARPT_ARPSEC             30
+#define ARPT_IPSEC_TUNNEL       31
+#define ARPT_INFINIBAND         32
+#define ARPT_CAI                33
+#define ARPT_WEIGAND            34
+#define ARPT_PUREIP             35
+
+struct eth_arph {
+  struct arph   header; /* { 1, 0x800, 6, 4, (1|2) } */
+  uint8_t       sndhwaddr[6];
+  uint8_t       sndpraddr[4];
+  uint8_t       trghwaddr[6];
+  uint8_t       trgpraddr[4];
+};
+
+
+/* -- IP (v4) definitions -- */
+struct ipv4h { 
+  uint8_t       vhl;
+  uint8_t       diffsrv;
+  uint16_t      len;
+  uint16_t      id;
+  uint16_t      fragoff;
+  uint8_t       ttl;
+  uint8_t       proto;
+  uint32_t      saddr;
+  uint32_t      daddr;
+};
+#define IPH_VERSION(iph)        ((iph).vhl >> 4)
+#define IPH_HLEN(iph)           (((iph).vhl & 0xf) << 2)
+#define IPH_ECN(iph)            ((iph).diffsrv & 0x3)
+#define IPH_RF                  0x8000
+#define IPH_DF                  0x4000
+#define IPH_MF                  0x2000
+#define IPH_FRAGMASK            0x1FFF
+#define IPH_FRAGOFF(iph)        (((iph).fragoff & IPH_FRAGMASK) << 3)
+
+#define IPPROT_V6_HOPOPT        0
+#define IPPROT_ICMP             1
+#define IPPROT_IGMP             2
+#define IPPROT_GGP              3
+#define IPPROT_IPIP             4
+#define IPPROT_ST               5
+#define IPPROT_TCP              6
+#define IPPROT_CBT              7
+#define IPPROT_EGP              8
+#define IPPROT_IGRP             9
+#define IPPROT_BBNRCC           10
+#define IPPROT_NVP              11
+#define IPPROT_PUP              12
+#define IPPROT_ARGUS            13
+#define IPPROT_EMCON            14
+#define IPPROT_XNET             15
+#define IPPROT_CHAOS            16
+#define IPPROT_UDP              17
+#define IPPROT_TMUX             18
+#define IPPROT_DCN              19
+#define IPPROT_HMP              20
+#define IPPROT_PKTRADIO         21
+#define IPPROT_XEROXNSIDP       22
+#define IPPROT_TRUNK1           23
+#define IPPROT_TRUNK2           24
+#define IPPROT_LEAF1            25
+#define IPPROT_LEAF2            26
+#define IPPROT_RDP              27
+#define IPPROT_IRTP             28
+#define IPPROT_ISOTRANS4        29
+#define IPPROT_NETBLT           30
+#define IPPROT_MFE              31
+#define IPPROT_MERIT            32
+#define IPPROT_DCCP             33
+#define IPPROT_3RDPCP           34
+#define IPPROT_IDPR             35
+#define IPPROT_XTP              36
+#define IPPROT_DDP              37
+#define IPPROT_IDPR_CTL         38
+#define IPPROT_TPPP             39
+#define IPPROT_ILTP             40
+#define IPPROT_V6V4             41
+#define IPPROT_SDRP             42
+#define IPPROT_V6_ROUTE_HDR     43
+#define IPPROT_V6_FRAG_HDR      44
+#define IPPROT_IDRP             45
+#define IPPROT_RSVP             46
+#define IPPROT_GRE              47
+#define IPPROT_DSR              48
+#define IPPROT_BNA              49
+#define IPPROT_ESP              50
+#define IPPROT_AH               51
+#define IPPROT_INLSP            52
+#define IPPROT_SWIPE            53
+#define IPPROT_NARP             54
+#define IPPROT_MEP              55
+#define IPPROT_TLSP             56
+#define IPPROT_SKIP             57
+#define IPPROT_ICMPV6           58
+#define IPPROT_MLD              IPPROT_ICMPV6
+#define IPPROT_V6_NONE          59
+#define IPPROT_V6_DSTOPS        60
+#define IPPROT_ANY_HOSTNET      61
+#define IPPROT_CFTP             62
+#define IPPROT_ANY_LOCNET       63
+#define IPPROT_SATNET           64
+#define IPPROT_KRYPTOLAN        65
+#define IPPROT_MITVRD           66
+#define IPPROT_IPPC             67
+#define IPPROT_ANY_DISTFS       68
+#define IPPROT_SATNET_MON       69
+#define IPPROT_VISA             70
+#define IPPROT_IPCU             71
+#define IPPROT_CPNE             72
+#define IPPROT_CPHB             73
+#define IPPROT_WANGSPAN         74
+#define IPPROT_PVP              75
+#define IPPROT_BACK_SETNET_MON  76
+#define IPPROT_SUNND            77
+#define IPPROT_WIDEBAND_MON     78
+#define IPPROT_WIDEBAND_EXPAK   79
+#define IPPROT_ISOIP            80
+#define IPPROT_VMTP             81
+#define IPPROT_SVMTP            82
+#define IPPROT_VINES            83
+#define IPPROT_TTP              84
+#define IPPROT_NSFNET_IGP       85
+#define IPPROT_DGP              86
+#define IPPROT_TCF              87
+#define IPPROT_EIGRP            88
+#define IPPROT_OSPF             89
+#define IPPROT_MOSPF            IPPROT_OSPF
+#define IPPROT_SPRITERPC        90
+#define IPPROT_LARP             91
+#define IPPROT_MTP              92
+#define IPPROT_AX25             93
+#define IPPROT_IPIP_OLD         94
+#define IPPROT_MICP             95
+#define IPPROT_SCCP             96
+#define IPPROT_ETHERIP          97
+#define IPPROT_ENCAP_HDR        98
+#define IPPROT_ANY_ENCRYPT      99
+#define IPPROT_GMTP             100
+#define IPPROT_IFMP             101
+#define IPPROT_PNNI             102
+#define IPPROT_PIM              103
+#define IPPROT_ARIS             104
+#define IPPROT_SCPS             105
+#define IPPROT_QNX              106
+#define IPPROT_ACTIVENET        107
+#define IPPROT_IPPCP            108
+#define IPPROT_SNP              109
+#define IPPROT_CCP              110
+#define IPPROT_IPX              111
+#define IPPROT_VRRP             112
+#define IPPROT_PGM              113
+#define IPPROT_ANY_0HOP         114
+#define IPPROT_L2TP             115
+#define IPPROT_DDX              116
+#define IPPROT_IATP             117
+#define IPPROT_SCHEDXFER        118
+#define IPPROT_SRP              119
+#define IPPROT_UTI              120
+#define IPPROT_SMP              121
+#define IPPROT_SM               122
+#define IPPROT_PTP              123
+#define IPPROT_ISIS             124
+#define IPPROT_FIRE             125
+#define IPPROT_CRTP             126
+#define IPPROT_CRUDP            127
+#define IPPROT_SSCOPMCE         128
+#define IPPROT_IPLT             129
+#define IPPROT_SPS              130
+#define IPPROT_PIPE             131
+#define IPPROT_SCTP             132
+#define IPPROT_FIBRE_CHANNEL    133
+#define IPPROT_RSVP_E2E_IGN     134
+#define IPPROT_MOBILITY         135
+#define IPPROT_UDPLITE          136
+#define IPPROT_MPLS             137
+#define IPPROT_MANET            138
+#define IPPROT_HIP              139
+#define IPPROT_EXP1             253
+#define IPPROT_EXP2             254
+#define IPPROT_RESERVED         255
+
+
+#define IPOPT_COPY(ipoptp)      ((*(byte_t*)ipoptp) >> 7)
+#define IPOPT_CLASS(ipoptp)     (((*(byte_t*)ipoptp) & 0x60) >> 5)
+#define IPOPTC_CTL              0x0
+#define IPOPTC_RES1             0x1
+#define IPOPTC_DBG              0x2
+#define IPOPTC_RES2             0x3
+
+#define IPOPT_OPTION(ipoptp)    ((*(byte_t*)ipoptp) & 0x1F)
+#define IPOPT_EOP               0       /* end of options */
+#define IPOPT_NOP               1       /* no op */
+#define IPOPT_LSR               3       /* loose source route */
+#define IPOPT_TS                4       /* timestamp */
+#define IPOPT_RR                7       /* record route */
+#define IPOPT_SID               9       /* stream ID */
+#define IPOPT_SSR               10      /* strict source route */
+
+#define IP_CLASSA(addrp)        ((*(byte_t*) & 0x80) == 0x0)
+#define IP_CLASSB(addrp)        ((*(byte_t*) & 0xC0) == 0x80)
+#define IP_CLASSC(addrp)        ((*(byte_t*) & 0xE0) == 0xC0)
+#define IP_CLASSD(addrp)        ((*(byte_t*) & 0xF0) == 0xE0)
+#define IP_CLASSE(addrp)        ((*(byte_t*) & 0xF8) == 0xF0)
+
+
+/* -- TCP definitions -- */
+struct tcph {
+  uint16_t      sport;
+  uint16_t      dport;
+  uint32_t      seqn;
+  uint32_t      ackn;
+  uint8_t       doff;
+  uint8_t       flags;
+  uint16_t      win;
+  uint16_t      cksum;
+  uint16_t      urgp;
+};
+#define TCPH_HLEN(tcph)         (((tcph).doff >> 2) & 3)
+#define TCPH_ECNN(tcph)         ((tcph).doff & 1)
+#define TCPF_FIN                0x01
+#define TCPF_SYN                0x02
+#define TCPF_RST                0x04
+#define TCPF_PSH                0x08
+#define TCPF_ACK                0x10
+#define TCPF_URG                0x20
+#define TCPF_CWR                0x40
+#define TCPF_ECE                0x80
+
+
+struct tcpopth {
+  uint8_t       kind;
+  uint8_t       len;
+};
+#define TCPOPT_EOP              0 /* length == 1 */
+#define TCPOPT_NOP              1 /* length == 1 */
+#define TCPOPT_MSS              2 /* length == 4 */
+#define TCPOPT_WSCALE           3 /* length == 3 */
+#define TCPOPT_SACKOK           4 /* length == 2 */
+#define TCPOPT_SACK             5 /* length == variable */
+#define TCPOPT_TSTAMP           8 /* length == 10 */
+#define TCPOPT_ALTCSUM_REQ      14 /* length == 3 */
+#define TCPOPT_ALTCSUM_DATA     15 /* length == variable */
+#define TCPOPT_MD5              19 /* length == 18 */
+
+
+
+
+/* -- UDP definitions -- */
+struct udph {
+  uint16_t      sport;
+  uint16_t      dport;
+  uint16_t      len;
+  uint16_t      cksum;
+};
+
+
+
+/* -- pseudo headers for TCP and UDP -- */
+struct pseudoh {
+  uint32_t      saddr;
+  uint32_t      daddr;
+  uint8_t       zero;
+  uint8_t       proto;
+  uint16_t      totlen; /* length starting with transport header */
+};
+
+
+struct pseudo6h {
+  struct ipv6addr saddr;
+  struct ipv6addr daddr;
+  uint8_t       zero;
+  uint8_t       proto;
+  uint16_t      totlen; /* length starting with transport header */
+};
+
+
+/* -- ICMP definitions -- */
+struct icmph { 
+  uint8_t       type;
+  uint8_t       code;
+  uint16_t      cksum;
+  union {
+    struct {
+      uint16_t  id;
+      uint16_t  seq;
+    } echo;
+    struct {
+      uint16_t  unused;
+      uint16_t  mtu;
+    } pmtu;
+    uint32_t    gateway;
+  } typeun;
+};
+#define ICMPT_ECHO_REPLY        0
+#define ICMPT_DEST_UNREACH      3
+#define ICMPT_SRC_QUENCH        4
+#define ICMPT_REDIRECT          5
+#define ICMPT_ECHO_REQUEST      8
+#define ICMPT_TIME_EXCEEDED     11
+#define ICMPT_PARAM_PROB        12
+#define ICMPT_TSREQ             13
+#define ICMPT_TSREP             14
+#define ICMPT_TRACEROUTE        30
+
+
+/* -- IPv6 definitions -- */
+struct ip6h {
+  uint32_t      prtcfl;
+  uint16_t      len;
+  uint8_t       nxthdr;
+  uint8_t       hoplim;
+  struct ipv6addr saddr;
+  struct ipv6addr daddr;
+};
+#define IPV6H_VERSION(ip6)      ((ip6).prtcfl >> 28)
+#define IPV6H_TCLASS(ip6)       (((ip6).prtcfl >> 20) & 0xff)
+#define IPV6H_FLOWID(ip6)       ((ip6).prtcfl & 0xfffff)
+
+
+/* -- ICMPv6 definitions -- */
+struct icmp6h {
+  uint8_t       type;
+  uint8_t       code;
+  uint16_t      cksum;
+  uint8_t       data[4];
+};
+#define ICMP6T_DEST_UNREACH     1
+#define ICMP6T_PKT_TOO_BIG      2
+#define ICMP6T_TIME_EXCEEDED    3
+#define ICMP6T_PARAM_PROB       4
+#define ICMP6T_ECHO_REQUEST     128
+#define ICMP6T_ECHO_REPLY       129
+#define ICMP6T_LQUERY           130
+#define ICMP6T_LRESPONSE        131
+#define ICMP6T_LREDUCTION       132
+#define ICMP6T_RSOLICIT         133
+#define ICMP6T_RADVERT          134
+#define ICMP6T_NSOLICIT         135
+#define ICMP6T_NADVERT          136
+#define ICMP6T_NREDIR           137
+
+#endif /* __tcpip_hdrs_h */
