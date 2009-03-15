@@ -1,51 +1,65 @@
 #ifndef __prototparse_h
 #define __prototparse_h
 #include <cat/cat.h>
+#include <cat/cattypes.h>
 
-#define PPT_ETHERNET		0
-#define PPT_ARP			1
-#define PPT_IPV4		2
-#define PPT_IPV6		3
-#define PPT_ICMP		4
-#define PPT_ICMP6		5
-#define PPT_UDP			6
-#define PPT_TCP			7
-#define PPT_MAX			PPT_TCP
+#define PPT_NONE                0
+#define PPT_ETHERNET		1
+#define PPT_ARP			2
+#define PPT_IPV4		3
+#define PPT_IPV6		4
+#define PPT_ICMP		5
+#define PPT_ICMP6		6
+#define PPT_UDP			7
+#define PPT_TCP			8
+#define PPT_MAX			100
+
+#define PPERR_LENGTH            0x00000001
+#define PPERR_CKSUM             0x00000002
+#define PPERR_OPTPARSE          0x00000004
+#define PPERR_INVALID           0x00000008 /* invalid combination of options */
 
 struct hdr_parse;
 
+struct pparse_ops {
+  int			(*follows)(struct hdr_parse *phdr);
+  struct hdr_parse *	(*parse)(struct hdr_parse *phdr);
+  void			(*free_parse)(struct hdr_parse *hdr);
+};
+
 struct proto_parser {
-  unsigned		type;
-  struct list *		children;
-  int			(*follows)(struct hdr_parse *parent);
-  struct hdr_parse *	(*parse)(struct hdr_parse *parent, byte_t *start, 
-                                 size_t maxlen);
-  void			(*free_parse)(struct hdr_parse *parse);
+  unsigned int	        type;
+  unsigned int	        valid;
+  struct list *	        children;
+  struct pparse_ops *   ops;
+};
+
+struct hparse_ops {
+  byte_t *      (*getfield)(struct hdr_parse *hdr, unsigned fid, int num, 
+                            size_t *len);
+  void          (*fixcksum)(struct hdr_parse *hdr);
 };
 
 struct hdr_parse {
-  unsigned              type;
+  unsigned int          type;
   struct hdr_parse *    parent;
   struct hdr_parse *    next;
-  void *                (*get_header)();
-  int                   (*has_field)(struct hdr_parse *hp, unsigned fid);
-  scalar_t              (*get_field)(struct hdr_parse *hp, unsigned fid, 
-		                     size_t *len);
-  void                  (*set_sfield)(struct hdr_parse *hp, unsigned fid, 
-                                      scalar_t val);
-  void                  (*set_vfield)(struct hdr_parse *hp, unsigned fid,
-                                      struct raw *val);
-  void                  (*get_payload)(struct hdr_parse *hp, struct raw *data);
+  uint32_t              error;
+  byte_t *              header;
+  size_t                hlen;
+  byte_t *              payload;
+  size_t                plen;
+  struct hparse_ops *   ops;
 };
 
-extern struct proto_parser *proto_parsers[];
+int  register_proto_parser(unsigned type, struct pparse_ops *ops);
+int  add_proto_parser_parent(unsigned cldtype, unsigned partype);
+void deregister_proto_parser(unsigned type);
+struct hdr_parse *parse_packet(unsigned firstpp, byte_t *pkt, size_t pktlen);
+void free_hdr_parse(struct hdr_parse *hdr);
+void install_default_proto_parsers();
 
-int  register_proto_parser(struct proto_parser *pp, unsigned type);
-int  add_proto_parser_parent(struct proto_parser *pp, unsigned type);
-void deregister_proto_parser(struct proto_parser *pp);
+scalar_t hdr_get_field(struct hdr_parse *hdr, unsigned fid, size_t *len);
+void hdr_fix_cksum(struct hdr_parse *hdr);
 
-struct hdr_parse *parse_packet(struct proto_parser *firstpp, byte_t *pkt, 
-                               size_t pktlen);
-void free_hdr_parse(struct hdr_parse *hp);
-
-#endif /* __pktparse_h */
+#endif /* __protoparse_h */

@@ -24,9 +24,9 @@ ${BINDIR}/pcapout: pcapout.o packet.o
 	${CC} -o ../bin/pcapout pcapout.o packet.o ${DEFS} ${OPTS} \
 		${INCS} ${LIBS}
 
-${BINDIR}/testpp: testpp.o testpp.o protoparse.o
-	${CC} -o ../bin/testpp testpp.o packet.o protoparse.o ${DEFS} ${OPTS} \
-		${INCS} ${LIBS}
+${BINDIR}/testpp: testpp.o testpp.o protoparse.o pptcpip.o util.o
+	${CC} -o ../bin/testpp testpp.o packet.o protoparse.o pptcpip.o util.o \
+		${DEFS} ${OPTS} ${INCS} ${LIBS}
 
 .c.o:
 	${CC} -c $< -o $@ ${DEFS} ${INCS} ${OPTS}

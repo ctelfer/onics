@@ -97,17 +97,25 @@ struct ipv4h {
   uint16_t      fragoff;
   uint8_t       ttl;
   uint8_t       proto;
+  uint16_t      cksum;
   uint32_t      saddr;
   uint32_t      daddr;
 };
 #define IPH_VERSION(iph)        ((iph).vhl >> 4)
 #define IPH_HLEN(iph)           (((iph).vhl & 0xf) << 2)
 #define IPH_ECN(iph)            ((iph).diffsrv & 0x3)
-#define IPH_RF                  0x8000
-#define IPH_DF                  0x4000
-#define IPH_MF                  0x2000
+/* Assumes network byte order */
+#define IPH_RF(iph)             ((((byte_t*)&(iph).fragoff)[0] >> 7) & 1)
+#define IPH_DF(iph)             ((((byte_t*)&(iph).fragoff)[0] >> 6) & 1)
+#define IPH_MF(iph)             ((((byte_t*)&(iph).fragoff)[0] >> 5) & 1)
+#define IPH_FRAGOFF(iph)        (((((byte_t*)&(iph).fragoff)[0] & 0x1F) << 11)|\
+                                 (((byte_t*)&(iph).fragoff)[1] << 3))
+/* for host byte order */
+#define IPH_RFMASK              0x8000
+#define IPH_DFMASK              0x4000
+#define IPH_MFMASK              0x2000
 #define IPH_FRAGMASK            0x1FFF
-#define IPH_FRAGOFF(iph)        (((iph).fragoff & IPH_FRAGMASK) << 3)
+/* Assumes network byte order */
 
 #define IPPROT_V6_HOPOPT        0
 #define IPPROT_ICMP             1
@@ -380,7 +388,7 @@ struct icmph {
 
 
 /* -- IPv6 definitions -- */
-struct ip6h {
+struct ipv6h {
   uint32_t      prtcfl;
   uint16_t      len;
   uint8_t       nxthdr;
@@ -388,10 +396,13 @@ struct ip6h {
   struct ipv6addr saddr;
   struct ipv6addr daddr;
 };
-#define IPV6H_VERSION(ip6)      ((ip6).prtcfl >> 28)
-#define IPV6H_TCLASS(ip6)       (((ip6).prtcfl >> 20) & 0xff)
-#define IPV6H_FLOWID(ip6)       ((ip6).prtcfl & 0xfffff)
-
+/* Assumes network byte order */
+#define IPV6H_VERSION(ip6)      (*(byte_t *)&(ip6) >> 4)
+#define IPV6H_TCLASS(ip6)       (((*(byte_t *)&(ip6) & 0xF) << 4) | \
+                                 ((*((byte_t *)&(ip6) + 1)) >> 4))
+#define IPV6H_FLOWID(ip6)       (((((byte_t *)&(ip6))[1] & 0xF) << 16) | \
+                                 ((((byte_t *)&(ip6))[2]) << 8) |        \
+                                 (((byte_t *)&(ip6))[3]))
 
 /* -- ICMPv6 definitions -- */
 struct icmp6h {

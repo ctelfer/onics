@@ -1,75 +1,104 @@
 #include "protoparse.h"
+#include "pptcpip.h"
 #include <errno.h>
 #include <cat/stduse.h>
 
-struct proto_parser *proto_parsers[PPT_MAX+1] = { 0 };
 
-int register_proto_parser(struct proto_parser *pp, unsigned type)
+struct proto_parser proto_parsers[PPT_MAX+1];
+struct pparse_ops proto_parser_ops[PPT_MAX+1];
+
+
+int register_proto_parser(unsigned type, struct pparse_ops *ppo)
 {
-  if ( type > PPT_MAX ) {
+  struct proto_parser *pp;
+  if ( (type > PPT_MAX) || (ppo == NULL) || (ppo->follows == NULL) || 
+       (ppo->parse == NULL) || (ppo->free_parse == NULL) ) {
     errno = EINVAL;
     return -1;
   }
-  if ( proto_parsers[type] != NULL ) {
+  pp = &proto_parsers[type];
+  if ( !pp->valid ) {
     errno = EACCES;
     return -1;
   }
   pp->type = type;
   pp->children = clist_newlist();
-  proto_parsers[type] = pp;
+  proto_parser_ops[type] = *ppo;
+  pp->ops = &proto_parser_ops[type];
+  pp->valid = 1;
   return 0;
 }
 
 
-int add_proto_parser_parent(struct proto_parser *pp, unsigned type)
+int add_proto_parser_parent(unsigned cldtype, unsigned partype)
 {
-  struct proto_parser *par;
-  if ( (type > PPT_MAX) || (par = proto_parsers[type]) == NULL ) {
+  struct proto_parser *par, *cld;
+  if ( (cldtype > PPT_MAX) || (partype > PPT_MAX) ) {
     errno = EINVAL;
     return -1;
   }
-  clist_enq(par->children, struct proto_parser *, pp);
+  par = &proto_parsers[cldtype];
+  cld = &proto_parsers[partype];
+  if ( !par->valid || !cld->valid ) {
+    errno = EINVAL;
+    return -1;
+  }
+  clist_enq(par->children, unsigned, cldtype);
   return 0;
 }
 
 
-void deregister_proto_parser(struct proto_parser *pp)
+void deregister_proto_parser(unsigned type)
 {
-  if ( (pp->type > PPT_MAX) || (proto_parsers[pp->type] != pp) )
-    return;
-  clist_freelist(pp->children);
-  pp->children = NULL;
-  proto_parsers[pp->type] = NULL;
+  struct proto_parser *pp;
+  if ( (type <= PPT_MAX) && (pp = &proto_parsers[type])->valid ) {
+    clist_freelist(pp->children);
+    pp->children = NULL;
+    pp->valid = 0;
+    pp->ops = NULL;
+  }
 }
 
 
-static struct hdr_parse *parse_packet_help(struct proto_parser *thisp,
-             struct hdr_parse *parp,
-             byte_t *pkt, size_t pktlen)
+static struct hdr_parse *parse_packet_help(struct proto_parser *thispp,
+                                           struct hdr_parse *parhp)
 {
-  struct hdr_parse *newp;
-  struct proto_parser *nextp;
+  struct proto_parser *nextpp;
+  struct hdr_parse *newhp = NULL;
   struct list *child;
   struct raw rest;
-  if ( !(newp = (*thisp->parse)(parp, pkt, pktlen)) )
+  unsigned cldid;
+  if ( !(newhp = (*thispp->ops->parse)(parhp)) )
     return NULL;
-  (*newp->get_payload)(newp, &rest);
-  l_for_each(child, thisp->children) {
-    nextp = clist_data(child, struct proto_parser *);
-    if ( (*nextp->follows)(newp) ) {
-      newp->next = parse_packet_help(nextp, newp, rest.data, 
-                         rest.len);
-      break;
+  newhp->next = NULL;
+  if ( newhp->error != 0 ) {
+    l_for_each(child, thispp->children) {
+      cldid = clist_data(child, unsigned);
+      abort_unless(cldid <= PPT_MAX);
+      nextpp = &proto_parsers[cldid];
+      if ( (*nextpp->ops->follows)(newhp) ) {
+        newhp->next = parse_packet_help(nextpp, newhp);
+        break;
+      }
     }
   }
-  return newp;
+  return newhp;
 }
 
 
-struct hdr_parse *parse_packet(struct proto_parser *firstproto, byte_t *pkt, 
-             size_t pktlen)
+struct hdr_parse *parse_packet(unsigned firstpp, byte_t *pkt, size_t pktlen)
 {
-  return parse_packet_help(firstproto, NULL, pkt, pktlen);
+  struct hdr_parse hdr = { 0 }, *outh;
+  if ( firstpp > PPT_MAX ) {
+    errno = EINVAL;
+    return NULL;
+  }
+  hdr.type = PPT_NONE;
+  hdr.payload = pkt;
+  hdr.plen = pktlen;
+  outh = parse_packet_help(&proto_parsers[firstpp], &hdr);
+  outh->parent = NULL;
+  return outh;
 }
 
 
@@ -79,8 +108,48 @@ void free_hdr_parse(struct hdr_parse *hp)
   if ( hp == NULL )
     return;
   free_hdr_parse(hp->next);
-  if ( (hp->type <= PPT_MAX) && ((pp = proto_parsers[hp->type]) != NULL) )
-    (*pp->free_parse)(hp);
-
+  if ( (hp->type > PPT_MAX) || !(pp = &proto_parsers[hp->type])->valid )
+    (*pp->ops->free_parse)(hp);
 }
+
+
+void install_default_proto_parsers()
+{
+  register_proto_parser(PPT_NONE, &none_pparse_ops);
+  register_proto_parser(PPT_ETHERNET, &eth_pparse_ops);
+  add_proto_parser_parent(PPT_ETHERNET, PPT_NONE);
+  register_proto_parser(PPT_ARP, &arp_pparse_ops);
+  add_proto_parser_parent(PPT_ARP, PPT_ETHERNET);
+  register_proto_parser(PPT_IPV4, &ipv4_pparse_ops);
+  add_proto_parser_parent(PPT_IPV4, PPT_ETHERNET);
+  register_proto_parser(PPT_IPV6, &ipv6_pparse_ops);
+  add_proto_parser_parent(PPT_IPV6, PPT_ETHERNET);
+  register_proto_parser(PPT_ICMP, &icmp_pparse_ops);
+  add_proto_parser_parent(PPT_ICMP, PPT_IPV4);
+  register_proto_parser(PPT_ICMP6, &icmpv6_pparse_ops);
+  add_proto_parser_parent(PPT_ICMP6, PPT_IPV6);
+  register_proto_parser(PPT_UDP, &udp_pparse_ops);
+  add_proto_parser_parent(PPT_UDP, PPT_IPV4);
+  add_proto_parser_parent(PPT_UDP, PPT_IPV6);
+  register_proto_parser(PPT_TCP, &udp_pparse_ops);
+  add_proto_parser_parent(PPT_TCP, PPT_IPV4);
+  add_proto_parser_parent(PPT_TCP, PPT_IPV6);
+}
+
+
+
+byte_t *hdr_getfield(struct hdr_parse *hp, unsigned fid, int num, size_t *len)
+{
+  abort_unless(hp && hp->ops);
+  return (*hp->ops->getfield)(hp, fid, num, len);
+}
+
+
+void hdr_fix_cksum(struct hdr_parse *hp)
+{
+  abort_unless(hp && hp->ops);
+  (*hp->ops->fixcksum)(hp);
+}
+
+
 
