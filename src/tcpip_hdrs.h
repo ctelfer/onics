@@ -20,6 +20,7 @@ struct eth2h {
   uint16_t      ethtype;
 };
 #define ETHTYPE_IP              0x0800
+#define ETHTYPE_IPV6            0x08DD
 #define ETHTYPE_ARP             0x0806
 
 
@@ -104,18 +105,12 @@ struct ipv4h {
 #define IPH_VERSION(iph)        ((iph).vhl >> 4)
 #define IPH_HLEN(iph)           (((iph).vhl & 0xf) << 2)
 #define IPH_ECN(iph)            ((iph).diffsrv & 0x3)
-/* Assumes network byte order */
-#define IPH_RF(iph)             ((((byte_t*)&(iph).fragoff)[0] >> 7) & 1)
-#define IPH_DF(iph)             ((((byte_t*)&(iph).fragoff)[0] >> 6) & 1)
-#define IPH_MF(iph)             ((((byte_t*)&(iph).fragoff)[0] >> 5) & 1)
-#define IPH_FRAGOFF(iph)        (((((byte_t*)&(iph).fragoff)[0] & 0x1F) << 11)|\
-                                 (((byte_t*)&(iph).fragoff)[1] << 3))
-/* for host byte order */
+/* Note:  must first convert to host byte order */
 #define IPH_RFMASK              0x8000
 #define IPH_DFMASK              0x4000
 #define IPH_MFMASK              0x2000
-#define IPH_FRAGMASK            0x1FFF
-/* Assumes network byte order */
+#define IPH_FRAGOFFMASK         0x1FFF
+#define IPH_FRAGOFF(fragoff)    (((fragoff) & IPH_FRAGOFFMASK) << 3)
 
 #define IPPROT_V6_HOPOPT        0
 #define IPPROT_ICMP             1
@@ -352,9 +347,10 @@ struct pseudoh {
 struct pseudo6h {
   struct ipv6addr saddr;
   struct ipv6addr daddr;
-  uint8_t       zero;
+  uint32_t      totlen;
+  uint16_t      zero1;
+  uint8_t       zero2;
   uint8_t       proto;
-  uint16_t      totlen; /* length starting with transport header */
 };
 
 
@@ -397,12 +393,10 @@ struct ipv6h {
   struct ipv6addr daddr;
 };
 /* Assumes network byte order */
-#define IPV6H_VERSION(ip6)      (*(byte_t *)&(ip6) >> 4)
-#define IPV6H_TCLASS(ip6)       (((*(byte_t *)&(ip6) & 0xF) << 4) | \
-                                 ((*((byte_t *)&(ip6) + 1)) >> 4))
-#define IPV6H_FLOWID(ip6)       (((((byte_t *)&(ip6))[1] & 0xF) << 16) | \
-                                 ((((byte_t *)&(ip6))[2]) << 8) |        \
-                                 (((byte_t *)&(ip6))[3]))
+#define IPV6H_PVERSION(ipv6hp)  (*(byte_t *)(ipv6hp) >> 4)
+#define IPV6H_VERSION(prtcfl)   ((prtcfl) >> 28)
+#define IPV6H_TCLASS(prtcfl)    (((prtcfl) >> 20) & 0xFF)
+#define IPV6H_FLOWID(prtcfl)    ((prtcfl) & 0xFFFFF)  
 
 /* -- ICMPv6 definitions -- */
 struct icmp6h {

@@ -111,7 +111,7 @@ static struct hdr_parse *eth_parse(struct hdr_parse *phdr)
   }
   hdr = newhdr(sizeof(*hdr), PPT_ETHERNET, phdr, &eth_hparse_ops);
   if ( hdr->hlen < 14 ) { 
-    hdr->error = PPERR_LENGTH;
+    hdr->error = PPERR_TOSMALL;
   } else {
     hdr->payload = hdr->header + 14;
     hdr->plen = hdr->hlen - 14;
@@ -147,7 +147,7 @@ static struct hdr_parse *arp_parse(struct hdr_parse *phdr)
   }
   hdr = newhdr(sizeof(*hdr), PPT_ARP, phdr, &arp_hparse_ops);
   if ( hdr->hlen < 8 ) {
-    hdr->error = PPERR_LENGTH;
+    hdr->error = PPERR_TOSMALL;
   } else { 
     hdr->payload = hdr->header + 8;
     hdr->plen = hdr->hlen - 8;
@@ -204,8 +204,10 @@ static struct hdr_parse *ipv4_parse(struct hdr_parse *phdr)
   hdr = newhdr(sizeof(*hdr), PPT_IPV4, phdr, &ipv4_hparse_ops);
   ip = (struct ipv4h *)hdr->header;
   hlen = IPH_HLEN(*ip);
-  if ( (hdr->hlen < 20) || (hlen < hdr->hlen) ) {
-    hdr->error |= PPERR_LENGTH;
+  if ( hdr->hlen < 20 ) {
+    hdr->error |= PPERR_TOSMALL;
+  } else if ( hlen < hdr->hlen )  {
+    hdr->error |= PPERR_HLEN;
   } else {
     tlen = hdr->hlen;
     hdr->hlen = hlen;
@@ -221,7 +223,7 @@ static struct hdr_parse *ipv4_parse(struct hdr_parse *phdr)
         return hdr;
     }
     if ( ip->fragoff != 0 ) {
-      if ( (uint32_t)IPH_FRAGOFF(*ip) + iplen > 65535 )
+      if ( (uint32_t)IPH_FRAGOFF(ntoh32(ip->fragoff)) + iplen > 65535 )
         hdr->error |= PPERR_INVALID;
       if ( IPH_RF(*ip) )
         hdr->error |= PPERR_INVALID;
