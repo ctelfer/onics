@@ -39,10 +39,9 @@ struct proto_parser {
 struct hparse_ops {
   byte_t *      (*getfield)(struct hdr_parse *hdr, unsigned fid, int num, 
                             size_t *len);
-  void          (*fixcksum)(struct hdr_parse *hdr);
-  void          (*insert)(struct hdr_parse *hdr, size_t off, size_t amt);
-  void          (*cut)(struct hdr_parse *hdr, size_t off, size_t amt);
-  struct hdr_parse * (*copy)(struct hdr_parse *);
+  int           (*fixlen)(struct hdr_parse *hdr);
+  int           (*fixcksum)(struct hdr_parse *hdr);
+  struct hdr_parse * (*copy)(struct hdr_parse *, byte_t *buffer);
   void		(*free)(struct hdr_parse *hdr);
 };
 
@@ -66,6 +65,7 @@ struct hparse_ops {
  */
 
 struct hdr_parse {
+  size_t                size; 
   unsigned int          type;
   struct hdr_parse *    parent;
   struct hdr_parse *    next;
@@ -80,6 +80,7 @@ struct hdr_parse {
 #define hdr_hlen(hdr) ((hdr)->poff - (hdr)->hoff)
 #define hdr_plen(hdr) ((hdr)->toff - (hdr)->poff)
 #define hdr_tlen(hdr) ((hdr)->eoff - (hdr)->toff)
+#define hdr_totlen(hdr) ((hdr)->eoff - (hdr)->hoff)
 #define hdr_header(hdr, type) ((type *)((hdr)->data + (hdr)->hoff))
 #define hdr_payload(hdr) ((void *)((hdr)->data + (hdr)->poff))
 #define hdr_trailer(hdr, type) ((type *)((hdr)->data + (hdr)->toff))
@@ -98,10 +99,10 @@ struct hdr_parse *create_parse(unsigned ppidx, byte_t *pkt, size_t len,
 
 void hdr_free(struct hdr_parse *hdr, int freechildren);
 size_t hdr_total_len(struct hdr_parse *hdr);
-struct hdr_parse *hdr_copy(struct hdr_parse *hdr);
+struct hdr_parse *hdr_copy(struct hdr_parse *hdr, byte_t *buffer);
 void hdr_set_packet_buffer(struct hdr_parse *hdr, byte_t *buffer);
 scalar_t hdr_get_field(struct hdr_parse *hdr, unsigned fid, size_t *len);
-void hdr_fix_cksum(struct hdr_parse *hdr);
+int hdr_fix_cksum(struct hdr_parse *hdr);
 int hdr_fix_len(struct hdr_parse *hdr);
 void hdr_remove(struct hdr_parse *hdr);
 

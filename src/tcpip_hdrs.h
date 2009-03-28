@@ -22,6 +22,7 @@ struct eth2h {
 #define ETHTYPE_IP              0x0800
 #define ETHTYPE_IPV6            0x08DD
 #define ETHTYPE_ARP             0x0806
+#define ETHHLEN                 14
 
 
 /* -- ARP definitions -- */

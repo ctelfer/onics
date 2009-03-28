@@ -2,6 +2,7 @@
 #include "pptcpip.h"
 #include <errno.h>
 #include <cat/stduse.h>
+#include <string.h>
 
 
 struct proto_parser proto_parsers[PPT_MAX+1];
@@ -90,9 +91,10 @@ int parse_from(struct hdr_parse *phdr)
   struct proto_parser *pp, *nextpp;
   struct list *child;
   unsigned cldid;
+  int errval;
 
-  abort_unless(phdr && phdr->type <= PPT_MAX)
-  pp = proto_parsers[phdr->type];
+  abort_unless(phdr && phdr->type <= PPT_MAX);
+  pp = &proto_parsers[phdr->type];
   abort_unless(pp->valid);
   last = phdr;
   while ( pp && (phdr->toff > 0) ) {
@@ -108,7 +110,7 @@ int parse_from(struct hdr_parse *phdr)
     }
     pp = nextpp;
     if ( nextpp ) {
-      if ( !(nhdr = (*nextpp->parse)(last)) ) {
+      if ( !(nhdr = (*nextpp->ops->parse)(last)) ) {
         errval = errno;
         goto err;
       }
@@ -122,7 +124,7 @@ int parse_from(struct hdr_parse *phdr)
 
 err:
   if ( phdr->next ) {
-    hdr_free(phdr->next);
+    hdr_free(phdr->next, 1);
     phdr->next = NULL;
   }
   errno = errval;
@@ -134,7 +136,7 @@ struct hdr_parse *parse_packet(unsigned ppidx, byte_t *pkt, size_t off,
                                size_t pktlen)
 {
   struct hdr_parse dummyhdr = { 0 }, *rhdr = NULL;
-  pp = &proto_parsers[PPT_NONE];
+  struct proto_parser *pp = &proto_parsers[PPT_NONE];
   if ( !pkt || pktlen < 1 || off < pktlen || !pp->valid ) {
     errno = EINVAL;
     return NULL;
@@ -187,12 +189,12 @@ void hdr_free(struct hdr_parse *hdr, int freechildren)
 }
 
 
-struct hdr_parse *hdr_copy(struct hdr_parse *ohdr)
+struct hdr_parse *hdr_copy(struct hdr_parse *ohdr, byte_t *buffer)
 {
   struct hdr_parse *first = NULL, *last = NULL, *hdr;
-  while ( ohdr ) { 
+  while ( ohdr ) {
     abort_unless(ohdr->ops && ohdr->ops->copy);
-    if ( !(hdr = (*ohdr->ops->copy)(ohdr)) )
+    if ( !(hdr = (*ohdr->ops->copy)(ohdr, buffer)) )
       goto err;
     if ( !first )
       first = hdr;
@@ -225,17 +227,17 @@ byte_t *hdr_getfield(struct hdr_parse *hdr, unsigned fid, int num, size_t *len)
 }
 
 
-void hdr_fix_cksum(struct hdr_parse *hdr)
+int hdr_fix_cksum(struct hdr_parse *hdr)
 {
   abort_unless(hdr && hdr->ops && hdr->ops->fixcksum);
-  (*hdr->ops->fixcksum)(hdr);
+  return (*hdr->ops->fixcksum)(hdr);
 }
 
 
-void hdr_fix_len(struct hdr_parse *hdr)
+int hdr_fix_len(struct hdr_parse *hdr)
 {
   abort_unless(hdr && hdr->ops && hdr->ops->fixlen);
-  (*hdr->ops->fixlen)(hdr);
+  return (*hdr->ops->fixlen)(hdr);
 }
 
 
@@ -255,10 +257,10 @@ void hdr_remove(struct hdr_parse *hdr)
 
 
 struct hdr_parse *create_parse(unsigned ppidx, byte_t *pkt, size_t len, 
-                               size_t off, struct hdr_parse *pkthdr)
+                               size_t off, struct hdr_parse *phdr)
 {
   size_t maxhlen, mintoff, maxtoff;
-  struct hdr_parse *hdr, *prev = NULL, *next = pkthdr;
+  struct hdr_parse *hdr, *prev = NULL, *next = phdr;
   struct proto_parser *pp;
 
   if ( (ppidx > PPT_MAX) || !(pp = &proto_parsers[ppidx])->valid )
@@ -295,7 +297,8 @@ struct hdr_parse *create_parse(unsigned ppidx, byte_t *pkt, size_t len,
     maxtoff = len;
   }
 
-  hdr = (*pp->opt->create)(pkthdr->data, off, maxhlen, mintoff, maxtoff);
+  /* TODO: revisit this API */
+  hdr = (*pp->ops->create)(phdr->data, off, maxhlen);
   if ( !hdr )
     return NULL;
   hdr->parent = prev;
@@ -408,7 +411,7 @@ int cut_adjust(struct hdr_parse *hdr, size_t off, size_t len, int moveup)
       hdr->eoff -= len;
     }
   } else if ( off <= hdr->eoff ) { 
-      if ( len > hdr_tlen(tlen) )
+      if ( len > hdr_tlen(hdr) )
         return -1;
     /* comes in the middle or at the end of the trailer */
     if ( !moveup ) {
@@ -440,7 +443,7 @@ int cut_adjust(struct hdr_parse *hdr, size_t off, size_t len, int moveup)
 }
 
 
-int hdr_cut(struct hdr_parse *hdr, size_t start, size_t len, int moveup)
+int hdr_cut(struct hdr_parse *hdr, size_t off, size_t len, int moveup)
 {
   size_t pktlen, ohoff;
   byte_t *op, *np;
@@ -453,8 +456,8 @@ int hdr_cut(struct hdr_parse *hdr, size_t start, size_t len, int moveup)
   pktlen = hdr_total_len(hdr);
   if ( len > pktlen )
     return - 1;
-  ohoff = hdr->ohoff;
-  if ( cut_adjust(hdr, start, len, moveup) < 0 )
+  ohoff = hdr->hoff;
+  if ( cut_adjust(hdr, off, len, moveup) < 0 )
     return -1;
 
   if ( hdr->data != NULL ) {
