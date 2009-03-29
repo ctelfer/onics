@@ -361,17 +361,34 @@ struct icmph {
   uint8_t       code;
   uint16_t      cksum;
   union {
+    /* ICMPT_ECHO_*, ICMPT_TS_*, ICMPT_INFO_* */
     struct {
       uint16_t  id;
       uint16_t  seq;
     } echo;
+
+    /* ICMPT_DEST_UNREAD:4 */
     struct {
       uint16_t  unused;
       uint16_t  mtu;
     } pmtu;
+
+    /* ICMPT_PARAM_PROB */
+    struct {
+      uint8_t   ptr;
+      uint8_t   unused1;
+      uint16_t  unused2;
+    } pprob;
+    
+    /* ICMPT_REDIRECT */
     uint32_t    gateway;
-  } typeun;
+
+    /* Many */
+    uint32_t    unused;
+  } u;
 };
+
+/* ICMP type values */
 #define ICMPT_ECHO_REPLY        0
 #define ICMPT_DEST_UNREACH      3
 #define ICMPT_SRC_QUENCH        4
@@ -379,9 +396,29 @@ struct icmph {
 #define ICMPT_ECHO_REQUEST      8
 #define ICMPT_TIME_EXCEEDED     11
 #define ICMPT_PARAM_PROB        12
-#define ICMPT_TSREQ             13
-#define ICMPT_TSREP             14
+#define ICMPT_TS_REQ            13
+#define ICMPT_TS_REP            14
+#define ICMPT_INFO_REQ          15
+#define ICMPT_INFO_REP          16
 #define ICMPT_TRACEROUTE        30
+
+/* ICMP_DEST_UNREACH codes */
+#define ICMPC_NET_UNREACH       0
+#define ICMPC_HOST_UNREACH      1
+#define ICMPC_PROTO_UNREACH     2
+#define ICMPC_PORT_UNREACH      3
+#define ICMPC_FRAG_NEEDED       4
+#define ICMPC_SRCRT_FAILED      5
+
+/* ICMP_TIME_EXCEEDED codes */
+#define ICMPC_TTL_EXCEEDED      0
+#define ICMPC_FRAG_TIMEOUT      1
+
+/* ICMP_REDIRECT codes */
+#define ICMPC_NET_REDIR         0
+#define ICMPC_HOST_REDIR        1
+#define ICMPC_TOS_NET_REDIR     2
+#define ICMPC_TOS_HOST_REDIR    3
 
 
 /* -- IPv6 definitions -- */
