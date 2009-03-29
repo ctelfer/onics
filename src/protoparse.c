@@ -117,7 +117,8 @@ int parse_from(struct hdr_parse *phdr)
       }
       last->next = nhdr;
       nhdr->parent = last;
-      if ( nhdr->error ) /* check for partial parse */
+      /* don't continue parsing if the lengths are screwed up */
+      if ( (nhdr->error & PPERR_LENMASK) ) 
         break;
       last = nhdr;
     }

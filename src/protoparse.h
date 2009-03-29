@@ -21,6 +21,8 @@
 #define PPERR_OPTLEN            0x00000010
 #define PPERR_INVALID           0x00000020 /* invalid combination of options */
 
+#define PPERR_LENMASK           (PPERR_TOSMALL|PPERR_HLEN|PPERR_LENGTH)
+
 struct hdr_parse;
 
 struct pparse_ops {
