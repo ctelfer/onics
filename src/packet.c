@@ -55,6 +55,7 @@ int pkt_create(struct pktbuf **p, size_t plen, enum pktdltype_e dltype)
   }
   pph.pph_dltype = dltype;
   pph.pph_len = plen;
+  pph.pph_class = 0;
   pph.pph_timestamp = 0;
   *p = new_packet(&pph);
 
@@ -124,10 +125,6 @@ int pkt_file_read(FILE *fp, struct pktbuf **p)
     errno = EIO;
     return -1;
   }
-  if ( (ssize_t)pph2.pph_len < 0 ) {
-    errno = EIO;
-    return -1;
-  }
   *p = new_packet(&pph2);
   if ( fread(pkt_data(*p), 1, (*p)->pkt_len, fp) < (*p)->pkt_len ) {
     errno = EIO;
@@ -142,6 +139,7 @@ int pkt_fd_read(int fd, struct pktbuf **p)
 {
   struct pktprehdr pph, pph2;
   ssize_t nr;
+  size_t rem, off = 0;
 
   if ( p == NULL ) {
     errno = EINVAL;
@@ -161,12 +159,17 @@ int pkt_fd_read(int fd, struct pktbuf **p)
     errno = EIO;
     return -1;
   }
-  if ( (ssize_t)pph2.pph_len < 0 ) {
-    errno = EIO;
-    return -1;
-  }
   *p = new_packet(&pph2);
-  if ( io_read(fd, pkt_data(*p), (*p)->pkt_len) < (*p)->pkt_len ) {
+
+  while ( (rem = (*p)->pkt_len) > SSIZE_MAX ) {
+    if ( io_read(fd, pkt_data(*p) + off, SSIZE_MAX) < SSIZE_MAX ) {
+      errno = EIO;
+      return -1;
+    }
+    rem -= SSIZE_MAX;
+    off += SSIZE_MAX;
+  }
+  if ( io_read(fd, pkt_data(*p) + off, rem) < rem ) {
     errno = EIO;
     return -1;
   }
@@ -180,7 +183,7 @@ int pkt_file_write(FILE *fp, struct pktbuf *p)
   struct pktprehdr pph;
   size_t nr;
 
-  if ( fp == NULL || p == NULL || (ssize_t)p->pkt_len < 0 ) {
+  if ( fp == NULL || p == NULL ) {
     errno = EINVAL;
     return -1;
   }
@@ -201,18 +204,27 @@ int pkt_file_write(FILE *fp, struct pktbuf *p)
 int pkt_fd_write(int fd, struct pktbuf *p)
 {
   struct pktprehdr pph;
-  size_t nr;
+  size_t rem, off = 0;
 
-  if ( p == NULL || (ssize_t)p->pkt_len < 0 ) {
+  if ( p == NULL ) {
     errno = EINVAL;
     return -1;
   }
   pack(&pph, sizeof(pph), "wwj", p->pkt_dltype, p->pkt_len, p->pkt_timestamp);
-  if ( (nr = io_write(fd, &pph, sizeof(pph))) < sizeof(pph) ) {
+  if ( io_write(fd, &pph, sizeof(pph)) < sizeof(pph) ) {
     errno = EIO;
     return -1;
   }
-  if ( (nr = io_write(fd, pkt_data(p), p->pkt_len)) < p->pkt_len ) {
+  rem = p->pkt_len;
+  while ( rem > SSIZE_MAX ) {
+    if ( io_write(fd, pkt_data(p) + off, SSIZE_MAX) < SSIZE_MAX ) {
+      errno = EIO;
+      return -1;
+    }
+    rem -= SSIZE_MAX;
+    off += SSIZE_MAX;
+  }
+  if ( io_write(fd, pkt_data(p) + off, rem) < rem ) {
     errno = EIO;
     return -1;
   }
