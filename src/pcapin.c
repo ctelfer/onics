@@ -98,6 +98,7 @@ int main(int argc, char *argv[])
   if ( pkt_create(&p, PKTMAX, dltype) < 0 ) 
     errsys("ptk_create: ");
   p->pkt_offset = 0;
+  p->pkt_class = 0;
   while ( (packet = (byte_t*)pcap_next(g_pcap, &pcapph)) != NULL ) { 
     p->pkt_len = pcapph.len;
     p->pkt_timestamp = (uint64_t)pcapph.ts.tv_sec * 1000000000 + 
