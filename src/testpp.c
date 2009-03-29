@@ -29,7 +29,7 @@ int main(int argc, char *argv[])
       if ( t->error == 0 ) {
         printf("\t\tNo errors\n");
       } else {
-        if ( (t->error & PPERR_TOSMALL) ) {
+        if ( (t->error & PPERR_TOOSMALL) ) {
           printf("\t\tPacket too small\n");
           continue;
         }
