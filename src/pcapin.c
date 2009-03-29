@@ -15,6 +15,7 @@ FILE *g_infile = NULL;
 struct clopt g_options[] = { 
   CLOPT_INIT(CLOPT_STRING, 'i', "--iface", "interfact to sniff from"),
   CLOPT_INIT(CLOPT_STRING, 'f', "--file", "file to read from"),
+  CLOPT_INIT(CLOPT_NOARG,'p', "--promisc", "set interface in promiscuous mode"),
   CLOPT_INIT(CLOPT_STRING, 'h', "--help", "print help")
 };
 struct clopt_parser g_oparse = 
@@ -35,7 +36,7 @@ void usage(const char *prog, const char *estr)
 void parse_args(int argc, char *argv[])
 {
   char ebuf[PCAP_ERRBUF_SIZE];
-  int rv, usefile = 1;
+  int rv, usefile = 1, promisc = 0;
   const char *pktsrc;
   struct clopt *opt;
 
@@ -50,6 +51,9 @@ void parse_args(int argc, char *argv[])
       pktsrc = opt->val.str_val; 
       usefile = 1; 
       break; 
+    case 'p': 
+      promisc = 1;
+      break;
     case 'h': 
       usage(argv[0], NULL); 
       break; 
@@ -68,7 +72,7 @@ void parse_args(int argc, char *argv[])
     if ( (g_pcap = pcap_fopen_offline(g_infile, ebuf)) == NULL ) 
       err("Error opening pcap: %s\n", ebuf); 
   } else { 
-    g_pcap = pcap_open_live(pktsrc, 65535, 1, 0, ebuf);
+    g_pcap = pcap_open_live(pktsrc, 65535, promisc, 0, ebuf);
     if ( g_pcap == NULL ) 
       err("Error opening interface %s: %s\n", pktsrc, ebuf);
   }
