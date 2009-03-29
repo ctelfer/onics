@@ -65,7 +65,7 @@ int main(int argc, char *argv[])
   int rv;
   uint32_t pcap_dlt;
   struct pcap_pkthdr pcapph;
-  struct pktt_packet *p;
+  struct pktbuf *p;
   int first_dltype;
   unsigned pktnum = 1;
 
@@ -80,7 +80,7 @@ int main(int argc, char *argv[])
   }
   first_dltype = p->pkt_dltype;
   switch(first_dltype) {
-  case PTDL_ETHERNET2:
+  case PKTDL_ETHERNET2:
     pcap_dlt = DLT_EN10MB;
     break;
   default:

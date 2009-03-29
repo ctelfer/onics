@@ -11,17 +11,19 @@
 #define INLINE
 #endif
 
-#define PHLEN offsetof(struct pktt_packet, pkt_buffer)
+#define PHLEN offsetof(struct pktbuf, pkt_buffer)
+
 
 static INLINE int dltype_is_valid(uint32_t dlt)
 {
-  return (dlt >= PTDL_MIN && dlt <= PTDL_MAX);
+  return (dlt >= PKTDL_MIN && dlt <= PKTDL_MAX);
 }
 
-static INLINE size_t offset_by_dltype(enum pktt_dltype_e dlt)
+
+static INLINE size_t offset_by_dltype(enum pktdltype_e dlt)
 {
   switch(dlt) { 
-    case PTDL_ETHERNET2:
+    case PKTDL_ETHERNET2:
       return 2;
     default:
       return 0;
@@ -29,13 +31,13 @@ static INLINE size_t offset_by_dltype(enum pktt_dltype_e dlt)
 }
 
 
-static INLINE struct pktt_packet * new_packet(const struct pktt_packet_hdr *ph)
+static INLINE struct pktbuf * new_packet(const struct pktprehdr *pph)
 {
-  size_t off = offset_by_dltype(ph->pkth_dltype);
-  size_t dlen = ph->pkth_len + off;
-  struct pktt_packet *p = emalloc(PHLEN + dlen);
+  size_t off = offset_by_dltype(pph->pph_dltype);
+  size_t dlen = pph->pph_len + off;
+  struct pktbuf *p = emalloc(PHLEN + dlen);
 
-  p->pkt_header = *ph;
+  p->pkt_header = *pph;
   p->pkt_buflen = dlen;
   p->pkt_offset = off;
 
@@ -43,26 +45,26 @@ static INLINE struct pktt_packet * new_packet(const struct pktt_packet_hdr *ph)
 }
 
 
-int pkt_create(struct pktt_packet **p, size_t plen, enum pktt_dltype_e dltype)
+int pkt_create(struct pktbuf **p, size_t plen, enum pktdltype_e dltype)
 {
-  struct pktt_packet_hdr ph;
+  struct pktprehdr pph;
 
   if ( p == NULL ) { 
     errno = EINVAL;
     return -1;
   }
-  ph.pkth_dltype = dltype;
-  ph.pkth_len = plen;
-  ph.pkth_timestamp = 0;
-  *p = new_packet(&ph);
+  pph.pph_dltype = dltype;
+  pph.pph_len = plen;
+  pph.pph_timestamp = 0;
+  *p = new_packet(&pph);
 
   return 0;
 }
 
 
-int pkt_copy(const struct pktt_packet *orig, struct pktt_packet **newp)
+int pkt_copy(const struct pktbuf *orig, struct pktbuf **newp)
 {
-  struct pktt_packet *p;
+  struct pktbuf *p;
   size_t dlen;
 
   if (!orig || !newp) {
@@ -78,10 +80,10 @@ int pkt_copy(const struct pktt_packet *orig, struct pktt_packet **newp)
 }
 
 
-int pkt_resize(struct pktt_packet **p, size_t plen)
+int pkt_resize(struct pktbuf **p, size_t plen)
 {
   size_t tlen;
-  struct pktt_packet *newp;
+  struct pktbuf *newp;
 
   if (!p || !*p) {
     errno = EINTR;
@@ -99,16 +101,16 @@ int pkt_resize(struct pktt_packet **p, size_t plen)
 }
 
 
-int pkt_file_read(FILE *fp, struct pktt_packet **p)
+int pkt_file_read(FILE *fp, struct pktbuf **p)
 {
-  struct pktt_packet_hdr ph, ph2;
+  struct pktprehdr pph, pph2;
   size_t nr;
 
   if ( fp == NULL || p == NULL ) {
     errno = EINVAL;
     return -1;
   }
-  if ( (nr = fread(&ph, 1, sizeof(ph), fp)) < sizeof(ph) ) {
+  if ( (nr = fread(&pph, 1, sizeof(pph), fp)) < sizeof(pph) ) {
     if ( ferror(fp) || nr > 0 ) {
       errno = EIO;
       return -1;
@@ -116,17 +118,17 @@ int pkt_file_read(FILE *fp, struct pktt_packet **p)
       return 0;
     }
   }
-  unpack(&ph, sizeof(ph), "wwj", &ph2.pkth_dltype, &ph2.pkth_len,
-         &ph2.pkth_timestamp);
-  if ( !dltype_is_valid(ph2.pkth_dltype) ) {
+  unpack(&pph, sizeof(pph), "wwj", &pph2.pph_dltype, &pph2.pph_len,
+         &pph2.pph_timestamp);
+  if ( !dltype_is_valid(pph2.pph_dltype) ) {
     errno = EIO;
     return -1;
   }
-  if ( (ssize_t)ph2.pkth_len < 0 ) {
+  if ( (ssize_t)pph2.pph_len < 0 ) {
     errno = EIO;
     return -1;
   }
-  *p = new_packet(&ph2);
+  *p = new_packet(&pph2);
   if ( fread(pkt_data(*p), 1, (*p)->pkt_len, fp) < (*p)->pkt_len ) {
     errno = EIO;
     return -1;
@@ -136,16 +138,16 @@ int pkt_file_read(FILE *fp, struct pktt_packet **p)
 }
 
 
-int pkt_fd_read(int fd, struct pktt_packet **p)
+int pkt_fd_read(int fd, struct pktbuf **p)
 {
-  struct pktt_packet_hdr ph, ph2;
+  struct pktprehdr pph, pph2;
   ssize_t nr;
 
   if ( p == NULL ) {
     errno = EINVAL;
     return -1;
   }
-  if ( (nr = io_read(fd, &ph, sizeof(ph))) < sizeof(ph) ) {
+  if ( (nr = io_read(fd, &pph, sizeof(pph))) < sizeof(pph) ) {
     if ( nr != 0 ) {
       errno = EIO;
       return -1;
@@ -153,17 +155,17 @@ int pkt_fd_read(int fd, struct pktt_packet **p)
       return 0;
     }
   }
-  unpack(&ph, sizeof(ph), "wwj", &ph2.pkth_dltype, &ph2.pkth_len,
-         &ph2.pkth_timestamp);
-  if ( !dltype_is_valid(ph2.pkth_dltype) ) {
+  unpack(&pph, sizeof(pph), "wwj", &pph2.pph_dltype, &pph2.pph_len,
+         &pph2.pph_timestamp);
+  if ( !dltype_is_valid(pph2.pph_dltype) ) {
     errno = EIO;
     return -1;
   }
-  if ( (ssize_t)ph2.pkth_len < 0 ) {
+  if ( (ssize_t)pph2.pph_len < 0 ) {
     errno = EIO;
     return -1;
   }
-  *p = new_packet(&ph2);
+  *p = new_packet(&pph2);
   if ( io_read(fd, pkt_data(*p), (*p)->pkt_len) < (*p)->pkt_len ) {
     errno = EIO;
     return -1;
@@ -173,17 +175,17 @@ int pkt_fd_read(int fd, struct pktt_packet **p)
 }
 
 
-int pkt_file_write(FILE *fp, struct pktt_packet *p)
+int pkt_file_write(FILE *fp, struct pktbuf *p)
 {
-  struct pktt_packet_hdr ph;
+  struct pktprehdr pph;
   size_t nr;
 
   if ( fp == NULL || p == NULL || (ssize_t)p->pkt_len < 0 ) {
     errno = EINVAL;
     return -1;
   }
-  pack(&ph, sizeof(ph), "wwj", p->pkt_dltype, p->pkt_len, p->pkt_timestamp);
-  if ( (nr = fwrite(&ph, 1, sizeof(ph), fp)) < sizeof(ph) ) {
+  pack(&pph, sizeof(pph), "wwj", p->pkt_dltype, p->pkt_len, p->pkt_timestamp);
+  if ( (nr = fwrite(&pph, 1, sizeof(pph), fp)) < sizeof(pph) ) {
     errno = EIO;
     return -1;
   }
@@ -196,17 +198,17 @@ int pkt_file_write(FILE *fp, struct pktt_packet *p)
 }
 
 
-int pkt_fd_write(int fd, struct pktt_packet *p)
+int pkt_fd_write(int fd, struct pktbuf *p)
 {
-  struct pktt_packet_hdr ph;
+  struct pktprehdr pph;
   size_t nr;
 
   if ( p == NULL || (ssize_t)p->pkt_len < 0 ) {
     errno = EINVAL;
     return -1;
   }
-  pack(&ph, sizeof(ph), "wwj", p->pkt_dltype, p->pkt_len, p->pkt_timestamp);
-  if ( (nr = io_write(fd, &ph, sizeof(ph))) < sizeof(ph) ) {
+  pack(&pph, sizeof(pph), "wwj", p->pkt_dltype, p->pkt_len, p->pkt_timestamp);
+  if ( (nr = io_write(fd, &pph, sizeof(pph))) < sizeof(pph) ) {
     errno = EIO;
     return -1;
   }
@@ -219,7 +221,7 @@ int pkt_fd_write(int fd, struct pktt_packet *p)
 }
 
 
-void pkt_free(struct pktt_packet *p)
+void pkt_free(struct pktbuf *p)
 {
   free(p);
 }

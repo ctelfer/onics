@@ -295,7 +295,7 @@ struct tcph {
   uint16_t      cksum;
   uint16_t      urgp;
 };
-#define TCPH_HLEN(tcph)         (((tcph).doff >> 2) & 3)
+#define TCPH_HLEN(tcph)         (((tcph).doff >> 2) & ~3)
 #define TCPH_ECNN(tcph)         ((tcph).doff & 1)
 #define TCPF_FIN                0x01
 #define TCPF_SYN                0x02

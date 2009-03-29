@@ -26,7 +26,9 @@ struct hdr_parse;
 struct pparse_ops {
   int			(*follows)(struct hdr_parse *phdr);
   struct hdr_parse *	(*parse)(struct hdr_parse *phdr);
-  struct hdr_parse *	(*create)(byte_t *start, size_t off, size_t len);
+  struct hdr_parse *	(*create)(byte_t *start, size_t off, 
+                                  size_t maxhlen, size_t minlen, 
+                                  size_t maxlen);
 };
 
 struct proto_parser {

@@ -37,16 +37,22 @@ static struct hdr_parse *newhdr(size_t sz, unsigned type,
 }
 
 static struct hdr_parse *crthdr(size_t sz, unsigned type, byte_t *buf,
-                                size_t off, size_t len, struct hparse_ops *ops)
+                                size_t off, size_t maxhlen, size_t maxtoff, 
+                                struct hparse_ops *ops)
 {
-  struct hdr_parse hdr = { 0 };
+  struct hdr_parse hdr = { 0 }, *nhdr;
+
+  if ( maxtoff < off || maxtoff < off + maxhlen )
+    return NULL;
   hdr.type = PPT_NONE;
   hdr.data = buf;
   hdr.hoff = off;
   hdr.poff = off;
-  hdr.toff = off + len;
-  hdr.eoff = off + len;
-  return newhdr(sz, type, &hdr, &none_hparse_ops);
+  hdr.toff = maxtoff;
+  hdr.eoff = maxtoff;
+  nhdr = newhdr(sz, type, &hdr, &none_hparse_ops);
+  nhdr->poff = nhdr->hoff + maxhlen;
+  return nhdr;
 }
 
 
@@ -62,7 +68,9 @@ static struct hdr_parse *default_parse(struct hdr_parse *phdr)
 }
 
 
-static struct hdr_parse *default_create(byte_t *start, size_t off, size_t len)
+static struct hdr_parse *default_create(byte_t *start, size_t off, 
+                                        size_t maxhlen, size_t mintoff,
+                                        size_t maxtoff)
 {
   return NULL;
 }
@@ -126,10 +134,14 @@ static struct hdr_parse *none_parse(struct hdr_parse *phdr)
 }
 
 
-static struct hdr_parse *none_create(byte_t *start, size_t off, size_t len)
+static struct hdr_parse *none_create(byte_t *start, size_t off, 
+                                     size_t maxhlen, size_t mintoff, 
+                                     size_t maxtoff)
 {
-  return crthdr(sizeof(struct hdr_parse), PPT_NONE, start, off, len, 
-                &none_hparse_ops);
+  struct hdr_parse *hdr;
+  hdr = crthdr(sizeof(struct hdr_parse), PPT_NONE, start, off, 
+               maxhlen, maxtoff, &none_hparse_ops);
+  return hdr;
 }
 
 /* -- ops for Ethernet type -- */
@@ -160,15 +172,18 @@ static struct hdr_parse *eth_parse(struct hdr_parse *phdr)
 }
 
 
-static struct hdr_parse *eth_create(byte_t *start, size_t off, size_t len)
+static struct hdr_parse *eth_create(byte_t *start, size_t off, size_t maxhlen,
+                                    size_t mintoff, size_t maxtoff)
 {
   struct hdr_parse *hdr;
-  if ( start == NULL || off >= len || len - off < ETHHLEN )
+  if ( start == NULL || maxhlen < ETHHLEN )
     return NULL;
-  hdr = crthdr(sizeof(struct hdr_parse), PPT_ETHERNET, start, off, len, 
-               &eth_hparse_ops);
-  memset(start + off, 0, ETHHLEN);
-  hdr->poff = hdr->hoff + ETHHLEN;
+  hdr = crthdr(sizeof(struct hdr_parse), PPT_ETHERNET, start, off, ETHHLEN, 
+               mintoff, &eth_hparse_ops);
+  if ( hdr ) {
+    memset(start + off, 0, ETHHLEN);
+  }
+  return hdr;
 }
 
 
@@ -199,7 +214,7 @@ static struct hdr_parse *arp_parse(struct hdr_parse *phdr)
   struct arph *arp;
   abort_unless(arp_follows(phdr));
   switch(phdr->type) {
-  case PPT_ARP:
+  case PPT_ETHERNET:
     break;
   default:
     return NULL;
@@ -235,26 +250,27 @@ static int arp_fixlen(struct hdr_parse *hdr)
 {
   if ( hdr_hlen(hdr) < 8 )
     return -1;
-  if ( (memcmp(hdr_header(hdr,void), ethiparpstr, 6) == 0) &&
-       (hdr_plen(hdr) != 20) )
-    return -1;
   return 0;
 }
 
 
-static struct hdr_parse *arp_create(byte_t *start, size_t off, size_t len)
+static struct hdr_parse *arp_create(byte_t *start, size_t off, size_t maxhlen,
+                                    size_t mintoff, size_t maxtoff)
 {
   struct hdr_parse *hdr;
   struct arph *arp;
-  if ( start == NULL || off >= len || len - off < 28 )
+  if ( start == NULL || maxhlen < sizeof(*arp) || mintoff > off + maxhlen )
     return NULL;
-  hdr = crthdr(sizeof(struct hdr_parse), PPT_ARP, start, off, len, 
-               &arp_hparse_ops);
-  memset(start + off, 0, 28);
-  hdr->poff = hdr->hoff + 8;
-  hdr->toff = hdr->eoff = hdr->poff + 28;
-  arp = hdr_header(hdr, struct arph);
-  pack(&arp, 8, "hhbbh", ARPT_ETHERNET, ETHTYPE_IP, 6, 4, ARPOP_REQUEST);
+  hdr = crthdr(sizeof(struct hdr_parse), PPT_ARP, start, off, sizeof(*arp), 
+               maxtoff, &arp_hparse_ops);
+  if ( hdr ) {
+    memset(start + off, 0, hdr_totlen(hdr));
+    if ( hdr_plen(hdr) >= 20 ) {
+      hdr->toff = hdr->eoff = hdr->poff + 20 + sizeof(*arp);
+      arp = hdr_header(hdr, struct arph);
+      pack(&arp, 8, "hhbbh", ARPT_ETHERNET, ETHTYPE_IP, 6, 4, ARPOP_REQUEST);
+    }
+  }
   return hdr;
 }
 
@@ -266,8 +282,7 @@ static int ipv4_follows(struct hdr_parse *phdr)
   if ( (phdr->type != PPT_ETHERNET) || (phdr->data == NULL) )
     return 0;
   unpack(&hdr_header(phdr, struct eth2h)->ethtype, 2, "h", &etype);
-  return (etype == ETHTYPE_IP) && (hdr_plen(phdr) > 0) && 
-         (IPH_VERSION(*hdr_header(phdr, struct ipv4h)) == 4);
+  return (etype == ETHTYPE_IP) && (hdr_plen(phdr) > 0);
 }
 
 
@@ -293,10 +308,12 @@ static struct hdr_parse *ipv4_parse(struct hdr_parse *phdr)
   if ( tlen < 20 ) {
     hdr->error |= PPERR_TOSMALL;
     hdr->poff = hdr->toff = hdr->eoff = hdr->hoff;
-  } else if ( hlen < tlen )  {
+  } else if ( hlen > tlen )  {
     hdr->error |= PPERR_HLEN;
     hdr->poff = hdr->toff = hdr->eoff = hdr->hoff;
   } else {
+    if ( (ip->vhl & 0xf0) != 0x40 )
+      hdr->error |= PPERR_INVALID;
     hdr->poff = hdr->hoff + hlen;
     unpack(&ip->len, 2, "h", &iplen);
     if ( iplen < hdr_plen(hdr) )
@@ -321,21 +338,23 @@ static struct hdr_parse *ipv4_parse(struct hdr_parse *phdr)
 }
 
 
-static struct hdr_parse *ipv4_create(byte_t *start, size_t off, size_t len)
+static struct hdr_parse *ipv4_create(byte_t *start, size_t off, size_t maxhlen,
+                                     size_t mintoff, size_t maxtoff)
 {
   struct hdr_parse *hdr;
   struct ipv4h *ip;
-  if ( start == NULL || off >= len || len - off < 20 )
+  if ( start == NULL || maxhlen < sizeof(*ip) )
     return NULL;
-  hdr = crthdr(sizeof(struct hdr_parse), PPT_IPV4, start, off, len, 
-               &ipv4_hparse_ops);
-  hdr->poff = hdr->hoff + 20;
-  ip = hdr_header(hdr, struct ipv4h);
-  memset(ip, 0, sizeof(*ip));
-  ip->vhl = 0x45;
-  if ( hdr_totlen(hdr) > 65535 )
-    hdr->toff = hdr->eoff = hdr->hoff = 65535;
-  ip->len = ntoh16(hdr_totlen(hdr));
+  if ( maxtoff - off > 65535 )
+    maxtoff = off + 65535;
+  hdr = crthdr(sizeof(struct hdr_parse), PPT_IPV4, start, off, sizeof(*ip), 
+               mintoff, &ipv4_hparse_ops);
+  if ( hdr ) {
+    ip = hdr_header(hdr, struct ipv4h);
+    memset(ip, 0, sizeof(*ip));
+    ip->vhl = 0x45;
+    ip->len = ntoh16(hdr_totlen(hdr));
+  }
   return hdr;
 }
 
@@ -471,20 +490,22 @@ static struct hdr_parse *udp_parse(struct hdr_parse *phdr)
 }
 
 
-static struct hdr_parse *udp_create(byte_t *start, size_t off, size_t len)
+static struct hdr_parse *udp_create(byte_t *start, size_t off, size_t maxhlen,
+                                    size_t mintoff, size_t maxtoff)
 {
   struct hdr_parse *hdr;
   struct udph *udp;
-  if ( start == NULL || off >= len || len - off < 8 )
+  if ( start == NULL || maxhlen < sizeof(*udp) )
     return NULL;
-  hdr = crthdr(sizeof(struct hdr_parse), PPT_UDP, start, off, len, 
-               &udp_hparse_ops);
-  hdr->poff = hdr->hoff + 8;
-  udp = hdr_header(hdr, struct udph);
-  memset(udp, 0, sizeof(*udp));
-  if ( hdr_totlen(hdr) > 65515 )
-    hdr->eoff = hdr->toff = hdr->poff + 65507;
-  pack(&udp->len, 2, "h", (uint16_t)hdr_totlen(hdr));
+  if ( maxtoff - off > 65535 ) 
+    maxtoff = off + 65535;
+  hdr = crthdr(sizeof(struct hdr_parse), PPT_UDP, start, off, sizeof(*udp), 
+               maxtoff, &udp_hparse_ops);
+  if ( hdr ) {
+    udp = hdr_header(hdr, struct udph);
+    memset(udp, 0, sizeof(*udp));
+    pack(&udp->len, 2, "h", (uint16_t)hdr_totlen(hdr));
+  }
   return hdr;
 }
 
@@ -556,7 +577,7 @@ static struct hdr_parse *tcp_parse(struct hdr_parse *phdr)
   if ( tlen < 20 ) {
     hdr->error |= PPERR_TOSMALL;
     hdr->poff = hdr->toff = hdr->eoff = hdr->hoff;
-  } else if ( hlen < tlen )  {
+  } else if ( hlen > tlen )  {
     hdr->error |= PPERR_HLEN;
     hdr->poff = hdr->toff = hdr->eoff = hdr->hoff;
   } else {
@@ -571,18 +592,20 @@ static struct hdr_parse *tcp_parse(struct hdr_parse *phdr)
 }
 
 
-static struct hdr_parse *tcp_create(byte_t *start, size_t off, size_t len)
+static struct hdr_parse *tcp_create(byte_t *start, size_t off, size_t maxhlen,
+                                    size_t mintoff, size_t maxtoff)
 {
   struct hdr_parse *hdr;
   struct tcph *tcp;
-  if ( start == NULL || off >= len || len - off < 20 )
+  if ( start == NULL || maxhlen < sizeof(*tcp) )
     return NULL;
-  hdr = crthdr(sizeof(struct hdr_parse), PPT_TCP, start, off, len, 
-               &tcp_hparse_ops);
-  hdr->poff = hdr->hoff + 20;
-  memset(hdr_header(hdr, void), 0, hdr_totlen(hdr));
-  tcp = hdr_header(hdr, struct tcph);
-  tcp->doff = 0x50;
+  hdr = crthdr(sizeof(struct hdr_parse), PPT_TCP, start, off, sizeof(*tcp), 
+               maxtoff, &tcp_hparse_ops);
+  if ( hdr ) {
+    memset(hdr_header(hdr, void), 0, sizeof(*tcp));
+    tcp = hdr_header(hdr, struct tcph);
+    tcp->doff = 0x50;
+  }
   return hdr;
 }
 
@@ -637,56 +660,110 @@ static void tcp_free(struct hdr_parse *hdr)
 
 /* -- op structures for default initialization -- */
 struct pparse_ops none_pparse_ops = {
-  none_follows, none_parse, default_create
+  none_follows, 
+  none_parse, 
+  default_create
 };
 struct hparse_ops none_hparse_ops = {
-  default_getfield, default_fixlen, default_fixcksum, simple_copy, default_free
+  default_getfield,
+  default_fixlen,
+  default_fixcksum,
+  simple_copy,
+  default_free
 };
 struct pparse_ops eth_pparse_ops = {
-  eth_follows, eth_parse, eth_create
+  eth_follows,
+  eth_parse,
+  eth_create
 };
 struct hparse_ops eth_hparse_ops = {
-  default_getfield, default_fixlen, default_fixcksum, simple_copy, default_free
+  default_getfield,
+  default_fixlen,
+  default_fixcksum,
+  simple_copy,
+  default_free
 };
 struct pparse_ops arp_pparse_ops = { 
-  arp_follows, arp_parse, arp_create
+  arp_follows,
+  arp_parse,
+  arp_create
 };
 struct hparse_ops arp_hparse_ops = {
-  arp_getfield, arp_fixlen, default_fixcksum, simple_copy, default_free
+  arp_getfield,
+  arp_fixlen,
+  default_fixcksum,
+  simple_copy,
+  default_free
 };
 struct pparse_ops ipv4_pparse_ops = { 
-  ipv4_follows, ipv4_parse, ipv4_create
+  ipv4_follows,
+  ipv4_parse,
+  ipv4_create
 };
 struct hparse_ops ipv4_hparse_ops = {
-  ipv4_getfield, ipv4_fixlen, ipv4_fixcksum, ipv4_copy, ipv4_free
+  ipv4_getfield,
+  ipv4_fixlen,
+  ipv4_fixcksum,
+  ipv4_copy,
+  ipv4_free
 };
 struct pparse_ops ipv6_pparse_ops = { 
-  default_follows, default_parse, default_create
+  default_follows,
+  default_parse,
+  default_create
 };
 struct hparse_ops ipv6_hparse_ops = {
-  default_getfield, default_fixlen, default_fixcksum, default_copy, default_free
+  default_getfield,
+  default_fixlen,
+  default_fixcksum,
+  default_copy,
+  default_free
 };
 struct pparse_ops icmp_pparse_ops = { 
-  default_follows, default_parse, default_create
+  default_follows,
+  default_parse,
+  default_create
 };
 struct hparse_ops icmp_hparse_ops = {
-  default_getfield, default_fixlen, default_fixcksum, default_copy, default_free
+  default_getfield,
+  default_fixlen,
+  default_fixcksum,
+  default_copy,
+  default_free
 };
 struct pparse_ops icmpv6_pparse_ops = { 
-  default_follows, default_parse, default_create
+  default_follows,
+  default_parse,
+  default_create
 };
 struct hparse_ops icmpv6_hparse_ops = {
-  default_getfield, default_fixlen, default_fixcksum, default_copy, default_free
+  default_getfield,
+  default_fixlen,
+  default_fixcksum,
+  default_copy,
+  default_free
 };
 struct pparse_ops udp_pparse_ops = {
-  udp_follows, udp_parse, udp_create
+  udp_follows,
+  udp_parse,
+  udp_create
 };
 struct hparse_ops udp_hparse_ops = {
-  default_getfield, udp_fixlen, udp_fixcksum, simple_copy, default_free
+  default_getfield,
+  udp_fixlen,
+  udp_fixcksum,
+  simple_copy,
+  default_free
 };
 struct pparse_ops tcp_pparse_ops = { 
-  tcp_follows, tcp_parse, tcp_create
+  tcp_follows,
+  tcp_parse,
+  tcp_create
 };
 struct hparse_ops tcp_hparse_ops = {
-  tcp_getfield, tcp_fixlen, tcp_fixcksum, tcp_copy, tcp_free
+  tcp_getfield,
+  tcp_fixlen,
+  tcp_fixcksum,
+  tcp_copy,
+  tcp_free
 };

@@ -18,7 +18,7 @@ int register_proto_parser(unsigned type, struct pparse_ops *ppo)
     return -1;
   }
   pp = &proto_parsers[type];
-  if ( !pp->valid ) {
+  if ( pp->valid ) {
     errno = EACCES;
     return -1;
   }
@@ -38,8 +38,8 @@ int add_proto_parser_parent(unsigned cldtype, unsigned partype)
     errno = EINVAL;
     return -1;
   }
-  par = &proto_parsers[cldtype];
-  cld = &proto_parsers[partype];
+  par = &proto_parsers[partype];
+  cld = &proto_parsers[cldtype];
   if ( !par->valid || !cld->valid ) {
     errno = EINVAL;
     return -1;
@@ -79,7 +79,7 @@ void install_default_proto_parsers()
   register_proto_parser(PPT_UDP, &udp_pparse_ops);
   add_proto_parser_parent(PPT_UDP, PPT_IPV4);
   add_proto_parser_parent(PPT_UDP, PPT_IPV6);
-  register_proto_parser(PPT_TCP, &udp_pparse_ops);
+  register_proto_parser(PPT_TCP, &tcp_pparse_ops);
   add_proto_parser_parent(PPT_TCP, PPT_IPV4);
   add_proto_parser_parent(PPT_TCP, PPT_IPV6);
 }
@@ -97,7 +97,7 @@ int parse_from(struct hdr_parse *phdr)
   pp = &proto_parsers[phdr->type];
   abort_unless(pp->valid);
   last = phdr;
-  while ( pp && (phdr->toff > 0) ) {
+  while ( pp && (hdr_plen(last) > 0) ) {
     nextpp = NULL;
     l_for_each(child, pp->children) {
       cldid = clist_data(child, unsigned);
@@ -107,6 +107,7 @@ int parse_from(struct hdr_parse *phdr)
       }
       if ( (*nextpp->ops->follows)(last) )
         break;
+      nextpp = NULL;
     }
     pp = nextpp;
     if ( nextpp ) {
@@ -114,6 +115,8 @@ int parse_from(struct hdr_parse *phdr)
         errval = errno;
         goto err;
       }
+      last->next = nhdr;
+      nhdr->parent = last;
       if ( nhdr->error ) /* check for partial parse */
         break;
       last = nhdr;
@@ -137,14 +140,16 @@ struct hdr_parse *parse_packet(unsigned ppidx, byte_t *pkt, size_t off,
 {
   struct hdr_parse dummyhdr = { 0 }, *rhdr = NULL;
   struct proto_parser *pp = &proto_parsers[PPT_NONE];
-  if ( !pkt || pktlen < 1 || off < pktlen || !pp->valid ) {
+  if ( !pkt || pktlen < 1 || off > pktlen || !pp->valid ) {
     errno = EINVAL;
     return NULL;
   }
   dummyhdr.type = PPT_NONE;
   dummyhdr.data = pkt;
+  dummyhdr.hoff = off;
   dummyhdr.poff = off;
-  dummyhdr.toff = pktlen;
+  dummyhdr.toff = off + pktlen;
+  dummyhdr.eoff = off + pktlen;
   if ( parse_from(&dummyhdr) == 0 ) {
     if ( (rhdr = dummyhdr.next) )
       rhdr->parent = NULL;
@@ -297,8 +302,7 @@ struct hdr_parse *create_parse(unsigned ppidx, byte_t *pkt, size_t len,
     maxtoff = len;
   }
 
-  /* TODO: revisit this API */
-  hdr = (*pp->ops->create)(phdr->data, off, maxhlen);
+  hdr = (*pp->ops->create)(phdr->data, off, maxhlen, mintoff, maxtoff);
   if ( !hdr )
     return NULL;
   hdr->parent = prev;

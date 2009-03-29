@@ -78,15 +78,15 @@ void parse_args(int argc, char *argv[])
 int main(int argc, char *argv[])
 {
   int dlt;
-  enum pktt_dltype_e dltype;
+  enum pktdltype_e dltype;
   struct pcap_pkthdr pcapph;
   const byte_t *packet;
-  struct pktt_packet *p;
+  struct pktbuf *p;
 
   parse_args(argc, argv);
   switch((dlt = pcap_datalink(g_pcap))) {
   case DLT_EN10MB: 
-    dltype = PTDL_ETHERNET2; 
+    dltype = PKTDL_ETHERNET2; 
     break;
   default: 
     err("unsupported datalink type: %d", dlt);
@@ -96,7 +96,8 @@ int main(int argc, char *argv[])
   p->pkt_offset = 0;
   while ( (packet = (byte_t*)pcap_next(g_pcap, &pcapph)) != NULL ) { 
     p->pkt_len = pcapph.len;
-    p->pkt_timestamp = (uint64_t)pcapph.ts.tv_sec * 1000000000 + (uint64_t)pcapph.ts.tv_usec * 1000;
+    p->pkt_timestamp = (uint64_t)pcapph.ts.tv_sec * 1000000000 + 
+                       (uint64_t)pcapph.ts.tv_usec * 1000;
     memcpy(p->pkt_buffer, packet, p->pkt_len); 
     if ( pkt_file_write(stdout, p) < 0 ) 
       errsys("pkt_file_write: ");
