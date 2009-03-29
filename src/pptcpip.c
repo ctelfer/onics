@@ -163,7 +163,7 @@ static struct hdr_parse *eth_parse(struct hdr_parse *phdr)
   }
   hdr = newhdr(sizeof(*hdr), PPT_ETHERNET, phdr, &eth_hparse_ops);
   if ( hdr_hlen(hdr) < ETHHLEN ) { 
-    hdr->error = PPERR_TOSMALL;
+    hdr->error = PPERR_TOOSMALL;
     hdr->poff = hdr->toff = hdr->eoff = hdr->hoff;
   } else {
     hdr->poff = hdr->hoff + ETHHLEN;
@@ -221,7 +221,7 @@ static struct hdr_parse *arp_parse(struct hdr_parse *phdr)
   }
   hdr = newhdr(sizeof(*hdr), PPT_ARP, phdr, &arp_hparse_ops);
   if ( hdr_hlen(hdr) < 8 ) {
-    hdr->error = PPERR_TOSMALL;
+    hdr->error = PPERR_TOOSMALL;
     hdr->poff = hdr->toff = hdr->eoff = hdr->hoff;
   } else { 
     hdr->poff = hdr->hoff + 8;
@@ -306,7 +306,7 @@ static struct hdr_parse *ipv4_parse(struct hdr_parse *phdr)
   hlen = IPH_HLEN(*ip);
   tlen = hdr_hlen(hdr);
   if ( tlen < 20 ) {
-    hdr->error |= PPERR_TOSMALL;
+    hdr->error |= PPERR_TOOSMALL;
     hdr->poff = hdr->toff = hdr->eoff = hdr->hoff;
   } else if ( hlen > tlen )  {
     hdr->error |= PPERR_HLEN;
@@ -416,24 +416,7 @@ static void ipv4_free(struct hdr_parse *hdr)
 }
 
 
-/* -- parse options for UDP protocol -- */
-static int udp_follows(struct hdr_parse *phdr) 
-{
-  if ( phdr->data == NULL )
-    return 0;
-  if ( phdr->type != PPT_IPV4 ) {
-    struct ipv4h *ip = hdr_header(phdr, struct ipv4h);
-    return ip->proto == IPPROT_UDP;
-  } else if ( phdr->type != PPT_IPV6 ) {
-    /* TODO: implement IPV6 next header finding */
-    return 0;
-  } else { 
-    return 0;
-  }
-}
-
-
-uint16_t tcpudp_cksum(struct hdr_parse *hdr, uint8_t proto)
+static uint16_t tcpudp_cksum(struct hdr_parse *hdr, uint8_t proto)
 {
   struct hdr_parse *phdr = hdr->parent;
   uint16_t sum = 0;
@@ -461,6 +444,23 @@ uint16_t tcpudp_cksum(struct hdr_parse *hdr, uint8_t proto)
 }
 
 
+/* -- parse options for UDP protocol -- */
+static int udp_follows(struct hdr_parse *phdr) 
+{
+  if ( phdr->data == NULL )
+    return 0;
+  if ( phdr->type != PPT_IPV4 ) {
+    struct ipv4h *ip = hdr_header(phdr, struct ipv4h);
+    return ip->proto == IPPROT_UDP;
+  } else if ( phdr->type != PPT_IPV6 ) {
+    /* TODO: implement IPV6 next header finding */
+    return 0;
+  } else { 
+    return 0;
+  }
+}
+
+
 static struct hdr_parse *udp_parse(struct hdr_parse *phdr)
 {
   struct hdr_parse *hdr;
@@ -478,8 +478,12 @@ static struct hdr_parse *udp_parse(struct hdr_parse *phdr)
   }
   hdr = newhdr(sizeof(*hdr), PPT_UDP, phdr, &udp_hparse_ops);
   if ( hdr_hlen(hdr) < 8 ) {
-    hdr->error |= PPERR_LENGTH;
+    hdr->error |= PPERR_TOOSMALL;
     hdr->poff = hdr->toff = hdr->eoff = hdr->hoff;
+  } else if ( (phdr->error & PPERR_LENGTH) ) {
+    hdr->poff = hdr->hoff + 8;
+    hdr->error |= PPERR_LENGTH;
+    hdr->error |= PPERR_CKSUM;
   } else {
     hdr->poff = hdr->hoff + 8;
     udp = hdr_header(hdr, struct udph);
@@ -575,11 +579,15 @@ static struct hdr_parse *tcp_parse(struct hdr_parse *phdr)
   hlen = TCPH_HLEN(*tcp);
   tlen = hdr_hlen(hdr);
   if ( tlen < 20 ) {
-    hdr->error |= PPERR_TOSMALL;
+    hdr->error |= PPERR_TOOSMALL;
     hdr->poff = hdr->toff = hdr->eoff = hdr->hoff;
   } else if ( hlen > tlen )  {
     hdr->error |= PPERR_HLEN;
     hdr->poff = hdr->toff = hdr->eoff = hdr->hoff;
+  } else if ( (phdr->error & PPERR_LENGTH) ) {
+    hdr->poff = hdr->hoff + hlen;
+    hdr->error |= PPERR_LENGTH;
+    hdr->error |= PPERR_CKSUM;
   } else {
     hdr->poff = hdr->hoff + hlen;
     if ( tcpudp_cksum(hdr, IPPROT_TCP) != 0 )
@@ -658,6 +666,77 @@ static void tcp_free(struct hdr_parse *hdr)
 }
 
 
+/* -- ICMP Protocol functions -- */
+static int icmp_follows(struct hdr_parse *phdr) 
+{
+  return (phdr->data != NULL) &&
+         (phdr->type == PPT_IPV4) &&
+         (hdr_header(phdr, struct ipv4h)->proto == IPPROT_ICMP);
+}
+
+
+static struct hdr_parse *icmp_parse(struct hdr_parse *phdr)
+{
+  struct hdr_parse *hdr;
+  uint32_t tlen;
+  uint16_t sum;
+  struct icmph *icmp;
+
+  abort_unless(icmp_follows(phdr));
+  switch(phdr->type) {
+  case PPT_IPV4:
+    break;
+  default:
+    return NULL;
+  }
+  hdr = newhdr(sizeof(*hdr), PPT_ICMP, phdr, &icmp_hparse_ops);
+  if ( hdr_hlen(hdr) < 8 ) {
+    hdr->error |= PPERR_TOOSMALL;
+    hdr->poff = hdr->toff = hdr->eoff = hdr->hoff;
+  } else if ( (phdr->error & PPERR_LENGTH) ) {
+    hdr->poff = hdr->hoff + 8;
+    hdr->error |= PPERR_LENGTH;
+    hdr->error |= PPERR_CKSUM;
+  } else {
+    hdr->poff = hdr->hoff + 8;
+    icmp = hdr_header(hdr, struct icmph);
+    if ( ~ones_sum(icmp, hdr_totlen(hdr), 0) )
+      hdr->error |= PPERR_CKSUM;
+  }
+  return hdr;
+}
+
+
+static struct hdr_parse *icmp_create(byte_t *start, size_t off, size_t maxhlen,
+                                     size_t mintoff, size_t maxtoff)
+{
+  struct hdr_parse *hdr;
+  struct icmph *icmp;
+  if ( start == NULL || maxhlen < sizeof(*icmp) )
+    return NULL;
+
+  hdr = crthdr(sizeof(struct hdr_parse), PPT_ICMP, start, off, sizeof(*icmp), 
+               maxtoff, &icmp_hparse_ops);
+  if ( hdr ) {
+    icmp = hdr_header(hdr, struct icmph);
+    memset(icmp, 0, sizeof(*icmp));
+  }
+  return hdr;
+}
+
+
+static int icmp_fixcksum(struct hdr_parse *hdr)
+{
+  struct icmph *icmp = hdr_header(hdr, struct icmph);
+  uint16_t sum;
+  if ( (hdr_hlen(hdr) != 8) || !hdr->parent )
+    return -1;
+  icmp->cksum = 0;
+  icmp->cksum = ~ones_sum(hdr, hdr_totlen(hdr), 0);
+  return 0;
+}
+
+
 /* -- op structures for default initialization -- */
 struct pparse_ops none_pparse_ops = {
   none_follows, 
@@ -720,15 +799,15 @@ struct hparse_ops ipv6_hparse_ops = {
   default_free
 };
 struct pparse_ops icmp_pparse_ops = { 
-  default_follows,
-  default_parse,
-  default_create
+  icmp_follows,
+  icmp_parse,
+  icmp_create
 };
 struct hparse_ops icmp_hparse_ops = {
   default_getfield,
   default_fixlen,
-  default_fixcksum,
-  default_copy,
+  icmp_fixcksum,
+  simple_copy,
   default_free
 };
 struct pparse_ops icmpv6_pparse_ops = { 

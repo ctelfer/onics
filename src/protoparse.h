@@ -14,14 +14,14 @@
 #define PPT_TCP			8
 #define PPT_MAX			100
 
-#define PPERR_TOSMALL           0x00000001
+#define PPERR_TOOSMALL          0x00000001
 #define PPERR_HLEN              0x00000002
 #define PPERR_LENGTH            0x00000004
 #define PPERR_CKSUM             0x00000008
 #define PPERR_OPTLEN            0x00000010
 #define PPERR_INVALID           0x00000020 /* invalid combination of options */
 
-#define PPERR_LENMASK           (PPERR_TOSMALL|PPERR_HLEN|PPERR_LENGTH)
+#define PPERR_HLENMASK          (PPERR_TOOSMALL|PPERR_HLEN)
 
 struct hdr_parse;
 
