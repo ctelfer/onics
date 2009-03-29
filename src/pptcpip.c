@@ -279,10 +279,22 @@ static struct hdr_parse *arp_create(byte_t *start, size_t off, size_t maxhlen,
 static int ipv4_follows(struct hdr_parse *phdr)
 {
   uint16_t etype;
-  if ( (phdr->type != PPT_ETHERNET) || (phdr->data == NULL) )
+  if ( phdr->data == NULL )
     return 0;
-  unpack(&hdr_header(phdr, struct eth2h)->ethtype, 2, "h", &etype);
-  return (etype == ETHTYPE_IP) && (hdr_plen(phdr) > 0);
+  if ( phdr->type == PPT_ETHERNET ) {
+    unpack(&hdr_header(phdr, struct eth2h)->ethtype, 2, "h", &etype);
+    return (etype == ETHTYPE_IP) && (hdr_plen(phdr) > 0);
+  }
+  if ( phdr->type == PPT_ICMP ) {
+    struct icmph *icmp = hdr_header(phdr, struct icmph);
+    /* types which can have a returned IP header in them */
+    return (icmp->type == ICMPT_DEST_UNREACH) ||
+           (icmp->type == ICMPT_TIME_EXCEEDED) ||
+           (icmp->type == ICMPT_PARAM_PROB) ||
+           (icmp->type == ICMPT_SRC_QUENCH) ||
+           (icmp->type == ICMPT_REDIRECT);
+  }
+  return 0;
 }
 
 
@@ -296,6 +308,7 @@ static struct hdr_parse *ipv4_parse(struct hdr_parse *phdr)
   abort_unless(ipv4_follows(phdr));
   switch(phdr->type) {
   case PPT_ETHERNET:
+  case PPT_ICMP:
     break;
   default:
     return NULL;

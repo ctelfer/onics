@@ -74,6 +74,7 @@ void install_default_proto_parsers()
   add_proto_parser_parent(PPT_IPV6, PPT_ETHERNET);
   register_proto_parser(PPT_ICMP, &icmp_pparse_ops);
   add_proto_parser_parent(PPT_ICMP, PPT_IPV4);
+  add_proto_parser_parent(PPT_IPV4, PPT_ICMP); /* embedded headers in ICMP */
   register_proto_parser(PPT_ICMP6, &icmpv6_pparse_ops);
   add_proto_parser_parent(PPT_ICMP6, PPT_IPV6);
   register_proto_parser(PPT_UDP, &udp_pparse_ops);
