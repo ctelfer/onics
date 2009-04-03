@@ -2,6 +2,7 @@
 #define __prototparse_h
 #include <cat/cat.h>
 #include <cat/cattypes.h>
+#include <cat/list.h>
 
 #define PPT_NONE                0
 #define PPT_ETHERNET		1
@@ -28,9 +29,7 @@ struct hdr_parse;
 struct pparse_ops {
   int			(*follows)(struct hdr_parse *phdr);
   struct hdr_parse *	(*parse)(struct hdr_parse *phdr);
-  struct hdr_parse *	(*create)(byte_t *start, size_t off, 
-                                  size_t maxhlen, size_t minlen, 
-                                  size_t maxlen);
+  struct hdr_parse *	(*create)(byte_t *start, size_t off, size_t maxlen);
 };
 
 struct proto_parser {
@@ -71,8 +70,7 @@ struct hparse_ops {
 struct hdr_parse {
   size_t                size; 
   unsigned int          type;
-  struct hdr_parse *    parent;
-  struct hdr_parse *    next;
+  struct list           node;
   byte_t *              data;
   uint32_t              error;
   size_t                hoff;
@@ -88,33 +86,34 @@ struct hdr_parse {
 #define hdr_header(hdr, type) ((type *)((hdr)->data + (hdr)->hoff))
 #define hdr_payload(hdr) ((void *)((hdr)->data + (hdr)->poff))
 #define hdr_trailer(hdr, type) ((type *)((hdr)->data + (hdr)->toff))
+#define hdr_parent(hdr) container((hdr)->node.prev, struct hdr_parse, node)
+#define hdr_child(hdr) container((hdr)->node.next, struct hdr_parse, node)
+#define hdr_islast(hdr) (hdr_child(hdr)->type == PPT_NONE)
+#define hdr_isfirst(hdr) ((hdr)->type == PPT_NONE)
 
 int register_proto_parser(unsigned type, struct pparse_ops *ops);
 int add_proto_parser_parent(unsigned cldtype, unsigned partype);
 void deregister_proto_parser(unsigned type);
 void install_default_proto_parsers();
 
-struct hdr_parse *parse_packet(unsigned firstpp, byte_t *pkt, size_t off, 
-                               size_t pktlen);
-int reparse_packet(struct hdr_parse *hdr);
-struct hdr_parse *create_parse(unsigned ppidx, byte_t *pkt, size_t len,
-                               size_t off, struct hdr_parse *pkthdr);
-
-
+/* header creation, parse and deletion */
+struct hdr_parse *hdr_create_parse(byte_t *buf, size_t off, size_t buflen);
+int hdr_add(unsigned ppidx, struct hdr_parse *hdr);
+struct hdr_parse *hdr_parse_packet(unsigned firstpp, byte_t *pbuf, size_t off, 
+                                   size_t pktlen, size_t buflen);
 void hdr_free(struct hdr_parse *hdr, int freechildren);
-size_t hdr_total_len(struct hdr_parse *hdr);
 struct hdr_parse *hdr_copy(struct hdr_parse *hdr, byte_t *buffer);
+
 void hdr_set_packet_buffer(struct hdr_parse *hdr, byte_t *buffer);
 scalar_t hdr_get_field(struct hdr_parse *hdr, unsigned fid, size_t *len);
 int hdr_fix_cksum(struct hdr_parse *hdr);
 int hdr_fix_len(struct hdr_parse *hdr);
-void hdr_remove(struct hdr_parse *hdr);
 
 /* insert and delete data from the parse (and packet) */
 /* NOTE: when inserting on the boundary between a payload and header or */
 /* a payload and trailer, hdr_splice() always favors inserting into the */
 /* payload section.  You can use hdr_adj_* to correct this later as needed. */
-int hdr_splice(struct hdr_parse *hdr, size_t off, size_t len, int moveup);
+int hdr_insert(struct hdr_parse *hdr, size_t off, size_t len, int moveup);
 int hdr_cut(struct hdr_parse *hdr, size_t off, size_t len, int moveup);
 
 /* expand or contract header/trailer within the encapsulating space */

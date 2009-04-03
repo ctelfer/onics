@@ -24,8 +24,6 @@ static struct hdr_parse *newhdr(size_t sz, unsigned type,
   hdr = emalloc(sz);
   hdr->size = sz;
   hdr->type = type;
-  hdr->parent = phdr;
-  hdr->next = NULL;
   hdr->data = phdr->data;
   hdr->error = 0;
   hdr->hoff = phdr->poff;
@@ -33,26 +31,30 @@ static struct hdr_parse *newhdr(size_t sz, unsigned type,
   hdr->toff = hdr->poff;
   hdr->eoff = hdr->poff;
   hdr->ops = ops;
+  l_ins(&phdr->node, &hdr->node);
   return hdr;
 }
 
 static struct hdr_parse *crthdr(size_t sz, unsigned type, byte_t *buf,
-                                size_t off, size_t maxhlen, size_t maxtoff, 
+                                size_t off, size_t hlen, size_t len, 
                                 struct hparse_ops *ops)
 {
-  struct hdr_parse hdr = { 0 }, *nhdr;
-
-  if ( maxtoff < off || maxtoff < off + maxhlen )
+  struct hdr_parse *hdr;
+  if ( hlen > len )
     return NULL;
-  hdr.type = PPT_NONE;
-  hdr.data = buf;
-  hdr.hoff = off;
-  hdr.poff = off;
-  hdr.toff = maxtoff;
-  hdr.eoff = maxtoff;
-  nhdr = newhdr(sz, type, &hdr, &none_hparse_ops);
-  nhdr->poff = nhdr->hoff + maxhlen;
-  return nhdr;
+  abort_unless(sz >= sizeof(struct hdr_parse));
+  hdr = emalloc(sz);
+  hdr->size = sz;
+  hdr->type = type;
+  hdr->data = buf;
+  hdr->error = 0;
+  hdr->hoff = off;
+  hdr->poff = off + hlen;
+  hdr->toff = off + len;
+  hdr->eoff = hdr->poff;
+  hdr->ops = ops;
+  l_init(&hdr->node);
+  return hdr;
 }
 
 
@@ -68,9 +70,7 @@ static struct hdr_parse *default_parse(struct hdr_parse *phdr)
 }
 
 
-static struct hdr_parse *default_create(byte_t *start, size_t off, 
-                                        size_t maxhlen, size_t mintoff,
-                                        size_t maxtoff)
+static struct hdr_parse *default_create(byte_t *start, size_t off, size_t len)
 {
   return NULL;
 }
@@ -134,13 +134,11 @@ static struct hdr_parse *none_parse(struct hdr_parse *phdr)
 }
 
 
-static struct hdr_parse *none_create(byte_t *start, size_t off, 
-                                     size_t maxhlen, size_t mintoff, 
-                                     size_t maxtoff)
+static struct hdr_parse *none_create(byte_t *start, size_t off, size_t len)
 {
   struct hdr_parse *hdr;
-  hdr = crthdr(sizeof(struct hdr_parse), PPT_NONE, start, off, 
-               maxhlen, maxtoff, &none_hparse_ops);
+  hdr = crthdr(sizeof(struct hdr_parse), PPT_NONE, start, off, 0, len, 
+               &none_hparse_ops);
   return hdr;
 }
 
@@ -172,14 +170,13 @@ static struct hdr_parse *eth_parse(struct hdr_parse *phdr)
 }
 
 
-static struct hdr_parse *eth_create(byte_t *start, size_t off, size_t maxhlen,
-                                    size_t mintoff, size_t maxtoff)
+static struct hdr_parse *eth_create(byte_t *start, size_t off, size_t len)
 {
   struct hdr_parse *hdr;
-  if ( start == NULL || maxhlen < ETHHLEN )
+  if ( start == NULL || len < ETHHLEN )
     return NULL;
-  hdr = crthdr(sizeof(struct hdr_parse), PPT_ETHERNET, start, off, ETHHLEN, 
-               mintoff, &eth_hparse_ops);
+  hdr = crthdr(sizeof(struct hdr_parse), PPT_ETHERNET, start, off, ETHHLEN, len,
+               &eth_hparse_ops);
   if ( hdr ) {
     memset(start + off, 0, ETHHLEN);
   }
@@ -254,19 +251,18 @@ static int arp_fixlen(struct hdr_parse *hdr)
 }
 
 
-static struct hdr_parse *arp_create(byte_t *start, size_t off, size_t maxhlen,
-                                    size_t mintoff, size_t maxtoff)
+static struct hdr_parse *arp_create(byte_t *start, size_t off, size_t len)
 {
   struct hdr_parse *hdr;
   struct arph *arp;
-  if ( start == NULL || maxhlen < sizeof(*arp) || mintoff > off + maxhlen )
+  if ( start == NULL || len < sizeof(*arp) )
     return NULL;
-  hdr = crthdr(sizeof(struct hdr_parse), PPT_ARP, start, off, sizeof(*arp), 
-               maxtoff, &arp_hparse_ops);
+  hdr = crthdr(sizeof(struct hdr_parse), PPT_ARP, start, off, sizeof(*arp), len,
+               &arp_hparse_ops);
   if ( hdr ) {
     memset(start + off, 0, hdr_totlen(hdr));
     if ( hdr_plen(hdr) >= 20 ) {
-      hdr->toff = hdr->eoff = hdr->poff + 20 + sizeof(*arp);
+      hdr->toff = hdr->eoff = hdr->poff + 28;
       arp = hdr_header(hdr, struct arph);
       pack(&arp, 8, "hhbbh", ARPT_ETHERNET, ETHTYPE_IP, 6, 4, ARPOP_REQUEST);
     }
@@ -351,17 +347,16 @@ static struct hdr_parse *ipv4_parse(struct hdr_parse *phdr)
 }
 
 
-static struct hdr_parse *ipv4_create(byte_t *start, size_t off, size_t maxhlen,
-                                     size_t mintoff, size_t maxtoff)
+static struct hdr_parse *ipv4_create(byte_t *start, size_t off, size_t len)
 {
   struct hdr_parse *hdr;
   struct ipv4h *ip;
-  if ( start == NULL || maxhlen < sizeof(*ip) )
+  if ( start == NULL || len < sizeof(*ip) )
     return NULL;
-  if ( maxtoff - off > 65535 )
-    maxtoff = off + 65535;
-  hdr = crthdr(sizeof(struct hdr_parse), PPT_IPV4, start, off, sizeof(*ip), 
-               mintoff, &ipv4_hparse_ops);
+  if ( len > 65535 )
+    len = 65535;
+  hdr = crthdr(sizeof(struct hdr_parse), PPT_IPV4, start, off, sizeof(*ip), len,
+               &ipv4_hparse_ops);
   if ( hdr ) {
     ip = hdr_header(hdr, struct ipv4h);
     memset(ip, 0, sizeof(*ip));
@@ -431,7 +426,7 @@ static void ipv4_free(struct hdr_parse *hdr)
 
 static uint16_t tcpudp_cksum(struct hdr_parse *hdr, uint8_t proto)
 {
-  struct hdr_parse *phdr = hdr->parent;
+  struct hdr_parse *phdr = hdr_parent(hdr);
   uint16_t sum = 0;
   if ( phdr->type == PPT_IPV4 ) {
     struct pseudoh ph;
@@ -462,13 +457,13 @@ static int udp_follows(struct hdr_parse *phdr)
 {
   if ( phdr->data == NULL )
     return 0;
-  if ( phdr->type != PPT_IPV4 ) {
+  if ( phdr->type == PPT_IPV4 ) {
     struct ipv4h *ip = hdr_header(phdr, struct ipv4h);
     return ip->proto == IPPROT_UDP;
-  } else if ( phdr->type != PPT_IPV6 ) {
+  } else if ( phdr->type == PPT_IPV6 ) {
     /* TODO: implement IPV6 next header finding */
     return 0;
-  } else { 
+  } else {
     return 0;
   }
 }
@@ -481,7 +476,7 @@ static struct hdr_parse *udp_parse(struct hdr_parse *phdr)
   uint16_t sum;
   struct udph *udp;
 
-  abort_unless(ipv4_follows(phdr));
+  abort_unless(udp_follows(phdr));
   switch(phdr->type) {
   case PPT_IPV4:
   case PPT_IPV6:
@@ -507,17 +502,16 @@ static struct hdr_parse *udp_parse(struct hdr_parse *phdr)
 }
 
 
-static struct hdr_parse *udp_create(byte_t *start, size_t off, size_t maxhlen,
-                                    size_t mintoff, size_t maxtoff)
+static struct hdr_parse *udp_create(byte_t *start, size_t off, size_t len)
 {
   struct hdr_parse *hdr;
   struct udph *udp;
-  if ( start == NULL || maxhlen < sizeof(*udp) )
+  if ( start == NULL || len < sizeof(*udp) )
     return NULL;
-  if ( maxtoff - off > 65535 ) 
-    maxtoff = off + 65535;
-  hdr = crthdr(sizeof(struct hdr_parse), PPT_UDP, start, off, sizeof(*udp), 
-               maxtoff, &udp_hparse_ops);
+  if ( len > 65535 ) 
+    len = 65535;
+  hdr = crthdr(sizeof(struct hdr_parse), PPT_UDP, start, off, sizeof(*udp), len,
+               &udp_hparse_ops);
   if ( hdr ) {
     udp = hdr_header(hdr, struct udph);
     memset(udp, 0, sizeof(*udp));
@@ -542,7 +536,9 @@ static int udp_fixcksum(struct hdr_parse *hdr)
 {
   struct udph *udp = hdr_header(hdr, struct udph);
   uint16_t sum;
-  if ( (hdr_hlen(hdr) != 8) || !hdr->parent )
+  if ( (hdr_hlen(hdr) != 8) || 
+       ((hdr_parent(hdr)->type != PPT_IPV4) && 
+        (hdr_parent(hdr)->type != PPT_IPV6)) )
     return -1;
   udp->cksum = 0;
   udp->cksum = tcpudp_cksum(hdr, IPPROT_UDP);
@@ -613,15 +609,14 @@ static struct hdr_parse *tcp_parse(struct hdr_parse *phdr)
 }
 
 
-static struct hdr_parse *tcp_create(byte_t *start, size_t off, size_t maxhlen,
-                                    size_t mintoff, size_t maxtoff)
+static struct hdr_parse *tcp_create(byte_t *start, size_t off, size_t len)
 {
   struct hdr_parse *hdr;
   struct tcph *tcp;
-  if ( start == NULL || maxhlen < sizeof(*tcp) )
+  if ( start == NULL || len < sizeof(*tcp) )
     return NULL;
-  hdr = crthdr(sizeof(struct hdr_parse), PPT_TCP, start, off, sizeof(*tcp), 
-               maxtoff, &tcp_hparse_ops);
+  hdr = crthdr(sizeof(struct hdr_parse), PPT_TCP, start, off, sizeof(*tcp), len,
+                &tcp_hparse_ops);
   if ( hdr ) {
     memset(hdr_header(hdr, void), 0, sizeof(*tcp));
     tcp = hdr_header(hdr, struct tcph);
@@ -657,7 +652,8 @@ static int tcp_fixcksum(struct hdr_parse *hdr)
 {
   struct tcph *tcp = hdr_header(hdr, struct tcph);
   uint16_t sum;
-  if ( !hdr->parent )
+  if ( (hdr_parent(hdr)->type != PPT_IPV4) && 
+       (hdr_parent(hdr)->type != PPT_IPV6) )
     return -1;
   tcp->cksum = 0;
   tcp->cksum = tcpudp_cksum(hdr, IPPROT_TCP);
@@ -720,16 +716,14 @@ static struct hdr_parse *icmp_parse(struct hdr_parse *phdr)
 }
 
 
-static struct hdr_parse *icmp_create(byte_t *start, size_t off, size_t maxhlen,
-                                     size_t mintoff, size_t maxtoff)
+static struct hdr_parse *icmp_create(byte_t *start, size_t off, size_t len)
 {
   struct hdr_parse *hdr;
   struct icmph *icmp;
-  if ( start == NULL || maxhlen < sizeof(*icmp) )
+  if ( start == NULL || len < sizeof(*icmp) )
     return NULL;
-
   hdr = crthdr(sizeof(struct hdr_parse), PPT_ICMP, start, off, sizeof(*icmp), 
-               maxtoff, &icmp_hparse_ops);
+               len, &icmp_hparse_ops);
   if ( hdr ) {
     icmp = hdr_header(hdr, struct icmph);
     memset(icmp, 0, sizeof(*icmp));
@@ -742,7 +736,7 @@ static int icmp_fixcksum(struct hdr_parse *hdr)
 {
   struct icmph *icmp = hdr_header(hdr, struct icmph);
   uint16_t sum;
-  if ( (hdr_hlen(hdr) != 8) || !hdr->parent )
+  if ( (hdr_hlen(hdr) != 8) || (hdr_parent(hdr)->type != PPT_IPV4) )
     return -1;
   icmp->cksum = 0;
   icmp->cksum = ~ones_sum(hdr, hdr_totlen(hdr), 0);
@@ -754,7 +748,7 @@ static int icmp_fixcksum(struct hdr_parse *hdr)
 struct pparse_ops none_pparse_ops = {
   none_follows, 
   none_parse, 
-  default_create
+  none_create
 };
 struct hparse_ops none_hparse_ops = {
   default_getfield,

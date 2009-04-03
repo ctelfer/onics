@@ -18,13 +18,14 @@ int main(int argc, char *argv[])
       printf("Unknown data type for packet %u\n", npkt);
       continue;
     }
-    hdr = parse_packet(PPT_ETHERNET, p->pkt_buffer, p->pkt_offset, p->pkt_len);
+    hdr = hdr_parse_packet(PPT_ETHERNET, p->pkt_buffer, p->pkt_offset, 
+                           p->pkt_len, p->pkt_buflen);
     if ( hdr == NULL ) {
       printf("Could not parse ethernet packet %u\n", npkt);
       continue;
     }
 
-    for ( nhdr = 1, t = hdr; t != NULL; t = t->next, ++nhdr ) {
+    for ( nhdr = 1, t = hdr_child(hdr); t != hdr; t = hdr_child(t), ++nhdr ) {
       printf("%4u:\tHeader %u -- Type %u\n", npkt, nhdr, t->type);
       if ( t->error == 0 ) {
         printf("\t\tNo errors\n");

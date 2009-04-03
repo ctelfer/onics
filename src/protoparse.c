@@ -86,18 +86,46 @@ void install_default_proto_parsers()
 }
 
 
-int parse_from(struct hdr_parse *phdr)
+struct hdr_parse *hdr_create_parse(byte_t *buf, size_t off, size_t buflen)
 {
-  struct hdr_parse *last = phdr, *nhdr;
+  struct proto_parser *pp;
+  struct hdr_parse *hdr;
+  if ( (off > buflen) || !(pp = &proto_parsers[PPT_NONE])->valid || !buf ) {
+    errno = EINVAL;
+    return NULL;
+  }
+  abort_unless(pp->ops && pp->ops->create);
+  if ( !(hdr = (*pp->ops->create)(buf, 0, buflen)) ) {
+    errno = ENOMEM;
+    return NULL;
+  }
+  hdr->hoff = 0;
+  hdr->poff = off;
+  hdr->eoff = hdr->toff = buflen;
+  return hdr;
+}
+
+
+struct hdr_parse *hdr_parse_packet(unsigned ppidx, byte_t *pkt, size_t off, 
+                                   size_t pktlen, size_t buflen)
+{
+  struct hdr_parse *first, *last, *nhdr;
   struct proto_parser *pp, *nextpp;
   struct list *child;
   unsigned cldid;
   int errval;
 
-  abort_unless(phdr && phdr->type <= PPT_MAX);
-  pp = &proto_parsers[phdr->type];
-  abort_unless(pp->valid);
-  last = phdr;
+  /* assume the rest of the sanity checks are in hdr_create_parse */
+  if ( (pktlen > buflen) || (pktlen > buflen - off) ) {
+    errno = EINVAL;
+    return NULL;
+  }
+  if ( !(first = hdr_create_parse(pkt, off, buflen)) )
+    return NULL;
+  first->toff = off + pktlen;
+  pp = &proto_parsers[PPT_NONE];
+
+  last = first;
   while ( pp && (hdr_plen(last) > 0) ) {
     nextpp = NULL;
     l_for_each(child, pp->children) {
@@ -116,8 +144,6 @@ int parse_from(struct hdr_parse *phdr)
         errval = errno;
         goto err;
       }
-      last->next = nhdr;
-      nhdr->parent = last;
       /* don't continue parsing if the lengths are screwed up */
       if ( (nhdr->error & PPERR_HLENMASK) ) 
         break;
@@ -125,93 +151,73 @@ int parse_from(struct hdr_parse *phdr)
     }
   }
 
-  return 0;
+  return first;
 
 err:
-  if ( phdr->next ) {
-    hdr_free(phdr->next, 1);
-    phdr->next = NULL;
-  }
+  hdr_free(first, 1);
   errno = errval;
-  return -1;
+  return NULL;
 }
 
 
-struct hdr_parse *parse_packet(unsigned ppidx, byte_t *pkt, size_t off, 
-                               size_t pktlen)
+int hdr_add(unsigned ppidx, struct hdr_parse *phdr)
 {
-  struct hdr_parse dummyhdr = { 0 }, *rhdr = NULL;
-  struct proto_parser *pp = &proto_parsers[PPT_NONE];
-  if ( !pkt || pktlen < 1 || off > pktlen || !pp->valid ) {
-    errno = EINVAL;
-    return NULL;
-  }
-  dummyhdr.type = PPT_NONE;
-  dummyhdr.data = pkt;
-  dummyhdr.hoff = off;
-  dummyhdr.poff = off;
-  dummyhdr.toff = off + pktlen;
-  dummyhdr.eoff = off + pktlen;
-  if ( parse_from(&dummyhdr) == 0 ) {
-    if ( (rhdr = dummyhdr.next) )
-      rhdr->parent = NULL;
-  }
-  return rhdr;
-}
-
-
-int reparse_packet(struct hdr_parse *phdr)
-{
-  if ( (phdr->type > PPT_MAX) || !proto_parsers[phdr->type].valid || 
-      !phdr->data ) {
+  struct proto_parser *pp;
+  if ( (ppidx > PPT_MAX) || !(pp = &proto_parsers[ppidx])->valid || !phdr ||
+       !hdr_islast(phdr) ) {
     errno = EINVAL;
     return -1;
   }
-  return parse_from(phdr);
-}
-
-
-size_t hdr_total_len(struct hdr_parse *hdr)
-{
-  if ( !hdr )
+  if ( (*pp->ops->create)(phdr->data, phdr->poff, hdr_plen(phdr)) == NULL )
+    return -1;
+  else
     return 0;
-  return hdr->eoff - hdr->hoff;
 }
 
 
-void hdr_free(struct hdr_parse *hdr, int freechildren)
+void hdr_free(struct hdr_parse *hdr, int freeall)
 {
   struct hdr_parse *next;
-  if ( freechildren ) {
-    while ( hdr != NULL ) {
-      next = hdr->next;
-      abort_unless(hdr->ops && hdr->ops->free);
-      (*hdr->ops->free)(hdr);
-      hdr = next;
+  if ( !hdr )
+    return;
+  if ( freeall ) {
+    while ( !hdr_islast(hdr) ) {
+      next = hdr_child(hdr);
+      l_rem(&next->node);
+      abort_unless(next->ops && next->ops->free);
+      (*next->ops->free)(hdr);
     }
-  } else if ( hdr ) {
-    abort_unless(hdr->ops && hdr->ops->free);
-    (*hdr->ops->free)(hdr);
   }
+  abort_unless(hdr->ops && hdr->ops->free);
+  l_rem(&hdr->node);
+  (*hdr->ops->free)(hdr);
 }
 
 
 struct hdr_parse *hdr_copy(struct hdr_parse *ohdr, byte_t *buffer)
 {
-  struct hdr_parse *first = NULL, *last = NULL, *hdr;
-  while ( ohdr ) {
-    abort_unless(ohdr->ops && ohdr->ops->copy);
-    if ( !(hdr = (*ohdr->ops->copy)(ohdr, buffer)) )
+  struct hdr_parse *first = NULL, *last, *t, *hdr;
+
+  if ( !ohdr || !buffer )
+    return NULL;
+
+  t = ohdr;
+  do {
+    abort_unless(t->ops && t->ops->copy);
+    if ( !(hdr = (*t->ops->copy)(t, buffer)) )
       goto err;
-    if ( !first )
+    if ( !first ) {
+      l_init(&hdr->node);
       first = hdr;
-    hdr->parent = last;
-    hdr->next = NULL;
-    if ( last )
-      last->next = hdr;
-    ohdr = ohdr->next;
-  }
+    } else {
+      l_ins(&last->node, &hdr->node);
+    }
+    last = hdr;
+    t = hdr_child(t);
+  } while ( t != ohdr );
+
   return first;
+
 err:
   hdr_free(first, 1);
   return NULL;
@@ -222,7 +228,7 @@ void hdr_set_packet_buffer(struct hdr_parse *hdr, byte_t *buffer)
 {
   while ( hdr ) {
     hdr->data = buffer;
-    hdr = hdr->next;
+    hdr = hdr_child(hdr);
   }
 }
 
@@ -248,76 +254,7 @@ int hdr_fix_len(struct hdr_parse *hdr)
 }
 
 
-void hdr_remove(struct hdr_parse *hdr)
-{
-  struct hdr_parse *thdr;
-  if ( !hdr )
-    return;
-  if ( (thdr = hdr->parent) )
-    thdr->next = hdr->next;
-  if ( (thdr = hdr->next) )
-    thdr->parent = hdr->parent;
-  hdr->next = NULL;
-  hdr->parent = NULL;
-  hdr_free(hdr, 0);
-}
-
-
-struct hdr_parse *create_parse(unsigned ppidx, byte_t *pkt, size_t len, 
-                               size_t off, struct hdr_parse *phdr)
-{
-  size_t maxhlen, mintoff, maxtoff;
-  struct hdr_parse *hdr, *prev = NULL, *next = phdr;
-  struct proto_parser *pp;
-
-  if ( (ppidx > PPT_MAX) || !(pp = &proto_parsers[ppidx])->valid )
-    return NULL;
-  if ( phdr && (phdr->data != pkt) )
-    return NULL;
-  if ( off > len )
-    return NULL;
-
-  if ( next ) { 
-    while ( next->poff < off ) { 
-      prev = next;
-      next = next->next;
-    }
-  }
-
-  if ( prev ) {
-    if ( next ) {
-      maxhlen = next->hoff - prev->poff;
-      mintoff = next->eoff;
-      maxtoff = prev->toff;
-    } else {
-      maxhlen = hdr_plen(prev);
-      mintoff = off;
-      maxtoff = prev->toff;
-    }
-  } else if ( next ) { 
-    maxhlen = next->hoff - off;
-    mintoff = next->toff;
-    maxtoff = mintoff + (len - next->eoff);
-  } else {
-    maxhlen = len;
-    mintoff = 0;
-    maxtoff = len;
-  }
-
-  hdr = (*pp->ops->create)(phdr->data, off, maxhlen, mintoff, maxtoff);
-  if ( !hdr )
-    return NULL;
-  hdr->parent = prev;
-  hdr->next = next;
-  if ( next )
-    next->parent = hdr;
-  if ( prev )
-    prev->next = hdr;
-  return hdr;
-}
-
-
-void splice_adjust(struct hdr_parse *hdr, size_t off, size_t len, int moveup)
+void insert_adjust(struct hdr_parse *hdr, size_t off, size_t len, int moveup)
 {
   while ( hdr != NULL ) {
     if ( (off <= hdr->hoff) && moveup )
@@ -342,12 +279,12 @@ void splice_adjust(struct hdr_parse *hdr, size_t off, size_t len, int moveup)
     else if ( (off >= hdr->eoff) && !moveup )
       hdr->eoff -= len;
 
-    hdr = hdr->next;
+    hdr = hdr_child(hdr);
   }
 }
 
 
-int hdr_splice(struct hdr_parse *hdr, size_t off, size_t len, int moveup)
+int hdr_insert(struct hdr_parse *hdr, size_t off, size_t len, int moveup)
 {
   byte_t *op, *np;
   size_t mlen;
@@ -362,7 +299,7 @@ int hdr_splice(struct hdr_parse *hdr, size_t off, size_t len, int moveup)
     if ( moveup ) { 
       op = hdr->data + off;
       np = op + len;
-      mlen = hdr_total_len(hdr) - off;
+      mlen = hdr_totlen(hdr) - off;
     } else {
       op = hdr->data + hdr->hoff;
       np = op - len;
@@ -371,7 +308,7 @@ int hdr_splice(struct hdr_parse *hdr, size_t off, size_t len, int moveup)
     memmove(np, op, mlen);
     memset(op, 0x5F, len);
   }
-  splice_adjust(hdr, off, len, moveup);
+  insert_adjust(hdr, off, len, moveup);
 }
 
 
@@ -437,7 +374,7 @@ int cut_adjust(struct hdr_parse *hdr, size_t off, size_t len, int moveup)
     }
   }
 
-  if ( cut_adjust(hdr->next, off, len, moveup) < 0 ) {
+  if ( cut_adjust(hdr_child(hdr), off, len, moveup) < 0 ) {
     hdr->hoff = ohoff;
     hdr->poff = opoff;
     hdr->toff = otoff;
@@ -459,7 +396,7 @@ int hdr_cut(struct hdr_parse *hdr, size_t off, size_t len, int moveup)
     return -1;
   if ( (off < hdr->hoff) || (off > hdr->eoff) )
     return -1;
-  pktlen = hdr_total_len(hdr);
+  pktlen = hdr_totlen(hdr);
   if ( len > pktlen )
     return - 1;
   ohoff = hdr->hoff;
@@ -489,12 +426,11 @@ int hdr_cut(struct hdr_parse *hdr, size_t off, size_t len, int moveup)
 
 int hdr_adj_hstart(struct hdr_parse *hdr, ptrdiff_t amt)
 {
-  if ( !hdr )
+  if ( !hdr || hdr_isfirst(hdr) )
     return -1;
   if ( amt < 0 ) { 
     abort_unless(-amt > 0); /* edge case for minimum neg value in 2s comp */
-    struct hdr_parse *phdr;
-    if ( (phdr = hdr->parent) && (-amt > hdr->hoff - phdr->eoff) )
+    if (-amt > hdr->hoff - hdr_parent(hdr)->eoff )
       return -1;
   } else if ( amt > 0 ) {
     if ( amt > hdr_hlen(hdr) )
@@ -514,8 +450,7 @@ int hdr_adj_hlen(struct hdr_parse *hdr, ptrdiff_t amt)
     if ( -amt > hdr_hlen(hdr)  )
       return -1;
   } else if ( amt > 0 ) {
-    struct hdr_parse *nhdr;
-    if ( (nhdr = hdr->next) && (amt > nhdr->hoff - hdr->poff) )
+    if ( !hdr_islast(hdr) && (amt > hdr_child(hdr)->hoff - hdr->poff) )
       return -1;
     if ( amt > hdr_plen(hdr) )
       return -1;
@@ -535,9 +470,13 @@ int hdr_adj_plen(struct hdr_parse *hdr, ptrdiff_t amt)
     if ( -amt > hdr_plen(hdr) )
       return -1;
   } else {
-    struct hdr_parse *phdr;
-    if ( (phdr = hdr->parent) && (amt > phdr->toff - hdr->toff) )
-      return -1;
+    if ( hdr_isfirst(hdr) ) {
+      if ( amt > hdr_tlen(hdr) )
+        return -1;
+    } else {
+      if ( amt > hdr_parent(hdr)->toff - hdr->toff )
+        return -1;
+    }
   }
   hdr->toff += amt;
   if ( hdr->toff > hdr->eoff )
@@ -547,15 +486,14 @@ int hdr_adj_plen(struct hdr_parse *hdr, ptrdiff_t amt)
 
 int hdr_adj_tlen(struct hdr_parse *hdr, ptrdiff_t amt)
 {
-  if ( !hdr )
+  if ( !hdr || hdr_isfirst(hdr) )
     return -1;
   if ( amt < 0 ) { 
     abort_unless(-amt > 0); /* edge case for minimum neg value in 2s comp */
     if ( -amt > hdr_tlen(hdr) )
       return -1;
   } else if ( amt > 0 ) {
-    struct hdr_parse *phdr;
-    if ( (phdr = hdr->parent) && (amt > phdr->toff - hdr->eoff) )
+    if ( amt > hdr_parent(hdr)->toff - hdr->eoff )
       return -1;
   }
   hdr->eoff += amt;
