@@ -57,6 +57,9 @@ struct netvm_inst g_netvm_ops[NTVM_IT_MAX+1] = {
   unimplemented,
   unimplemented,
   unimplemented,
+  unimplemented,
+  unimplemented,
+  unimplemented,
   unimplemented
 };
 
