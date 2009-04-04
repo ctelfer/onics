@@ -69,10 +69,16 @@ static void ni_ldmem(struct netvm *vm)
 {
   struct netvm_inst *inst = &vm->inst[vm->pc];
   uint64_t val;
-  register unsigned int addr = inst->u.num.val;
   register unsigned int width = inst->u.num.width;
+  register unsigned int addr;
+  if ( inst->onstack ) {
+    S_POP(vm, val);
+    addr = val;
+  } else {
+    addr = inst->u.num.val;
+  }
   FATAL(addr > vm->memsz || addr + width > vm->memsz);
-  if (inst->u.num.issigned)
+  if ( inst->u.num.issigned )
     width = -width;
   switch(width) {
   case -1: val = (int64_t)*(int8_t *)(vm->mem + addr) = val; break;
@@ -95,10 +101,16 @@ static void ni_stmem(struct netvm *vm)
   struct netvm_inst *inst = &vm->inst[vm->pc];
   uint64_t val;
   register unsigned int addr = inst->u.num.val;
-  register int width = inst->u.num.width;
+  register int width;
+  if ( inst->onstack ) {
+    S_POP(vm, val);
+    addr = val;
+  } else {
+    addr = inst->u.num.val;
+  }
   FATAL(addr > vm->memsz || addr + width > vm->memsz);
   S_POP(vm, val);
-  if (inst->u.num.issigned)
+  if ( inst->u.num.issigned )
     width = -width;
   switch(width) {
   case -1: *(int8_t *)(vm->mem + addr) = val; break;
@@ -115,33 +127,76 @@ static void ni_stmem(struct netvm *vm)
 }
 
 
-static void ni_lkpkt(struct netvm *vm)
+static void ni_ldpkt(struct netvm *vm)
 {
   struct netvm_inst *inst = &vm->inst[vm->pc];
-  struct netvm_hdr_desc *hd, hd0;
+  struct netvm_hdr_desc hd0;
   struct hdr_parse *hdr;
   uint64_t val;
+  uint32_t addr;
+  int width;
 
-  hd = &inst->hdr;
-  if ( hd->pktnum == NETVM_HDONSTACK ) {
-    hd = &hd0;
+  hd0 = inst->hdr;
+  if ( hd->onstack == NETVM_HDONSTACK ) {
     S_POP(vm, val);
-    hd->pktnum = val & 0xFF;
-    hd->htype = (val >> 8) & 0xFF;
-    hd->idx = (val >> 16) & 0xFF;
-    hd->field = (val >> 24) & 0xFF;
+    hd0.pktnum = val & 0xFF;
+    hd0.htype = (val >> 8) & 0xFF;
+    hd0.idx = (val >> 16) & 0xFF;
+    hd0.field = (val >> 24) & 0xFF;
+  } 
+  if ( hd0.stackoff ) {
     S_POP(vm, val);
-    hd->offset = val;
+    hd0.offset = val;
   }
-  FATAL(!NETVM_HDRFLDOK(hd->field));
-  hdr = find_header(hd);
+  width = hd0.width;
+
+  FATAL((hd0.offset + width < hd0.offset) || !NETVM_ISHDROFF(hd0.field));
+  hdr = find_header(&hd0);
   FATAL(hdr == NULL);
 
-  if (NETVM_ISHDROFF(hd->field)) {
-
+  switch(hd0.field) {
+  case NETVM_HDR_HOFF:
+    FATAL(hd0.offset + width >= hdr_hlen(hdr));
+    addr = hdr->hoff + hd0.offset;
+    break;
+  case NETVM_HDR_POFF:
+    FATAL(hd0.offset + width >= hdr_plen(hdr));
+    addr = hdr->poff + hd0.offset;
+    break;
+  case NETVM_HDR_TOFF:
+    FATAL(hd0.offset + width >= hdr_tlen(hdr));
+    addr = hdr->toff + hd0.offset;
+    break;
+  case NETVM_HDR_EOFF:
+  default:
+    FATAL(0);
+    break;
   }
+
+  if ( hd0.issigned )
+    width = -width;
+  switch(width) {
+  case -1: val = (int64_t)*(int8_t *)(hdr->data + addr) = val; break;
+  case -2: val = (int64_t)*(int16_t *)(hdr->data + addr) = val; break;
+  case -4: val = (int64_t)*(int32_t *)(hdr->data + addr) = val; break;
+  case -8: val = (int64_t)*(int64_t *)(hdr->data + addr) = val; break;
+  case 1: val = *(uint8_t *)(hdr->data + addr) = val; break;
+  case 2: val = *(uint16_t *)(hdr->data + addr) = val; break;
+  case 4: val = *(uint32_t *)(hdr->data + addr) = val; break;
+  case 8: val = *(uint64_t *)(hdr->data + addr) = val; break;
+  default:
+    FATAL(0);
+  }
+  S_PUSH(vm, val);
 }
 
+
+static void ni_ldclass(struct netvm *vm)
+{
+  struct netvm_inst *inst = &vm->inst[vm->pc];
+  int pktnum = inst->u.hdr.pktnum;
+  FATAL((pktnum >= NETVM_MAXPKTS) || (vm->packets[pktnum] == NULL));
+}
 
 struct netvm_inst g_netvm_ops[NTVM_IT_MAX+1] = { 
   ni_pop,
@@ -150,7 +205,6 @@ struct netvm_inst g_netvm_ops[NTVM_IT_MAX+1] = {
   ni_ldmem,
   ni_stmem,
   ni_ldpkt,
-  unimplemented,
   unimplemented,
   unimplemented,
   unimplemented,
@@ -255,21 +309,17 @@ int run_netvm(struct netvm *vm, int maxcycles, int *rv)
       return -1;
 
   vm->error = 0;
-  vm->pc = 0;
-  vm->running = 0;
-  vm->sp = 0;
+  vm->running = 1;
   vm->branch = 0;
 
-  while ( vm->running && maxcycles != 0 ) {
+  while ( vm->running && !vm->error && maxcycles != 0 ) {
     inst = &vm->inst[vm->pc];
     (*g_netvm_ops[inst->opcode])(vm);
-
     /* if we branched: don't adjust the PC, otherwise clear the branch flag */
     if ( vm->branch )
       vm->branch = 0;
-    else
+    else if ( vm->running && !vm->error )
       ++vm->pc;
-
     /* decrement cycle count if running for a limited duration */
     if ( maxcycles > 0 )
       --maxcycles;

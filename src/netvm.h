@@ -87,7 +87,6 @@ enum {
   NETVM_IT_HDRADJ,
   NETVM_IT_BR,
   NETVM_IT_BRIF,
-  NETVM_IT_BRERR,
   NETVM_IT_BROFF,
 
   NETVM_IT_MAX = NETVM_IT_BROFF
@@ -100,24 +99,30 @@ struct netvm_data {
     struct netvm_num {
       uint8_t           width;
       uint8_t           issigned;
-      uint16_t          pad;
+      uint8_t           onstack; /* for load/store operations */
+      uint8_t           pad;
       uint64_t          val;
     } num;
     struct netvm_hdr_desc {
-      uint8_t           pktnum; /* which packet entry */
-      uint8_t           htype; /* PPT_*;  PPT_NONE == absolute idx */
-      uint8_t           idx;   /* 0 == whole packet, 1 == 1st hdr,... */
-      uint8_t           field; /* NETVM_HDR_* */
-      uint8_t           width;
-      uint8_t           issigned;
-      uint16_t          pad;
+      uint8_t           width;    /* useless for load and store header ops */
+      uint8_t           issigned; /* useless for load and store header ops */
+      uint8_t           hdonstk;  /* header desc is on the stack */
+      uint8_t           offonstk; /* offset is on the stack */
+      uint8_t           pktnum;   /* which packet entry */
+      uint8_t           htype;    /* PPT_*;  PPT_NONE == absolute idx */
+      uint8_t           idx;      /* 0 == whole packet, 1 == 1st hdr,... */
+      uint8_t           field;    /* NETVM_HDR_* */
       uint32_t          offset;
     } hdr;
   }u;
 };
 
 /* 
- * If pktnum == NETVM_HDONSTACK for a header instruction then the instruction 
+ * If onstack is set for a load/store instruction then the address to load
+ * from or store to is on top of the stack.  Store operations always take their
+ * values from the stack as well.  (but not PUSH operations)
+ *
+ * If onstack is set for a header instruction then the instruction 
  * expects the (field << 24 | idx << 16 | htype << 8 | pktnum ) to be the next 
  * entry on the stack.  If the offset is needed for the instruction, the 
  * offset must be the second thing on the stack.
