@@ -1,26 +1,30 @@
 #ifndef __netvm_h
 #define __netvm_h
 #include "tcpip_hdrs.h"
+#include "packet.h"
+#include "progoparse.h"
 #include <stdio.h>
 
-
-enum {
-  NETVM_UINT,
-  NETVM_INT,
-  NETVM_ADDR,
-  NETVM_HDR,
+struct netvmpkt {
+  struct pktbuf *       packet;
+  struct hdr_parse *    headers;
 };
+
 
 enum {
   NETVM_HDR_HOFF,
-  NETVM_HDR_HLEN,
   NETVM_HDR_POFF,
-  NETVM_HDR_PLEN,
   NETVM_HDR_TOFF,
-  NETVM_HDR_TLEN,
   NETVM_HDR_EOFF,
+  NETVM_HDR_HLEN,
+  NETVM_HDR_PLEN,
+  NETVM_HDR_TLEN,
   NETVM_HDR_LEN
 };
+
+#define NETVM_HDRFLDOK(f) (((f) >= NETVM_HDR_HOFF) && ((f) <= NETVM_HDR_LEN)
+#define NETVM_ISHDROFF(f) (((f) >= NETVM_HDR_HOFF) && ((f) <= NETVM_HDR_EOFF)
+#define NETVM_ISHDRLEN(f) (((f) >= NETVM_HDR_HLEN) && ((f) <= NETVM_HDR_LEN)
 
 
 enum {
@@ -74,64 +78,76 @@ enum {
   NETVM_IT_STPKT,
   NETVM_IT_STCLASS,
   NETVM_IT_STTS,
-  NETVM_IT_COPYPKT,
+  NETVM_IT_PKTCOPY,
+  NETVM_IT_HDRCREATE,
   NETVM_IT_FIXLEN,
   NETVM_IT_FIXCKSUM,
+  NETVM_IT_PKTINS,
+  NETVM_IT_PKTCUT,
+  NETVM_IT_HDRADJ,
   NETVM_IT_BR,
   NETVM_IT_BRIF,
+  NETVM_IT_BRERR,
   NETVM_IT_BROFF,
 
   NETVM_IT_MAX = NETVM_IT_BROFF
 };
 
 
+#define NETVM_HDONSTACK   255
 struct netvm_data {
   union {
     struct netvm_num {
-      unsigned short            width; /* valid for INT and UINT: 1,2,4,8 */
-      unsigned short            pad;
-      unsigned long long        val;
+      uint8_t           width;
+      uint8_t           issigned;
+      uint16_t          pad;
+      uint64_t          val;
     } num;
     struct netvm_hdr_desc {
-      unsigned char             onstack;  /* read from stack instead */
-      unsigned char             htype; /* PPT_*;  PPT_NONE == absolute idx */
-      unsigned char             idx;   /* 0 == whole packet, 1 == 1st hdr,... */
-      unsigned char             field; /* NETVM_HDR_* */
-      unsigned int              offset;
+      uint8_t           pktnum; /* which packet entry */
+      uint8_t           htype; /* PPT_*;  PPT_NONE == absolute idx */
+      uint8_t           idx;   /* 0 == whole packet, 1 == 1st hdr,... */
+      uint8_t           field; /* NETVM_HDR_* */
+      uint8_t           width;
+      uint8_t           issigned;
+      uint16_t          pad;
+      uint32_t          offset;
     } hdr;
   }u;
 };
 
 /* 
- * if onstack is set for a hdr_desc in an instruction then the instruction 
- * expects the (field << 16 | idx << 8 | htype) to be the next entry on the 
- * stack.  If the offset is needed for the instruction, the offset must be
- * the second thing on the stack.
+ * If pktnum == NETVM_HDONSTACK for a header instruction then the instruction 
+ * expects the (field << 24 | idx << 16 | htype << 8 | pktnum ) to be the next 
+ * entry on the stack.  If the offset is needed for the instruction, the 
+ * offset must be the second thing on the stack.
  */
 
 
 struct netvm_inst {
-  unsigned int          opcode;
+  uint32_t              opcode;
   struct netvm_data     data;
 };
 
 
+/* NOTE: must be less than or equal to NETVM_HDONSTACK */
 #define NETVM_MAXPKTS   16
 struct netvm {
-  int                   matchonly;
   struct netvm_inst *   inst;
   unsigned int          ninst;
-  unsigned long long *  stack;
+  uint64_t *            stack;
   unsigned int          stksz;
   byte_t *              mem;
   unsigned int          memsz;
   unsigned int          rosegoff;
   FILE *                outfile;
-  struct pktbuf *       packets[NETVM_MAXPKTS];
+  struct netvmpkt *     packets[NETVM_MAXPKTS];
+  int                   matchonly;
   int                   running;
   int                   error;
-  unsigned              pc;
-  unsigned              sp;
+  int                   branch;
+  unsigned int          pc;
+  unsigned int          sp;
 };
 
 
@@ -142,11 +158,14 @@ void init_netvm(struct netvm *vm, struct netvm_data *stack, unsigned int ssz,
 /* clear memory, set pc <= 0, discard packets */
 void reset_netvm(struct netvm *vm, struct netvm_inst *inst, unsigned ni);
 
-
 /* 0 if run ok and no retval, 1 if run ok and stack not empty, -1 if err, -2 */
 /* if out of cycles */
 int run_netvm(struct netvm *vm, int maxcycles, int *rv);
 
+/* returns 0 if ok inputting packet and -1 otherwise */
+int set_netvm_packet(struct netvm *vm, struct pktbuf *pkt, int slot);
 
+/* returns 0 if the packet is OK to be sent and -1 otherwise */
+struct netvmpkt *release_netvm_packet(int slot);
 
 #endif /* __netvm_h */
