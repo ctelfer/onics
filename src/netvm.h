@@ -3,7 +3,7 @@
 #include "tcpip_hdrs.h"
 #include "packet.h"
 #include "progoparse.h"
-#include <stdio.h>
+#include <cat/emit.h>
 
 struct netvmpkt {
   struct pktbuf *       packet;
@@ -37,6 +37,10 @@ enum {
   NETVM_IT_LDCLASS,
   NETVM_IT_LDTS,
   NETVM_IT_LDHDRF,
+  NETVM_IT_NOT,
+  NETVM_IT_TONET,
+  NETVM_IT_TOHOST,
+  NETVM_IT_SIGNX,
   NETVM_IT_ADD,
   NETVM_IT_SUB,
   NETVM_IT_MUL,
@@ -45,7 +49,6 @@ enum {
   NETVM_IT_SHL,
   NETVM_IT_SHR,
   NETVM_IT_SHRA,
-  NETVM_IT_NOT,
   NETVM_IT_AND,
   NETVM_IT_OR,
   NETVM_IT_EQ,
@@ -58,19 +61,15 @@ enum {
   NETVM_IT_SLE,
   NETVM_IT_SGT,
   NETVM_IT_SGE,
-  NETVM_IT_MASKEQ,
-  NETVM_IT_TONET,
-  NETVM_IT_TOHOST,
-  NETVM_IT_HASPROTO,
   NETVM_IT_HASHDR,
   NETVM_IT_HALT,
-
   NETVM_IT_MAX_MATCH = NETVM_IT_HALT,
+
   /* not allowed in pure match run */
   NETVM_IT_PRBIN,
+  NETVM_IT_PROCT,
   NETVM_IT_PRDEC,
   NETVM_IT_PRHEX,
-  NETVM_IT_PROCT,
   NETVM_IT_PRIP,
   NETVM_IT_PRETH,
   NETVM_IT_PRIPV6,
@@ -93,21 +92,31 @@ enum {
 };
 
 
+enum {
+  NETVM_HDF_HDONSTACK   0x1,
+  NETVM_HDF_OFFONSTACK  0x2,
+  NETVM_HDF_TONET       0x4,
+  NETVM_HDF_TOHOST      0x8,
+  NETVM_HDF_IPHLEN      0x10, /* only used on 1 byte packet load instructions */
+  NETVM_HDF_TCPHLEN     0x20, /* only used on 1 byte packet load instructions */
+};
+
+
 #define NETVM_HDONSTACK   255
 struct netvm_data {
   union {
     struct netvm_num {
       uint8_t           width;
       uint8_t           issigned;
-      uint8_t           onstack; /* for load/store operations */
+      uint8_t           immed; /* addr for load/store ops and v2 of alu ops */
       uint8_t           pad;
       uint64_t          val;
     } num;
     struct netvm_hdr_desc {
-      uint8_t           width;    /* useless for load and store header ops */
-      uint8_t           issigned; /* useless for load and store header ops */
-      uint8_t           hdonstk;  /* header desc is on the stack */
-      uint8_t           offonstk; /* offset is on the stack */
+      uint8_t           width;    /* useless for load/store header field ops */
+      uint8_t           issigned; /* useless for load/store header field ops */
+      uint8_t           flags;    /* header desc is on the stack */
+      uint8_t           pad;      /* offset is on the stack */
       uint8_t           pktnum;   /* which packet entry */
       uint8_t           htype;    /* PPT_*;  PPT_NONE == absolute idx */
       uint8_t           idx;      /* 0 == whole packet, 1 == 1st hdr,... */
@@ -145,7 +154,7 @@ struct netvm {
   byte_t *              mem;
   unsigned int          memsz;
   unsigned int          rosegoff;
-  FILE *                outfile;
+  struct emitter *      outport;
   struct netvmpkt *     packets[NETVM_MAXPKTS];
   int                   matchonly;
   int                   running;
@@ -158,7 +167,7 @@ struct netvm {
 
 void init_netvm(struct netvm *vm, struct netvm_data *stack, unsigned int ssz,
                 byte_t *mem, unsigned int memsz, unsigned int roseg, 
-                FILE *outfile);
+                struct emitter *outport);
 
 /* clear memory, set pc <= 0, discard packets */
 void reset_netvm(struct netvm *vm, struct netvm_inst *inst, unsigned ni);
