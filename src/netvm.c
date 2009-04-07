@@ -6,6 +6,9 @@
 #include <cat/emalloc.h>
 #include "util.h"
 
+#define IMMED(inst) ((inst)->flags & NETVM_IF_IMMED)
+#define ISSIGNED(inst) ((inst)->flags & NETVM_IF_SIGNED)
+
 #define FATAL(__cond, __vm) \
   if (__cond) { __vm->error = 1; __vm->running = 0; return; }
 
@@ -87,7 +90,7 @@ static void ni_pop(struct netvm *vm)
 static void ni_push(struct netvm *vm)
 {
   struct netvm_inst *inst = &vm->inst[vm->pc];
-  S_PUSH(vm, inst->u.num.val);
+  S_PUSH(vm, inst->val);
 }
 
 
@@ -103,17 +106,17 @@ static void ni_ldmem(struct netvm *vm)
 {
   struct netvm_inst *inst = &vm->inst[vm->pc];
   uint64_t val;
-  register unsigned int width = inst->u.num.width;
-  register unsigned int addr;
+  register int width = inst->width;
+  register uint32_t addr;
   FATAL(!vm->mem || !vm->memsz);
   CKWIDTH(width);
-  if ( inst->u.num.immed ) {
-    addr = inst->u.num.val;
+  if ( IMMED(inst) ) {
+    addr = inst->val;
   } else {
     S_POP(vm, addr);
   }
   FATAL(addr > vm->memsz || addr + width > vm->memsz);
-  if ( inst->u.num.issigned )
+  if ( ISSIGNED(inst) )
     width = -width;
   switch(width) {
   case -1: val = (int64_t)*(int8_t *)(vm->mem + addr) = val; break;
@@ -135,14 +138,13 @@ static void ni_stmem(struct netvm *vm)
 {
   struct netvm_inst *inst = &vm->inst[vm->pc];
   uint64_t val;
-  register unsigned int addr = inst->u.num.val;
-  register int width = inst->u.num.width;
+  register int width = inst->width;
+  register uint32_t addr;
   CKWIDTH(width);
-  if ( inst->u.num.immed ) {
-    addr = inst->u.num.val;
+  if ( IMMED(inst) ) {
+    addr = inst->val;
   } else {
-    S_POP(vm, val);
-    addr = val;
+    S_POP(vm, addr);
   }
   FATAL(addr > vm->memsz || addr + width > vm->memsz);
   S_POP(vm, val);
@@ -157,34 +159,31 @@ static void ni_stmem(struct netvm *vm)
 }
 
 
-static void get_hd(struct netvm *vm, struct netvm_hdr_desc *hd, int getoff)
+static void get_hd(struct netvm *vm, struct netvm_inst *inst,
+                   struct netvm_hdr_desc *hd)
 {
   uint64_t val;
-  if ( hd->flags & NETVM_HDF_HDONSTACK ) {
+  if ( IMMED(inst) ) {
     S_POP(vm, val);
-    hd->pktnum = val & 0xFF;
-    hd->htype = (val >> 8) & 0xFF;
-    hd->idx = (val >> 16) & 0xFF;
-    hd->field = (val >> 24) & 0xFF;
-  } 
-  if ( getoff && (hd->flags & NETVM_HDF_OFFONSTACK) ) {
-    S_POP(vm, val);
-    hd->offset = val;
+    memcpy(hd, &val, sizeof(*hd));
+  } else {
+    memcpy(hd, &inst->val, sizeof(*hd));
   }
 }
 
 
-static int get_hdr_info(struct netvm *vm, struct netvm_hdr_desc *hd,
-                        uint32_t *addr, struct hdr_parse **hdrp)
+static void get_hdr_info(struct netvm *vm, struct netvm_inst *inst, 
+                         struct netvm_hdr_desc *hd, uint32_t *addr, 
+                         struct hdr_parse **hdrp)
 {
   uint64_t val;
   int width;
   struct hdr_parse *hdr;
 
-  get_hd(vm, hd, 1);
+  get_hd(vm, inst, hd);
   if ( vm->error )
     return;
-  width = hd->width;
+  width = inst->width;
   CKWIDTH(width);
 
   FATAL((hd->offset + width < hd->offset) || !NETVM_ISHDROFF(hd->field));
@@ -221,12 +220,11 @@ static void ni_ldpkt(struct netvm *vm)
   uint32_t addr;
   uint64_t val;
 
-  hd0 = inst->hdr;
-  get_hdr_info(vm, *hd0, &addr, &hdr);
+  get_hdr_info(vm, inst, &hd0, &addr, &hdr);
   if ( vm->error )
     return;
 
-  switch(hd0.width) {
+  switch(inst->width) {
   case 1: 
     val = (int64_t)*(int8_t *)(hdr->data + addr); 
     if ( hd0.flags & NETVM_HDF_IPHLEN ) { 
@@ -234,7 +232,7 @@ static void ni_ldpkt(struct netvm *vm)
     } else if ( hd0.flags & NETVM_HDF_TCPHLEN ) {
       val = (val & 0xf0) >> 2;
     } else { 
-      if ( hd0.issigned )
+      if ( ISSIGNED(inst) )
         val |= -(val & 0x80);
     }
     break;
@@ -242,14 +240,14 @@ static void ni_ldpkt(struct netvm *vm)
     val = *(uint16_t *)(hdr->data + addr); 
     if ( hd0.flags & NETVM_HDF_TOHOST )
       val = ntoh16(val);
-    if ( hd0.issigned )
+    if ( ISSIGNED(inst) )
       val |= -(val & 0x8000);
     break;
   case 4: 
     val = *(uint32_t *)(hdr->data + addr); 
     if ( hd0.flags & NETVM_HDF_TOHOST )
       val = ntoh32(val);
-    if ( hd0.issigned )
+    if ( ISSIGNED(inst) )
       val |= -(val & 0x80000000);
     break;
   case 8: 
@@ -267,13 +265,18 @@ static void ni_ldpkt(struct netvm *vm)
 static void ni_ldpmeta(struct netvm *vm)
 {
   struct netvm_inst *inst = &vm->inst[vm->pc];
-  int pktnum = inst->u.hdr.pktnum;
+  int pktnum;
   struct netvmpkt *pkt;
+  if ( IMMED(inst) ) {
+    pktnum = inst->val;
+  } else {
+    S_POP(vm, pktnum);
+  }
   FATAL((pktnum >= NETVM_MAXPKTS) || !(pkt = vm->packets[pktnum]));
-  if ( inst->opcode == NETVM_IT_LDCLASS ) {
+  if ( inst->opcode == NETVM_OC_LDCLASS ) {
     S_PUSH(vm, pkt->packet->pkt_class);
   } else {
-    abort_unless(inst->type == NETVM_IT_LDTS);
+    abort_unless(inst->type == NETVM_OC_LDTS);
     S_PUSH(vm, pkt->packet->pkt_timestamp);
   }
 }
@@ -287,8 +290,7 @@ static void ni_ldhdrf(struct netvm *vm)
   uint64_t val;
   uint32_t addr;
 
-  hd0 = inst->hdr;
-  get_hd(vm, &hd0, 1);
+  get_hd(vm, inst, &hd0);
   if ( vm->error )
     return;
   FATAL(!NETVM_HDFLDOK(hd0.field));
@@ -315,61 +317,61 @@ static void ni_numop(struct netvm *vm)
   struct netvm_inst *inst = &vm->inst[vm->pc];
   uint64_t out, v1, v2;
   int amt;
-  if ( (inst->opcode < NETVM_IT_NOT) || (inst->opdcode > NETVM_IT_SIGNX)) {
-    if ( inst->u.num.immed )  {
-      v2 = inst->u.num.val;
+  if ( (inst->opcode < NETVM_OC_NOT) || (inst->opdcode > NETVM_OC_SIGNX)) {
+    if ( IMMED(inst) )  {
+      v2 = inst->val;
     } else {
       S_POP(vm, v2);
     }
   }
   S_POP(vm, v1);
   switch (inst->opcode) {
-  case NETVM_IT_NOT: out = ~v1; break;
-  case NETVM_IT_TONET: 
-    CKWIDTH(inst->u.num.width);
-    switch (inst->u.num.width) {
+  case NETVM_OC_NOT: out = ~v1; break;
+  case NETVM_OC_TONET: 
+    CKWIDTH(inst->width);
+    switch (inst->width) {
     case 2: out = hton16(v1); break;
     case 4: out = hton32(v1); break;
     case 8: out = hton64(v1); break;
     }
     break;
-  case NETVM_IT_TOHOST: 
-    CKWIDTH(inst->u.num.width);
-    switch (inst->u.num.width) {
+  case NETVM_OC_TOHOST: 
+    CKWIDTH(inst->width);
+    switch (inst->width) {
     case 2: out = hton16(v1); break;
     case 4: out = hton32(v1); break;
     case 8: out = hton64(v1); break;
     }
     break;
-  case NETVM_IT_SIGNX: 
-    CKWIDTH(inst->u.num.width);
+  case NETVM_OC_SIGNX: 
+    CKWIDTH(inst->width);
     case 1: out = v1 | -(v1 & 0x80); break;
     case 2: out = v1 | -(v1 & 0x8000); break;
     case 4: out = v1 | -(v1 & 0x80000000); break;
     break;
-  case NETVM_IT_ADD: out = v1 + v2; break;
-  case NETVM_IT_SUB: out = v1 - v2; break;
-  case NETVM_IT_MUL: out = v1 * v2; break;
-  case NETVM_IT_DIV: out = v1 / v2; break;
-  case NETVM_IT_MOD: out = v1 % v2; break;
-  case NETVM_IT_SHL: out = v1 << (v2 & 0x3F); break;
-  case NETVM_IT_SHR: out = v1 >> (v2 & 0x3F); break;
-  case NETVM_IT_SHRA:
+  case NETVM_OC_ADD: out = v1 + v2; break;
+  case NETVM_OC_SUB: out = v1 - v2; break;
+  case NETVM_OC_MUL: out = v1 * v2; break;
+  case NETVM_OC_DIV: out = v1 / v2; break;
+  case NETVM_OC_MOD: out = v1 % v2; break;
+  case NETVM_OC_SHL: out = v1 << (v2 & 0x3F); break;
+  case NETVM_OC_SHR: out = v1 >> (v2 & 0x3F); break;
+  case NETVM_OC_SHRA:
     amt = v2 & 0x3F;
     out = (v1 >> amt) | ~(1 << (63 - amt));
     break;
-  case NETVM_IT_AND: out = v1 & v2; break;
-  case NETVM_IT_OR: out = v1 | v2; break;
-  case NETVM_IT_EQ: out = v1 == v2; break;
-  case NETVM_IT_NEQ: out = v1 != v2; break;
-  case NETVM_IT_LT: out = v1 < v2; break;
-  case NETVM_IT_LE: out = v1 <= v2; break;
-  case NETVM_IT_GT: out = v1 > v2; break;
-  case NETVM_IT_GE: out = v1 >= v2; break;
-  case NETVM_IT_SLT: out = (int64_t)v1 < (int64_t)v2; break;
-  case NETVM_IT_SLE: out = (int64_t)v1 <= (int64_t)v2; break;
-  case NETVM_IT_SGT: out = (int64_t)v1 > (int64_t)v2; break;
-  case NETVM_IT_SGE: out = (int64_t)v1 >= (int64_t)v2; break;
+  case NETVM_OC_AND: out = v1 & v2; break;
+  case NETVM_OC_OR: out = v1 | v2; break;
+  case NETVM_OC_EQ: out = v1 == v2; break;
+  case NETVM_OC_NEQ: out = v1 != v2; break;
+  case NETVM_OC_LT: out = v1 < v2; break;
+  case NETVM_OC_LE: out = v1 <= v2; break;
+  case NETVM_OC_GT: out = v1 > v2; break;
+  case NETVM_OC_GE: out = v1 >= v2; break;
+  case NETVM_OC_SLT: out = (int64_t)v1 < (int64_t)v2; break;
+  case NETVM_OC_SLE: out = (int64_t)v1 <= (int64_t)v2; break;
+  case NETVM_OC_SGT: out = (int64_t)v1 > (int64_t)v2; break;
+  case NETVM_OC_SGE: out = (int64_t)v1 >= (int64_t)v2; break;
   default:
     abort_unless(0);
   }
@@ -380,9 +382,11 @@ static void ni_numop(struct netvm *vm)
 static void ni_hashdr(struct netvm *vm)
 {
   struct netvm_inst *inst = &vm->inst[vm->pc];
-  struct netvm_hdr_desc hd0 = { 0, 0, 0, 0, inst->u.hdr.pktnum, 
-                               inst->u.hdr.htype, 0, 0, 0};
+  struct netvm_hdr_desc hd0;
   uint64_t val;
+  get_hd(vm, inst, &hd0);
+  if ( vm->error )
+    return;
   val = find_header(vm, &hd0) != NULL;
   S_PUSH(vm, val);
 }
@@ -398,17 +402,16 @@ static void ni_branch(struct netvm *vm)
 {
   struct netvm_inst *inst = &vm->inst[vm->pc];
   uint32_t addr;
-  if ( inst->u.num.immed )
-    addr = inst->u.num.val;
+  if ( IMMED(inst) )
+    addr = inst->val;
   else
     S_POP(vm, addr);
-  if ( inst->opcode == NETVM_IT_BRIF ) {
+  if ( inst->opcode == NETVM_OC_BRIF ) {
     uint64_t cond;
     S_POP(vm, cond);
     if ( !cond )
       return;
   }
-
   FATAL(addr >= vm->ninst);
   vm->pc = addr;
   vm->branch = 1;
@@ -419,41 +422,41 @@ static void ni_prnum(struct netvm *vm)
 {
   struct netvm_inst *inst = &vm->inst[vm->pc];
   char fmtbuf[12];
-  register int nwidth = inst->u.num.width;
-  register int swidth = inst->u.num.val;
+  register int nwidth = inst->width;
+  register int swidth = inst->val;
   uint64_t val;
 
   abort_unless(vm->outport);
   CKWIDTH(nwidth);
-  FATAL(swidth > 64 || swidth < 0);
+  FATAL(swidth > 64 || swidth < 0); /* to prevent overflow of fmtbuf */
 
   switch (inst->opcode) {
-  case NETVM_IT_PRBIN: 
+  case NETVM_OC_PRBIN: 
     if ( swidth )
       sprintf(fmtbuf, "%%0%d"FMT64"b", swidth);
     else
       sprintf(fmtbuf, "%%"FMT64"b");
     break;
-  case NETVM_IT_PROCT:
+  case NETVM_OC_PROCT:
     if ( swidth )
       sprintf(fmtbuf, "%%0%d"FMT64"o", swidth);
     else
       sprintf(fmtbuf, "%%"FMT64"o");
     break;
-  case NETVM_IT_PRDEC:
+  case NETVM_OC_PRDEC:
     if ( swidth ) {
-      if ( inst->u.num.issigned )
+      if ( ISSIGNED(inst) )
         sprintf(fmtbuf, "%%0%d"FMT64"d", swidth);
       else
         sprintf(fmtbuf, "%%0%d"FMT64"u", swidth);
     } else { 
-      if ( inst->u.num.issigned )
+      if ( ISSIGNED(inst) )
         sprintf(fmtbuf, "%%"FMT64"d");
       else
         sprintf(fmtbuf, "%%"FMT64"u");
     }
     break;
-  case NETVM_IT_PRHEX:
+  case NETVM_OC_PRHEX:
     if ( swidth )
       sprintf(fmtbuf, "%%0%d"FMT64"x", swidth);
     else
@@ -467,7 +470,7 @@ static void ni_prnum(struct netvm *vm)
   if ( nwidth < 8 )
     val &= ~((1 << (nwidth * 8)) - 1);
   /* sign extend the result if we are printing a signed decimal */
-  if ( (inst->u.num.issigned) && (inst->opcode == NETVM_IT_PRDEC) )
+  if ( ISSIGNED(inst) && (inst->opcode == NETVM_OC_PRDEC) )
     val |= -(val & (1 << (nwidth * 8 - 1)));
   emit_format(vm->outport, fmtbuf, val);
 }
@@ -518,9 +521,9 @@ static void ni_prstr(struct netvm *vm)
   uint32_t addr, len;
   char *p, *e;
   abort_unless(vm->outport);
-  if ( inst->u.num.immed ) {
-    addr = inst->u.num.val;
-    len = inst->u.num.width;
+  if ( IMMED(inst) ) {
+    addr = inst->val;
+    len = inst->width;
   } else {
     S_POP(vm, len);
     S_POP(vm, addr);
@@ -539,13 +542,12 @@ static void ni_stpkt(struct netvm *vm)
   uint32_t addr;
   uint64_t val;
 
-  hd0 = inst->hdr;
-  get_hdr_info(vm, *hd0, &addr, &hdr);
+  get_hdr_info(vm, inst, *hd0, &addr, &hdr);
   if ( vm->error )
     return;
   S_POP(vm, val);
 
-  switch(hd0.width) {
+  switch(inst->width) {
   case 1: {
     *(uint8_t *)(hdr->data + addr) = val;
   } break;
@@ -575,15 +577,20 @@ static void ni_stpkt(struct netvm *vm)
 static void ni_stpmeta(struct netvm *vm)
 {
   struct netvm_inst *inst = &vm->inst[vm->pc];
-  int pktnum = inst->u.hdr.pktnum;
+  int pktnum;
   struct netvmpkt *pkt;
   uint64_t val;
+  if ( IMMED(inst) ) {
+    pktnum = inst->val;
+  } else {
+    S_POP(vm, pktnum);
+  }
   FATAL((pktnum >= NETVM_MAXPKTS) || !(pkt = vm->packets[pktnum]));
   S_POP(vm, val);
-  if ( inst->opcode == NETVM_IT_STCLASS ) {
+  if ( inst->opcode == NETVM_OC_STCLASS ) {
     pkt->packet->pkt_class = val;
   } else {
-    abort_unless(inst->type == NETVM_IT_STTS);
+    abort_unless(inst->type == NETVM_OC_STTS);
     pkt->packet->pkt_timestamp = val;
   }
 }
@@ -592,13 +599,14 @@ static void ni_stpmeta(struct netvm *vm)
 static void ni_newpkt(struct netvm *vm)
 {
   struct netvm_inst *inst = &vm->inst[vm->pc];
-  int pktnum = inst->u.hdr.pktnum;
+  struct netvm_hdr_desc hd0;
   struct netvmpkt *pkt, *pnew;
-  uint32_t pktlen;
-  FATAL((pktnum >= NETVM_MAXPKTS) || !(pkt = vm->packets[pktnum]));
-  S_POP(vm, pktlen);
+  get_hd(vm, inst, &hd0);
+  if ( vm->error )
+    return;
+  FATAL(hd0.pktnum >= NETVM_MAXPKTS);
   pnew = emalloc(sizeof(*pnew));
-  if ( pkt_create(&pnew->packet, pktlen, inst->u.hdr.htype) < 0 ) {
+  if ( pkt_create(&pnew->packet, hd0.offset, hd0.htype) < 0 ) {
     free(pnew);
     FATAL(0);
   }
@@ -610,7 +618,7 @@ static void ni_newpkt(struct netvm *vm)
     free(pnew);
     FATAL(0);
   }
-  if ( (pkt = release_netvm_packet(vm, pktnum)) ) {
+  if ( (pkt = release_netvm_packet(vm, hd0.pktnum)) ) {
     hdr_free(pkt->headers, 1);
     pkt_free(pkt->packet);
     free(pkt);
@@ -622,13 +630,17 @@ static void ni_newpkt(struct netvm *vm)
 static void ni_pktcopy(struct netvm *vm)
 {
   struct netvm_inst *inst = &vm->inst[vm->pc];
-  int pktnum = inst->u.hdr.pktnum;
+  int pktnum;
   int slot;
   struct netvmpkt *pkt, *pnew;
+  if ( IMMED(inst) ) {
+    ptknum = inst->val;
+  } else {
+    S_POP(vm, pktnum);
+  }
   FATAL((pktnum >= NETVM_MAXPKTS) || !(pkt = vm->packets[pktnum]));
   S_POP(vm, slot);
   FATAL(slot < 0 || slot >= NETVM_MAXPKTS);
-
   pnew = emalloc(sizeof(*pnew));
   if ( pkt_copy(pkt->packet, &pnew->packet) < 0 ) {
     free(pnew);
@@ -651,27 +663,40 @@ static void ni_pktcopy(struct netvm *vm)
 static void ni_crehdr(struct netvm *vm)
 {
   struct netvm_inst *inst = &vm->inst[vm->pc];
-  int pktnum = inst->u.hdr.pktnum;
-  FATAL((pktnum >= NETVM_MAXPKTS) || !(pkt = vm->packets[pktnum]));
-  FATAL(hdr_add(inst->u.hdr.htype, hdr_parent(pkt->headers)) < 0);
+  struct netvm_hdr_desc hd0;
+  get_hd(vm, inst, &hd0);
+  if ( vm->error )
+    return;
+  FATAL((hd0.pktnum >= NETVM_MAXPKTS) || !(pkt = vm->packets[hd0.pktnum]));
+  FATAL(hdr_add(hd0.htype, hdr_parent(pkt->headers)) < 0);
 }
 
 
 static void ni_fixlen(struct netvm *vm)
 {
   struct netvm_inst *inst = &vm->inst[vm->pc];
-  int pktnum = inst->u.hdr.pktnum;
+  int pktnum;
   struct netvmpkt *pkt;
+  if ( IMMED(inst) ) {
+    pktnum = inst->val;
+  } else { 
+    S_POP(vm, pktnum);
+  }
   FATAL((pktnum >= NETVM_MAXPKTS) || !(pkt = vm->packets[pktnum]));
   FATAL(hdr_fixlen(pkt->headers) < 0);
 }
 
 
-static void ni_fixcksumn(struct netvm *vm)
+static void ni_fixcksum(struct netvm *vm)
 {
   struct netvm_inst *inst = &vm->inst[vm->pc];
-  int pktnum = inst->u.hdr.pktnum;
+  int pktnum;
   struct netvmpkt *pkt;
+  if ( IMMED(inst) ) {
+    pktnum = inst->val;
+  } else { 
+    S_POP(vm, pktnum);
+  }
   FATAL((pktnum >= NETVM_MAXPKTS) || !(pkt = vm->packets[pktnum]));
   FATAL(hdr_fixcksum(pkt->headers) < 0);
 }
@@ -680,41 +705,45 @@ static void ni_fixcksumn(struct netvm *vm)
 static void ni_hdrins(struct netvm *vm)
 {
   struct netvm_inst *inst = &vm->inst[vm->pc];
-  int pktnum = inst->u.hdr.pktnum;
+  struct netvm_hdr_desc hd0;
   struct netvmpkt *pkt;
-  uint32_t off, len;
-  int moveup = inst->u.hdr.flags & NETVM_HDF_MOVEUP;
-  FATAL((pktnum >= NETVM_MAXPKTS) || !(pkt = vm->packets[pktnum]));
+  uint32_t len;
+  int moveup;
+  get_hd(vm, inst, &hd0);
+  if ( vm->error )
+    return;
+  moveup = hd0.flags & NETVM_HDF_MOVEUP;
+  FATAL((hd0.pktnum >= NETVM_MAXPKTS) || !(pkt = vm->packets[hd0.pktnum]));
   S_POP(vm, len);
-  S_POP(vm, off);
-  FATAL(hdr_insert(pkt->headers, off, len, moveup) < 0);
+  FATAL(hdr_insert(pkt->headers, hd0.offset, len, moveup) < 0);
 }
 
 
 static void ni_hdrcut(struct netvm *vm)
 {
   struct netvm_inst *inst = &vm->inst[vm->pc];
-  int pktnum = inst->u.hdr.pktnum;
+  struct netvm_hdr_desc hd0;
   struct netvmpkt *pkt;
-  uint32_t off, len;
-  int moveup = inst->u.hdr.flags & NETVM_HDF_MOVEUP;
-  FATAL((pktnum >= NETVM_MAXPKTS) || !(pkt = vm->packets[pktnum]));
+  uint32_t len;
+  int moveup;
+  get_hd(vm, inst, &hd0);
+  if ( vm->error )
+    return;
+  moveup = hd0.flags & NETVM_HDF_MOVEUP;
+  FATAL((hd0.pktnum >= NETVM_MAXPKTS) || !(pkt = vm->packets[hd0.pktnum]));
   S_POP(vm, len);
-  S_POP(vm, off);
-  FATAL(hdr_cut(pkt->headers, off, len, moveup) < 0);
+  FATAL(hdr_cut(pkt->headers, hd0.offset, len, moveup) < 0);
 }
 
 
 static void ni_hdradj(struct netvm *vm)
 {
   struct netvm_inst *inst = &vm->inst[vm->pc];
-  int pktnum = inst->u.hdr.pktnum;
   struct netvm_hdr_desc hd0;
   uint64_t val;
   ptrdiff_t amt;
   int rv;
-  hd0 = inst->hdr;
-  get_hd(vm, &hd0);
+  get_hd(vm, inst, &hd0);
   if ( vm->error )
     return;
   hdr = find_header(vm, &hd0);

@@ -10,7 +10,6 @@ struct netvmpkt {
   struct hdr_parse *    headers;
 };
 
-
 enum {
   NETVM_HDR_HOFF,
   NETVM_HDR_POFF,
@@ -24,128 +23,106 @@ enum {
 
 #define NETVM_HDRFLDOK(f) (((f) >= NETVM_HDR_HOFF) && ((f) <= NETVM_HDR_LEN)
 #define NETVM_ISHDROFF(f) (((f) >= NETVM_HDR_HOFF) && ((f) <= NETVM_HDR_EOFF)
-#define NETVM_ISHDRLEN(f) (((f) >= NETVM_HDR_HLEN) && ((f) <= NETVM_HDR_LEN)
-
 
 enum {
-  NETVM_IT_POP,
-  NETVM_IT_PUSH,
-  NETVM_IT_DUP,
-  NETVM_IT_LDMEM,
-  NETVM_IT_STMEM,
-  NETVM_IT_LDPKT,
-  NETVM_IT_LDCLASS,
-  NETVM_IT_LDTS,
-  NETVM_IT_LDHDRF,
-  NETVM_IT_NOT,
-  NETVM_IT_TONET,
-  NETVM_IT_TOHOST,
-  NETVM_IT_SIGNX,
-  NETVM_IT_ADD,
-  NETVM_IT_SUB,
-  NETVM_IT_MUL,
-  NETVM_IT_DIV,
-  NETVM_IT_MOD,
-  NETVM_IT_SHL,
-  NETVM_IT_SHR,
-  NETVM_IT_SHRA,
-  NETVM_IT_AND,
-  NETVM_IT_OR,
-  NETVM_IT_EQ,
-  NETVM_IT_NEQ,
-  NETVM_IT_LT,
-  NETVM_IT_LE,
-  NETVM_IT_GT,
-  NETVM_IT_GE,
-  NETVM_IT_SLT,
-  NETVM_IT_SLE,
-  NETVM_IT_SGT,
-  NETVM_IT_SGE,
-  NETVM_IT_HASHDR,
-  NETVM_IT_HALT,
-  NETVM_IT_MAX_MATCH = NETVM_IT_HALT,
+  NETVM_OC_POP,
+  NETVM_OC_PUSH,
+  NETVM_OC_DUP,
+  NETVM_OC_LDMEM,
+  NETVM_OC_STMEM,
+  NETVM_OC_LDPKT,
+  NETVM_OC_LDCLASS,
+  NETVM_OC_LDTS,
+  NETVM_OC_LDHDRF,
+  NETVM_OC_NOT,
+  NETVM_OC_TONET,
+  NETVM_OC_TOHOST,
+  NETVM_OC_SIGNX,
+  NETVM_OC_ADD,
+  NETVM_OC_SUB,
+  NETVM_OC_MUL,
+  NETVM_OC_DIV,
+  NETVM_OC_MOD,
+  NETVM_OC_SHL,
+  NETVM_OC_SHR,
+  NETVM_OC_SHRA,
+  NETVM_OC_AND,
+  NETVM_OC_OR,
+  NETVM_OC_EQ,
+  NETVM_OC_NEQ,
+  NETVM_OC_LT,
+  NETVM_OC_LE,
+  NETVM_OC_GT,
+  NETVM_OC_GE,
+  NETVM_OC_SLT,
+  NETVM_OC_SLE,
+  NETVM_OC_SGT,
+  NETVM_OC_SGE,
+  NETVM_OC_HASHDR,
+  NETVM_OC_HALT,
+  NETVM_OC_MAX_MATCH = NETVM_OC_HALT,
 
   /* not allowed in pure match run */
-  NETVM_IT_BR,
-  NETVM_IT_BRIF,
-  NETVM_IT_PRBIN,
-  NETVM_IT_PROCT,
-  NETVM_IT_PRDEC,
-  NETVM_IT_PRHEX,
-  NETVM_IT_PRIP,
-  NETVM_IT_PRETH,
-  NETVM_IT_PRIPV6,
-  NETVM_IT_PRSTR,
-  NETVM_IT_STPKT,
-  NETVM_IT_STCLASS,
-  NETVM_IT_STTS,
-  NETVM_IT_PKTNEW,
-  NETVM_IT_PKTCOPY,
-  NETVM_IT_HDRCREATE,
-  NETVM_IT_FIXLEN,
-  NETVM_IT_FIXCKSUM,
-  NETVM_IT_PKTINS,
-  NETVM_IT_PKTCUT,
-  NETVM_IT_HDRADJ,
+  NETVM_OC_BR,
+  NETVM_OC_BRIF,
+  NETVM_OC_PRBIN,       /* special: val == min string width */
+  NETVM_OC_PROCT,       /* special: val == min string width */
+  NETVM_OC_PRDEC,       /* special: val == min string width */
+  NETVM_OC_PRHEX,       /* special: val == min string width */
+  NETVM_OC_PRIP,        /* special: no immediate operands */
+  NETVM_OC_PRETH,       /* special: no immediate operands */
+  NETVM_OC_PRIPV6,      /* special: no immediate operands */
+  NETVM_OC_PRSTR,       /* special: if immmed, width == string length */
+  NETVM_OC_STPKT,
+  NETVM_OC_STCLASS,
+  NETVM_OC_STTS,
+  NETVM_OC_PKTNEW,
+  NETVM_OC_PKTCOPY,
+  NETVM_OC_HDRCREATE,
+  NETVM_OC_FIXLEN,
+  NETVM_OC_FIXCKSUM,
+  NETVM_OC_PKTINS,
+  NETVM_OC_PKTCUT,
+  NETVM_OC_HDRADJ,
 
-  NETVM_IT_MAX = NETVM_IT_BROFF
+  NETVM_OC_MAX = NETVM_OC_BROFF
 };
-
 
 enum {
-  NETVM_HDF_HDONSTACK   0x1,
-  NETVM_HDF_OFFONSTACK  0x2,
-  NETVM_HDF_TONET       0x4,
-  NETVM_HDF_TOHOST      0x8,
-  NETVM_HDF_IPHLEN      0x10, /* only used on 1 byte packet load instructions */
-  NETVM_HDF_TCPHLEN     0x20, /* only used on 1 byte packet load instructions */
-  NETVM_HDF_MOVEUP      0x40, /* only used HDRINS and HDRCUT */
-};
-
-
-#define NETVM_HDONSTACK   255
-struct netvm_data {
-  union {
-    struct netvm_num {
-      uint8_t           width;
-      uint8_t           issigned;
-      uint8_t           immed; /* addr for load/store ops and v2 of alu ops */
-      uint8_t           pad;
-      uint64_t          val;
-    } num;
-    struct netvm_hdr_desc {
-      uint8_t           width;    /* useless for load/store header field ops */
-      uint8_t           issigned; /* useless for load/store header field ops */
-      uint8_t           flags;    /* header desc is on the stack */
-      uint8_t           pad;      /* offset is on the stack */
-      uint8_t           pktnum;   /* which packet entry */
-      uint8_t           htype;    /* PPT_*;  PPT_NONE == absolute idx */
-      uint8_t           idx;      /* 0 == whole packet, 1 == 1st hdr,... */
-      uint8_t           field;    /* NETVM_HDR_* */
-      uint32_t          offset;
-    } hdr;
-  }u;
+  NETVM_IF_IMMED =      0x1, /* last op is immediate rather than on stack */ 
+  NETVM_IF_SIGNED =     0x2, /* number, value or all operands are signed */
+  NETVM_IF_TONET =      0x4, /* for store operations */
+  NETVM_IF_TOHOST =     0x8, /* for load operation s*/
+  NETVM_IF_IPHLEN =    0x10, /* on 1 byte packet load instructions */
+  NETVM_IF_TCPHLEN =   0x20, /* on 1 byte packet load instructions */
+  NETVM_IF_MOVEUP =    0x40, /* only used HDRINS and HDRCUT */
 };
 
 /* 
- * If onstack is set for a load/store instruction then the address to load
+ * If immed is not set for a load/store instruction then the address to load
  * from or store to is on top of the stack.  Store operations always take their
  * values from the stack as well.  (but not PUSH operations)
  *
- * If onstack is set for a header instruction then the instruction 
- * expects the (field << 24 | idx << 16 | htype << 8 | pktnum ) to be the next 
- * entry on the stack.  If the offset is needed for the instruction, the 
- * offset must be the second thing on the stack.
+ * If immed is not set for a header instruction then the instruction 
+ * expects a struct netvm_hdr_desc to be the value on the stack packed into a
+ * 64-bit word.
  */
 
-
-struct netvm_inst {
-  uint32_t              opcode;
-  struct netvm_data     data;
+struct netvm_hdr_desc {
+  uint8_t           pktnum;     /* which packet entry */
+  uint8_t           htype;      /* PPT_*;  PPT_NONE == absolute idx */
+  uint8_t           idx;        /* 0 == 1st hdr, 1 == 2nd hdr,... */
+  uint8_t           field;      /* NETVM_HDR_* */
+  uint32_t          offset;     /* offset into packet */
 };
 
+struct netvm_inst {
+  uint8_t       opcode; /* NETVM_OC_* */
+  uint8_t       width;  /* 1, 2, 4 or 8 for most operations */
+  uint16_t      flags;  /* NETVM_IF_* */
+  uint64_t      val;    /* Varies with instruction */
+};
 
-/* NOTE: must be less than or equal to NETVM_HDONSTACK */
 #define NETVM_MAXPKTS   16
 struct netvm {
   struct netvm_inst *   inst;
@@ -166,6 +143,8 @@ struct netvm {
 };
 
 
+/* mem may be NULL and memsz 0.  roseg must be <= memsz.  stack must not be */
+/* 0 and ssz is the number of stack elements.  outport may be NULL */
 void init_netvm(struct netvm *vm, struct netvm_data *stack, unsigned int ssz,
                 byte_t *mem, unsigned int memsz, unsigned int roseg, 
                 struct emitter *outport);
