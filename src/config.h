@@ -3,4 +3,7 @@
 
 #define HAS_PCAP
 
+#define FMT64   "ll"
+/* #define FMT64   "l" */ /* use this one for 64-bit machines */
+
 #endif /* __pkttools_config_h */

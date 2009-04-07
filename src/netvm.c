@@ -1,5 +1,10 @@
+#include "config.h"
 #include "netvm.h"
+#include <string.h>
+#include <stdlib.h>
 #include <cat/emit_format.h>
+#include <cat/emalloc.h>
+#include "util.h"
 
 #define FATAL(__cond, __vm) \
   if (__cond) { __vm->error = 1; __vm->running = 0; return; }
@@ -37,7 +42,8 @@
  * means find the 2nd (0-based counting) TCP (PPT_TCP == 8) header in the 4th
  * packet.
  */
-static struct hdr_parse *find_header(struct netvm *vm, struct netvm_hdr_desc *hd)
+static struct hdr_parse *find_header(struct netvm *vm, 
+                                     struct netvm_hdr_desc *hd)
 {
   struct netvmpkt *pkt;
   struct hdr_parse *hdr;
@@ -99,12 +105,12 @@ static void ni_ldmem(struct netvm *vm)
   uint64_t val;
   register unsigned int width = inst->u.num.width;
   register unsigned int addr;
+  FATAL(!vm->mem || !vm->memsz);
   CKWIDTH(width);
   if ( inst->u.num.immed ) {
     addr = inst->u.num.val;
   } else {
-    S_POP(vm, val);
-    addr = val;
+    S_POP(vm, addr);
   }
   FATAL(addr > vm->memsz || addr + width > vm->memsz);
   if ( inst->u.num.issigned )
@@ -151,54 +157,76 @@ static void ni_stmem(struct netvm *vm)
 }
 
 
-static void ni_ldpkt(struct netvm *vm)
+static void get_hd(struct netvm *vm, struct netvm_hdr_desc *hd, int getoff)
 {
-  struct netvm_inst *inst = &vm->inst[vm->pc];
-  struct netvm_hdr_desc hd0;
-  struct hdr_parse *hdr;
   uint64_t val;
-  uint32_t addr;
-  int width;
-
-  hd0 = inst->hdr;
-  if ( hd0.flags & NETVM_HDF_HDONSTACK ) {
+  if ( hd->flags & NETVM_HDF_HDONSTACK ) {
     S_POP(vm, val);
-    hd0.pktnum = val & 0xFF;
-    hd0.htype = (val >> 8) & 0xFF;
-    hd0.idx = (val >> 16) & 0xFF;
-    hd0.field = (val >> 24) & 0xFF;
+    hd->pktnum = val & 0xFF;
+    hd->htype = (val >> 8) & 0xFF;
+    hd->idx = (val >> 16) & 0xFF;
+    hd->field = (val >> 24) & 0xFF;
   } 
-  if ( hd0.flags & NETVM_HDF_OFFONSTACK ) {
+  if ( getoff && (hd->flags & NETVM_HDF_OFFONSTACK) ) {
     S_POP(vm, val);
-    hd0.offset = val;
+    hd->offset = val;
   }
-  width = hd0.width;
+}
+
+
+static int get_hdr_info(struct netvm *vm, struct netvm_hdr_desc *hd,
+                        uint32_t *addr, struct hdr_parse **hdrp)
+{
+  uint64_t val;
+  int width;
+  struct hdr_parse *hdr;
+
+  get_hd(vm, hd, 1);
+  if ( vm->error )
+    return;
+  width = hd->width;
   CKWIDTH(width);
 
-  FATAL((hd0.offset + width < hd0.offset) || !NETVM_ISHDROFF(hd0.field));
-  hdr = find_header(vm, &hd0);
+  FATAL((hd->offset + width < hd->offset) || !NETVM_ISHDROFF(hd->field));
+  hdr = find_header(vm, hd);
   FATAL(hdr == NULL);
 
-  switch(hd0.field) {
+  switch(hd->field) {
   case NETVM_HDR_HOFF:
-    FATAL(hd0.offset + width >= hdr_hlen(hdr));
-    addr = hdr->hoff + hd0.offset;
+    FATAL(hd->offset + width >= hdr_hlen(hdr));
+    *addr = hdr->hoff + hd->offset;
     break;
   case NETVM_HDR_POFF:
     FATAL(hd0.offset + width >= hdr_plen(hdr));
-    addr = hdr->poff + hd0.offset;
+    *addr = hdr->poff + hd->offset;
     break;
   case NETVM_HDR_TOFF:
-    FATAL(hd0.offset + width >= hdr_tlen(hdr));
-    addr = hdr->toff + hd0.offset;
+    FATAL(hd->offset + width >= hdr_tlen(hdr));
+    *addr = hdr->toff + hd->offset;
     break;
   case NETVM_HDR_EOFF:
   default:
     FATAL(0);
     break;
   }
+  *hdrp = hdr;
+}
 
-  switch(width) {
+
+static void ni_ldpkt(struct netvm *vm)
+{
+  struct netvm_inst *inst = &vm->inst[vm->pc];
+  struct netvm_hdr_desc hd0;
+  struct hdr_parse *hdr;
+  uint32_t addr;
+  uint64_t val;
+
+  hd0 = inst->hdr;
+  get_hdr_info(vm, *hd0, &addr, &hdr);
+  if ( vm->error )
+    return;
+
+  switch(hd0.width) {
   case 1: 
     val = (int64_t)*(int8_t *)(hdr->data + addr); 
     if ( hd0.flags & NETVM_HDF_IPHLEN ) { 
@@ -212,31 +240,22 @@ static void ni_ldpkt(struct netvm *vm)
     break;
   case 2: 
     val = *(uint16_t *)(hdr->data + addr); 
-    if ( hdr0.flags & NETVM_HDRF_TOHOST ) {
+    if ( hd0.flags & NETVM_HDF_TOHOST )
       val = ntoh16(val);
-    } else if ( hdr0.flags & NETVM_HDRF_TONET ) {
-      val = hton16(val);
-    }
     if ( hd0.issigned )
       val |= -(val & 0x8000);
     break;
   case 4: 
     val = *(uint32_t *)(hdr->data + addr); 
-    if ( hdr0.flags & NETVM_HDRF_TOHOST ) {
+    if ( hd0.flags & NETVM_HDF_TOHOST )
       val = ntoh32(val);
-    } else if ( hdr0.flags & NETVM_HDRF_TONET ) {
-      val = hton32(val);
-    }
     if ( hd0.issigned )
       val |= -(val & 0x80000000);
     break;
   case 8: 
     val = *(uint64_t *)(hdr->data + addr); 
-    if ( hdr0.flags & NETVM_HDRF_TOHOST ) {
+    if ( hd0.flags & NETVM_HDF_TOHOST )
       val = ntoh64(val);
-    } else if ( hdr0.flags & NETVM_HDRF_TONET ) {
-      val = hton64(val);
-    }
     break;
   default:
     FATAL(0);
@@ -269,19 +288,10 @@ static void ni_ldhdrf(struct netvm *vm)
   uint32_t addr;
 
   hd0 = inst->hdr;
-  if ( hd0.flags & NETVM_HDF_HDONSTACK ) {
-    S_POP(vm, val);
-    hd0.pktnum = val & 0xFF;
-    hd0.htype = (val >> 8) & 0xFF;
-    hd0.idx = (val >> 16) & 0xFF;
-    hd0.field = (val >> 24) & 0xFF;
-  } 
-  if ( hd0.flags & NETVM_HDF_OFFONSTACK ) {
-    S_POP(vm, val);
-    hd0.offset = val;
-  }
-
-  FATAL(!NETVM_HDRFLDOK(hd0.field));
+  get_hd(vm, &hd0, 1);
+  if ( vm->error )
+    return;
+  FATAL(!NETVM_HDFLDOK(hd0.field));
   hdr = find_header(vm, &hd0);
   FATAL(hdr == NULL);
 
@@ -384,6 +394,27 @@ static void ni_halt(struct netvm *vm)
 }
 
 
+static void ni_branch(struct netvm *vm)
+{
+  struct netvm_inst *inst = &vm->inst[vm->pc];
+  uint32_t addr;
+  if ( inst->u.num.immed )
+    addr = inst->u.num.val;
+  else
+    S_POP(vm, addr);
+  if ( inst->opcode == NETVM_IT_BRIF ) {
+    uint64_t cond;
+    S_POP(vm, cond);
+    if ( !cond )
+      return;
+  }
+
+  FATAL(addr >= vm->ninst);
+  vm->pc = addr;
+  vm->branch = 1;
+}
+
+
 static void ni_prnum(struct netvm *vm)
 {
   struct netvm_inst *inst = &vm->inst[vm->pc];
@@ -399,34 +430,34 @@ static void ni_prnum(struct netvm *vm)
   switch (inst->opcode) {
   case NETVM_IT_PRBIN: 
     if ( swidth )
-      sprintf(fmtbuf, "%%0%dllb", swidth);
+      sprintf(fmtbuf, "%%0%d"FMT64"b", swidth);
     else
-      sprintf(fmtbuf, "%%llb");
+      sprintf(fmtbuf, "%%"FMT64"b");
     break;
   case NETVM_IT_PROCT:
     if ( swidth )
-      sprintf(fmtbuf, "%%0%dllo", swidth);
+      sprintf(fmtbuf, "%%0%d"FMT64"o", swidth);
     else
-      sprintf(fmtbuf, "%%llo");
+      sprintf(fmtbuf, "%%"FMT64"o");
     break;
   case NETVM_IT_PRDEC:
     if ( swidth ) {
       if ( inst->u.num.issigned )
-        sprintf(fmtbuf, "%%0%dlld", swidth);
+        sprintf(fmtbuf, "%%0%d"FMT64"d", swidth);
       else
-        sprintf(fmtbuf, "%%0%dllu", swidth);
+        sprintf(fmtbuf, "%%0%d"FMT64"u", swidth);
     } else { 
       if ( inst->u.num.issigned )
-        sprintf(fmtbuf, "%%lld");
+        sprintf(fmtbuf, "%%"FMT64"d");
       else
-        sprintf(fmtbuf, "%%llu");
+        sprintf(fmtbuf, "%%"FMT64"u");
     }
     break;
   case NETVM_IT_PRHEX:
     if ( swidth )
-      sprintf(fmtbuf, "%%0%dllx", swidth);
+      sprintf(fmtbuf, "%%0%d"FMT64"x", swidth);
     else
-      sprintf(fmtbuf, "%%llx");
+      sprintf(fmtbuf, "%%"FMT64"x");
   default:
     abort_unless(0);
   }
@@ -450,6 +481,255 @@ static void ni_prip(struct netvm *vm)
   S_POP(vm, val);
   /* Assumes network byte order */
   emit_format(vm->outport, "%u.%u.%u.%u", bp[0], bp[1], bp[2], bp[3]);
+}
+
+
+static void ni_preth(struct netvm *vm)
+{
+  uint32_t val;
+  byte_t *bp = &val;
+  abort_unless(vm->outport);
+  S_POP(vm, val);
+  /* Assumes network byte order */
+  emit_format(vm->outport, "%02x:%02x:%02x:%02x:%02x:%02x", 
+              bp[0], bp[1], bp[2], bp[3], bp[4], bp[5]);
+}
+
+
+static void ni_pripv6(struct netvm *vm)
+{
+  uint64_t vhi, vlo;
+  byte_t *bhi = &vhi, *blo = &vlo;
+  abort_unless(vm->outport);
+  S_POP(vm, vlo);
+  S_POP(vm, vhi);
+  /* TODO: use the compression */
+  emit_format(vm->outport, 
+      "%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x",
+      bhi[0], bhi[1], bhi[2], bhi[3], bhi[4], bhi[5], bhi[6], bhi[7],
+      blo[0], blo[1], blo[2], blo[3], blo[4], blo[5], blo[6], blo[7]);
+}
+
+
+/* strings are stored with a 1-byte length prefix: no null terminators */
+static void ni_prstr(struct netvm *vm)
+{
+  struct netvm_inst *inst = &vm->inst[vm->pc];
+  uint32_t addr, len;
+  char *p, *e;
+  abort_unless(vm->outport);
+  if ( inst->u.num.immed ) {
+    addr = inst->u.num.val;
+    len = inst->u.num.width;
+  } else {
+    S_POP(vm, len);
+    S_POP(vm, addr);
+  }
+  FATAL(!vm->mem || !vm->memsz || addr >= vm->memsz);
+  FATAL(addr + len > vm->memsz || addr + len < addr);
+  emit_raw(vm->outport, vm->mem + addr, len);
+}
+
+
+static void ni_stpkt(struct netvm *vm)
+{
+  struct netvm_inst *inst = &vm->inst[vm->pc];
+  struct netvm_hdr_desc hd0;
+  struct hdr_parse *hdr;
+  uint32_t addr;
+  uint64_t val;
+
+  hd0 = inst->hdr;
+  get_hdr_info(vm, *hd0, &addr, &hdr);
+  if ( vm->error )
+    return;
+  S_POP(vm, val);
+
+  switch(hd0.width) {
+  case 1: {
+    *(uint8_t *)(hdr->data + addr) = val;
+  } break;
+  case 2: {
+    uint16_t v = val;
+    if ( hd0.flags & NETVM_HDF_TOHOST )
+      v = hton16(v);
+    *(uint16_t *)(hdr->data + addr) = v;
+  } break;
+  case 4:
+    uint32_t v = val;
+    if ( hd0.flags & NETVM_HDF_TOHOST )
+      v = hton32(v);
+    *(uint32_t *)(hdr->data + addr) = v;
+    break;
+  case 8:
+    if ( hd0.flags & NETVM_HDF_TOHOST )
+      val = hton64(val);
+    *(uint64_t *)(hdr->data + addr) = val;
+    break;
+  default:
+    abort_unless(0); /* should be checked in get_hdr_info() */
+  }
+}
+
+
+static void ni_stpmeta(struct netvm *vm)
+{
+  struct netvm_inst *inst = &vm->inst[vm->pc];
+  int pktnum = inst->u.hdr.pktnum;
+  struct netvmpkt *pkt;
+  uint64_t val;
+  FATAL((pktnum >= NETVM_MAXPKTS) || !(pkt = vm->packets[pktnum]));
+  S_POP(vm, val);
+  if ( inst->opcode == NETVM_IT_STCLASS ) {
+    pkt->packet->pkt_class = val;
+  } else {
+    abort_unless(inst->type == NETVM_IT_STTS);
+    pkt->packet->pkt_timestamp = val;
+  }
+}
+
+
+static void ni_newpkt(struct netvm *vm)
+{
+  struct netvm_inst *inst = &vm->inst[vm->pc];
+  int pktnum = inst->u.hdr.pktnum;
+  struct netvmpkt *pkt, *pnew;
+  uint32_t pktlen;
+  FATAL((pktnum >= NETVM_MAXPKTS) || !(pkt = vm->packets[pktnum]));
+  S_POP(vm, pktlen);
+  pnew = emalloc(sizeof(*pnew));
+  if ( pkt_create(&pnew->packet, pktlen, inst->u.hdr.htype) < 0 ) {
+    free(pnew);
+    FATAL(0);
+  }
+  pnew->headers = hdr_create_parse(pnew->packet->pkt_buffer,
+                                   pnew->packet->pkt_offset,
+                                   pnew->packet->pkt_buflen);
+  if ( !pnew->headers ) {
+    pkt_free(pnew->packet);
+    free(pnew);
+    FATAL(0);
+  }
+  if ( (pkt = release_netvm_packet(vm, pktnum)) ) {
+    hdr_free(pkt->headers, 1);
+    pkt_free(pkt->packet);
+    free(pkt);
+  }
+  set_netvm_packet(vm, slot, pnew);
+}
+
+
+static void ni_pktcopy(struct netvm *vm)
+{
+  struct netvm_inst *inst = &vm->inst[vm->pc];
+  int pktnum = inst->u.hdr.pktnum;
+  int slot;
+  struct netvmpkt *pkt, *pnew;
+  FATAL((pktnum >= NETVM_MAXPKTS) || !(pkt = vm->packets[pktnum]));
+  S_POP(vm, slot);
+  FATAL(slot < 0 || slot >= NETVM_MAXPKTS);
+
+  pnew = emalloc(sizeof(*pnew));
+  if ( pkt_copy(pkt->packet, &pnew->packet) < 0 ) {
+    free(pnew);
+    FATAL(0);
+  }
+  if ( !(pnew->headers = hdr_copy(pkt->header, pnew->packet->pkt_buffer)) ) {
+    pkt_free(pnew->packet);
+    free(pnew);
+    FATAL(0);
+  }
+  if ( (pkt = release_netvm_packet(vm, slot)) ) {
+    hdr_free(pkt->headers, 1);
+    pkt_free(pkt->packet);
+    free(pkt);
+  }
+  set_netvm_packet(vm, slot, pnew);
+}
+
+
+static void ni_crehdr(struct netvm *vm)
+{
+  struct netvm_inst *inst = &vm->inst[vm->pc];
+  int pktnum = inst->u.hdr.pktnum;
+  FATAL((pktnum >= NETVM_MAXPKTS) || !(pkt = vm->packets[pktnum]));
+  FATAL(hdr_add(inst->u.hdr.htype, hdr_parent(pkt->headers)) < 0);
+}
+
+
+static void ni_fixlen(struct netvm *vm)
+{
+  struct netvm_inst *inst = &vm->inst[vm->pc];
+  int pktnum = inst->u.hdr.pktnum;
+  struct netvmpkt *pkt;
+  FATAL((pktnum >= NETVM_MAXPKTS) || !(pkt = vm->packets[pktnum]));
+  FATAL(hdr_fixlen(pkt->headers) < 0);
+}
+
+
+static void ni_fixcksumn(struct netvm *vm)
+{
+  struct netvm_inst *inst = &vm->inst[vm->pc];
+  int pktnum = inst->u.hdr.pktnum;
+  struct netvmpkt *pkt;
+  FATAL((pktnum >= NETVM_MAXPKTS) || !(pkt = vm->packets[pktnum]));
+  FATAL(hdr_fixcksum(pkt->headers) < 0);
+}
+
+
+static void ni_hdrins(struct netvm *vm)
+{
+  struct netvm_inst *inst = &vm->inst[vm->pc];
+  int pktnum = inst->u.hdr.pktnum;
+  struct netvmpkt *pkt;
+  uint32_t off, len;
+  int moveup = inst->u.hdr.flags & NETVM_HDF_MOVEUP;
+  FATAL((pktnum >= NETVM_MAXPKTS) || !(pkt = vm->packets[pktnum]));
+  S_POP(vm, len);
+  S_POP(vm, off);
+  FATAL(hdr_insert(pkt->headers, off, len, moveup) < 0);
+}
+
+
+static void ni_hdrcut(struct netvm *vm)
+{
+  struct netvm_inst *inst = &vm->inst[vm->pc];
+  int pktnum = inst->u.hdr.pktnum;
+  struct netvmpkt *pkt;
+  uint32_t off, len;
+  int moveup = inst->u.hdr.flags & NETVM_HDF_MOVEUP;
+  FATAL((pktnum >= NETVM_MAXPKTS) || !(pkt = vm->packets[pktnum]));
+  S_POP(vm, len);
+  S_POP(vm, off);
+  FATAL(hdr_cut(pkt->headers, off, len, moveup) < 0);
+}
+
+
+static void ni_hdradj(struct netvm *vm)
+{
+  struct netvm_inst *inst = &vm->inst[vm->pc];
+  int pktnum = inst->u.hdr.pktnum;
+  struct netvm_hdr_desc hd0;
+  uint64_t val;
+  ptrdiff_t amt;
+  int rv;
+  hd0 = inst->hdr;
+  get_hd(vm, &hd0);
+  if ( vm->error )
+    return;
+  hdr = find_header(vm, &hd0);
+  FATAL(hdr == NULL);
+  S_POP(vm, val);
+  amt = (int64_t)val;
+  switch(hd0.field) {
+  case NETVM_HDR_HOFF: rv = hdr_adj_hstart(hdr, amt); break;
+  case NETVM_HDR_HLEN: rv = hdr_adj_hlen(hdr, amt); break;
+  case NETVM_HDR_PLEN: rv = hdr_adj_plen(hdr, amt); break;
+  case NETVM_HDR_TLEN: rv = hdr_adj_tlen(hdr, amt); break;
+  default:
+    FATAL(0);
+  }
+  FATAL(rv < 0);
 }
 
 
@@ -491,25 +771,27 @@ struct netvm_inst g_netvm_ops[NTVM_IT_MAX+1] = {
   ni_halt,
 
   /* non-matching-only */
+  ni_branch, /* BR */
+  ni_branch, /* BRIF */
   ni_prnum, /* PRBIN */
   ni_prnum, /* PROCT */
   ni_prnum, /* PRDEC */
   ni_prnum, /* PRHEX */
   ni_prip,
-  unimplemented,
-  unimplemented,
-  unimplemented,
-  unimplemented,
-  unimplemented,
-  unimplemented,
-  unimplemented,
-  unimplemented,
-  unimplemented,
-  unimplemented,
-  unimplemented,
-  unimplemented,
-  unimplemented,
-  unimplemented,
+  ni_preth,
+  ni_pripv6,
+  ni_prstr,
+  ni_stpkt,
+  ni_stpmeta, /* STCLASS */
+  ni_stpmeta, /* STTS */
+  ni_pktnew,
+  ni_pktcopy,
+  ni_crehdr,
+  ni_fixlen,
+  ni_fixcksum,
+  ni_hdrins,
+  ni_hdrcut,
+  ni_hdradj,
 };
 
 
@@ -594,5 +876,24 @@ int run_netvm(struct netvm *vm, int maxcycles, int *rv)
   if ( rv )
     *rv = TOP(vm);
   return 1;
+}
+
+
+void set_netvm_packet(struct netvm *vm, int slot, struct netvmpkt *pkt)
+{
+  if ( !vm || slot < 0 || slot >= NETVM_MAXPKTS )
+    return;
+  vm->packets[slot]  = pkt;
+}
+
+
+struct netvmpkt *release_netvm_pkt(struct netvm *vm, int slot)
+{
+  struct netvmpkt *pkt;
+  if ( !vm || slot < 0 || slot >= NETVM_MAXPKTS )
+    return NULL;
+  pkt = vm->packets[slot];
+  vm->packets[slot] = NULL;
+  return pkt;
 }
 

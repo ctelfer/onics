@@ -66,6 +66,8 @@ enum {
   NETVM_IT_MAX_MATCH = NETVM_IT_HALT,
 
   /* not allowed in pure match run */
+  NETVM_IT_BR,
+  NETVM_IT_BRIF,
   NETVM_IT_PRBIN,
   NETVM_IT_PROCT,
   NETVM_IT_PRDEC,
@@ -77,6 +79,7 @@ enum {
   NETVM_IT_STPKT,
   NETVM_IT_STCLASS,
   NETVM_IT_STTS,
+  NETVM_IT_PKTNEW,
   NETVM_IT_PKTCOPY,
   NETVM_IT_HDRCREATE,
   NETVM_IT_FIXLEN,
@@ -84,9 +87,6 @@ enum {
   NETVM_IT_PKTINS,
   NETVM_IT_PKTCUT,
   NETVM_IT_HDRADJ,
-  NETVM_IT_BR,
-  NETVM_IT_BRIF,
-  NETVM_IT_BROFF,
 
   NETVM_IT_MAX = NETVM_IT_BROFF
 };
@@ -99,6 +99,7 @@ enum {
   NETVM_HDF_TOHOST      0x8,
   NETVM_HDF_IPHLEN      0x10, /* only used on 1 byte packet load instructions */
   NETVM_HDF_TCPHLEN     0x20, /* only used on 1 byte packet load instructions */
+  NETVM_HDF_MOVEUP      0x40, /* only used HDRINS and HDRCUT */
 };
 
 
@@ -148,12 +149,12 @@ struct netvm_inst {
 #define NETVM_MAXPKTS   16
 struct netvm {
   struct netvm_inst *   inst;
-  unsigned int          ninst;
+  uint32_t              ninst;
   uint64_t *            stack;
-  unsigned int          stksz;
+  uint32_t              stksz;
   byte_t *              mem;
-  unsigned int          memsz;
-  unsigned int          rosegoff;
+  uint32_t              memsz;
+  uint32_t              rosegoff;
   struct emitter *      outport;
   struct netvmpkt *     packets[NETVM_MAXPKTS];
   int                   matchonly;
@@ -177,9 +178,9 @@ void reset_netvm(struct netvm *vm, struct netvm_inst *inst, unsigned ni);
 int run_netvm(struct netvm *vm, int maxcycles, int *rv);
 
 /* returns 0 if ok inputting packet and -1 otherwise */
-int set_netvm_packet(struct netvm *vm, struct pktbuf *pkt, int slot);
+void set_netvm_packet(struct netvm *vm, int slot, struct netvmpkt *pkt);
 
 /* returns 0 if the packet is OK to be sent and -1 otherwise */
-struct netvmpkt *release_netvm_packet(int slot);
+struct netvmpkt *release_netvm_packet(struct netvm *vm, int slot);
 
 #endif /* __netvm_h */
