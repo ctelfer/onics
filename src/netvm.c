@@ -165,7 +165,11 @@ static void get_hd(struct netvm *vm, struct netvm_inst *inst,
   uint64_t val;
   if ( IMMED(inst) ) {
     S_POP(vm, val);
-    memcpy(hd, &val, sizeof(*hd));
+    hd->pktnum = (val >> 56) & 0xff;
+    hd->htype = (val >> 48) & 0xff;
+    hd->idx = (val >> 40) & 0xff;
+    hd->field = (val >> 32) & 0xff;
+    hd->offset = val & 0xffffffff;
   } else {
     memcpy(hd, &inst->val, sizeof(*hd));
   }
