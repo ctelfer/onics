@@ -12,7 +12,8 @@ BINDIR=../bin
 
 TARGETS=${BINDIR}/pcapin \
 	${BINDIR}/pcapout \
-	${BINDIR}/testpp
+	${BINDIR}/testpp \
+	${BINDIR}/testvm
 
 all: ${TARGETS}
 
@@ -24,8 +25,13 @@ ${BINDIR}/pcapout: pcapout.o packet.o
 	${CC} -o ../bin/pcapout pcapout.o packet.o ${DEFS} ${OPTS} \
 		${INCS} ${LIBS}
 
-${BINDIR}/testpp: testpp.o testpp.o protoparse.o pptcpip.o util.o
+${BINDIR}/testpp: testpp.o protoparse.o pptcpip.o util.o packet.o
 	${CC} -o ../bin/testpp testpp.o packet.o protoparse.o pptcpip.o util.o \
+		${DEFS} ${OPTS} ${INCS} ${LIBS}
+
+${BINDIR}/testvm: testvm.o protoparse.o pptcpip.o util.o packet.o netvm.o
+	${CC} -o ../bin/testvm testvm.o packet.o protoparse.o pptcpip.o util.o \
+		netvm.o \
 		${DEFS} ${OPTS} ${INCS} ${LIBS}
 
 .c.o:

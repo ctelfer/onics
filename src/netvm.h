@@ -2,7 +2,7 @@
 #define __netvm_h
 #include "tcpip_hdrs.h"
 #include "packet.h"
-#include "progoparse.h"
+#include "protoparse.h"
 #include <cat/emit.h>
 
 struct netvmpkt {
@@ -11,7 +11,7 @@ struct netvmpkt {
 };
 
 enum {
-  NETVM_HDR_HOFF,
+  NETVM_HDR_HOFF = 1,
   NETVM_HDR_POFF,
   NETVM_HDR_TOFF,
   NETVM_HDR_EOFF,
@@ -21,8 +21,8 @@ enum {
   NETVM_HDR_LEN
 };
 
-#define NETVM_HDRFLDOK(f) (((f) >= NETVM_HDR_HOFF) && ((f) <= NETVM_HDR_LEN)
-#define NETVM_ISHDROFF(f) (((f) >= NETVM_HDR_HOFF) && ((f) <= NETVM_HDR_EOFF)
+#define NETVM_HDRFLDOK(f) (((f) >= NETVM_HDR_HOFF) && ((f) <= NETVM_HDR_LEN))
+#define NETVM_ISHDROFF(f) (((f) >= NETVM_HDR_HOFF) && ((f) <= NETVM_HDR_EOFF))
 
 enum {
   NETVM_OC_POP,
@@ -85,7 +85,7 @@ enum {
   NETVM_OC_PKTCUT,
   NETVM_OC_HDRADJ,
 
-  NETVM_OC_MAX = NETVM_OC_BROFF
+  NETVM_OC_MAX = NETVM_OC_HDRADJ
 };
 
 enum {
@@ -107,6 +107,14 @@ enum {
  * expects a struct netvm_hdr_desc to be the value on the stack packed into a
  * 64-bit word.
  */
+
+#define NETVM_HDESC(pn, ht, idx, fld, off) \
+  ((((uint64_t)(pn) & 0xFF) << 56)|\
+   (((uint64_t)(ht) & 0xFF) << 48)|\
+   (((uint64_t)(idx) & 0xFF) << 40)|\
+   (((uint64_t)(fld) & 0xFF) << 32)|\
+   ((uint64_t)(off) & 0xFFFFFFFF))
+
 
 struct netvm_hdr_desc {
   uint8_t           pktnum;     /* which packet entry */
@@ -145,7 +153,7 @@ struct netvm {
 
 /* mem may be NULL and memsz 0.  roseg must be <= memsz.  stack must not be */
 /* 0 and ssz is the number of stack elements.  outport may be NULL */
-void init_netvm(struct netvm *vm, struct netvm_data *stack, unsigned int ssz,
+void init_netvm(struct netvm *vm, uint64_t *stack, unsigned int ssz,
                 byte_t *mem, unsigned int memsz, unsigned int roseg, 
                 struct emitter *outport);
 
@@ -155,6 +163,13 @@ void reset_netvm(struct netvm *vm, struct netvm_inst *inst, unsigned ni);
 /* 0 if run ok and no retval, 1 if run ok and stack not empty, -1 if err, -2 */
 /* if out of cycles */
 int run_netvm(struct netvm *vm, int maxcycles, int *rv);
+
+
+/* takes control of the struct pktbuf and returns a netvmpkt */
+struct netvmpkt *pktbuf_to_netvmpkt(struct pktbuf *pb);
+
+/* frees the netvmpkt and the underlying pakcet */
+void free_netvmpkt(struct netvmpkt *pkt);
 
 /* returns 0 if ok inputting packet and -1 otherwise */
 void set_netvm_packet(struct netvm *vm, int slot, struct netvmpkt *pkt);
