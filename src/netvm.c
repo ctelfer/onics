@@ -21,7 +21,7 @@
 #define S_TOP(__vm, __v)                                                \
   do {                                                                  \
     FATAL((__vm), S_EMPTY(__vm));                                       \
-    __v = __vm->stack[__vm->sp];                                        \
+    __v = __vm->stack[__vm->sp-1];                                      \
   } while (0)
 
 #define S_POP(__vm, __v)                                                \
@@ -330,7 +330,9 @@ static void ni_numop(struct netvm *vm)
   }
   S_POP(vm, v1);
   switch (inst->opcode) {
-  case NETVM_OC_NOT: out = ~v1; break;
+  case NETVM_OC_NOT: out = !v1; break;
+  case NETVM_OC_INVERT: out = ~v1; break;
+  case NETVM_OC_ISNZ: out = v1 != 0; break;
   case NETVM_OC_TONET: 
     CKWIDTH(vm, inst->width);
     switch (inst->width) {
@@ -416,7 +418,8 @@ static void ni_branch(struct netvm *vm)
     if ( !cond )
       return;
   }
-  FATAL(vm, addr >= vm->ninst);
+  /* ok to overflow number of instructions by 1: implied halt instruction */
+  FATAL(vm, addr > vm->ninst);
   vm->pc = addr;
   vm->branch = 1;
 }
@@ -881,22 +884,29 @@ int run_netvm(struct netvm *vm, int maxcycles, uint64_t *rv)
     /* if we branched: don't adjust the PC, otherwise clear the branch flag */
     if ( vm->branch )
       vm->branch = 0;
-    else if ( vm->running && !vm->error )
+    else 
       ++vm->pc;
+    if ( vm->pc >= vm->ninst ) {
+      vm->running = 0;
+      if ( vm->pc != vm->ninst ) 
+        vm->error = 1;
+    }
     /* decrement cycle count if running for a limited duration */
     if ( maxcycles > 0 )
       --maxcycles;
   }
 
-  if ( maxcycles == 0 )
+  if ( maxcycles == 0 ) {
     return -2;
-  else if ( vm->error )
+  } else if ( vm->error ) {
     return -1;
-  if ( vm->sp == 0 )
+  } else if ( vm->sp == 0 ) {
     return 0;
-  if ( rv )
-    *rv = vm->stack[vm->sp-1];
-  return 1;
+  } else { 
+    if ( rv )
+      *rv = vm->stack[vm->sp-1];
+    return 1;
+  }
 }
 
 
