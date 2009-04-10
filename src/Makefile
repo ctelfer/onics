@@ -35,7 +35,7 @@ ${BINDIR}/testvm: testvm.o protoparse.o pptcpip.o util.o packet.o netvm.o
 		${DEFS} ${OPTS} ${INCS} ${LIBS}
 
 .c.o:
-	${CC} -c $< -o $@ ${DEFS} ${INCS} ${OPTS}
+	${CC} -Wall -c $< -o $@ ${DEFS} ${INCS} ${OPTS}
 
 
 clean:

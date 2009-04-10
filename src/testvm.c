@@ -19,9 +19,10 @@ int main(int argc, char *argv[])
 {
   struct pktbuf *p;
   struct netvm vm;
-  unsigned npkt = 0;
-  unsigned ntcp = 0;
-  int vmrv, rc;
+  int npkt = 0;
+  int ntcp = 0;
+  int vmrv;
+  uint64_t rc;
   struct netvmpkt *nvp;
 
   install_default_proto_parsers();
@@ -40,16 +41,19 @@ int main(int argc, char *argv[])
     set_netvm_packet(&vm, 0, pktbuf_to_netvmpkt(p));
     vmrv = run_netvm(&vm, -1, &rc);
 
-    if (vmrv == 0)
+    if ( vmrv == 0 ) {
       printf("Packet %u: no return value\n", npkt);
-    else if (vmrv == 1)
-      printf("Packet %u: VM returned value %d\n", npkt, rc);
-    else if (vmrv == -1)
-      printf("Packet %u: VM returned error\n");
-    else if (vmrv == -2)
-      printf("Packet %u: VM out of cycles\n");
-    else
+    } else if (vmrv == 1) {
+      printf("Packet %u: VM returned value %d\n", npkt, (int)rc);
+      if ( rc )
+        ++ntcp;
+    } else if (vmrv == -1) {
+      printf("Packet %u: VM returned error\n", npkt);
+    } else if (vmrv == -2) {
+      printf("Packet %u: VM out of cycles\n", npkt);
+    } else {
       abort_unless(0);
+    }
 
     free_netvmpkt(release_netvm_packet(&vm, 0));
   }

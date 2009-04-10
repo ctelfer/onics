@@ -122,6 +122,8 @@ struct hdr_parse *hdr_parse_packet(unsigned ppidx, byte_t *pkt, size_t off,
   }
   if ( !(first = hdr_create_parse(pkt, off, buflen)) )
     return NULL;
+  if ( ppidx == PPT_NONE )
+    return first;
   first->toff = off + pktlen;
   pp = &proto_parsers[PPT_NONE];
 
@@ -185,7 +187,7 @@ void hdr_free(struct hdr_parse *hdr, int freeall)
       next = hdr_child(hdr);
       l_rem(&next->node);
       abort_unless(next->ops && next->ops->free);
-      (*next->ops->free)(hdr);
+      (*next->ops->free)(next);
     }
   }
   abort_unless(hdr->ops && hdr->ops->free);
@@ -309,6 +311,7 @@ int hdr_insert(struct hdr_parse *hdr, size_t off, size_t len, int moveup)
     memset(op, 0x5F, len);
   }
   insert_adjust(hdr, off, len, moveup);
+  return 0;
 }
 
 
@@ -481,6 +484,7 @@ int hdr_adj_plen(struct hdr_parse *hdr, ptrdiff_t amt)
   hdr->toff += amt;
   if ( hdr->toff > hdr->eoff )
     hdr->eoff = hdr->toff;
+  return 0;
 }
 
 

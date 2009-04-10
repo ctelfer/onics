@@ -18,10 +18,11 @@ enum {
   NETVM_HDR_HLEN,
   NETVM_HDR_PLEN,
   NETVM_HDR_TLEN,
-  NETVM_HDR_LEN
+  NETVM_HDR_LEN,
+  NETVM_HDR_ERR
 };
 
-#define NETVM_HDRFLDOK(f) (((f) >= NETVM_HDR_HOFF) && ((f) <= NETVM_HDR_LEN))
+#define NETVM_HDRFLDOK(f) (((f) >= NETVM_HDR_HOFF) && ((f) <= NETVM_HDR_ERR))
 #define NETVM_ISHDROFF(f) (((f) >= NETVM_HDR_HOFF) && ((f) <= NETVM_HDR_EOFF))
 
 enum {
@@ -162,7 +163,7 @@ void reset_netvm(struct netvm *vm, struct netvm_inst *inst, unsigned ni);
 
 /* 0 if run ok and no retval, 1 if run ok and stack not empty, -1 if err, -2 */
 /* if out of cycles */
-int run_netvm(struct netvm *vm, int maxcycles, int *rv);
+int run_netvm(struct netvm *vm, int maxcycles, uint64_t *rv);
 
 
 /* takes control of the struct pktbuf and returns a netvmpkt */

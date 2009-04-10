@@ -50,10 +50,11 @@ int main(int argc, char *argv[])
           printf("\t\tInvalid field combination error\n");
       }
 
-      printf("\t\tOffset: %8u\tLength: %8u\n", t->hoff, hdr_totlen(t));
-      printf("\t\tHeader length: %8u\n", hdr_hlen(t));
-      printf("\t\tPayload length:%8u\n", hdr_plen(t));
-      printf("\t\tTrailer length:%8u\n", hdr_tlen(t));
+      printf("\t\tOffset: %8u\tLength: %8u\n", (unsigned)t->hoff,
+             (unsigned)hdr_totlen(t));
+      printf("\t\tHeader length: %8u\n", (unsigned)hdr_hlen(t));
+      printf("\t\tPayload length:%8u\n", (unsigned)hdr_plen(t));
+      printf("\t\tTrailer length:%8u\n", (unsigned)hdr_tlen(t));
     } 
     printf("\n");
     pkt_free(p);

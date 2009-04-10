@@ -72,6 +72,7 @@ static struct hdr_parse *find_header(struct netvm *vm,
 }
 
 
+#if 0
 static void unimplemented(struct netvm *vm)
 {
   struct netvm_inst *inst = &vm->inst[vm->pc];
@@ -79,6 +80,7 @@ static void unimplemented(struct netvm *vm)
     emit_format(vm->outport, "Instruction %d not implemented\n", inst->opcode);
   vm->error = 1;
 }
+#endif
 
 
 static void ni_pop(struct netvm *vm)
@@ -164,16 +166,15 @@ static void get_hd(struct netvm *vm, struct netvm_inst *inst,
                    struct netvm_hdr_desc *hd)
 {
   uint64_t val;
-  if ( IMMED(inst) ) {
+  if ( IMMED(inst) )
+    val = inst->val;
+  else
     S_POP(vm, val);
-    hd->pktnum = (val >> 56) & 0xff;
-    hd->htype = (val >> 48) & 0xff;
-    hd->idx = (val >> 40) & 0xff;
-    hd->field = (val >> 32) & 0xff;
-    hd->offset = val & 0xffffffff;
-  } else {
-    memcpy(hd, &inst->val, sizeof(*hd));
-  }
+  hd->pktnum = (val >> 56) & 0xff;
+  hd->htype = (val >> 48) & 0xff;
+  hd->idx = (val >> 40) & 0xff;
+  hd->field = (val >> 32) & 0xff;
+  hd->offset = val & 0xffffffff;
 }
 
 
@@ -181,7 +182,6 @@ static void get_hdr_info(struct netvm *vm, struct netvm_inst *inst,
                          struct netvm_hdr_desc *hd, uint32_t *addr, 
                          struct hdr_parse **hdrp)
 {
-  uint64_t val;
   int width;
   struct hdr_parse *hdr;
 
@@ -292,8 +292,6 @@ static void ni_ldhdrf(struct netvm *vm)
   struct netvm_inst *inst = &vm->inst[vm->pc];
   struct netvm_hdr_desc hd0;
   struct hdr_parse *hdr;
-  uint64_t val;
-  uint32_t addr;
 
   get_hd(vm, inst, &hd0);
   if ( vm->error )
@@ -303,14 +301,15 @@ static void ni_ldhdrf(struct netvm *vm)
   FATAL(vm, hdr == NULL);
 
   switch (hd0.field) {
-  NETVM_HDR_HOFF: S_PUSH(vm, hdr->hoff); break;
-  NETVM_HDR_POFF: S_PUSH(vm, hdr->poff); break;
-  NETVM_HDR_TOFF: S_PUSH(vm, hdr->toff); break;
-  NETVM_HDR_EOFF: S_PUSH(vm, hdr->eoff); break;
-  NETVM_HDR_HLEN: S_PUSH(vm, hdr_hlen(hdr)); break;
-  NETVM_HDR_PLEN: S_PUSH(vm, hdr_plen(hdr)); break;
-  NETVM_HDR_TLEN: S_PUSH(vm, hdr_tlen(hdr)); break;
-  NETVM_HDR_LEN:  S_PUSH(vm, hdr_totlen(hdr)); break;
+  case NETVM_HDR_HOFF: S_PUSH(vm, hdr->hoff); break;
+  case NETVM_HDR_POFF: S_PUSH(vm, hdr->poff); break;
+  case NETVM_HDR_TOFF: S_PUSH(vm, hdr->toff); break;
+  case NETVM_HDR_EOFF: S_PUSH(vm, hdr->eoff); break;
+  case NETVM_HDR_HLEN: S_PUSH(vm, hdr_hlen(hdr)); break;
+  case NETVM_HDR_PLEN: S_PUSH(vm, hdr_plen(hdr)); break;
+  case NETVM_HDR_TLEN: S_PUSH(vm, hdr_tlen(hdr)); break;
+  case NETVM_HDR_LEN:  S_PUSH(vm, hdr_totlen(hdr)); break;
+  case NETVM_HDR_ERR:  S_PUSH(vm, hdr->error); break;
   default:
     abort_unless(0);
   }
@@ -524,7 +523,6 @@ static void ni_prstr(struct netvm *vm)
 {
   struct netvm_inst *inst = &vm->inst[vm->pc];
   uint32_t addr, len;
-  char *p, *e;
   abort_unless(vm->outport);
   if ( IMMED(inst) ) {
     addr = inst->val;
@@ -822,7 +820,7 @@ void init_netvm(struct netvm *vm, uint64_t *stack, unsigned int ssz,
                 byte_t *mem, unsigned int memsz, unsigned int roseg, 
                 struct emitter *outport)
 {
-  abort_unless(vm && stack && mem && vm->rosegoff <= vm->memsz);
+  abort_unless(vm && stack && mem && roseg <= memsz);
   vm->stack = stack;
   vm->stksz = ssz;
   vm->mem = mem;
@@ -856,7 +854,7 @@ void reset_netvm(struct netvm *vm, struct netvm_inst *inst, unsigned ni)
 
 
 /* 0 if run ok and no retval, 1 if run ok and stack not empty, -1 if err */
-int run_netvm(struct netvm *vm, int maxcycles, int *rv)
+int run_netvm(struct netvm *vm, int maxcycles, uint64_t *rv)
 {
   unsigned i, maxi;
   struct netvm_inst *inst;
@@ -897,8 +895,19 @@ int run_netvm(struct netvm *vm, int maxcycles, int *rv)
   if ( vm->sp == 0 )
     return 0;
   if ( rv )
-    *rv = vm->stack[vm->sp];
+    *rv = vm->stack[vm->sp-1];
   return 1;
+}
+
+
+static unsigned pktdlt_to_ppt(uint32_t dltype)
+{
+  switch(dltype) {
+  case PKTDL_ETHERNET2:
+    return PPT_ETHERNET;
+  default:
+    return PPT_NONE;
+  }
 }
 
 
@@ -909,9 +918,9 @@ struct netvmpkt *pktbuf_to_netvmpkt(struct pktbuf *pb)
     return NULL;
   pnew = emalloc(sizeof(*pnew));
   pnew->packet = pb;
-  pnew->headers = hdr_create_parse(pnew->packet->pkt_buffer,
-                                   pnew->packet->pkt_offset,
-                                   pnew->packet->pkt_buflen);
+  pnew->headers = hdr_parse_packet(pktdlt_to_ppt(pb->pkt_dltype),
+		                   pb->pkt_buffer, pb->pkt_offset, pb->pkt_len,
+				   pb->pkt_buflen);
   if ( !pnew->headers ) {
     pkt_free(pnew->packet);
     free(pnew);

@@ -1,5 +1,8 @@
 #include "packet.h"
 #include <cat/emalloc.h>
+#include <cat/pack.h>
+#include <cat/io.h>
+#include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
@@ -66,7 +69,6 @@ int pkt_create(struct pktbuf **p, size_t plen, enum pktdltype_e dltype)
 int pkt_copy(const struct pktbuf *orig, struct pktbuf **newp)
 {
   struct pktbuf *p;
-  size_t dlen;
 
   if (!orig || !newp) {
     errno = EINTR;
@@ -84,7 +86,6 @@ int pkt_copy(const struct pktbuf *orig, struct pktbuf **newp)
 int pkt_resize(struct pktbuf **p, size_t plen)
 {
   size_t tlen;
-  struct pktbuf *newp;
 
   if (!p || !*p) {
     errno = EINTR;

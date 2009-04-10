@@ -4,6 +4,7 @@
 #include "util.h"
 #include <cat/emalloc.h>
 #include <string.h>
+#include <stdlib.h>
 
 extern struct hparse_ops none_hparse_ops;
 extern struct hparse_ops eth_hparse_ops;
@@ -184,14 +185,6 @@ static struct hdr_parse *eth_create(byte_t *start, size_t off, size_t len)
 }
 
 
-static int eth_fixlen(struct hdr_parse *hdr)
-{
-  if ( hdr_hlen(hdr) != ETHHLEN )
-    return -1;
-  return 0;
-}
-
-
 /* -- ops for ARP type -- */
 static int arp_follows(struct hdr_parse *phdr) 
 {
@@ -208,7 +201,6 @@ static byte_t ethiparpstr[6] = { 0, 1, 8, 0, 6, 4 };
 static struct hdr_parse *arp_parse(struct hdr_parse *phdr)
 {
   struct hdr_parse *hdr;
-  struct arph *arp;
   abort_unless(arp_follows(phdr));
   switch(phdr->type) {
   case PPT_ETHERNET:
@@ -299,7 +291,7 @@ static struct hdr_parse *ipv4_parse(struct hdr_parse *phdr)
   struct hdr_parse *hdr;
   struct ipv4h *ip;
   int hlen, tlen;
-  uint16_t iplen, frag, sum;
+  uint16_t iplen, sum;
 
   abort_unless(ipv4_follows(phdr));
   switch(phdr->type) {
@@ -313,7 +305,7 @@ static struct hdr_parse *ipv4_parse(struct hdr_parse *phdr)
   hdr = newhdr(sizeof(*hdr), PPT_IPV4, phdr, &ipv4_hparse_ops);
   ip = hdr_header(hdr, struct ipv4h);
   hlen = IPH_HLEN(*ip);
-  tlen = hdr_hlen(hdr);
+  tlen = hdr_totlen(hdr);
   if ( tlen < 20 ) {
     hdr->error |= PPERR_TOOSMALL;
     hdr->poff = hdr->toff = hdr->eoff = hdr->hoff;
@@ -396,7 +388,6 @@ static int ipv4_fixlen(struct hdr_parse *hdr)
 
 static int ipv4_fixcksum(struct hdr_parse *hdr)
 {
-  uint16_t sum;
   size_t hlen;
   struct ipv4h *ip;
   abort_unless(hdr && hdr->data);
@@ -472,8 +463,6 @@ static int udp_follows(struct hdr_parse *phdr)
 static struct hdr_parse *udp_parse(struct hdr_parse *phdr)
 {
   struct hdr_parse *hdr;
-  uint32_t tlen;
-  uint16_t sum;
   struct udph *udp;
 
   abort_unless(udp_follows(phdr));
@@ -535,7 +524,6 @@ static int udp_fixlen(struct hdr_parse *hdr)
 static int udp_fixcksum(struct hdr_parse *hdr)
 {
   struct udph *udp = hdr_header(hdr, struct udph);
-  uint16_t sum;
   if ( (hdr_hlen(hdr) != 8) || 
        ((hdr_parent(hdr)->type != PPT_IPV4) && 
         (hdr_parent(hdr)->type != PPT_IPV6)) )
@@ -549,7 +537,6 @@ static int udp_fixcksum(struct hdr_parse *hdr)
 /* -- TCP functions -- */
 static int tcp_follows(struct hdr_parse *phdr)
 {
-  uint16_t etype;
   if ( ((phdr->type != PPT_IPV4) && (phdr->type != PPT_IPV6)) || 
        (phdr->data == NULL) )
     return 0;
@@ -586,7 +573,7 @@ static struct hdr_parse *tcp_parse(struct hdr_parse *phdr)
   hdr = newhdr(sizeof(*hdr), PPT_TCP, phdr, &tcp_hparse_ops);
   tcp = hdr_header(hdr, struct tcph);
   hlen = TCPH_HLEN(*tcp);
-  tlen = hdr_hlen(hdr);
+  tlen = hdr_totlen(hdr);
   if ( tlen < 20 ) {
     hdr->error |= PPERR_TOOSMALL;
     hdr->poff = hdr->toff = hdr->eoff = hdr->hoff;
@@ -651,7 +638,6 @@ static int tcp_fixlen(struct hdr_parse *hdr)
 static int tcp_fixcksum(struct hdr_parse *hdr)
 {
   struct tcph *tcp = hdr_header(hdr, struct tcph);
-  uint16_t sum;
   if ( (hdr_parent(hdr)->type != PPT_IPV4) && 
        (hdr_parent(hdr)->type != PPT_IPV6) )
     return -1;
@@ -687,8 +673,6 @@ static int icmp_follows(struct hdr_parse *phdr)
 static struct hdr_parse *icmp_parse(struct hdr_parse *phdr)
 {
   struct hdr_parse *hdr;
-  uint32_t tlen;
-  uint16_t sum;
   struct icmph *icmp;
 
   abort_unless(icmp_follows(phdr));
@@ -735,7 +719,6 @@ static struct hdr_parse *icmp_create(byte_t *start, size_t off, size_t len)
 static int icmp_fixcksum(struct hdr_parse *hdr)
 {
   struct icmph *icmp = hdr_header(hdr, struct icmph);
-  uint16_t sum;
   if ( (hdr_hlen(hdr) != 8) || (hdr_parent(hdr)->type != PPT_IPV4) )
     return -1;
   icmp->cksum = 0;
