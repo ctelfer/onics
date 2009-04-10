@@ -25,68 +25,80 @@ enum {
 #define NETVM_HDRFLDOK(f) (((f) >= NETVM_HDR_HOFF) && ((f) <= NETVM_HDR_ERR))
 #define NETVM_ISHDROFF(f) (((f) >= NETVM_HDR_HOFF) && ((f) <= NETVM_HDR_EOFF))
 
+/* 
+ * W -> uses width field to determine now many bytes to manipulate
+ * I -> Immediate flag honored for last argument
+ * S -> will sign extend on load if sign extention flag set
+ * N -> will convert to network byte order on store if TONET flag set
+ * H -> will convert to host byte order on load if TOHOST flag set
+ * T -> with 1-byte load will treat as TCP offset and convert to byte length 
+ * P -> with 1-byte load will treat as IP header len and convert to byte length 
+ * M -> MOVEUP flag used for INS and CUT operations
+ */
+
 enum {
-  NETVM_OC_POP,
-  NETVM_OC_PUSH,
-  NETVM_OC_DUP,
-  NETVM_OC_LDMEM,
-  NETVM_OC_STMEM,
-  NETVM_OC_LDPKT,
-  NETVM_OC_LDCLASS,
-  NETVM_OC_LDTS,
-  NETVM_OC_LDHDRF,
-  NETVM_OC_NOT,
-  NETVM_OC_INVERT,
-  NETVM_OC_ISNZ,
-  NETVM_OC_TONET,
-  NETVM_OC_TOHOST,
-  NETVM_OC_SIGNX,
-  NETVM_OC_ADD,
-  NETVM_OC_SUB,
-  NETVM_OC_MUL,
-  NETVM_OC_DIV,
-  NETVM_OC_MOD,
-  NETVM_OC_SHL,
-  NETVM_OC_SHR,
-  NETVM_OC_SHRA,
-  NETVM_OC_AND,
-  NETVM_OC_OR,
-  NETVM_OC_EQ,
-  NETVM_OC_NEQ,
-  NETVM_OC_LT,
-  NETVM_OC_LE,
-  NETVM_OC_GT,
-  NETVM_OC_GE,
-  NETVM_OC_SLT,
-  NETVM_OC_SLE,
-  NETVM_OC_SGT,
-  NETVM_OC_SGE,
-  NETVM_OC_HASHDR,
-  NETVM_OC_HALT,
-  NETVM_OC_MAX_MATCH = NETVM_OC_HALT,
+  NETVM_OC_POP,         /* discards top of stack */
+  NETVM_OC_PUSH,        /* implied IMMED:  pushes immediate value onto stack */
+  NETVM_OC_DUP,         /* dupcliates top of stack */
+  NETVM_OC_LDMEM,       /* [addr|WIS]: load from memory */
+  NETVM_OC_STMEM,       /* [addr|WI]: store to memory */
+  NETVM_OC_LDPKT,       /* [hdesc|WSHTP]: load bytes from packet */
+  NETVM_OC_LDCLASS,     /* [pktnum|I]: load packet class */
+  NETVM_OC_LDTS,        /* [pktnum|I]: load packet timestamp */
+  NETVM_OC_LDHDRF,      /* [hdesc|I]: load field from header parse */
+  NETVM_OC_NOT,         /* [v] logcal not (1 or 0) */
+  NETVM_OC_INVERT,      /* [v] bit-wise inversion */
+  NETVM_OC_ISNZ,        /* [v] is zero (1 or 0) */
+  NETVM_OC_TONET,       /* [v|W] convert to network byte order */
+  NETVM_OC_TOHOST,      /* [v|W] convert to host byte order */
+  NETVM_OC_SIGNX,       /* [v|W] sign extend based on width */
+  NETVM_OC_ADD,         /* [v1,v2|I] add v1 and v2 */
+  NETVM_OC_SUB,         /* [v1,v2|I] subtract v2 from v1 */
+  NETVM_OC_MUL,         /* [v1,v2|I] multiply v1 from v2 */
+  NETVM_OC_DIV,         /* [v1,v2|I] divide v1 by v2 */
+  NETVM_OC_MOD,         /* [v1,v2|I] remainder of v1 / v2 */
+  NETVM_OC_SHL,         /* [v1,v2|I] v1 left shifted by (v2 % 64) */
+  NETVM_OC_SHR,         /* [v1,v2|I] v1 right shifted by (v2 % 64) */
+  NETVM_OC_SHRA,        /* [v1,v2|I] v1 right arithmatic shifted by (v2 % 64) */
+  NETVM_OC_AND,         /* [v1,v2|I] logical v1 and v2 */
+  NETVM_OC_OR,          /* [v1,v2|I] logical v1 or v2 */
+  NETVM_OC_EQ,          /* [v1,v2|I] v1 equals v2 */
+  NETVM_OC_NEQ,         /* [v1,v2|I] v1 not equal to v2 */
+  NETVM_OC_LT,          /* [v1,v2|I] v1 less than v2 */
+  NETVM_OC_LE,          /* [v1,v2|I] v1 less than or equal to v2 */
+  NETVM_OC_GT,          /* [v1,v2|I] v1 greater than v2 */
+  NETVM_OC_GE,          /* [v1,v2|I] v1 greater than or equal to v2 */
+  NETVM_OC_SLT,         /* [v1,v2|I] v1 less than v2 (signed) */
+  NETVM_OC_SLE,         /* [v1,v2|I] v1 less than or equal to v2 (signed) */
+  NETVM_OC_SGT,         /* [v1,v2|I] v1 greater than v2 (signed) */
+  NETVM_OC_SGE,         /* [v1,v2|I] v1 greater than or equal to v2 (signed) */
+  NETVM_OC_HASHDR,      /* [hdesc|I] true if has header (field in HD ignored) */
+  NETVM_OC_HALT,        /* halt program */
+  NETVM_OC_BR,          /* [v|I] set PC to v (must be > PC in matchonly mode */
+  NETVM_OC_BRIF,        /* [c,v|I] set PC to v if c is non-zero */
+                        /*         (must be > PC in matchonly mode */
+  NETVM_OC_MAX_MATCH = NETVM_OC_BRIF,
 
   /* not allowed in pure match run */
-  NETVM_OC_BR,
-  NETVM_OC_BRIF,
-  NETVM_OC_PRBIN,       /* special: val == min string width */
-  NETVM_OC_PROCT,       /* special: val == min string width */
-  NETVM_OC_PRDEC,       /* special: val == min string width */
-  NETVM_OC_PRHEX,       /* special: val == min string width */
-  NETVM_OC_PRIP,        /* special: no immediate operands */
-  NETVM_OC_PRETH,       /* special: no immediate operands */
-  NETVM_OC_PRIPV6,      /* special: no immediate operands */
-  NETVM_OC_PRSTR,       /* special: if immmed, width == string length */
-  NETVM_OC_STPKT,
-  NETVM_OC_STCLASS,
-  NETVM_OC_STTS,
-  NETVM_OC_PKTNEW,
-  NETVM_OC_PKTCOPY,
-  NETVM_OC_HDRCREATE,
-  NETVM_OC_FIXLEN,
-  NETVM_OC_FIXCKSUM,
-  NETVM_OC_PKTINS,
-  NETVM_OC_PKTCUT,
-  NETVM_OC_HDRADJ,
+  NETVM_OC_PRBIN,       /* [v] print v in binary --  val == min string width */
+  NETVM_OC_PROCT,       /* [v] print v in octal  --  val == min string width */
+  NETVM_OC_PRDEC,       /* [v|S] print v in decimal --  val == min str width */
+  NETVM_OC_PRHEX,       /* [v] print v in hex --  val == min string width */
+  NETVM_OC_PRIP,        /* [v] print IP address (network byte order) */
+  NETVM_OC_PRETH,       /* [v] print ethernet address (network byte order) */
+  NETVM_OC_PRIPV6,      /* [vhi,vlo] print IPv6 address (network byte order) */
+  NETVM_OC_PRSTR,       /* [addr,len|I] print len bytes from addr in mem */
+  NETVM_OC_STPKT,       /* [v,hdesc|IWH] store into packet memory */
+  NETVM_OC_STCLASS,     /* [v,pktnum|I] store into packet class */
+  NETVM_OC_STTS,        /* [v,pktnum|I] store into timestamp */
+  NETVM_OC_PKTNEW,      /* [hdesc|I] create packet: offset==len, htype==dl */
+  NETVM_OC_PKTCOPY,     /* [pktnum1,pktnum2|I] copy packet */
+  NETVM_OC_HDRCREATE,   /* [hdesc|I] create header of htype in packet pktnum */
+  NETVM_OC_FIXLEN,      /* [ptknum|I] fix length fields in the packet */
+  NETVM_OC_FIXCKSUM,    /* [ptknum|I] fix checksum fields in the packet */
+  NETVM_OC_PKTINS,      /* [len,hdesc|I] insert len bytes at hd.offset */
+  NETVM_OC_PKTCUT,      /* [len,hdesc|I] cut len bytes at hd.offset */
+  NETVM_OC_HDRADJ,      /* [amt,hdesc|I] adjust offset field by amt (signed) */
 
   NETVM_OC_MAX = NETVM_OC_HDRADJ
 };

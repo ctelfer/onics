@@ -29,7 +29,8 @@ ${BINDIR}/testpp: testpp.o protoparse.o pptcpip.o util.o packet.o
 	${CC} -o ../bin/testpp testpp.o packet.o protoparse.o pptcpip.o util.o \
 		${DEFS} ${OPTS} ${INCS} ${LIBS}
 
-${BINDIR}/testvm: testvm.o protoparse.o pptcpip.o util.o packet.o netvm.o
+${BINDIR}/testvm: testvm.o protoparse.o pptcpip.o util.o packet.o netvm.o \
+	          netvm.h protoparse.h packet.h
 	${CC} -o ../bin/testvm testvm.o packet.o protoparse.o pptcpip.o util.o \
 		netvm.o \
 		${DEFS} ${OPTS} ${INCS} ${LIBS}
