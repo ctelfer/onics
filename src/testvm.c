@@ -19,20 +19,23 @@ struct clopt_parser optparser = CLOPTPARSER_INIT(options,array_length(options));
 uint64_t vm_stack[64];
 byte_t vm_memory[512];
 
+
 struct netvm_inst vm_prog_istcp[] = { 
-  { NETVM_OC_HASHDR, 0, NETVM_IF_IMMED, NETVM_HDESC(0, PPT_TCP, 0, 0, 0) },
+  { NETVM_OC_HASHDR, 0, NETVM_IF_IMMED, NETVM_HDESC(0,PPT_TCP,0,0,0) },
   { NETVM_OC_HALT, 0, 0, 0 },
 };
 
+
 struct netvm_inst vm_prog_tcperr[] = { 
-  /*0*/{ NETVM_OC_HASHDR, 0, NETVM_IF_IMMED, 
-         NETVM_HDESC(0, PPT_TCP, 0, 0, 0) },
+  /*0*/{ NETVM_OC_HASHDR, 0, NETVM_IF_IMMED, NETVM_HDESC(0,PPT_TCP,0,0,0) },
   /*1*/{ NETVM_OC_DUP, 0, 0, 0 },
   /*2*/{ NETVM_OC_NOT, 0, 0, 0 },
-  /*3*/{ NETVM_OC_BRIF, 0, NETVM_IF_IMMED, /* END */ 5 },
+  /*3*/{ NETVM_OC_BRIF, 0, NETVM_IF_IMMED, /* END */ 6 },
   /*4*/{ NETVM_OC_LDHDRF, 0, NETVM_IF_IMMED, 
-         NETVM_HDESC(0, PPT_TCP, 0, NETVM_HDR_ERR, 0) },
+         NETVM_HDESC(0,PPT_TCP,0,NETVM_HDR_ERR,0) },
+  /*5*/{ NETVM_OC_ISNZ, 0, 0, 0 },
 };
+
 
 struct netvm_programs {
   struct netvm_inst *   prog;
@@ -44,7 +47,6 @@ struct netvm_programs {
   { vm_prog_tcperr, array_length(vm_prog_tcperr),
     "tcperr -- Test if the packet is TCP and has errors" },
 };
-
 unsigned prognum = 0;
 
 
@@ -87,24 +89,19 @@ int main(int argc, char *argv[])
   int npass = 0;
   int vmrv;
   uint64_t rc;
-  struct netvmpkt *nvp;
 
   parse_options(argc, argv);
   install_default_proto_parsers();
-  init_netvm(&vm, vm_stack, array_length(vm_stack), vm_memory, 
+  netvm_init(&vm, vm_stack, array_length(vm_stack), vm_memory, 
              array_length(vm_memory), array_length(vm_memory), NULL);
+  if ( netvm_setcode(&vm,vm_progs[prognum].prog,vm_progs[prognum].proglen) < 0)
+    err("Error validating program %d", prognum);
 
   while ( pkt_file_read(stdin, &p) > 0 ) {
     ++npkt;
-    if ( (nvp = pktbuf_to_netvmpkt(p)) == NULL ) {
-      printf("Error parsing packet %d\n", npkt);
-      pkt_free(p);
-      continue;
-    }
-
-    reset_netvm(&vm, vm_progs[prognum].prog, vm_progs[prognum].proglen);
-    set_netvm_packet(&vm, 0, pktbuf_to_netvmpkt(p));
-    vmrv = run_netvm(&vm, -1, &rc);
+    netvm_reset(&vm);
+    netvm_loadpkt(&vm, p, 0);
+    vmrv = netvm_run(&vm, -1, &rc);
 
     if ( vmrv == 0 ) {
       printf("Packet %u: no return value\n", npkt);
@@ -119,9 +116,8 @@ int main(int argc, char *argv[])
     } else {
       abort_unless(0);
     }
-
-    free_netvmpkt(release_netvm_packet(&vm, 0));
   }
+  netvm_reset(&vm);
 
   printf("%u out of %u packets passed\n", npass, npkt);
 

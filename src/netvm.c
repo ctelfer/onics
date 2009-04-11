@@ -39,6 +39,47 @@
 #define CKWIDTH(__vm, __w) FATAL((__vm), !__w || (__w & (__w - 1)) || (__w > 8))
 
 
+static unsigned pktdlt_to_ppt(uint32_t dltype)
+{
+  switch(dltype) {
+  case PKTDL_ETHERNET2:
+    return PPT_ETHERNET;
+  default:
+    return PPT_NONE;
+  }
+}
+
+
+static struct netvmpkt *pktbuf_to_netvmpkt(struct pktbuf *pb)
+{
+  struct netvmpkt *pnew;
+  abort_unless(pb);
+  pnew = emalloc(sizeof(*pnew));
+  pnew->packet = pb;
+  pnew->headers = hdr_parse_packet(pktdlt_to_ppt(pb->pkt_dltype),
+		                   pb->pkt_buffer, pb->pkt_offset, pb->pkt_len,
+				   pb->pkt_buflen);
+  abort_unless(pnew->headers);
+  return pnew;
+}
+
+
+static void free_netvmpkt(struct netvmpkt *pkt)
+{
+  if ( pkt ) {
+    if ( pkt->headers ) {
+      hdr_free(pkt->headers, 1);
+      pkt->headers = NULL;
+    }
+    if ( pkt->packet ) {
+      pkt_free(pkt->packet);
+      pkt->packet = NULL;
+    }
+    free(pkt);
+  }
+}
+
+
 typedef void (*netvm_op)(struct netvm *vm);
 
 
@@ -408,10 +449,13 @@ static void ni_branch(struct netvm *vm)
 {
   struct netvm_inst *inst = &vm->inst[vm->pc];
   uint32_t addr;
-  if ( IMMED(inst) )
+  if ( IMMED(inst) ) {
     addr = inst->val;
-  else
+  } else {
+    abort_unless(!vm->matchonly);
     S_POP(vm, addr);
+    FATAL(vm, addr > vm->ninst);
+  }
   if ( inst->opcode == NETVM_OC_BRIF ) {
     uint64_t cond;
     S_POP(vm, cond);
@@ -419,9 +463,7 @@ static void ni_branch(struct netvm *vm)
       return;
   }
   /* ok to overflow number of instructions by 1: implied halt instruction */
-  FATAL(vm, addr > vm->ninst);
-  vm->pc = addr;
-  vm->branch = 1;
+  vm->pc = addr - 1;
 }
 
 
@@ -608,7 +650,6 @@ static void ni_newpkt(struct netvm *vm)
   struct netvm_hdr_desc hd0;
   struct netvmpkt *pnew;
   struct pktbuf *p;
-  int slot;
   get_hd(vm, inst, &hd0);
   if ( vm->error )
     return;
@@ -619,8 +660,8 @@ static void ni_newpkt(struct netvm *vm)
     pkt_free(p);
     VMERR(vm);
   }
-  free_netvmpkt(release_netvm_packet(vm, hd0.pktnum));
-  set_netvm_packet(vm, slot, pnew);
+  free_netvmpkt(vm->packets[hd0.pktnum]);
+  vm->packets[hd0.pktnum] = pnew;
 }
 
 
@@ -648,8 +689,8 @@ static void ni_pktcopy(struct netvm *vm)
     free(pnew);
     VMERR(vm);
   }
-  free_netvmpkt(release_netvm_packet(vm, slot));
-  set_netvm_packet(vm, slot, pnew);
+  free_netvmpkt(vm->packets[slot]);
+  vm->packets[slot] = pnew;
 }
 
 
@@ -821,11 +862,11 @@ netvm_op g_netvm_ops[NETVM_OC_MAX+1] = {
 };
 
 
-void init_netvm(struct netvm *vm, uint64_t *stack, unsigned int ssz,
+void netvm_init(struct netvm *vm, uint64_t *stack, unsigned int ssz,
                 byte_t *mem, unsigned int memsz, unsigned int roseg, 
                 struct emitter *outport)
 {
-  abort_unless(vm && stack && mem && roseg <= memsz);
+  abort_unless(vm && stack && ssz > 0 && roseg <= memsz);
   vm->stack = stack;
   vm->stksz = ssz;
   vm->mem = mem;
@@ -837,63 +878,114 @@ void init_netvm(struct netvm *vm, uint64_t *stack, unsigned int ssz,
     vm->outport = &null_emitter;
   vm->inst = NULL;
   vm->ninst = 0;
-  reset_netvm(vm, NULL, 0);
+  vm->pc = 0;
+  vm->sp = 0;
+  if ( vm->mem )
+    memset(vm->mem, 0, roseg);
+  memset(vm->packets, 0, sizeof(vm->packets));
 }
 
 
-/* clear memory, set pc <= 0, discard packets */
-void reset_netvm(struct netvm *vm, struct netvm_inst *inst, unsigned ni)
+int netvm_validate(struct netvm *vm)
 {
-  int i;
-  abort_unless(vm && vm->stack && vm->mem && vm->rosegoff <= vm->memsz);
-  vm->pc = 0;
-  vm->sp = 0;
-  for ( i = 0; i < NETVM_MAXPKTS; ++i )
-    vm->packets[i] = NULL;
-  memset(vm->mem, 0, vm->rosegoff);
-  if ( inst != NULL ) {
+  struct netvm_inst *inst;
+  unsigned i, maxi;
+
+  if ( !vm || !vm->stack || (vm->rosegoff > vm->memsz) || !vm->inst )
+    return -1;
+  maxi = vm->matchonly ? NETVM_OC_MAX_MATCH : NETVM_OC_MAX;
+  for ( i = 0; i < vm->ninst; i++ ) {
+    inst = &vm->inst[i];
+    if ( inst->opcode > maxi )
+      return -1;
+    if ( (inst->opcode == NETVM_OC_BR) || (inst->opcode == NETVM_OC_BRIF) ) {
+      if ( vm->matchonly ) {
+        /* matchonly mode may only branch forward and to immediate positions */
+        if ( !IMMED(inst) || ((unsigned int)inst->val <= i) )
+          return -1;
+      }
+      if ( inst->val > vm->ninst )
+        return -1;
+    }
+  }
+  return 0;
+}
+
+
+/* set up netvm code */
+int netvm_setcode(struct netvm *vm, struct netvm_inst *inst, unsigned ni)
+{
     vm->inst = inst;
     vm->ninst = ni;
+    return netvm_validate(vm);
+}
+
+
+void netvm_loadpkt(struct netvm *vm, struct pktbuf *p, int slot)
+{
+  struct netvmpkt *pkt;
+  if ( (slot < 0) || (slot >= NETVM_MAXPKTS) )
+    return;
+  pkt = pktbuf_to_netvmpkt(p);
+  abort_unless(pkt);
+  free_netvmpkt(vm->packets[slot]);
+  vm->packets[slot] = pkt;
+}
+
+
+void netvm_clrpkt(struct netvm *vm, struct pktbuf *p, int slot, int keeppktbuf)
+{
+  struct netvmpkt *pkt;
+  if ( (slot < 0) || (slot >= NETVM_MAXPKTS) )
+    return;
+  if ( (pkt = vm->packets[slot]) ) {
+    if ( keeppktbuf )
+      pkt->packet = NULL;
+    free_netvmpkt(pkt);
+    vm->packets[slot] = NULL;
   }
 }
 
 
-/* 0 if run ok and no retval, 1 if run ok and stack not empty, -1 if err */
-int run_netvm(struct netvm *vm, int maxcycles, uint64_t *rv)
+/* clear memory, set pc <= 0, discard packets */
+void netvm_reset(struct netvm *vm)
 {
-  unsigned i, maxi;
+  int i;
+  abort_unless(vm && vm->stack && vm->rosegoff <= vm->memsz && vm->inst);
+  vm->pc = 0;
+  vm->sp = 0;
+  for ( i = 0; i < NETVM_MAXPKTS; ++i ) {
+    free_netvmpkt(vm->packets[i]);
+    vm->packets[i] = NULL;
+  }
+  if ( vm->mem )
+    memset(vm->mem, 0, vm->rosegoff);
+}
+
+
+/* 0 if run ok and no retval, 1 if run ok and stack not empty, -1 if err */
+int netvm_run(struct netvm *vm, int maxcycles, uint64_t *rv)
+{
   struct netvm_inst *inst;
-
-  abort_unless(vm && vm->stack && vm->mem && vm->rosegoff <= vm->memsz);
-  if ( !vm->inst )
-    return -1;
-
-  if ( vm->matchonly )
-    maxi = NETVM_OC_MAX_MATCH;
-  else
-    maxi =  NETVM_OC_MAX;
-  for ( i = 0; i < vm->ninst; i++ )
-    if ( vm->inst[i].opcode > maxi )
-      return -1;
 
   vm->error = 0;
   vm->running = 1;
-  vm->branch = 0;
+  
+  if ( vm->pc >= vm->ninst ) {
+    vm->running = 0;
+    if ( vm->pc != vm->ninst ) 
+      vm->error = 1;
+  }
 
-  while ( vm->running && !vm->error && maxcycles != 0 ) {
+  while ( vm->running && !vm->error && (maxcycles != 0) ) {
     inst = &vm->inst[vm->pc];
     (*g_netvm_ops[inst->opcode])(vm);
-    /* if we branched: don't adjust the PC, otherwise clear the branch flag */
-    if ( vm->branch )
-      vm->branch = 0;
-    else 
-      ++vm->pc;
+    ++vm->pc;
     if ( vm->pc >= vm->ninst ) {
       vm->running = 0;
       if ( vm->pc != vm->ninst ) 
         vm->error = 1;
     }
-    /* decrement cycle count if running for a limited duration */
     if ( maxcycles > 0 )
       --maxcycles;
   }
@@ -909,64 +1001,5 @@ int run_netvm(struct netvm *vm, int maxcycles, uint64_t *rv)
       *rv = vm->stack[vm->sp-1];
     return 1;
   }
-}
-
-
-static unsigned pktdlt_to_ppt(uint32_t dltype)
-{
-  switch(dltype) {
-  case PKTDL_ETHERNET2:
-    return PPT_ETHERNET;
-  default:
-    return PPT_NONE;
-  }
-}
-
-
-struct netvmpkt *pktbuf_to_netvmpkt(struct pktbuf *pb)
-{
-  struct netvmpkt *pnew;
-  if ( !pb )
-    return NULL;
-  pnew = emalloc(sizeof(*pnew));
-  pnew->packet = pb;
-  pnew->headers = hdr_parse_packet(pktdlt_to_ppt(pb->pkt_dltype),
-		                   pb->pkt_buffer, pb->pkt_offset, pb->pkt_len,
-				   pb->pkt_buflen);
-  if ( !pnew->headers ) {
-    pkt_free(pnew->packet);
-    free(pnew);
-    pnew = NULL;
-  }
-  return pnew;
-}
-
-
-void free_netvmpkt(struct netvmpkt *pkt)
-{
-  if ( pkt ) {
-    hdr_free(pkt->headers, 1);
-    pkt_free(pkt->packet);
-    free(pkt);
-  }
-}
-
-
-void set_netvm_packet(struct netvm *vm, int slot, struct netvmpkt *pkt)
-{
-  if ( !vm || slot < 0 || slot >= NETVM_MAXPKTS )
-    return;
-  vm->packets[slot]  = pkt;
-}
-
-
-struct netvmpkt *release_netvm_packet(struct netvm *vm, int slot)
-{
-  struct netvmpkt *pkt;
-  if ( !vm || slot < 0 || slot >= NETVM_MAXPKTS )
-    return NULL;
-  pkt = vm->packets[slot];
-  vm->packets[slot] = NULL;
-  return pkt;
 }
 

@@ -160,7 +160,6 @@ struct netvm {
   int                   matchonly;
   int                   running;
   int                   error;
-  int                   branch;
   unsigned int          pc;
   unsigned int          sp;
 };
@@ -168,28 +167,33 @@ struct netvm {
 
 /* mem may be NULL and memsz 0.  roseg must be <= memsz.  stack must not be */
 /* 0 and ssz is the number of stack elements.  outport may be NULL */
-void init_netvm(struct netvm *vm, uint64_t *stack, unsigned int ssz,
+void netvm_init(struct netvm *vm, uint64_t *stack, unsigned int ssz,
                 byte_t *mem, unsigned int memsz, unsigned int roseg, 
                 struct emitter *outport);
 
-/* clear memory, set pc <= 0, discard packets */
-void reset_netvm(struct netvm *vm, struct netvm_inst *inst, unsigned ni);
+/* set the instruction code and validate the vm: 0 on success, -1 on error */
+int netvm_setcode(struct netvm *vm, struct netvm_inst *inst, unsigned ni);
+
+/* validate a netvm is properly set up and that all branches are correct */
+/* called by set_netvm_code implicitly:  returns 0 on success, -1 on error */
+int netvm_validate(struct netvm *vm);
+
+/* clear memory, set pc <- 0, set sp <- 0, discard packets */
+void netvm_reset(struct netvm *vm);
+
+/* will free existing packets if they are slotted.  Note this gives up */
+/* control of the packet.  netvm_clrpkt() or netvm_reset() or other native */
+/* netvm instructions will free it.  Make a copy if this isn't desired or */
+/* be careful of the program that you run and call clrpkt with the don't free */
+/* flag set before calling netvm_reset() */
+void netvm_loadpkt(struct netvm *vm, struct pktbuf *p, int slot);
+
+/* free the packet in a slot:  note this destroys existin packet buffer */
+/* unless keeppktbuf is set */
+void netvm_clrpkt(struct netvm *vm, struct pktbuf *p, int slot, int keeppktbuf);
 
 /* 0 if run ok and no retval, 1 if run ok and stack not empty, -1 if err, -2 */
 /* if out of cycles */
-int run_netvm(struct netvm *vm, int maxcycles, uint64_t *rv);
-
-
-/* takes control of the struct pktbuf and returns a netvmpkt */
-struct netvmpkt *pktbuf_to_netvmpkt(struct pktbuf *pb);
-
-/* frees the netvmpkt and the underlying pakcet */
-void free_netvmpkt(struct netvmpkt *pkt);
-
-/* returns 0 if ok inputting packet and -1 otherwise */
-void set_netvm_packet(struct netvm *vm, int slot, struct netvmpkt *pkt);
-
-/* returns 0 if the packet is OK to be sent and -1 otherwise */
-struct netvmpkt *release_netvm_packet(struct netvm *vm, int slot);
+int netvm_run(struct netvm *vm, int maxcycles, uint64_t *rv);
 
 #endif /* __netvm_h */
