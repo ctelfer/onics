@@ -317,8 +317,10 @@ static struct hdr_parse *ipv4_parse(struct hdr_parse *phdr)
       hdr->error |= PPERR_INVALID;
     hdr->poff = hdr->hoff + hlen;
     unpack(&ip->len, 2, "h", &iplen);
-    if ( iplen < hdr_plen(hdr) )
+    if ( iplen > hdr_totlen(hdr) )
       hdr->error |= PPERR_LENGTH;
+    else if ( iplen < hdr_totlen(hdr) )
+      hdr->toff = hdr->hoff + iplen;
     sum = ~ones_sum(ip, hlen, 0);
     if ( sum != 0 ) {
         hdr->error |= PPERR_CKSUM;
@@ -426,7 +428,7 @@ static uint16_t tcpudp_cksum(struct hdr_parse *hdr, uint8_t proto)
     ph.saddr = ip->saddr;
     ph.daddr = ip->daddr;
     ph.proto = proto;
-    ph.totlen = hdr_totlen(hdr);
+    ph.totlen = ntoh16(hdr_totlen(hdr));
     sum = ones_sum(&ph, 12, 0);
   } else {
     abort_unless(phdr->type == PPT_IPV6);
@@ -436,10 +438,10 @@ static uint16_t tcpudp_cksum(struct hdr_parse *hdr, uint8_t proto)
     ph.saddr = ip6->saddr;
     ph.daddr = ip6->daddr;
     ph.proto = proto;
-    ph.totlen = hdr_totlen(hdr);
+    ph.totlen = ntoh16(hdr_totlen(hdr));
     sum = ones_sum(&ph, 40, 0);
   }
-  return ~ones_sum(hdr_payload(hdr), hdr_plen(hdr), sum);
+  return ~ones_sum(hdr_header(hdr, void), hdr_totlen(hdr), sum);
 }
 
 
