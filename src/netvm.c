@@ -768,6 +768,8 @@ netvm_op g_netvm_ops[NETVM_OC_MAX+1] = {
   ni_ldpmeta, /* LDTS */
   ni_ldhdrf,
   ni_numop, /* NOT */
+  ni_numop, /* INVERT */
+  ni_numop, /* ISNZ */
   ni_numop, /* TONET */
   ni_numop, /* TOHOST */
   ni_numop, /* SIGNX */
@@ -793,10 +795,10 @@ netvm_op g_netvm_ops[NETVM_OC_MAX+1] = {
   ni_numop, /* SGE */
   ni_hashdr,
   ni_halt,
-
-  /* non-matching-only */
   ni_branch, /* BR */
   ni_branch, /* BRIF */
+
+  /* non-matching-only */
   ni_prnum, /* PRBIN */
   ni_prnum, /* PROCT */
   ni_prnum, /* PRDEC */
