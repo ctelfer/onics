@@ -75,6 +75,7 @@ static int isxport(int ppt)
   case PPT_ICMP6:
   case PPT_UDP:
   case PPT_TCP:
+    return 1;
   default:
     return 0;
   }
@@ -105,6 +106,7 @@ static struct netvmpkt *pktbuf_to_netvmpkt(struct pktbuf *pb)
   struct hdr_parse *hdr;
   abort_unless(pb);
   pnew = emalloc(sizeof(*pnew));
+  memset(pnew, 0, sizeof(*pnew));
   pnew->packet = pb;
   pnew->headers = hdr_parse_packet(pktdlt_to_ppt(pb->pkt_dltype),
 		                   pb->pkt_buffer, pb->pkt_offset, pb->pkt_len,
@@ -286,7 +288,7 @@ static void get_hdr_info(struct netvm *vm, struct netvm_inst *inst,
   width = inst->width;
   CKWIDTH(vm, width);
 
-  if ( hd->htype == NETVM_HDQUICK ) {
+  if ( hd->htype == NETVM_HDLAYER ) {
     FATAL(vm, hd->idx > NETVM_HDI_MAX);
     FATAL(vm, (hd->pktnum >= NETVM_MAXPKTS) || !(pkt=vm->packets[hd->pktnum]));
     hdr = pkt->layer[hd->idx];
@@ -398,8 +400,21 @@ static void ni_ldhdrf(struct netvm *vm)
   if ( vm->error )
     return;
   FATAL(vm, !NETVM_HDRFLDOK(hd0.field));
-  hdr = find_header(vm, &hd0);
-  FATAL(vm, hdr == NULL);
+  if ( hd0.htype == NETVM_HDLAYER ) {
+    FATAL(vm, (hd0.pktnum >= NETVM_MAXPKTS) || (hd0.idx > NETVM_HDI_MAX));
+    hdr = vm->packets[hd0.pktnum]->layer[hd0.idx];
+    /* Special case to make it easy to check for layer headers */
+  } else {
+    hdr = find_header(vm, &hd0);
+  }
+  if ( !hdr ) {
+    if ( hd0.field == NETVM_HDR_TYPE ) {
+      S_PUSH(vm, PPT_NONE);
+      return;
+    } else { 
+      VMERR(vm);
+    }
+  }
 
   switch (hd0.field) {
   case NETVM_HDR_HOFF: S_PUSH(vm, hdr->hoff); break;
@@ -411,7 +426,7 @@ static void ni_ldhdrf(struct netvm *vm)
   case NETVM_HDR_TLEN: S_PUSH(vm, hdr_tlen(hdr)); break;
   case NETVM_HDR_LEN:  S_PUSH(vm, hdr_totlen(hdr)); break;
   case NETVM_HDR_ERR:  S_PUSH(vm, hdr->error); break;
-  case NETVM_HDR_TYPE:  S_PUSH(vm, hdr->type); break;
+  case NETVM_HDR_TYPE: S_PUSH(vm, hdr->type); break;
   default:
     abort_unless(0);
   }
@@ -496,7 +511,7 @@ static void ni_hashdr(struct netvm *vm)
   get_hd(vm, inst, &hd0);
   if ( vm->error )
     return;
-  if ( hd0.htype == NETVM_HDQUICK ) {
+  if ( hd0.htype == NETVM_HDLAYER ) {
     FATAL(vm, hd0.idx > NETVM_HDI_MAX);
     FATAL(vm, (hd0.pktnum >= NETVM_MAXPKTS) || !(pkt=vm->packets[hd0.pktnum]));
     val = pkt->layer[hd0.idx] != NULL;

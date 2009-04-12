@@ -37,6 +37,13 @@ struct netvm_inst vm_prog_tcperr[] = {
 };
 
 
+struct netvm_inst vm_prog_isudp[] = { 
+  { NETVM_OC_LDHDRF, 0, NETVM_IF_IMMED, 
+    NETVM_HDESC(0, NETVM_HDLAYER, NETVM_HDI_XPORT, NETVM_HDR_TYPE, 0) },
+  { NETVM_OC_EQ, 0, NETVM_IF_IMMED, PPT_UDP },
+};
+
+
 struct netvm_programs {
   struct netvm_inst *   prog;
   unsigned              proglen;
@@ -46,6 +53,8 @@ struct netvm_programs {
     "istcp -- Test if the packet has a TCP header" },
   { vm_prog_tcperr, array_length(vm_prog_tcperr),
     "tcperr -- Test if the packet is TCP and has errors" },
+  { vm_prog_isudp, array_length(vm_prog_isudp), 
+    "isudp -- Test if the packet is UDP" },
 };
 unsigned prognum = 0;
 

@@ -138,9 +138,9 @@ enum {
    (((uint64_t)(fld) & 0xFF) << 32)|\
    ((uint64_t)(off) & 0xFFFFFFFF))
 
-#define NETVM_HDQUICK           255     /* find header of type NETVM_HDI_* */
+#define NETVM_HDLAYER   255   /* find header of type NETVM_HDI_* */
 /* 
- * When htype == NETVM_HDQUICk, the header referred to is one of the layer
+ * When htype == NETVM_HDLAYER, the header referred to is one of the layer
  * pointers stored in netvmpkt.  This allows quick access to the network, 
  * data link, transport, and tunnel headers.  It also allows them to be accessed
  * by layer. (e.g. transport).  In this case the idx field tells which layer.
