@@ -5,9 +5,15 @@
 #include "protoparse.h"
 #include <cat/emit.h>
 
+#define NETVM_HDI_LINK          0       /* e.g. Ethernet */
+#define NETVM_HDI_TUN           1       /* e.g. ESP, GRE, IP in IP */
+#define NETVM_HDI_NET           2       /* e.g. IPv4, IPv6 */
+#define NETVM_HDI_XPORT         3       /* e.g. TCP, UDP, RTP, ICMP */
+#define NETVM_HDI_MAX           NETVM_HDI_XPORT
 struct netvmpkt {
   struct pktbuf *       packet;
   struct hdr_parse *    headers;
+  struct hdr_parse *    layer[NETVM_HDI_MAX+1];
 };
 
 enum {
@@ -19,10 +25,11 @@ enum {
   NETVM_HDR_PLEN,
   NETVM_HDR_TLEN,
   NETVM_HDR_LEN,
-  NETVM_HDR_ERR
+  NETVM_HDR_ERR,
+  NETVM_HDR_TYPE
 };
 
-#define NETVM_HDRFLDOK(f) (((f) >= NETVM_HDR_HOFF) && ((f) <= NETVM_HDR_ERR))
+#define NETVM_HDRFLDOK(f) (((f) >= NETVM_HDR_HOFF) && ((f) <= NETVM_HDR_TYPE))
 #define NETVM_ISHDROFF(f) (((f) >= NETVM_HDR_HOFF) && ((f) <= NETVM_HDR_EOFF))
 
 /* 
@@ -93,7 +100,8 @@ enum {
   NETVM_OC_STTS,        /* [v,pktnum|I] store into timestamp */
   NETVM_OC_PKTNEW,      /* [hdesc|I] create packet: offset==len, htype==dl */
   NETVM_OC_PKTCOPY,     /* [pktnum1,pktnum2|I] copy packet */
-  NETVM_OC_HDRCREATE,   /* [hdesc|I] create header of htype in packet pktnum */
+  NETVM_OC_HDRPUSH,     /* [hdesc|I] create header of htype in packet pktnum */
+  NETVM_OC_HDRPOP,      /* [pktnum|I] pop the top header off of packet pktnum */
   NETVM_OC_FIXLEN,      /* [ptknum|I] fix length fields in the packet */
   NETVM_OC_FIXCKSUM,    /* [ptknum|I] fix checksum fields in the packet */
   NETVM_OC_PKTINS,      /* [len,hdesc|I] insert len bytes at hd.offset */
@@ -130,6 +138,13 @@ enum {
    (((uint64_t)(fld) & 0xFF) << 32)|\
    ((uint64_t)(off) & 0xFFFFFFFF))
 
+#define NETVM_HDQUICK           255     /* find header of type NETVM_HDI_* */
+/* 
+ * When htype == NETVM_HDQUICk, the header referred to is one of the layer
+ * pointers stored in netvmpkt.  This allows quick access to the network, 
+ * data link, transport, and tunnel headers.  It also allows them to be accessed
+ * by layer. (e.g. transport).  In this case the idx field tells which layer.
+ */
 
 struct netvm_hdr_desc {
   uint8_t           pktnum;     /* which packet entry */

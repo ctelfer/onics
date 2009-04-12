@@ -50,9 +50,59 @@ static unsigned pktdlt_to_ppt(uint32_t dltype)
 }
 
 
+static int islink(int ppt)
+{
+  return ppt == PPT_ETHERNET;
+}
+
+
+static int istun(int ppt)
+{
+  return 0;
+}
+
+
+static int isnet(int ppt)
+{
+  return (ppt == PPT_IPV4) || (ppt == PPT_IPV6) || (ppt == PPT_ARP); 
+}
+
+
+static int isxport(int ppt)
+{
+  switch(ppt) {
+  case PPT_ICMP:
+  case PPT_ICMP6:
+  case PPT_UDP:
+  case PPT_TCP:
+  default:
+    return 0;
+  }
+}
+
+
+static void assign_hdrptr(struct netvmpkt *pkt, struct hdr_parse *h)
+{
+  if ( islink(h->type) ) {
+    if ( !pkt->layer[NETVM_HDI_LINK] )
+      pkt->layer[NETVM_HDI_LINK] = h;
+  } else if ( istun(h->type) ) {
+    if ( !pkt->layer[NETVM_HDI_TUN] )
+      pkt->layer[NETVM_HDI_TUN] = h;
+  } else if ( isnet(h->type) ) {
+    if ( !pkt->layer[NETVM_HDI_NET] )
+      pkt->layer[NETVM_HDI_NET] = h;
+  } else if ( isxport(h->type) ) {
+    if ( !pkt->layer[NETVM_HDI_XPORT] )
+      pkt->layer[NETVM_HDI_XPORT] = h;
+  }
+}
+
+
 static struct netvmpkt *pktbuf_to_netvmpkt(struct pktbuf *pb)
 {
   struct netvmpkt *pnew;
+  struct hdr_parse *hdr;
   abort_unless(pb);
   pnew = emalloc(sizeof(*pnew));
   pnew->packet = pb;
@@ -60,6 +110,9 @@ static struct netvmpkt *pktbuf_to_netvmpkt(struct pktbuf *pb)
 		                   pb->pkt_buffer, pb->pkt_offset, pb->pkt_len,
 				   pb->pkt_buflen);
   abort_unless(pnew->headers);
+  for ( hdr = hdr_child(pnew->headers); hdr->type != PPT_NONE; 
+        hdr = hdr_child(hdr) )
+    assign_hdrptr(pnew, hdr);
   return pnew;
 }
 
@@ -225,6 +278,7 @@ static void get_hdr_info(struct netvm *vm, struct netvm_inst *inst,
 {
   int width;
   struct hdr_parse *hdr;
+  struct netvmpkt *pkt;
 
   get_hd(vm, inst, hd);
   if ( vm->error )
@@ -232,8 +286,14 @@ static void get_hdr_info(struct netvm *vm, struct netvm_inst *inst,
   width = inst->width;
   CKWIDTH(vm, width);
 
-  FATAL(vm, (hd->offset + width < hd->offset) || !NETVM_ISHDROFF(hd->field));
-  hdr = find_header(vm, hd);
+  if ( hd->htype == NETVM_HDQUICK ) {
+    FATAL(vm, hd->idx > NETVM_HDI_MAX);
+    FATAL(vm, (hd->pktnum >= NETVM_MAXPKTS) || !(pkt=vm->packets[hd->pktnum]));
+    hdr = pkt->layer[hd->idx];
+  } else {
+    FATAL(vm, (hd->offset + width < hd->offset) || !NETVM_ISHDROFF(hd->field));
+    hdr = find_header(vm, hd);
+  }
   FATAL(vm, hdr == NULL);
 
   switch(hd->field) {
@@ -351,6 +411,7 @@ static void ni_ldhdrf(struct netvm *vm)
   case NETVM_HDR_TLEN: S_PUSH(vm, hdr_tlen(hdr)); break;
   case NETVM_HDR_LEN:  S_PUSH(vm, hdr_totlen(hdr)); break;
   case NETVM_HDR_ERR:  S_PUSH(vm, hdr->error); break;
+  case NETVM_HDR_TYPE:  S_PUSH(vm, hdr->type); break;
   default:
     abort_unless(0);
   }
@@ -431,10 +492,17 @@ static void ni_hashdr(struct netvm *vm)
   struct netvm_inst *inst = &vm->inst[vm->pc];
   struct netvm_hdr_desc hd0;
   uint64_t val;
+  struct netvmpkt *pkt;
   get_hd(vm, inst, &hd0);
   if ( vm->error )
     return;
-  val = find_header(vm, &hd0) != NULL;
+  if ( hd0.htype == NETVM_HDQUICK ) {
+    FATAL(vm, hd0.idx > NETVM_HDI_MAX);
+    FATAL(vm, (hd0.pktnum >= NETVM_MAXPKTS) || !(pkt=vm->packets[hd0.pktnum]));
+    val = pkt->layer[hd0.idx] != NULL;
+  } else {
+    val = find_header(vm, &hd0) != NULL;
+  }
   S_PUSH(vm, val);
 }
 
@@ -694,7 +762,7 @@ static void ni_pktcopy(struct netvm *vm)
 }
 
 
-static void ni_crehdr(struct netvm *vm)
+static void ni_hdrpush(struct netvm *vm)
 {
   struct netvm_inst *inst = &vm->inst[vm->pc];
   struct netvm_hdr_desc hd0;
@@ -704,6 +772,32 @@ static void ni_crehdr(struct netvm *vm)
     return;
   FATAL(vm, (hd0.pktnum >= NETVM_MAXPKTS) || !(pkt = vm->packets[hd0.pktnum]));
   FATAL(vm, hdr_add(hd0.htype, hdr_parent(pkt->headers)) < 0);
+  assign_hdrptr(pkt, hdr_parent(pkt->headers));
+}
+
+
+static void ni_hdrpop(struct netvm *vm)
+{
+  struct netvm_inst *inst = &vm->inst[vm->pc];
+  int i, pktnum;
+  struct netvmpkt *pkt;
+  struct hdr_parse *last;
+  if ( IMMED(inst) ) {
+    pktnum = inst->val;
+  } else { 
+    S_POP(vm, pktnum);
+  }
+  FATAL(vm, (pktnum >= NETVM_MAXPKTS) || !(pkt = vm->packets[pktnum]));
+  last = hdr_parent(pkt->headers);
+  if ( last->type != PPT_NONE ) {
+    for ( i = 0; i <= NETVM_HDI_MAX; ++i ) {
+      if ( pkt->layer[i] == last ) {
+        pkt->layer[i] = NULL;
+        break;
+      }
+    }
+    hdr_free(last, 0);
+  }
 }
 
 
@@ -853,7 +947,8 @@ netvm_op g_netvm_ops[NETVM_OC_MAX+1] = {
   ni_stpmeta, /* STTS */
   ni_newpkt,
   ni_pktcopy,
-  ni_crehdr,
+  ni_hdrpush,
+  ni_hdrpop,
   ni_fixlen,
   ni_fixcksum,
   ni_hdrins,
