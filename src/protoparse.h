@@ -13,7 +13,7 @@
 #define PPT_ICMP6		6
 #define PPT_UDP			7
 #define PPT_TCP			8
-#define PPT_MAX			100
+#define PPT_MAX			127
 
 #define PPERR_TOOSMALL          0x00000001
 #define PPERR_HLEN              0x00000002
