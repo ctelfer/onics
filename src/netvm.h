@@ -44,6 +44,7 @@ enum {
  */
 
 enum {
+  NETVM_OC_NOP,         /* no operation */
   NETVM_OC_POP,         /* discards top of stack */
   NETVM_OC_PUSH,        /* implied IMMED:  pushes immediate value onto stack */
   NETVM_OC_DUP,         /* dupcliates top of stack */
@@ -147,47 +148,50 @@ enum {
  */
 
 struct netvm_hdr_desc {
-  uint8_t           pktnum;     /* which packet entry */
-  uint8_t           htype;      /* PPT_*;  PPT_NONE == absolute idx */
-  uint8_t           idx;        /* 0 == 1st hdr, 1 == 2nd hdr,... */
-  uint8_t           field;      /* NETVM_HDR_* */
-  uint32_t          offset;     /* offset into packet */
+  uint8_t               pktnum;     /* which packet entry */
+  uint8_t               htype;      /* PPT_*;  PPT_NONE == absolute idx */
+  uint8_t               idx;        /* 0 == 1st hdr, 1 == 2nd hdr,... */
+  uint8_t               field;      /* NETVM_HDR_* */
+  uint32_t              offset;     /* offset into packet */
 };
 
 struct netvm_inst {
-  uint8_t       opcode; /* NETVM_OC_* */
-  uint8_t       width;  /* 1, 2, 4 or 8 for most operations */
-  uint16_t      flags;  /* NETVM_IF_* */
-  uint64_t      val;    /* Varies with instruction */
+  uint8_t               opcode; /* NETVM_OC_* */
+  uint8_t               width;  /* 1, 2, 4 or 8 for most operations */
+  uint16_t              flags;  /* NETVM_IF_* */
+  uint64_t              val;    /* Varies with instruction */
 };
 
 #define NETVM_MAXPKTS   16
 struct netvm {
   struct netvm_inst *   inst;
   uint32_t              ninst;
+  uint32_t              pc;
+
   uint64_t *            stack;
   uint32_t              stksz;
+  uint32_t              sp;
+
   byte_t *              mem;
   uint32_t              memsz;
   uint32_t              rosegoff;
+
   struct emitter *      outport;
   struct netvmpkt *     packets[NETVM_MAXPKTS];
   int                   matchonly;
   int                   running;
   int                   error;
-  unsigned int          pc;
-  unsigned int          sp;
 };
 
 
 /* mem may be NULL and memsz 0.  roseg must be <= memsz.  stack must not be */
 /* 0 and ssz is the number of stack elements.  outport may be NULL */
-void netvm_init(struct netvm *vm, uint64_t *stack, unsigned int ssz,
-                byte_t *mem, unsigned int memsz, unsigned int roseg, 
+void netvm_init(struct netvm *vm, uint64_t *stack, uint32_t ssz,
+                byte_t *mem, uint32_t memsz, uint32_t roseg, 
                 struct emitter *outport);
 
 /* set the instruction code and validate the vm: 0 on success, -1 on error */
-int netvm_setcode(struct netvm *vm, struct netvm_inst *inst, unsigned ni);
+int netvm_setcode(struct netvm *vm, struct netvm_inst *inst, uint32_t ni);
 
 /* validate a netvm is properly set up and that all branches are correct */
 /* called by set_netvm_code implicitly:  returns 0 on success, -1 on error */

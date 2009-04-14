@@ -30,7 +30,7 @@ struct netvm_inst vm_prog_tcperr[] = {
   /*0*/{ NETVM_OC_HASHDR, 0, NETVM_IF_IMMED, NETVM_HDESC(0,PPT_TCP,0,0,0) },
   /*1*/{ NETVM_OC_DUP, 0, 0, 0 },
   /*2*/{ NETVM_OC_NOT, 0, 0, 0 },
-  /*3*/{ NETVM_OC_BRIF, 0, NETVM_IF_IMMED, /* END */ 6 },
+  /*3*/{ NETVM_OC_BRIF, 0, NETVM_IF_IMMED, /* END */ 2 },
   /*4*/{ NETVM_OC_LDHDRF, 0, NETVM_IF_IMMED, 
          NETVM_HDESC(0,PPT_TCP,0,NETVM_HDR_ERR,0) },
   /*5*/{ NETVM_OC_ISNZ, 0, 0, 0 },

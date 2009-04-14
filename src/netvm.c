@@ -6,6 +6,7 @@
 #include <cat/emalloc.h>
 #include "util.h"
 
+#define MAXINST         0x7ffffffe
 #define IMMED(inst) ((inst)->flags & NETVM_IF_IMMED)
 #define ISSIGNED(inst) ((inst)->flags & NETVM_IF_SIGNED)
 
@@ -177,6 +178,11 @@ static void unimplemented(struct netvm *vm)
   vm->error = 1;
 }
 #endif
+
+
+static void ni_nop(struct netvm *vm)
+{
+}
 
 
 static void ni_pop(struct netvm *vm)
@@ -531,13 +537,13 @@ static void ni_halt(struct netvm *vm)
 static void ni_branch(struct netvm *vm)
 {
   struct netvm_inst *inst = &vm->inst[vm->pc];
-  uint32_t addr;
+  uint32_t off;
   if ( IMMED(inst) ) {
-    addr = inst->val;
+    off = inst->val;
   } else {
     abort_unless(!vm->matchonly);
-    S_POP(vm, addr);
-    FATAL(vm, addr > vm->ninst);
+    S_POP(vm, off);
+    FATAL(vm, vm->pc + off + 1 > vm->ninst);
   }
   if ( inst->opcode == NETVM_OC_BRIF ) {
     uint64_t cond;
@@ -546,7 +552,7 @@ static void ni_branch(struct netvm *vm)
       return;
   }
   /* ok to overflow number of instructions by 1: implied halt instruction */
-  vm->pc = addr - 1;
+  vm->pc += off;
 }
 
 
@@ -908,6 +914,7 @@ static void ni_hdradj(struct netvm *vm)
 
 
 netvm_op g_netvm_ops[NETVM_OC_MAX+1] = { 
+  ni_nop,
   ni_pop,
   ni_push,
   ni_dup,
@@ -972,8 +979,8 @@ netvm_op g_netvm_ops[NETVM_OC_MAX+1] = {
 };
 
 
-void netvm_init(struct netvm *vm, uint64_t *stack, unsigned int ssz,
-                byte_t *mem, unsigned int memsz, unsigned int roseg, 
+void netvm_init(struct netvm *vm, uint64_t *stack, uint32_t ssz,
+                byte_t *mem, uint32_t memsz, uint32_t roseg, 
                 struct emitter *outport)
 {
   abort_unless(vm && stack && ssz > 0 && roseg <= memsz);
@@ -999,9 +1006,10 @@ void netvm_init(struct netvm *vm, uint64_t *stack, unsigned int ssz,
 int netvm_validate(struct netvm *vm)
 {
   struct netvm_inst *inst;
-  unsigned i, maxi;
+  uint32_t i, maxi, newpc;
 
-  if ( !vm || !vm->stack || (vm->rosegoff > vm->memsz) || !vm->inst )
+  if ( !vm || !vm->stack || (vm->rosegoff > vm->memsz) || !vm->inst ||
+       (vm->ninst < 0) || (vm->ninst > MAXINST) )
     return -1;
   maxi = vm->matchonly ? NETVM_OC_MAX_MATCH : NETVM_OC_MAX;
   for ( i = 0; i < vm->ninst; i++ ) {
@@ -1009,13 +1017,16 @@ int netvm_validate(struct netvm *vm)
     if ( inst->opcode > maxi )
       return -1;
     if ( (inst->opcode == NETVM_OC_BR) || (inst->opcode == NETVM_OC_BRIF) ) {
-      if ( vm->matchonly ) {
-        /* matchonly mode may only branch forward and to immediate positions */
-        if ( !IMMED(inst) || ((unsigned int)inst->val <= i) )
+      if ( IMMED(inst) ) {
+        newpc = (uint32_t)inst->val + 1 + i;
+        if ( newpc > vm->ninst )
+          return -1;
+        if ( vm->matchonly && (newpc <= i) )
+          return -1;
+      } else {
+        if ( vm->matchonly )
           return -1;
       }
-      if ( inst->val > vm->ninst )
-        return -1;
     }
   }
   return 0;
@@ -1023,7 +1034,7 @@ int netvm_validate(struct netvm *vm)
 
 
 /* set up netvm code */
-int netvm_setcode(struct netvm *vm, struct netvm_inst *inst, unsigned ni)
+int netvm_setcode(struct netvm *vm, struct netvm_inst *inst, uint32_t ni)
 {
     vm->inst = inst;
     vm->ninst = ni;
@@ -1061,7 +1072,8 @@ void netvm_clrpkt(struct netvm *vm, struct pktbuf *p, int slot, int keeppktbuf)
 void netvm_reset(struct netvm *vm)
 {
   int i;
-  abort_unless(vm && vm->stack && vm->rosegoff <= vm->memsz && vm->inst);
+  abort_unless(vm && vm->stack && vm->rosegoff <= vm->memsz && vm->inst && 
+               vm->ninst >= 0 && vm->ninst <= MAXINST);
   vm->pc = 0;
   vm->sp = 0;
   for ( i = 0; i < NETVM_MAXPKTS; ++i ) {
@@ -1078,14 +1090,15 @@ int netvm_run(struct netvm *vm, int maxcycles, uint64_t *rv)
 {
   struct netvm_inst *inst;
 
+  abort_unless(vm && vm->stack && vm->rosegoff <= vm->memsz && vm->inst && 
+               vm->ninst >= 0 && vm->ninst <= MAXINST);
   vm->error = 0;
   vm->running = 1;
   
-  if ( vm->pc >= vm->ninst ) {
+  if ( vm->pc < 0 || vm->pc > vm->ninst )
+    vm->error = 1;
+  else if ( vm->pc == vm->ninst + 1 )
     vm->running = 0;
-    if ( vm->pc != vm->ninst ) 
-      vm->error = 1;
-  }
 
   while ( vm->running && !vm->error && (maxcycles != 0) ) {
     inst = &vm->inst[vm->pc];
