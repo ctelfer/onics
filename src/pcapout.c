@@ -1,4 +1,4 @@
-#include "packet.h"
+#include "pktbuf.h"
 #include <stdio.h>
 #include <limits.h>
 #include <pcap.h>

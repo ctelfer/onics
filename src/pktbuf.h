@@ -1,15 +1,13 @@
-#ifndef __common_pkttools_h
-#define __common_pkttools_h
+/*
+ * Copyright 2009 -- Christopher Telfer
+ * See attached licence.
+ */
+#ifndef __pktbuf_h
+#define __pktbuf_h
 #include <cat/cat.h>
 #include <cat/cattypes.h>
 #include <stdio.h>
 #include "config.h"
-
-enum pktdltype_e {
-  PKTDL_MIN =       0x1,
-  PKTDL_ETHERNET2 = 0x1,
-  PKTDL_MAX =       0x1
-};
 
 struct pktprehdr {
   uint32_t  pph_dltype;
@@ -30,6 +28,12 @@ struct pktbuf {
 #define pkt_timestamp pkt_header.pph_timestamp
 #define pkt_data(p)   ((p)->pkt_buffer + (p)->pkt_offset)
 
+enum pktdltype_e {
+  PKTDL_MIN =       0x1,
+  PKTDL_ETHERNET2 = 0x1,
+  PKTDL_MAX =       0x1
+};
+
 int  pkt_create(struct pktbuf **p, size_t plen, enum pktdltype_e dltype);
 int  pkt_copy(const struct pktbuf *orig, struct pktbuf **newp);
 int  pkt_resize(struct pktbuf **p, size_t newsize);
@@ -39,4 +43,4 @@ int  pkt_file_write(FILE *fp, struct pktbuf *p);
 int  pkt_fd_write(int fd, struct pktbuf *p);
 void pkt_free(struct pktbuf *p);
 
-#endif /* __common_pkttools_h */
+#endif /* __pktbuf_h */

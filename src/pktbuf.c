@@ -1,4 +1,4 @@
-#include "packet.h"
+#include "pktbuf.h"
 #include <cat/emalloc.h>
 #include <cat/pack.h>
 #include <cat/io.h>

@@ -1,5 +1,5 @@
 #include <stdio.h>
-#include "packet.h"
+#include "pktbuf.h"
 #include "protoparse.h"
 #include "tcpip_hdrs.h"
 

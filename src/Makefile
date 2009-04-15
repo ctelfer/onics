@@ -17,21 +17,21 @@ TARGETS=${BINDIR}/pcapin \
 
 all: ${TARGETS}
 
-${BINDIR}/pcapin: pcapin.o packet.o
-	${CC} -o ../bin/pcapin pcapin.o packet.o ${DEFS} ${OPTS} \
+${BINDIR}/pcapin: pcapin.o pktbuf.o
+	${CC} -o ../bin/pcapin pcapin.o pktbuf.o ${DEFS} ${OPTS} \
 		${INCS} ${LIBS}
 
-${BINDIR}/pcapout: pcapout.o packet.o
-	${CC} -o ../bin/pcapout pcapout.o packet.o ${DEFS} ${OPTS} \
+${BINDIR}/pcapout: pcapout.o pktbuf.o
+	${CC} -o ../bin/pcapout pcapout.o pktbuf.o ${DEFS} ${OPTS} \
 		${INCS} ${LIBS}
 
-${BINDIR}/testpp: testpp.o protoparse.o pptcpip.o util.o packet.o
-	${CC} -o ../bin/testpp testpp.o packet.o protoparse.o pptcpip.o util.o \
+${BINDIR}/testpp: testpp.o protoparse.o pptcpip.o util.o pktbuf.o
+	${CC} -o ../bin/testpp testpp.o pktbuf.o protoparse.o pptcpip.o util.o \
 		${DEFS} ${OPTS} ${INCS} ${LIBS}
 
-${BINDIR}/testvm: testvm.o protoparse.o pptcpip.o util.o packet.o netvm.o \
-	          netvm.h protoparse.h packet.h
-	${CC} -o ../bin/testvm testvm.o packet.o protoparse.o pptcpip.o util.o \
+${BINDIR}/testvm: testvm.o protoparse.o pptcpip.o util.o pktbuf.o netvm.o \
+	          netvm.h protoparse.h pktbuf.h
+	${CC} -o ../bin/testvm testvm.o pktbuf.o protoparse.o pptcpip.o util.o \
 		netvm.o \
 		${DEFS} ${OPTS} ${INCS} ${LIBS}
 

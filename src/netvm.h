@@ -1,36 +1,23 @@
 #ifndef __netvm_h
 #define __netvm_h
 #include "tcpip_hdrs.h"
-#include "packet.h"
+#include "pktbuf.h"
 #include "protoparse.h"
 #include <cat/emit.h>
 
-#define NETVM_HDI_LINK          0       /* e.g. Ethernet */
-#define NETVM_HDI_TUN           1       /* e.g. ESP, GRE, IP in IP */
-#define NETVM_HDI_NET           2       /* e.g. IPv4, IPv6 */
-#define NETVM_HDI_XPORT         3       /* e.g. TCP, UDP, RTP, ICMP */
-#define NETVM_HDI_MAX           NETVM_HDI_XPORT
+enum {
+  NETVM_HDI_LINK,       /* e.g. Ethernet */
+  NETVM_HDI_TUN,        /* e.g. ESP, GRE, IP in IP */
+  NETVM_HDI_NET,        /* e.g. IPv4, IPv6 */
+  NETVM_HDI_XPORT,      /* e.g. TCP, UDP, RTP, ICMP */
+  NETVM_HDI_MAX = NETVM_HDI_XPORT
+};
+
 struct netvmpkt {
   struct pktbuf *       packet;
   struct hdr_parse *    headers;
   struct hdr_parse *    layer[NETVM_HDI_MAX+1];
 };
-
-enum {
-  NETVM_HDR_HOFF = 1,
-  NETVM_HDR_POFF,
-  NETVM_HDR_TOFF,
-  NETVM_HDR_EOFF,
-  NETVM_HDR_HLEN,
-  NETVM_HDR_PLEN,
-  NETVM_HDR_TLEN,
-  NETVM_HDR_LEN,
-  NETVM_HDR_ERR,
-  NETVM_HDR_TYPE
-};
-
-#define NETVM_HDRFLDOK(f) (((f) >= NETVM_HDR_HOFF) && ((f) <= NETVM_HDR_TYPE))
-#define NETVM_ISHDROFF(f) (((f) >= NETVM_HDR_HOFF) && ((f) <= NETVM_HDR_EOFF))
 
 /* 
  * W -> uses width field to determine now many bytes to manipulate
@@ -113,14 +100,30 @@ enum {
 };
 
 enum {
-  NETVM_IF_IMMED =      0x1, /* last op is immediate rather than on stack */ 
-  NETVM_IF_SIGNED =     0x2, /* number, value or all operands are signed */
-  NETVM_IF_TONET =      0x4, /* for store operations */
-  NETVM_IF_TOHOST =     0x8, /* for load operation s*/
+  NETVM_IF_IMMED =     0x01, /* last op is immediate rather than on stack */ 
+  NETVM_IF_SIGNED =    0x02, /* number, value or all operands are signed */
+  NETVM_IF_TONET =     0x04, /* for store operations */
+  NETVM_IF_TOHOST =    0x08, /* for load operation s*/
   NETVM_IF_IPHLEN =    0x10, /* on 1 byte packet load instructions */
   NETVM_IF_TCPHLEN =   0x20, /* on 1 byte packet load instructions */
   NETVM_IF_MOVEUP =    0x40, /* only used HDRINS and HDRCUT */
 };
+
+enum {
+  NETVM_HDR_HOFF,
+  NETVM_HDR_POFF,
+  NETVM_HDR_TOFF,
+  NETVM_HDR_EOFF,
+  NETVM_HDR_HLEN,
+  NETVM_HDR_PLEN,
+  NETVM_HDR_TLEN,
+  NETVM_HDR_LEN,
+  NETVM_HDR_ERR,
+  NETVM_HDR_TYPE
+};
+
+#define NETVM_HDRFLDOK(f) ((f) <= NETVM_HDR_TYPE)
+#define NETVM_ISHDROFF(f) ((f) <= NETVM_HDR_EOFF)
 
 /* 
  * If immed is not set for a load/store instruction then the address to load

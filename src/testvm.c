@@ -3,7 +3,7 @@
 #include <cat/stdemit.h>
 #include <cat/optparse.h>
 #include <cat/str.h>
-#include "packet.h"
+#include "pktbuf.h"
 #include "protoparse.h"
 #include "tcpip_hdrs.h"
 #include "netvm.h"
