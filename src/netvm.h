@@ -43,7 +43,7 @@ enum {
   NETVM_OC_LDHDRF,      /* [hdesc|I]: load field from header parse */
   NETVM_OC_NOT,         /* [v] logcal not (1 or 0) */
   NETVM_OC_INVERT,      /* [v] bit-wise inversion */
-  NETVM_OC_ISNZ,        /* [v] is zero (1 or 0) */
+  NETVM_OC_TOBOOL,      /* [v] if v != 0, 1, otherwise 0 */
   NETVM_OC_TONET,       /* [v|W] convert to network byte order */
   NETVM_OC_TOHOST,      /* [v|W] convert to host byte order */
   NETVM_OC_SIGNX,       /* [v|W] sign extend based on width */
@@ -55,8 +55,9 @@ enum {
   NETVM_OC_SHL,         /* [v1,v2|I] v1 left shifted by (v2 % 64) */
   NETVM_OC_SHR,         /* [v1,v2|I] v1 right shifted by (v2 % 64) */
   NETVM_OC_SHRA,        /* [v1,v2|I] v1 right arithmatic shifted by (v2 % 64) */
-  NETVM_OC_AND,         /* [v1,v2|I] logical v1 and v2 */
-  NETVM_OC_OR,          /* [v1,v2|I] logical v1 or v2 */
+  NETVM_OC_AND,         /* [v1,v2|I] bitwise v1 and v2 */
+  NETVM_OC_OR,          /* [v1,v2|I] bitwise v1 or v2 */
+  NETVM_OC_XOR,         /* [v1,v2|I] bitwise v1 exclusive or v2 */
   NETVM_OC_EQ,          /* [v1,v2|I] v1 equals v2 */
   NETVM_OC_NEQ,         /* [v1,v2|I] v1 not equal to v2 */
   NETVM_OC_LT,          /* [v1,v2|I] v1 less than v2 */
@@ -212,7 +213,7 @@ void netvm_loadpkt(struct netvm *vm, struct pktbuf *p, int slot);
 
 /* free the packet in a slot:  note this destroys existin packet buffer */
 /* unless keeppktbuf is set */
-void netvm_clrpkt(struct netvm *vm, struct pktbuf *p, int slot, int keeppktbuf);
+struct pktbuf *netvm_clrpkt(struct netvm *vm, int slot, int keeppktbuf);
 
 /* 0 if run ok and no retval, 1 if run ok and stack not empty, -1 if err, -2 */
 /* if out of cycles */

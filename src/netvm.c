@@ -455,7 +455,7 @@ static void ni_numop(struct netvm *vm)
   switch (inst->opcode) {
   case NETVM_OC_NOT: out = !v1; break;
   case NETVM_OC_INVERT: out = ~v1; break;
-  case NETVM_OC_ISNZ: out = v1 != 0; break;
+  case NETVM_OC_TOBOOL: out = v1 != 0; break;
   case NETVM_OC_TONET: 
     CKWIDTH(vm, inst->width);
     switch (inst->width) {
@@ -491,6 +491,7 @@ static void ni_numop(struct netvm *vm)
     break;
   case NETVM_OC_AND: out = v1 & v2; break;
   case NETVM_OC_OR: out = v1 | v2; break;
+  case NETVM_OC_XOR: out = v1 ^ v2; break;
   case NETVM_OC_EQ: out = v1 == v2; break;
   case NETVM_OC_NEQ: out = v1 != v2; break;
   case NETVM_OC_LT: out = v1 < v2; break;
@@ -832,8 +833,16 @@ static void ni_fixlen(struct netvm *vm)
   } else { 
     S_POP(vm, pktnum);
   }
+  /* TODO: allow more precise selection of which lengths to fix */
   FATAL(vm, (pktnum >= NETVM_MAXPKTS) || !(pkt = vm->packets[pktnum]));
-  FATAL(vm, hdr_fix_len(pkt->headers) < 0);
+  if ( pkt->layer[NETVM_HDI_XPORT] )
+    FATAL(vm, hdr_fix_len(pkt->layer[NETVM_HDI_XPORT]) < 0);
+  if ( pkt->layer[NETVM_HDI_NET] )
+    FATAL(vm, hdr_fix_len(pkt->layer[NETVM_HDI_NET]) < 0);
+  if ( pkt->layer[NETVM_HDI_TUN] )
+    FATAL(vm, hdr_fix_len(pkt->layer[NETVM_HDI_TUN]) < 0);
+  if ( pkt->layer[NETVM_HDI_LINK] )
+    FATAL(vm, hdr_fix_len(pkt->layer[NETVM_HDI_LINK]) < 0);
 }
 
 
@@ -847,8 +856,16 @@ static void ni_fixcksum(struct netvm *vm)
   } else { 
     S_POP(vm, pktnum);
   }
+  /* TODO: allow more precise selection of which checksums to fix */
   FATAL(vm, (pktnum >= NETVM_MAXPKTS) || !(pkt = vm->packets[pktnum]));
-  FATAL(vm, hdr_fix_cksum(pkt->headers) < 0);
+  if ( pkt->layer[NETVM_HDI_XPORT] )
+    FATAL(vm, hdr_fix_cksum(pkt->layer[NETVM_HDI_XPORT]) < 0);
+  if ( pkt->layer[NETVM_HDI_NET] )
+    FATAL(vm, hdr_fix_cksum(pkt->layer[NETVM_HDI_NET]) < 0);
+  if ( pkt->layer[NETVM_HDI_TUN] )
+    FATAL(vm, hdr_fix_cksum(pkt->layer[NETVM_HDI_TUN]) < 0);
+  if ( pkt->layer[NETVM_HDI_LINK] )
+    FATAL(vm, hdr_fix_cksum(pkt->layer[NETVM_HDI_LINK]) < 0);
 }
 
 
@@ -926,7 +943,7 @@ netvm_op g_netvm_ops[NETVM_OC_MAX+1] = {
   ni_ldhdrf,
   ni_numop, /* NOT */
   ni_numop, /* INVERT */
-  ni_numop, /* ISNZ */
+  ni_numop, /* TOBOOL */
   ni_numop, /* TONET */
   ni_numop, /* TOHOST */
   ni_numop, /* SIGNX */
@@ -940,6 +957,7 @@ netvm_op g_netvm_ops[NETVM_OC_MAX+1] = {
   ni_numop, /* SHRA */
   ni_numop, /* AND */
   ni_numop, /* OR */
+  ni_numop, /* XOR */
   ni_numop, /* EQ */
   ni_numop, /* NEQ */
   ni_numop, /* LT */
@@ -997,6 +1015,7 @@ void netvm_init(struct netvm *vm, uint64_t *stack, uint32_t ssz,
   vm->ninst = 0;
   vm->pc = 0;
   vm->sp = 0;
+  vm->matchonly = 0;
   if ( vm->mem )
     memset(vm->mem, 0, roseg);
   memset(vm->packets, 0, sizeof(vm->packets));
@@ -1054,17 +1073,19 @@ void netvm_loadpkt(struct netvm *vm, struct pktbuf *p, int slot)
 }
 
 
-void netvm_clrpkt(struct netvm *vm, struct pktbuf *p, int slot, int keeppktbuf)
+struct pktbuf *netvm_clrpkt(struct netvm *vm, int slot, int keeppktbuf)
 {
+  struct pktbuf *pb = NULL;
   struct netvmpkt *pkt;
-  if ( (slot < 0) || (slot >= NETVM_MAXPKTS) )
-    return;
-  if ( (pkt = vm->packets[slot]) ) {
-    if ( keeppktbuf )
+  if ( (slot >= 0) && (slot < NETVM_MAXPKTS) && (pkt = vm->packets[slot]) ) {
+    if ( keeppktbuf ) {
+      pb = pkt->packet;
       pkt->packet = NULL;
+    }
     free_netvmpkt(pkt);
     vm->packets[slot] = NULL;
   }
+  return pb;
 }
 
 
