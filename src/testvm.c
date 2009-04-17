@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <cat/err.h>
 #include <cat/stdemit.h>
 #include <cat/optparse.h>
@@ -17,8 +18,20 @@ struct clopt options[] = {
 
 struct clopt_parser optparser = CLOPTPARSER_INIT(options,array_length(options));
 
+
+
+
 uint64_t vm_stack[64];
-byte_t vm_memory[512];
+byte_t vm_memory[1024];
+#define ROSEGOFF (sizeof(vm_memory)/2)
+
+
+
+struct meminit {
+  const byte_t *        init;
+  uint32_t              len;
+  uint32_t              off;
+};
 
 
 struct netvm_inst vm_prog_istcp[] = { 
@@ -83,25 +96,45 @@ struct netvm_inst vm_prog_count10[] = {
   /*15*/{ NETVM_OC_PRSTR, 1, NETVM_IF_IMMED, 72 },
 };
 
+
+char hws1[] = "Hello World\n";
+#define HWS_OFFSET      (ROSEGOFF)
+#define HWS_SIZE        (sizeof(hws1)-1)
+struct meminit hwmi[] = {
+  { (byte_t*)hws1, HWS_SIZE, HWS_OFFSET } 
+};
+
+
+struct netvm_inst vm_prog_helloworld[] = { 
+  { NETVM_OC_PRSTR, HWS_SIZE, NETVM_IF_IMMED, HWS_OFFSET },
+};
+
+
 struct netvm_program {
   struct netvm_inst *   code;
   unsigned              codelen;
   const char *          desc;
   int                   nopkts;
   int                   filter;
+  struct meminit *      mi;
+  int                   nmi;
 } vm_progs[] = { 
   { vm_prog_istcp, array_length(vm_prog_istcp), 
-    "istcp -- Test if the packet has a TCP header", 0, 0 },
+    "istcp -- Test if the packet has a TCP header", 0, 0, NULL, 0 },
   { vm_prog_tcperr, array_length(vm_prog_tcperr),
-    "tcperr -- Test if the packet is TCP and has errors", 0, 0 },
+    "tcperr -- Test if the packet is TCP and has errors", 0, 0, NULL, 0 },
   { vm_prog_isudp, array_length(vm_prog_isudp), 
-    "isudp -- Test if the packet is UDP", 0, 0 },
+    "isudp -- Test if the packet is UDP", 0, 0, NULL, 0 },
   { vm_prog_fixcksum, array_length(vm_prog_fixcksum),
-    "fixcksum -- fix checksums on packets", 0, 1 },
+    "fixcksum -- fix checksums on packets", 0, 1, NULL, 0 },
   { vm_prog_toggledf, array_length(vm_prog_toggledf),
-    "toggledf -- toggle the df bit in the IP header and fix checksums", 0, 1 },
+    "toggledf -- toggle the df bit in the IP header and fix checksums", 0, 1, 
+    NULL, 0 },
   { vm_prog_count10, array_length(vm_prog_count10),
-    "count10 -- print out 10 '.'s followed by a newline", 1, 1 }
+    "count10 -- print out 10 '.'s followed by a newline", 1, 1, NULL, 0 },
+  { vm_prog_helloworld, array_length(vm_prog_helloworld),
+    "hello-world -- print out 'hello world' from a preinitialized string", 1, 1,
+    hwmi, array_length(hwmi) }
 };
 unsigned prognum = 0;
 
@@ -138,10 +171,24 @@ void parse_options(int argc, char *argv[])
 }
 
 
-void run_without_packets(struct netvm *vm)
+void init_memory(struct netvm *vm, struct meminit *mi, size_t nmi)
+{
+  while (nmi > 0) {
+    abort_unless(mi->off < vm->memsz && mi->off + mi->len < vm->memsz && 
+                 mi->off + mi->len >= mi->off);
+    memcpy(vm->mem + mi->off, mi->init, mi->len);
+    ++mi;
+    --nmi;
+  }
+}
+
+
+void run_without_packets(struct netvm *vm, struct meminit *mi, size_t nmi)
 {
   int vmrv;
   uint64_t rc;
+
+  init_memory(vm, mi, nmi);
   vmrv = netvm_run(vm, -1, &rc);
 
   if ( vmrv == 0 ) {
@@ -158,7 +205,8 @@ void run_without_packets(struct netvm *vm)
 }
 
 
-void run_with_packets(struct netvm *vm, int filter)
+void run_with_packets(struct netvm *vm, int filter, struct meminit *mi, 
+                      size_t nmi)
 {
   struct pktbuf *p;
   int npkt = 0;
@@ -170,6 +218,7 @@ void run_with_packets(struct netvm *vm, int filter)
     ++npkt;
     netvm_reset(vm);
     netvm_loadpkt(vm, p, 0);
+    init_memory(vm, mi, nmi);
     vmrv = netvm_run(vm, -1, &rc);
 
     if ( vmrv == 0 ) {
@@ -212,17 +261,16 @@ int main(int argc, char *argv[])
   prog = &vm_progs[prognum];
   file_emitter_init(&fe, stdout);
   netvm_init(&vm, vm_stack, array_length(vm_stack), vm_memory, 
-             array_length(vm_memory), array_length(vm_memory), 
-             (prog->nopkts ? &fe.fe_emitter : NULL));
+             array_length(vm_memory), ROSEGOFF, &fe.fe_emitter);
   if ( !prog->filter )
     vm.matchonly = 1;
   if ( netvm_setcode(&vm, prog->code, prog->codelen) < 0)
     err("Error validating program %d\n", prognum);
 
   if ( prog->nopkts ) {
-    run_without_packets(&vm);
+    run_without_packets(&vm, prog->mi, prog->nmi);
   } else {
-    run_with_packets(&vm, prog->filter);
+    run_with_packets(&vm, prog->filter, prog->mi, prog->nmi);
   }
 
   return 0;
