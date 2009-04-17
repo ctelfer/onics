@@ -73,16 +73,14 @@ struct netvm_inst vm_prog_count10[] = {
   /*5*/{ NETVM_OC_STMEM, 8, NETVM_IF_IMMED, 0 },
   /*6*/{ NETVM_OC_LDMEM, 8, NETVM_IF_IMMED, 0 },
   /*7*/{ NETVM_OC_DUP, 0, 0, 0 },
-  /*8*/{ NETVM_OC_LT, 0, NETVM_IF_IMMED, 10 },
-  /*9*/{ NETVM_OC_BRIF, 0, NETVM_IF_IMMED,  5 },
-  /*10*/{ NETVM_OC_PUSH, 0, 0, 64 },
-  /*11*/{ NETVM_OC_PRSTR, 0, NETVM_IF_IMMED, 1 },
-  /*12*/{ NETVM_OC_ADD, 0, NETVM_IF_IMMED, 1 },
-  /*13*/{ NETVM_OC_STMEM, 8, NETVM_IF_IMMED, 0 },
-  /*14*/{ NETVM_OC_BR, 0, NETVM_IF_IMMED, (uint32_t)0 - 9 },
-  /*15*/{ NETVM_OC_POP, 0, 0, 0 },
-  /*16*/{ NETVM_OC_PUSH, 0, 0, 72 },
-  /*17*/{ NETVM_OC_PRSTR, 0, NETVM_IF_IMMED, 1 },
+  /*8*/{ NETVM_OC_GE, 0, NETVM_IF_IMMED, 10 },
+  /*9*/{ NETVM_OC_BRIF, 0, NETVM_IF_IMMED,  4 },
+  /*10*/{ NETVM_OC_PRSTR, 1, NETVM_IF_IMMED, 64 },
+  /*11*/{ NETVM_OC_ADD, 0, NETVM_IF_IMMED, 1 },
+  /*12*/{ NETVM_OC_STMEM, 8, NETVM_IF_IMMED, 0 },
+  /*13*/{ NETVM_OC_BR, 0, NETVM_IF_IMMED, (uint64_t)0 - 8 },
+  /*14*/{ NETVM_OC_POP, 0, 0, 0 },
+  /*15*/{ NETVM_OC_PRSTR, 1, NETVM_IF_IMMED, 72 },
 };
 
 struct netvm_program {
@@ -103,7 +101,7 @@ struct netvm_program {
   { vm_prog_toggledf, array_length(vm_prog_toggledf),
     "toggledf -- toggle the df bit in the IP header and fix checksums", 0, 1 },
   { vm_prog_count10, array_length(vm_prog_count10),
-    "count10 -- print out 10 '.'s followed by a newline", 1, 0 }
+    "count10 -- print out 10 '.'s followed by a newline", 1, 1 }
 };
 unsigned prognum = 0;
 
