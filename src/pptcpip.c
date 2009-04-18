@@ -76,10 +76,18 @@ static struct hdr_parse *default_create(byte_t *start, size_t off, size_t len)
   return NULL;
 }
 
-static byte_t *default_getfield(struct hdr_parse *hdr, unsigned fid, int num,
-                                size_t *len)
+
+static void default_update(struct hdr_parse *hdr)
 {
-  return NULL;
+}
+
+
+static size_t default_getfield(struct hdr_parse *hdr, unsigned fid, 
+                               unsigned num, size_t *len)
+{
+  if ( len != NULL )
+    *len = 0;
+  return 0;
 }
 
 
@@ -185,6 +193,17 @@ static struct hdr_parse *eth_create(byte_t *start, size_t off, size_t len)
 }
 
 
+static void eth_update(struct hdr_parse *hdr)
+{
+  if ( hdr_totlen(hdr) < ETHHLEN ) {
+    hdr->error |= PPERR_TOOSMALL;
+    return;
+  }
+  if ( hdr_hlen(hdr) != ETHHLEN )
+    hdr->error |= PPERR_HLEN;
+}
+
+
 /* -- ops for ARP type -- */
 static int arp_follows(struct hdr_parse *phdr) 
 {
@@ -223,15 +242,32 @@ static struct hdr_parse *arp_parse(struct hdr_parse *phdr)
 }
 
 
-static byte_t *arp_getfield(struct hdr_parse *hdr, unsigned fid, int num,
-                            size_t *len)
+static void arp_update(struct hdr_parse *hdr)
+{
+  if ( hdr_totlen(hdr) < 8 ) {
+    hdr->error |= PPERR_TOOSMALL;
+    return;
+  }
+  hdr->poff = hdr->hoff + 8;
+  if ( !(memcmp(ethiparpstr, hdr_header(hdr,void), sizeof(ethiparpstr)) ) &&
+       (hdr_plen(hdr) < 20) )
+    hdr->error = PPERR_INVALID;
+}
+
+
+static size_t arp_getfield(struct hdr_parse *hdr, unsigned fid, 
+                           unsigned num, size_t *len)
 {
   if ( hdr == NULL || fid != ARPFLD_ETHARP || num != 0 || hdr_hlen(hdr) == 0 ||
-       hdr_plen(hdr) < 20 || memcmp(hdr_header(hdr,void), ethiparpstr, 6) != 0 )
-    return NULL;
+       hdr_plen(hdr) < 20 || 
+       memcmp(hdr_header(hdr,void), ethiparpstr, 6) != 0 ) {
+    if ( len != NULL )
+      *len = 0;
+    return 0;
+  }
   if ( len != NULL )
     *len = 20;
-  return hdr_header(hdr, byte_t);
+  return hdr->hoff;
 }
 
 
@@ -361,11 +397,27 @@ static struct hdr_parse *ipv4_create(byte_t *start, size_t off, size_t len)
 }
 
 
-static byte_t *ipv4_getfield(struct hdr_parse *hdr, unsigned fid, int num,
-                             size_t *len)
+static void ipv4_update(struct hdr_parse *hdr)
 {
+  if ( hdr_totlen(hdr) < 20 ) {
+    hdr->error |= PPERR_TOOSMALL;
+    return;
+  }
+  if ( hdr_hlen(hdr) < 20 ) {
+    hdr->error |= PPERR_HLEN;
+    return;
+  }
   /* TODO: parse options */
-  return NULL;
+}
+
+
+static size_t ipv4_getfield(struct hdr_parse *hdr, unsigned fid, 
+                            unsigned num, size_t *len)
+{
+  if ( len != NULL )
+    *len = 0;
+  /* TODO: parse options */
+  return 0;
 }
 
 
@@ -512,6 +564,19 @@ static struct hdr_parse *udp_create(byte_t *start, size_t off, size_t len)
 }
 
 
+static void udp_update(struct hdr_parse *hdr)
+{
+  if ( hdr_totlen(hdr) < 8 ) {
+    hdr->error = PPERR_TOOSMALL;
+    return;
+  }
+  if ( hdr_hlen(hdr) < 8 ) {
+    hdr->error = PPERR_HLEN;
+    return;
+  }
+}
+
+
 static int udp_fixlen(struct hdr_parse *hdr)
 {
   if ( hdr_hlen(hdr) != 8 )
@@ -615,11 +680,27 @@ static struct hdr_parse *tcp_create(byte_t *start, size_t off, size_t len)
 }
 
 
-static byte_t *tcp_getfield(struct hdr_parse *hdr, unsigned fid, int num,
-                            size_t *len)
+static void tcp_update(struct hdr_parse *hdr)
 {
+  if ( hdr_totlen(hdr) < 20 ) {
+    hdr->error = PPERR_TOOSMALL;
+    return;
+  }
+  if ( hdr_hlen(hdr) < 20 ) {
+    hdr->error = PPERR_HLEN;
+    return;
+  }
   /* TODO: parse options */
-  return NULL;
+}
+
+
+static size_t tcp_getfield(struct hdr_parse *hdr, unsigned fid, 
+                           unsigned num, size_t *len)
+{
+  if ( len != NULL )
+    *len = 0;
+  /* TODO: parse options */
+  return 0;
 }
 
 
@@ -718,6 +799,20 @@ static struct hdr_parse *icmp_create(byte_t *start, size_t off, size_t len)
 }
 
 
+static void icmp_update(struct hdr_parse *hdr)
+{
+  if ( hdr_totlen(hdr) < 8 ) {
+    hdr->error = PPERR_TOOSMALL;
+    return;
+  }
+  if ( hdr_hlen(hdr) < 8 ) {
+    hdr->error = PPERR_HLEN;
+    return;
+  }
+  /* TODO: check by type? */
+}
+
+
 static int icmp_fixcksum(struct hdr_parse *hdr)
 {
   struct icmph *icmp = hdr_header(hdr, struct icmph);
@@ -736,6 +831,7 @@ struct pparse_ops none_pparse_ops = {
   none_create
 };
 struct hparse_ops none_hparse_ops = {
+  default_update,
   default_getfield,
   default_fixlen,
   default_fixcksum,
@@ -748,6 +844,7 @@ struct pparse_ops eth_pparse_ops = {
   eth_create
 };
 struct hparse_ops eth_hparse_ops = {
+  eth_update,
   default_getfield,
   default_fixlen,
   default_fixcksum,
@@ -760,6 +857,7 @@ struct pparse_ops arp_pparse_ops = {
   arp_create
 };
 struct hparse_ops arp_hparse_ops = {
+  arp_update,
   arp_getfield,
   arp_fixlen,
   default_fixcksum,
@@ -772,6 +870,7 @@ struct pparse_ops ipv4_pparse_ops = {
   ipv4_create
 };
 struct hparse_ops ipv4_hparse_ops = {
+  ipv4_update,
   ipv4_getfield,
   ipv4_fixlen,
   ipv4_fixcksum,
@@ -784,6 +883,7 @@ struct pparse_ops ipv6_pparse_ops = {
   default_create
 };
 struct hparse_ops ipv6_hparse_ops = {
+  default_update,
   default_getfield,
   default_fixlen,
   default_fixcksum,
@@ -796,6 +896,7 @@ struct pparse_ops icmp_pparse_ops = {
   icmp_create
 };
 struct hparse_ops icmp_hparse_ops = {
+  icmp_update,
   default_getfield,
   default_fixlen,
   icmp_fixcksum,
@@ -808,6 +909,7 @@ struct pparse_ops icmpv6_pparse_ops = {
   default_create
 };
 struct hparse_ops icmpv6_hparse_ops = {
+  default_update,
   default_getfield,
   default_fixlen,
   default_fixcksum,
@@ -820,6 +922,7 @@ struct pparse_ops udp_pparse_ops = {
   udp_create
 };
 struct hparse_ops udp_hparse_ops = {
+  udp_update,
   default_getfield,
   udp_fixlen,
   udp_fixcksum,
@@ -832,6 +935,7 @@ struct pparse_ops tcp_pparse_ops = {
   tcp_create
 };
 struct hparse_ops tcp_hparse_ops = {
+  tcp_update,
   tcp_getfield,
   tcp_fixlen,
   tcp_fixcksum,

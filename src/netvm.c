@@ -433,6 +433,15 @@ static void ni_ldhdrf(struct netvm *vm)
   case NETVM_HDR_LEN:  S_PUSH(vm, hdr_totlen(hdr)); break;
   case NETVM_HDR_ERR:  S_PUSH(vm, hdr->error); break;
   case NETVM_HDR_TYPE: S_PUSH(vm, hdr->type); break;
+  case NETVM_HDR_PRFLD: {
+    size_t off, len;
+    unsigned fid, idx;
+    fid = hd0.offset & 0xffff;
+    idx = (hd0.offset >> 16) & 0xffff;
+    off = hdr_get_field(hdr, fid, idx, &len);
+    S_PUSH(vm, (uint64_t)off); 
+    S_PUSH(vm, (uint64_t)len); 
+  } break;
   default:
     abort_unless(0);
   }
@@ -823,6 +832,20 @@ static void ni_hdrpop(struct netvm *vm)
 }
 
 
+static void ni_hdrup(struct netvm *vm)
+{
+  struct netvm_inst *inst = &vm->inst[vm->pc];
+  struct netvm_hdr_desc hd0;
+  struct hdr_parse *hdr;
+  get_hd(vm, inst, &hd0);
+  if ( vm->error )
+    return;
+  hdr = find_header(vm, &hd0);
+  FATAL(vm, hdr == NULL);
+  hdr_update(hdr);
+}
+
+
 static void ni_fixlen(struct netvm *vm)
 {
   struct netvm_inst *inst = &vm->inst[vm->pc];
@@ -989,6 +1012,7 @@ netvm_op g_netvm_ops[NETVM_OC_MAX+1] = {
   ni_pktcopy,
   ni_hdrpush,
   ni_hdrpop,
+  ni_hdrup,
   ni_fixlen,
   ni_fixcksum,
   ni_hdrins,

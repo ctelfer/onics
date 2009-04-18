@@ -15,12 +15,12 @@
 #define PPT_TCP			8
 #define PPT_MAX			127
 
-#define PPERR_TOOSMALL          0x00000001
-#define PPERR_HLEN              0x00000002
-#define PPERR_LENGTH            0x00000004
-#define PPERR_CKSUM             0x00000008
-#define PPERR_OPTLEN            0x00000010
-#define PPERR_INVALID           0x00000020 /* invalid combination of options */
+#define PPERR_TOOSMALL          0x0001
+#define PPERR_HLEN              0x0002
+#define PPERR_LENGTH            0x0004
+#define PPERR_CKSUM             0x0008
+#define PPERR_OPTLEN            0x0010
+#define PPERR_INVALID           0x0020 /* invalid combination of options */
 
 #define PPERR_HLENMASK          (PPERR_TOOSMALL|PPERR_HLEN)
 
@@ -40,8 +40,9 @@ struct proto_parser {
 };
 
 struct hparse_ops {
-  byte_t *      (*getfield)(struct hdr_parse *hdr, unsigned fid, int num, 
-                            size_t *len);
+  void          (*update)(struct hdr_parse *hdr);
+  size_t        (*getfield)(struct hdr_parse *hdr, unsigned fid, 
+                            unsigned num, size_t *len);
   int           (*fixlen)(struct hdr_parse *hdr);
   int           (*fixcksum)(struct hdr_parse *hdr);
   struct hdr_parse * (*copy)(struct hdr_parse *, byte_t *buffer);
@@ -72,7 +73,7 @@ struct hdr_parse {
   unsigned int          type;
   struct list           node;
   byte_t *              data;
-  uint32_t              error;
+  unsigned int          error;
   size_t                hoff;
   size_t                poff;
   size_t                toff;
@@ -105,7 +106,10 @@ void hdr_free(struct hdr_parse *hdr, int freechildren);
 struct hdr_parse *hdr_copy(struct hdr_parse *hdr, byte_t *buffer);
 
 void hdr_set_packet_buffer(struct hdr_parse *hdr, byte_t *buffer);
-scalar_t hdr_get_field(struct hdr_parse *hdr, unsigned fid, size_t *len);
+/* returns error field as a matter of convenience */
+unsigned int hdr_update(struct hdr_parse *hdr);
+size_t hdr_get_field(struct hdr_parse *hdr, unsigned fid, unsigned idx, 
+                     size_t *len);
 int hdr_fix_cksum(struct hdr_parse *hdr);
 int hdr_fix_len(struct hdr_parse *hdr);
 

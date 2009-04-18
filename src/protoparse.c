@@ -235,7 +235,16 @@ void hdr_set_packet_buffer(struct hdr_parse *hdr, byte_t *buffer)
 }
 
 
-byte_t *hdr_getfield(struct hdr_parse *hdr, unsigned fid, int num, size_t *len)
+unsigned int hdr_update(struct hdr_parse *hdr)
+{
+  abort_unless(hdr && hdr->ops && hdr->ops->update);
+  (*hdr->ops->update)(hdr);
+  return hdr->error;
+}
+
+
+size_t hdr_get_field(struct hdr_parse *hdr, unsigned fid, unsigned num,
+                     size_t *len)
 {
   abort_unless(hdr && hdr->ops && hdr->ops->getfield);
   return (*hdr->ops->getfield)(hdr, fid, num, len);

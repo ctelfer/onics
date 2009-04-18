@@ -91,6 +91,7 @@ enum {
   NETVM_OC_PKTCOPY,     /* [pktnum1,pktnum2|I] copy packet */
   NETVM_OC_HDRPUSH,     /* [hdesc|I] create header of htype in packet pktnum */
   NETVM_OC_HDRPOP,      /* [pktnum|I] pop the top header off of packet pktnum */
+  NETVM_OC_HDRUP,       /* [hdesc|I] update the fields in the header */
   NETVM_OC_FIXLEN,      /* [ptknum|I] fix length fields in the packet */
   NETVM_OC_FIXCKSUM,    /* [ptknum|I] fix checksum fields in the packet */
   NETVM_OC_PKTINS,      /* [len,hdesc|I] insert len bytes at hd.offset */
@@ -120,10 +121,11 @@ enum {
   NETVM_HDR_TLEN,
   NETVM_HDR_LEN,
   NETVM_HDR_ERR,
-  NETVM_HDR_TYPE
+  NETVM_HDR_TYPE,
+  NETVM_HDR_PRFLD,
 };
 
-#define NETVM_HDRFLDOK(f) ((f) <= NETVM_HDR_TYPE)
+#define NETVM_HDRFLDOK(f) ((f) <= NETVM_HDR_PRFLD)
 #define NETVM_ISHDROFF(f) ((f) <= NETVM_HDR_EOFF)
 
 /* 
@@ -156,7 +158,8 @@ struct netvm_hdr_desc {
   uint8_t               htype;      /* PPT_*;  PPT_NONE == absolute idx */
   uint8_t               idx;        /* 0 == 1st hdr, 1 == 2nd hdr,... */
   uint8_t               field;      /* NETVM_HDR_* */
-  uint32_t              offset;     /* offset into packet */
+  uint32_t              offset;     /* offset into packet for LD/STPKT */
+                                    /* or proto field index for PRFLD */
 };
 
 struct netvm_inst {
