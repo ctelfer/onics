@@ -13,6 +13,10 @@ enum {
   NETVM_HDI_MAX = NETVM_HDI_XPORT
 };
 
+/* we probably want to move this out of here and call it something else */
+/* parsed packets are useful to lots of applications.  We also should */
+/* consider adding a list entry to this structure for easy queuing. */
+
 struct netvmpkt {
   struct pktbuf *       packet;
   struct hdr_parse *    headers;
@@ -28,6 +32,16 @@ struct netvmpkt {
  * T -> with 1-byte load will treat as TCP offset and convert to byte length 
  * P -> with 1-byte load will treat as IP header len and convert to byte length 
  * M -> MOVEUP flag used for INS and CUT operations
+ *
+ * Field types:
+ * v, v1, v2 - a generic numeric value
+ * addr - an offset into memory
+ * len - a length, usually of some region in memory
+ * hdesc - a header descriptor (see below)
+ * pktnum - an index into the packet table
+ * pa - a packet address
+ * rxaddr - address of regular expression in memory
+ * rxlen - length of regular expression in memory
  */
 
 enum {
@@ -41,6 +55,7 @@ enum {
   NETVM_OC_LDCLASS,     /* [pktnum|I]: load packet class */
   NETVM_OC_LDTS,        /* [pktnum|I]: load packet timestamp */
   NETVM_OC_LDHDRF,      /* [hdesc|I]: load field from header parse */
+  NETVM_OC_BULKP2M,     /* [pa,addr,len,pktnum|I]: move bytes from pa to addr */
   NETVM_OC_NOT,         /* [v] logcal not (1 or 0) */
   NETVM_OC_INVERT,      /* [v] bit-wise inversion */
   NETVM_OC_TOBOOL,      /* [v] if v != 0, 1, otherwise 0 */
@@ -69,6 +84,8 @@ enum {
   NETVM_OC_SGT,         /* [v1,v2|I] v1 greater than v2 (signed) */
   NETVM_OC_SGE,         /* [v1,v2|I] v1 greater than or equal to v2 (signed) */
   NETVM_OC_HASHDR,      /* [hdesc|I] true if has header (field in HD ignored) */
+  NETVM_OC_PREX,        /* [pa,len,rxaddr,rxlen]: regex on packet data */
+  NETVM_OC_MREX,        /* [addr,len,rxaddr,rxlen]: regex on memory data */
   NETVM_OC_HALT,        /* halt program */
   NETVM_OC_BR,          /* [v|I] set PC to v (must be > PC in matchonly mode */
   NETVM_OC_BRIF,        /* [c,v|I] set PC to v if c is non-zero */
@@ -76,6 +93,10 @@ enum {
   NETVM_OC_MAX_MATCH = NETVM_OC_BRIF,
 
   /* not allowed in pure match run */
+  NETVM_OC_CALL,        /* [v,narg]: branch and link to v: put ret addr narg */
+                        /*           deep in the stack, pushing the rest up */
+  NETVM_OC_RETURN,      /* [v,narg]: branch to the addr narg deep in the */
+                        /*           stack.  shift the remaining items down */
   NETVM_OC_PRBIN,       /* [v] print v in binary --  val == min string width */
   NETVM_OC_PROCT,       /* [v] print v in octal  --  val == min string width */
   NETVM_OC_PRDEC,       /* [v|S] print v in decimal --  val == min str width */
@@ -87,6 +108,7 @@ enum {
   NETVM_OC_STPKT,       /* [v,hdesc|IWH] store into packet memory */
   NETVM_OC_STCLASS,     /* [v,pktnum|I] store into packet class */
   NETVM_OC_STTS,        /* [v,pktnum|I] store into timestamp */
+  NETVM_OC_BULKM2P,     /* [addr,pa,len,pktnum|I]: move bytes from pa to addr */
   NETVM_OC_PKTNEW,      /* [hdesc|I] create packet: offset==len, htype==dl */
   NETVM_OC_PKTCOPY,     /* [pktnum1,pktnum2|I] copy packet */
   NETVM_OC_HDRPUSH,     /* [hdesc|I] create header of htype in packet pktnum */
@@ -99,6 +121,48 @@ enum {
   NETVM_OC_HDRADJ,      /* [amt,hdesc|I] adjust offset field by amt (signed) */
 
   NETVM_OC_MAX = NETVM_OC_HDRADJ
+
+  /* 
+   * Still to consider:
+   *
+   * RESOLVE - resolve names to addresses or visa versa (mem to mem)
+   *
+   * If we do this, should it be synchronous or asynchronous?  See below.
+   *
+   * ENQ - enqueue a packet (desc in mem?, if not: where?)
+   *       any way to order them?  Pass address of compare function?
+   * DEQ - dequeue a packet (desc in mem?, if not: where?)
+   *       front only or arbitrary indices in?
+   *
+   * One possible way to do ENQ/DEQ is to have an unbounded list of saved
+   * packets and have an instruction that returns a handle to the packet.
+   * The netvm could then store queues of handles in main memory.  This is 
+   * better than any other way I've come up with so far.  Obviously, for 
+   * restricted operation, the saved packets should be bounded.  If we do this,
+   * we could conceivably remove the packet array or maybe limit it to 2.
+   *
+   * PRECV - read in next packet?  Not sure I want this in the VM, but...
+   * PSEND - send out a packet?  Not sure I want this in the VM either...
+   *
+   * If we have these two operations (PSEND/PRECV) then we should probably
+   * do it in the same style as NETVM_OC_PR*.  I.e. have input and output
+   * interfaces that can be set or not.
+   *
+   * POP - population count
+   * NLZ - number of leading zeros
+   *
+   * TOREG - queue an instruction address on a timer list with one argument
+   *         and issue a CALL when the timer expires.  2 types of timers:
+   *         real-time and instruction tick?  Pushes a handle which one can
+   *         use to cancel the event.
+   * TOSTOP - cancel a registered timer event
+   *
+   * CURTIME - get the current time (GMT?  Relative?)
+   *
+   * Instruction store modification? 
+   *
+   * Note unimplemented instructions in validate?
+   */
 };
 
 enum {
@@ -190,6 +254,10 @@ struct netvm {
   int                   error;
 };
 
+
+/* TODO: conser moving emitter setting out of initialization */
+/* this may become a more common practice if we also add queueing store and */
+/* input and output ports, a resolver, etc... */
 
 /* mem may be NULL and memsz 0.  roseg must be <= memsz.  stack must not be */
 /* 0 and ssz is the number of stack elements.  outport may be NULL */

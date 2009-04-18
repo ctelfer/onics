@@ -169,15 +169,13 @@ static struct hdr_parse *find_header(struct netvm *vm,
 }
 
 
-#if 0
-static void unimplemented(struct netvm *vm)
+static void ni_unimplemented(struct netvm *vm)
 {
   struct netvm_inst *inst = &vm->inst[vm->pc];
   if ( vm->outport )
     emit_format(vm->outport, "Instruction %d not implemented\n", inst->opcode);
   vm->error = 1;
 }
-#endif
 
 
 static void ni_nop(struct netvm *vm)
@@ -964,6 +962,7 @@ netvm_op g_netvm_ops[NETVM_OC_MAX+1] = {
   ni_ldpmeta, /* LDCLASS */
   ni_ldpmeta, /* LDTS */
   ni_ldhdrf,
+  ni_unimplemented, /* BULKP2M */
   ni_numop, /* NOT */
   ni_numop, /* INVERT */
   ni_numop, /* TOBOOL */
@@ -992,11 +991,15 @@ netvm_op g_netvm_ops[NETVM_OC_MAX+1] = {
   ni_numop, /* SGT */
   ni_numop, /* SGE */
   ni_hashdr,
+  ni_unimplemented, /* PREX */
+  ni_unimplemented, /* MREX */
   ni_halt,
   ni_branch, /* BR */
   ni_branch, /* BRIF */
 
   /* non-matching-only */
+  ni_unimplemented, /* CALL */
+  ni_unimplemented, /* RETURN */
   ni_prnum, /* PRBIN */
   ni_prnum, /* PROCT */
   ni_prnum, /* PRDEC */
@@ -1008,6 +1011,7 @@ netvm_op g_netvm_ops[NETVM_OC_MAX+1] = {
   ni_stpkt,
   ni_stpmeta, /* STCLASS */
   ni_stpmeta, /* STTS */
+  ni_unimplemented, /* BULKP2M */
   ni_newpkt,
   ni_pktcopy,
   ni_hdrpush,
