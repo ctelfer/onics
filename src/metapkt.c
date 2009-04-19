@@ -36,8 +36,7 @@ struct metapkt *metapkt_new(size_t plen, int ppt)
   uint32_t dltype = ppt_to_pktdltype(ppt);
   if ( dltype == PKTDL_INVALID )
     return NULL;
-  pkt = emalloc(sizeof(*pkt));
-  memset(pkt, 0, sizeof(pkt));
+  pkt = ecalloc(1, sizeof(*pkt));
   pkt_create(&pkt->pkb, plen, dltype);
   pkt->headers = hdr_create_parse(pkt->pkb->pkt_buffer, pkt->pkb->pkt_offset,
                                   pkt->pkb->pkt_buflen);
@@ -53,8 +52,7 @@ struct metapkt *pktbuf_to_metapkt(struct pktbuf *pkb)
 
   abort_unless(pkb);
   ppt = pktdltype_to_ppt(pkb->pkt_dltype);
-  pkt = emalloc(sizeof(*pkt));
-  memset(pkt, 0, sizeof(*pkt));
+  pkt = ecalloc(1, sizeof(*pkt));
   pkt->pkb = pkb;
   if ( ppt != PPT_INVALID )
     pkt->headers = hdr_parse_packet(ppt,pkb->pkt_buffer, pkb->pkt_offset, 
@@ -69,18 +67,46 @@ struct metapkt *pktbuf_to_metapkt(struct pktbuf *pkb)
 }
 
 
+static int get_hdr_index(struct metapkt *pkt, struct hdr_parse *hdr)
+{
+  int i = 0;
+  struct hdr_parse *t;
+  for ( t = hdr_child(hdr); t->type != PPT_NONE; t= hdr_child(t) ) {
+    ++i;
+    if ( t == hdr )
+      break;
+  }
+  abort_unless(t == hdr && i > 0);
+  return i;
+}
+
+
+static struct hdr_parse *get_hdr_byindex(struct metapkt *pkt, int i)
+{
+  struct hdr_parse *t;
+  abort_unless(i > 0);
+  for ( t = hdr_child(pkt->headers); --i > 0; t = hdr_child(t) ) {
+    abort_unless(t->type != PPT_NONE);
+  }
+  return t;
+}
+
+
 struct metapkt *metapkt_copy(struct metapkt *pkt)
 {
   struct metapkt *pnew;
+  int l;
   abort_unless(pkt && pkt->pkb && pkt->headers);
-  pnew = emalloc(sizeof(*pnew));
+  pnew = ecalloc(1, sizeof(*pnew));
   pkt_copy(pkt->pkb, &pnew->pkb);
   if ( !(pnew->headers = hdr_copy(pkt->headers, pnew->pkb->pkt_buffer)) ) {
     pkt_free(pnew->pkb);
     free(pnew);
     return NULL;
   }
-  /* TODO: fix layers */
+  for ( l = NETVM_HDI_LINK; l <= NETVM_HDI_MAX; ++l )
+    if ( pkt->layer[l] )
+      pnew->layer[l] = get_hdr_byindex(pnew, get_hdr_index(pkt, pkt->layer[l]));
   return pnew;
 }
 
