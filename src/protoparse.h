@@ -14,6 +14,7 @@
 #define PPT_UDP			7
 #define PPT_TCP			8
 #define PPT_MAX			127
+#define PPT_INVALID             (PPT_MAX + 1)
 
 #define PPERR_TOOSMALL          0x0001
 #define PPERR_HLEN              0x0002

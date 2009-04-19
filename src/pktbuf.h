@@ -30,8 +30,12 @@ struct pktbuf {
 
 enum pktdltype_e {
   PKTDL_MIN =       0x1,
-  PKTDL_ETHERNET2 = 0x1,
-  PKTDL_MAX =       0x1
+
+  PKTDL_NONE =      0x1,        /* starts with network layer header */
+  PKTDL_ETHERNET2 = 0x2,        /* starts with 14-byte ethernet 2 header */
+
+  PKTDL_MAX =       0x2,
+  PKTDL_INVALID =   PKTDL_MAX+1 /* not valid in packet, but used internally */
 };
 
 int  pkt_create(struct pktbuf **p, size_t plen, enum pktdltype_e dltype);

@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <cat/emit_format.h>
 #include <cat/emalloc.h>
+#include <cat/bitops.h>
 #include "util.h"
 
 #define MAXINST         0x7ffffffe
@@ -16,7 +17,7 @@
   if (__cond) { __vm->error = 1; return; }
 
 #define S_EMPTY(__vm)           (__vm->sp == 0)
-#define S_HAS(__vm, __n)        (__vm->sp >= n)
+#define S_HAS(__vm, __n)        (__vm->sp >= __n)
 #define S_FULL(__vm)            (__vm->sp >= __vm->stksz)
 
 #define S_TOP(__vm, __v)                                                \
@@ -40,102 +41,6 @@
 #define CKWIDTH(__vm, __w) FATAL((__vm), !__w || (__w & (__w - 1)) || (__w > 8))
 
 
-static unsigned pktdlt_to_ppt(uint32_t dltype)
-{
-  switch(dltype) {
-  case PKTDL_ETHERNET2:
-    return PPT_ETHERNET;
-  default:
-    return PPT_NONE;
-  }
-}
-
-
-static int islink(int ppt)
-{
-  return ppt == PPT_ETHERNET;
-}
-
-
-static int istun(int ppt)
-{
-  return 0;
-}
-
-
-static int isnet(int ppt)
-{
-  return (ppt == PPT_IPV4) || (ppt == PPT_IPV6) || (ppt == PPT_ARP); 
-}
-
-
-static int isxport(int ppt)
-{
-  switch(ppt) {
-  case PPT_ICMP:
-  case PPT_ICMP6:
-  case PPT_UDP:
-  case PPT_TCP:
-    return 1;
-  default:
-    return 0;
-  }
-}
-
-
-static void assign_hdrptr(struct netvmpkt *pkt, struct hdr_parse *h)
-{
-  if ( islink(h->type) ) {
-    if ( !pkt->layer[NETVM_HDI_LINK] )
-      pkt->layer[NETVM_HDI_LINK] = h;
-  } else if ( istun(h->type) ) {
-    if ( !pkt->layer[NETVM_HDI_TUN] )
-      pkt->layer[NETVM_HDI_TUN] = h;
-  } else if ( isnet(h->type) ) {
-    if ( !pkt->layer[NETVM_HDI_NET] )
-      pkt->layer[NETVM_HDI_NET] = h;
-  } else if ( isxport(h->type) ) {
-    if ( !pkt->layer[NETVM_HDI_XPORT] )
-      pkt->layer[NETVM_HDI_XPORT] = h;
-  }
-}
-
-
-static struct netvmpkt *pktbuf_to_netvmpkt(struct pktbuf *pb)
-{
-  struct netvmpkt *pnew;
-  struct hdr_parse *hdr;
-  abort_unless(pb);
-  pnew = emalloc(sizeof(*pnew));
-  memset(pnew, 0, sizeof(*pnew));
-  pnew->packet = pb;
-  pnew->headers = hdr_parse_packet(pktdlt_to_ppt(pb->pkt_dltype),
-		                   pb->pkt_buffer, pb->pkt_offset, pb->pkt_len,
-				   pb->pkt_buflen);
-  abort_unless(pnew->headers);
-  for ( hdr = hdr_child(pnew->headers); hdr->type != PPT_NONE; 
-        hdr = hdr_child(hdr) )
-    assign_hdrptr(pnew, hdr);
-  return pnew;
-}
-
-
-static void free_netvmpkt(struct netvmpkt *pkt)
-{
-  if ( pkt ) {
-    if ( pkt->headers ) {
-      hdr_free(pkt->headers, 1);
-      pkt->headers = NULL;
-    }
-    if ( pkt->packet ) {
-      pkt_free(pkt->packet);
-      pkt->packet = NULL;
-    }
-    free(pkt);
-  }
-}
-
-
 typedef void (*netvm_op)(struct netvm *vm);
 
 
@@ -147,7 +52,7 @@ typedef void (*netvm_op)(struct netvm *vm);
 static struct hdr_parse *find_header(struct netvm *vm, 
                                      struct netvm_hdr_desc *hd)
 {
-  struct netvmpkt *pkt;
+  struct metapkt *pkt;
   struct hdr_parse *hdr;
   int n = 0;
   if ( hd->pktnum >= NETVM_MAXPKTS )
@@ -155,7 +60,7 @@ static struct hdr_parse *find_header(struct netvm *vm,
   pkt = vm->packets[hd->pktnum];
   if ( !pkt )
     return NULL;
-  abort_unless(pkt->packet && pkt->headers);
+  abort_unless(pkt->pkb && pkt->headers);
   hdr = pkt->headers;
   do {
     if ( (hd->htype == PPT_NONE) || (hd->htype == hdr->type) ) {
@@ -284,7 +189,7 @@ static void get_hdr_info(struct netvm *vm, struct netvm_inst *inst,
 {
   int width;
   struct hdr_parse *hdr;
-  struct netvmpkt *pkt;
+  struct metapkt *pkt;
 
   get_hd(vm, inst, hd);
   if ( vm->error )
@@ -378,7 +283,7 @@ static void ni_ldpmeta(struct netvm *vm)
 {
   struct netvm_inst *inst = &vm->inst[vm->pc];
   int pktnum;
-  struct netvmpkt *pkt;
+  struct metapkt *pkt;
   if ( IMMED(inst) ) {
     pktnum = inst->val;
   } else {
@@ -386,10 +291,10 @@ static void ni_ldpmeta(struct netvm *vm)
   }
   FATAL(vm, (pktnum >= NETVM_MAXPKTS) || !(pkt = vm->packets[pktnum]));
   if ( inst->opcode == NETVM_OC_LDCLASS ) {
-    S_PUSH(vm, pkt->packet->pkt_class);
+    S_PUSH(vm, pkt->pkb->pkt_class);
   } else {
     abort_unless(inst->opcode == NETVM_OC_LDTS);
-    S_PUSH(vm, pkt->packet->pkt_timestamp);
+    S_PUSH(vm, pkt->pkb->pkt_timestamp);
   }
 }
 
@@ -445,6 +350,31 @@ static void ni_ldhdrf(struct netvm *vm)
   }
 }
 
+static void ni_blkmv(struct netvm *vm)
+{
+  struct netvm_inst *inst = &vm->inst[vm->pc];
+  int pktnum;
+  uint64_t poff, maddr, len;
+  struct metapkt *pkt;
+  struct hdr_parse *hdr;
+  if ( IMMED(inst) ) {
+    pktnum = inst->val;
+  } else {
+    S_POP(vm, pktnum);
+  }
+  FATAL(vm, (pktnum >= NETVM_MAXPKTS) || !(pkt = vm->packets[pktnum]));
+  S_POP(vm, len);
+  S_POP(vm, maddr);
+  S_POP(vm, poff);
+  FATAL(vm, (len + maddr < len) || (len + poff < len)); /* overflow */
+  hdr = pkt->headers;
+  FATAL(vm, (poff < hdr->poff) || (len > hdr_totlen(hdr)));
+  FATAL(vm, !vm->mem || (maddr + len > vm->memsz));
+  if ( inst->opcode == NETVM_OC_BULKP2M )
+    memcpy(vm->mem + maddr, hdr_payload(hdr), len);
+  else
+    memcpy(hdr_payload(hdr), vm->mem + maddr, len);
+}
 
 static void ni_numop(struct netvm *vm)
 {
@@ -463,6 +393,16 @@ static void ni_numop(struct netvm *vm)
   case NETVM_OC_NOT: out = !v1; break;
   case NETVM_OC_INVERT: out = ~v1; break;
   case NETVM_OC_TOBOOL: out = v1 != 0; break;
+  case NETVM_OC_POPL: /* fall through */
+  case NETVM_OC_NLZ: 
+    CKWIDTH(vm, inst->width);
+    if ( inst->width < sizeof(uint64_t) )
+      v1 &= (1 << (inst->width * 8)) - 1;
+    if ( inst->opcode == NETVM_OC_POPL )
+      out = pop_64(v1);
+    else
+      out = nlz_64(v1);
+    break;
   case NETVM_OC_TONET: 
     CKWIDTH(vm, inst->width);
     switch (inst->width) {
@@ -521,7 +461,7 @@ static void ni_hashdr(struct netvm *vm)
   struct netvm_inst *inst = &vm->inst[vm->pc];
   struct netvm_hdr_desc hd0;
   uint64_t val;
-  struct netvmpkt *pkt;
+  struct metapkt *pkt;
   get_hd(vm, inst, &hd0);
   if ( vm->error )
     return;
@@ -561,6 +501,45 @@ static void ni_branch(struct netvm *vm)
   }
   /* ok to overflow number of instructions by 1: implied halt instruction */
   vm->pc += off;
+}
+
+
+static void ni_call(struct netvm *vm)
+{
+  struct netvm_inst *inst = &vm->inst[vm->pc];
+  uint64_t addr, narg, sslot;
+  if ( IMMED(inst) ) {
+    narg = inst->val;
+  } else {
+    S_POP(vm, narg);
+  }
+  S_POP(vm, addr);
+  FATAL(vm, addr + 1 > vm->ninst);
+  FATAL(vm, !S_HAS(vm, narg) || S_FULL(vm));
+  sslot = vm->sp - narg;
+  memmove(vm->stack + sslot + 1, vm->stack + sslot, narg*sizeof(vm->stack[0]));
+  vm->stack[sslot] = vm->pc + 1;
+  ++vm->sp;
+  vm->pc = addr;
+}
+
+
+static void ni_return(struct netvm *vm)
+{
+  struct netvm_inst *inst = &vm->inst[vm->pc];
+  uint64_t addr, narg, sslot;
+  if ( IMMED(inst) ) {
+    narg = inst->val;
+  } else {
+    S_POP(vm, narg);
+  }
+  FATAL(vm, (narg + 1 < narg) || !S_HAS(vm, narg + 1));
+  sslot = vm->sp - narg - 1;
+  addr = vm->stack[sslot];
+  FATAL(vm, addr + 1 > vm->ninst);
+  memmove(vm->stack + sslot, vm->stack + sslot + 1, narg*sizeof(vm->stack[0]));
+  --vm->sp;
+  vm->pc = addr;
 }
 
 
@@ -723,7 +702,7 @@ static void ni_stpmeta(struct netvm *vm)
 {
   struct netvm_inst *inst = &vm->inst[vm->pc];
   int pktnum;
-  struct netvmpkt *pkt;
+  struct metapkt *pkt;
   uint64_t val;
   if ( IMMED(inst) ) {
     pktnum = inst->val;
@@ -733,10 +712,10 @@ static void ni_stpmeta(struct netvm *vm)
   FATAL(vm, (pktnum >= NETVM_MAXPKTS) || !(pkt = vm->packets[pktnum]));
   S_POP(vm, val);
   if ( inst->opcode == NETVM_OC_STCLASS ) {
-    pkt->packet->pkt_class = val;
+    pkt->pkb->pkt_class = val;
   } else {
     abort_unless(inst->opcode == NETVM_OC_STTS);
-    pkt->packet->pkt_timestamp = val;
+    pkt->pkb->pkt_timestamp = val;
   }
 }
 
@@ -745,19 +724,15 @@ static void ni_newpkt(struct netvm *vm)
 {
   struct netvm_inst *inst = &vm->inst[vm->pc];
   struct netvm_hdr_desc hd0;
-  struct netvmpkt *pnew;
-  struct pktbuf *p;
+  struct metapkt *pnew;
   get_hd(vm, inst, &hd0);
   if ( vm->error )
     return;
   FATAL(vm, hd0.pktnum >= NETVM_MAXPKTS);
-  FATAL(vm, pkt_create(&p, hd0.offset, hd0.htype) < 0);
-  pnew = pktbuf_to_netvmpkt(p);
-  if ( !pnew ) {
-    pkt_free(p);
-    VMERR(vm);
-  }
-  free_netvmpkt(vm->packets[hd0.pktnum]);
+  /* NOTE: htype must be a PKDL_* value, not a PPT_* value */
+  pnew = metapkt_new(hd0.offset, hd0.htype);
+  FATAL(vm, !pnew);
+  metapkt_free(vm->packets[hd0.pktnum], 1);
   vm->packets[hd0.pktnum] = pnew;
 }
 
@@ -767,7 +742,7 @@ static void ni_pktcopy(struct netvm *vm)
   struct netvm_inst *inst = &vm->inst[vm->pc];
   int pktnum;
   int slot;
-  struct netvmpkt *pkt, *pnew;
+  struct metapkt *pkt, *pnew;
   if ( IMMED(inst) ) {
     pktnum = inst->val;
   } else {
@@ -776,17 +751,9 @@ static void ni_pktcopy(struct netvm *vm)
   FATAL(vm, (pktnum >= NETVM_MAXPKTS) || !(pkt = vm->packets[pktnum]));
   S_POP(vm, slot);
   FATAL(vm, slot < 0 || slot >= NETVM_MAXPKTS);
-  pnew = emalloc(sizeof(*pnew));
-  if ( pkt_copy(pkt->packet, &pnew->packet) < 0 ) {
-    free(pnew);
-    VMERR(vm);
-  }
-  if ( !(pnew->headers = hdr_copy(pkt->headers, pnew->packet->pkt_buffer)) ) {
-    pkt_free(pnew->packet);
-    free(pnew);
-    VMERR(vm);
-  }
-  free_netvmpkt(vm->packets[slot]);
+  pnew = metapkt_copy(pkt);
+  FATAL(vm, !pnew);
+  metapkt_free(vm->packets[slot], 1);
   vm->packets[slot] = pnew;
 }
 
@@ -795,38 +762,27 @@ static void ni_hdrpush(struct netvm *vm)
 {
   struct netvm_inst *inst = &vm->inst[vm->pc];
   struct netvm_hdr_desc hd0;
-  struct netvmpkt *pkt;
+  struct metapkt *pkt;
   get_hd(vm, inst, &hd0);
   if ( vm->error )
     return;
   FATAL(vm, (hd0.pktnum >= NETVM_MAXPKTS) || !(pkt = vm->packets[hd0.pktnum]));
-  FATAL(vm, hdr_add(hd0.htype, hdr_parent(pkt->headers)) < 0);
-  assign_hdrptr(pkt, hdr_parent(pkt->headers));
+  FATAL(vm, metapkt_pushhdr(pkt, hd0.htype) < 0);
 }
 
 
 static void ni_hdrpop(struct netvm *vm)
 {
   struct netvm_inst *inst = &vm->inst[vm->pc];
-  int i, pktnum;
-  struct netvmpkt *pkt;
-  struct hdr_parse *last;
+  int pktnum;
+  struct metapkt *pkt;
   if ( IMMED(inst) ) {
     pktnum = inst->val;
   } else { 
     S_POP(vm, pktnum);
   }
   FATAL(vm, (pktnum >= NETVM_MAXPKTS) || !(pkt = vm->packets[pktnum]));
-  last = hdr_parent(pkt->headers);
-  if ( last->type != PPT_NONE ) {
-    for ( i = 0; i <= NETVM_HDI_MAX; ++i ) {
-      if ( pkt->layer[i] == last ) {
-        pkt->layer[i] = NULL;
-        break;
-      }
-    }
-    hdr_free(last, 0);
-  }
+  metapkt_pophdr(pkt);
 }
 
 
@@ -848,7 +804,7 @@ static void ni_fixlen(struct netvm *vm)
 {
   struct netvm_inst *inst = &vm->inst[vm->pc];
   int pktnum;
-  struct netvmpkt *pkt;
+  struct metapkt *pkt;
   if ( IMMED(inst) ) {
     pktnum = inst->val;
   } else { 
@@ -871,7 +827,7 @@ static void ni_fixcksum(struct netvm *vm)
 {
   struct netvm_inst *inst = &vm->inst[vm->pc];
   int pktnum;
-  struct netvmpkt *pkt;
+  struct metapkt *pkt;
   if ( IMMED(inst) ) {
     pktnum = inst->val;
   } else { 
@@ -894,7 +850,7 @@ static void ni_hdrins(struct netvm *vm)
 {
   struct netvm_inst *inst = &vm->inst[vm->pc];
   struct netvm_hdr_desc hd0;
-  struct netvmpkt *pkt;
+  struct metapkt *pkt;
   uint32_t len;
   int moveup;
   get_hd(vm, inst, &hd0);
@@ -911,7 +867,7 @@ static void ni_hdrcut(struct netvm *vm)
 {
   struct netvm_inst *inst = &vm->inst[vm->pc];
   struct netvm_hdr_desc hd0;
-  struct netvmpkt *pkt;
+  struct metapkt *pkt;
   uint32_t len;
   int moveup;
   get_hd(vm, inst, &hd0);
@@ -962,10 +918,12 @@ netvm_op g_netvm_ops[NETVM_OC_MAX+1] = {
   ni_ldpmeta, /* LDCLASS */
   ni_ldpmeta, /* LDTS */
   ni_ldhdrf,
-  ni_unimplemented, /* BULKP2M */
+  ni_blkmv, /* BULKP2M */
   ni_numop, /* NOT */
   ni_numop, /* INVERT */
   ni_numop, /* TOBOOL */
+  ni_numop, /* POPL */
+  ni_numop, /* NLZ */
   ni_numop, /* TONET */
   ni_numop, /* TOHOST */
   ni_numop, /* SIGNX */
@@ -998,8 +956,8 @@ netvm_op g_netvm_ops[NETVM_OC_MAX+1] = {
   ni_branch, /* BRIF */
 
   /* non-matching-only */
-  ni_unimplemented, /* CALL */
-  ni_unimplemented, /* RETURN */
+  ni_call, /* CALL */
+  ni_return, /* RETURN */
   ni_prnum, /* PRBIN */
   ni_prnum, /* PROCT */
   ni_prnum, /* PRDEC */
@@ -1011,7 +969,7 @@ netvm_op g_netvm_ops[NETVM_OC_MAX+1] = {
   ni_stpkt,
   ni_stpmeta, /* STCLASS */
   ni_stpmeta, /* STTS */
-  ni_unimplemented, /* BULKP2M */
+  ni_blkmv, /* BULKP2M */
   ni_newpkt,
   ni_pktcopy,
   ni_hdrpush,
@@ -1091,29 +1049,27 @@ int netvm_setcode(struct netvm *vm, struct netvm_inst *inst, uint32_t ni)
 
 void netvm_loadpkt(struct netvm *vm, struct pktbuf *p, int slot)
 {
-  struct netvmpkt *pkt;
+  struct metapkt *pkt;
   if ( (slot < 0) || (slot >= NETVM_MAXPKTS) )
     return;
-  pkt = pktbuf_to_netvmpkt(p);
+  pkt = pktbuf_to_metapkt(p);
   abort_unless(pkt);
-  free_netvmpkt(vm->packets[slot]);
+  metapkt_free(vm->packets[slot], 1);
   vm->packets[slot] = pkt;
 }
 
 
-struct pktbuf *netvm_clrpkt(struct netvm *vm, int slot, int keeppktbuf)
+struct pktbuf *netvm_clrpkt(struct netvm *vm, int slot, int keeppkb)
 {
-  struct pktbuf *pb = NULL;
-  struct netvmpkt *pkt;
+  struct metapkt *pkt;
+  struct pktbuf *pkb = NULL;
   if ( (slot >= 0) && (slot < NETVM_MAXPKTS) && (pkt = vm->packets[slot]) ) {
-    if ( keeppktbuf ) {
-      pb = pkt->packet;
-      pkt->packet = NULL;
-    }
-    free_netvmpkt(pkt);
+    if ( keeppkb )
+      pkb = pkt->pkb;
+    metapkt_free(pkt, keeppkb);
     vm->packets[slot] = NULL;
   }
-  return pb;
+  return pkb;
 }
 
 
@@ -1126,7 +1082,7 @@ void netvm_reset(struct netvm *vm)
   vm->pc = 0;
   vm->sp = 0;
   for ( i = 0; i < NETVM_MAXPKTS; ++i ) {
-    free_netvmpkt(vm->packets[i]);
+    metapkt_free(vm->packets[i], 1);
     vm->packets[i] = NULL;
   }
   if ( vm->mem )

@@ -19,12 +19,9 @@ struct clopt options[] = {
 struct clopt_parser optparser = CLOPTPARSER_INIT(options,array_length(options));
 
 
-
-
 uint64_t vm_stack[64];
 byte_t vm_memory[1024];
 #define ROSEGOFF (sizeof(vm_memory)/2)
-
 
 
 struct meminit {

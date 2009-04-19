@@ -30,12 +30,12 @@ ${BINDIR}/testpp: testpp.o protoparse.o pptcpip.o util.o pktbuf.o
 		${DEFS} ${OPTS} ${INCS} ${LIBS}
 
 ${BINDIR}/testvm: testvm.o protoparse.o pptcpip.o util.o pktbuf.o netvm.o \
-	          netvm.h protoparse.h pktbuf.h
+	          metapkt.o netvm.h protoparse.h pktbuf.h metapkt.c
 	${CC} -o ../bin/testvm testvm.o pktbuf.o protoparse.o pptcpip.o util.o \
-		netvm.o \
+		netvm.o metapkt.o \
 		${DEFS} ${OPTS} ${INCS} ${LIBS}
 
-.c.o:
+.c.o: $<
 	${CC} -Wall -c $< -o $@ ${DEFS} ${INCS} ${OPTS}
 
 

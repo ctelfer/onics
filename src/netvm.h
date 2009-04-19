@@ -1,27 +1,8 @@
 #ifndef __netvm_h
 #define __netvm_h
 #include "tcpip_hdrs.h"
-#include "pktbuf.h"
-#include "protoparse.h"
+#include "metapkt.h"
 #include <cat/emit.h>
-
-enum {
-  NETVM_HDI_LINK,       /* e.g. Ethernet */
-  NETVM_HDI_TUN,        /* e.g. ESP, GRE, IP in IP */
-  NETVM_HDI_NET,        /* e.g. IPv4, IPv6 */
-  NETVM_HDI_XPORT,      /* e.g. TCP, UDP, RTP, ICMP */
-  NETVM_HDI_MAX = NETVM_HDI_XPORT
-};
-
-/* we probably want to move this out of here and call it something else */
-/* parsed packets are useful to lots of applications.  We also should */
-/* consider adding a list entry to this structure for easy queuing. */
-
-struct netvmpkt {
-  struct pktbuf *       packet;
-  struct hdr_parse *    headers;
-  struct hdr_parse *    layer[NETVM_HDI_MAX+1];
-};
 
 /* 
  * W -> uses width field to determine now many bytes to manipulate
@@ -59,6 +40,8 @@ enum {
   NETVM_OC_NOT,         /* [v] logcal not (1 or 0) */
   NETVM_OC_INVERT,      /* [v] bit-wise inversion */
   NETVM_OC_TOBOOL,      /* [v] if v != 0, 1, otherwise 0 */
+  NETVM_OC_POPL,        /* [v|W] # of bits in v for lower W bytes */
+  NETVM_OC_NLZ,         /* [v|W] # of leading zeroes in v for lower W bytes */
   NETVM_OC_TONET,       /* [v|W] convert to network byte order */
   NETVM_OC_TOHOST,      /* [v|W] convert to host byte order */
   NETVM_OC_SIGNX,       /* [v|W] sign extend based on width */
@@ -93,9 +76,9 @@ enum {
   NETVM_OC_MAX_MATCH = NETVM_OC_BRIF,
 
   /* not allowed in pure match run */
-  NETVM_OC_CALL,        /* [v,narg]: branch and link to v: put ret addr narg */
-                        /*           deep in the stack, pushing the rest up */
-  NETVM_OC_RETURN,      /* [v,narg]: branch to the addr narg deep in the */
+  NETVM_OC_CALL,        /* [v,narg|I]: branch and link to v: put raddr narg */
+                        /*             deep in the stack, pushing the rest up */
+  NETVM_OC_RETURN,      /* [v,narg|I]: branch to the addr narg deep in the */
                         /*           stack.  shift the remaining items down */
   NETVM_OC_PRBIN,       /* [v] print v in binary --  val == min string width */
   NETVM_OC_PROCT,       /* [v] print v in octal  --  val == min string width */
@@ -212,7 +195,7 @@ enum {
 #define NETVM_HDLAYER   255   /* find header of type NETVM_HDI_* */
 /* 
  * When htype == NETVM_HDLAYER, the header referred to is one of the layer
- * pointers stored in netvmpkt.  This allows quick access to the network, 
+ * pointers stored in metapkt.  This allows quick access to the network, 
  * data link, transport, and tunnel headers.  It also allows them to be accessed
  * by layer. (e.g. transport).  In this case the idx field tells which layer.
  */
@@ -248,7 +231,7 @@ struct netvm {
   uint32_t              rosegoff;
 
   struct emitter *      outport;
-  struct netvmpkt *     packets[NETVM_MAXPKTS];
+  struct metapkt *      packets[NETVM_MAXPKTS];
   int                   matchonly;
   int                   running;
   int                   error;

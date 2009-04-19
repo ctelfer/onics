@@ -15,6 +15,7 @@
 #endif
 
 #define PHLEN offsetof(struct pktbuf, pkt_buffer)
+#define DEFAULT_HPAD 256
 
 
 static INLINE int dltype_is_valid(uint32_t dlt)
@@ -27,9 +28,11 @@ static INLINE size_t offset_by_dltype(enum pktdltype_e dlt)
 {
   switch(dlt) { 
     case PKTDL_ETHERNET2:
-      return 2;
+      return 2 + DEFAULT_HPAD;
+    case PKTDL_NONE:
+      return 0 + DEFAULT_HPAD;
     default:
-      return 0;
+      return DEFAULT_HPAD;
   }
 }
 
@@ -71,7 +74,7 @@ int pkt_copy(const struct pktbuf *orig, struct pktbuf **newp)
   struct pktbuf *p;
 
   if (!orig || !newp) {
-    errno = EINTR;
+    errno = EINVAL;
     return -1;
   }
   p = new_packet(&orig->pkt_header);
