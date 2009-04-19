@@ -113,7 +113,6 @@ int main(int argc, char *argv[])
       pcapph.ts.tv_usec = (p->pkt_timestamp % 1000000000) * 1000;
       pcap_dump((u_char *)g_dumper, &pcapph, pkt_data(p));
     } else {
-      /* TODO: create an option for intervals between sends */
       if ( pcap_inject(g_pcap, pkt_data(p), p->pkt_len) < 0 )
         err("pcap_inject: %s\n", pcap_geterr(g_pcap));
     }
