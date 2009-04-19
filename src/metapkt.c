@@ -4,7 +4,7 @@
 #include <stdlib.h>
 
 
-static unsigned pktdltype_to_ppt(uint32_t dltype)
+static unsigned dltype_to_ppt(uint32_t dltype)
 {
   switch(dltype) {
   case PKTDL_ETHERNET2:
@@ -17,7 +17,7 @@ static unsigned pktdltype_to_ppt(uint32_t dltype)
 }
 
 
-static uint32_t ppt_to_pktdltype(int ppt)
+static uint32_t ppt_to_dltype(int ppt)
 {
   switch(ppt) {
   case PPT_ETHERNET:
@@ -33,7 +33,7 @@ static uint32_t ppt_to_pktdltype(int ppt)
 struct metapkt *metapkt_new(size_t plen, int ppt)
 {
   struct metapkt *pkt;
-  uint32_t dltype = ppt_to_pktdltype(ppt);
+  uint32_t dltype = ppt_to_dltype(ppt);
   if ( dltype == PKTDL_INVALID )
     return NULL;
   pkt = ecalloc(1, sizeof(*pkt));
@@ -51,7 +51,7 @@ struct metapkt *pktbuf_to_metapkt(struct pktbuf *pkb)
   unsigned ppt;
 
   abort_unless(pkb);
-  ppt = pktdltype_to_ppt(pkb->pkt_dltype);
+  ppt = dltype_to_ppt(pkb->pkt_dltype);
   pkt = ecalloc(1, sizeof(*pkt));
   pkt->pkb = pkb;
   if ( ppt != PPT_INVALID )
@@ -185,9 +185,6 @@ void metapkt_clr_layer(struct metapkt *pkt, int layer)
 
 int metapkt_pushhdr(struct metapkt *pkt, int htype)
 {
-  if ( hdr_parent(pkt->headers)->type != PPT_NONE ) {
-    /* TODO: fix linklayer offset? */
-  }
   if ( hdr_add(htype, hdr_parent(pkt->headers)) < 0 )
     return -1;
   metapkt_set_layer(pkt, hdr_parent(pkt->headers));
@@ -211,4 +208,14 @@ void metapkt_pophdr(struct metapkt *pkt)
   }
 }
 
+
+void metapkt_fixdlt(struct metapkt *pkt)
+{
+  uint32_t dltype = PKTDL_NONE;
+  if ( pkt->layer[NETVM_HDI_LINK] != NULL ) {
+    dltype = ppt_to_dltype(pkt->layer[NETVM_HDI_LINK]->type);
+    abort_unless(dltype != PKTDL_INVALID);
+  }
+  pkt->pkb->pkt_dltype = dltype;
+}
 

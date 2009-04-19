@@ -36,6 +36,7 @@ void metapkt_set_layer(struct metapkt *pkt, struct hdr_parse *h);
 void metapkt_clr_layer(struct metapkt *pkt, int layer);
 int metapkt_pushhdr(struct metapkt *pkt, int htype);
 void metapkt_pophdr(struct metapkt *pkt);
+void metapkt_fixdlt(struct metapkt *pkt);
 
 
 #endif /* __metapkt_h */

@@ -97,6 +97,7 @@ enum {
   NETVM_OC_HDRPUSH,     /* [hdesc|I] create header of htype in packet pktnum */
   NETVM_OC_HDRPOP,      /* [pktnum|I] pop the top header off of packet pktnum */
   NETVM_OC_HDRUP,       /* [hdesc|I] update the fields in the header */
+  NETVM_OC_FIXDLT,      /* [pktnum|I] set dltype based on PPT_ of 2nd header */
   NETVM_OC_FIXLEN,      /* [ptknum|I] fix length fields in the packet */
   NETVM_OC_FIXCKSUM,    /* [ptknum|I] fix checksum fields in the packet */
   NETVM_OC_PKTINS,      /* [len,hdesc|I] insert len bytes at hd.offset */

@@ -7,6 +7,12 @@
 #include <cat/bitops.h>
 #include "util.h"
 
+/* 
+ * TODO:  If the chip doesn't support unaligned data access (e.g. xscale),
+ * then the load and store operations need to be revamped to use memmove/memcpy
+ * to load and store data values.  This can wait for later.
+ */
+
 #define MAXINST         0x7ffffffe
 #define IMMED(inst) ((inst)->flags & NETVM_IF_IMMED)
 #define ISSIGNED(inst) ((inst)->flags & NETVM_IF_SIGNED)
@@ -800,6 +806,21 @@ static void ni_hdrup(struct netvm *vm)
 }
 
 
+static void ni_fixdlt(struct netvm *vm)
+{
+  struct netvm_inst *inst = &vm->inst[vm->pc];
+  int pktnum;
+  struct metapkt *pkt;
+  if ( IMMED(inst) ) {
+    pktnum = inst->val;
+  } else { 
+    S_POP(vm, pktnum);
+  }
+  FATAL(vm, (pktnum >= NETVM_MAXPKTS) || !(pkt = vm->packets[pktnum]));
+  metapkt_fixdlt(pkt);
+}
+
+
 static void ni_fixlen(struct netvm *vm)
 {
   struct netvm_inst *inst = &vm->inst[vm->pc];
@@ -975,6 +996,7 @@ netvm_op g_netvm_ops[NETVM_OC_MAX+1] = {
   ni_hdrpush,
   ni_hdrpop,
   ni_hdrup,
+  ni_fixdlt,
   ni_fixlen,
   ni_fixcksum,
   ni_hdrins,
