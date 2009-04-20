@@ -29,9 +29,9 @@ enum {
   NETVM_OC_NOP,         /* no operation */
   NETVM_OC_POP,         /* discards top of stack */
   NETVM_OC_PUSH,        /* implied IMMED:  pushes immediate value onto stack */
+  NETVM_OC_DUP,         /* dupcliates top of stack */
   NETVM_OC_SWAP,        /* [|W] swap stack positions "val" and "width" */
                         /* 0-based counting from the top of the stack */
-  NETVM_OC_DUP,         /* dupcliates top of stack */
   NETVM_OC_LDMEM,       /* [addr|WIS]: load from memory */
   NETVM_OC_STMEM,       /* [addr|WI]: store to memory */
   NETVM_OC_LDPKT,       /* [hdesc|WSHTP]: load bytes from packet */

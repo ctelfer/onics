@@ -118,6 +118,14 @@ static void ni_push(struct netvm *vm)
 }
 
 
+static void ni_dup(struct netvm *vm)
+{
+  uint64_t val;
+  S_TOP(vm, val);
+  S_PUSH(vm, val);
+}
+
+
 static void ni_swap(struct netvm *vm)
 {
   struct netvm_inst *inst = &vm->inst[vm->pc];
@@ -126,14 +134,6 @@ static void ni_swap(struct netvm *vm)
   tmp = S_GET(vm, inst->width);
   S_SET(vm, inst->width, S_GET(vm, inst->val));
   S_SET(vm, inst->val, tmp);
-}
-
-
-static void ni_dup(struct netvm *vm)
-{
-  uint64_t val;
-  S_TOP(vm, val);
-  S_PUSH(vm, val);
 }
 
 
@@ -967,8 +967,8 @@ netvm_op g_netvm_ops[NETVM_OC_MAX+1] = {
   ni_nop,
   ni_pop,
   ni_push,
-  ni_swap,
   ni_dup,
+  ni_swap,
   ni_ldmem,
   ni_stmem,
   ni_ldpkt,
