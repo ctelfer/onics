@@ -761,7 +761,7 @@ static void ni_stpmeta(struct netvm *vm)
 }
 
 
-static void ni_newpkt(struct netvm *vm)
+static void ni_pktnew(struct netvm *vm)
 {
   struct netvm_inst *inst = &vm->inst[vm->pc];
   struct netvm_hdr_desc hd0;
@@ -796,6 +796,22 @@ static void ni_pktcopy(struct netvm *vm)
   FATAL(vm, !pnew);
   metapkt_free(vm->packets[slot], 1);
   vm->packets[slot] = pnew;
+}
+
+
+static void ni_pktdel(struct netvm *vm)
+{
+  struct netvm_inst *inst = &vm->inst[vm->pc];
+  int pktnum;
+  struct metapkt *pkt;
+  if ( IMMED(inst) ) {
+    pktnum = inst->val;
+  } else {
+    S_POP(vm, pktnum);
+  }
+  FATAL(vm, (pktnum >= NETVM_MAXPKTS) || !(pkt = vm->packets[pktnum]));
+  metapkt_free(pkt, 1);
+  vm->packets[pktnum] = NULL;
 }
 
 
@@ -1028,8 +1044,9 @@ netvm_op g_netvm_ops[NETVM_OC_MAX+1] = {
   ni_stpmeta, /* STCLASS */
   ni_stpmeta, /* STTS */
   ni_blkmv, /* BULKP2M */
-  ni_newpkt,
+  ni_pktnew,
   ni_pktcopy,
+  ni_pktdel,
   ni_hdrpush,
   ni_hdrpop,
   ni_hdrup,

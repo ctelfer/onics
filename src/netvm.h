@@ -35,7 +35,7 @@ enum {
   NETVM_OC_SWAP,        /* [|WV] swap stack positions "val" and "width" */
                         /* 0-based counting from the top of the stack */
   NETVM_OC_LDMEM,       /* [addr|WIS]: load from memory */
-  NETVM_OC_STMEM,       /* [addr|WI]: store to memory */
+  NETVM_OC_STMEM,       /* [v,addr|WI]: store to memory */
   NETVM_OC_LDPKT,       /* [hdesc|WSHTP]: load bytes from packet */
   NETVM_OC_LDCLASS,     /* [pktnum|I]: load packet class */
   NETVM_OC_LDTS,        /* [pktnum|I]: load packet timestamp */
@@ -98,7 +98,8 @@ enum {
   NETVM_OC_STTS,        /* [v,pktnum|I] store into timestamp */
   NETVM_OC_BULKM2P,     /* [addr,pa,len,pktnum|I]: move bytes from pa to addr */
   NETVM_OC_PKTNEW,      /* [hdesc|I] create packet: offset==len, htype==dl */
-  NETVM_OC_PKTCOPY,     /* [pktnum1,pktnum2|I] copy packet */
+  NETVM_OC_PKTCOPY,     /* [pktnum2,pktnum1|I] copy packet in slot1 to slot2 */
+  NETVM_OC_PKTDEL,      /* [pktnum|I] delete packet */
   NETVM_OC_HDRPUSH,     /* [hdesc|I] create header of htype in packet pktnum */
   NETVM_OC_HDRPOP,      /* [pktnum|I] pop the top header off of packet pktnum */
   NETVM_OC_HDRUP,       /* [hdesc|I] update the fields in the header */

@@ -158,6 +158,22 @@ struct netvm_inst vm_prog_fib[] = {
 };
 
 
+#define DUP1ST_PNUM     0
+struct netvm_inst vm_prog_dup1st[] = { 
+  /* 0*/{ NETVM_OC_LDMEM, 8, NETVM_IF_IMMED, DUP1ST_PNUM },
+  /* 1*/{ NETVM_OC_ADD, 0, NETVM_IF_IMMED, 1 },
+  /* 2*/{ NETVM_OC_DUP, 0, NETVM_IF_IMMED, 1 },
+  /* 3*/{ NETVM_OC_STMEM, 8, NETVM_IF_IMMED, DUP1ST_PNUM },
+  /* 4*/{ NETVM_OC_LE, 0, NETVM_IF_IMMED, 1 },
+  /* 5*/{ NETVM_OC_BRIF, 0, NETVM_IF_IMMED, NETVM_BRF(3) },
+  /* 6*/{ NETVM_OC_PKTDEL, 0, NETVM_IF_IMMED, 0 },
+  /* 7*/{ NETVM_OC_HALT, 0, 0, 0 },
+  /* 8*/{ NETVM_OC_PUSH, 0, 0, 1 }, 
+  /* 9*/{ NETVM_OC_PUSH, 0, 0, 0 }, 
+  /*10*/{ NETVM_OC_PKTCOPY, 0, 0, 0 }
+};
+
+
 struct netvm_program {
   struct netvm_inst *   code;
   unsigned              codelen;
@@ -185,6 +201,8 @@ struct netvm_program {
     hwmi, array_length(hwmi) },
   { vm_prog_fib, array_length(vm_prog_fib),
     "fib -- compute Xth fibonacci number", 1, 1, fibi, array_length(fibi) },
+  { vm_prog_dup1st, array_length(vm_prog_dup1st),
+    "dup1st -- duplicate the first packet and discard rest", 0, 1, NULL, 0 },
 };
 unsigned prognum = 0;
 
@@ -283,7 +301,7 @@ void run_with_packets(struct netvm *vm, int filter, struct meminit *mi,
     fprintf(stderr, "Packet %u: ", npkt);
     print_vmret(vmrv, rc);
 
-    if ( filter ) {
+    if ( filter && vmrv >= 0 ) {
       for ( i = 0; i < NETVM_MAXPKTS; ++i ) {
         p = netvm_clrpkt(vm, i, 1);
         if ( p ) {

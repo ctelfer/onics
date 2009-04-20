@@ -71,7 +71,7 @@ static int get_hdr_index(struct metapkt *pkt, struct hdr_parse *hdr)
 {
   int i = 0;
   struct hdr_parse *t;
-  for ( t = hdr_child(hdr); t->type != PPT_NONE; t= hdr_child(t) ) {
+  for ( t = hdr_child(pkt->headers); t->type != PPT_NONE; t= hdr_child(t) ) {
     ++i;
     if ( t == hdr )
       break;
