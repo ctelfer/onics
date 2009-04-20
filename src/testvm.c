@@ -194,7 +194,9 @@ void usage()
   char buf[4096];
   char pdesc[128];
   int i;
+  fprintf(stderr, "usage: testvm [options]\n");
   optparse_print(&optparser, buf, sizeof(buf));
+  str_cat(buf, "\n", sizeof(buf));
   for ( i = 0; i < array_length(vm_progs); ++i ) {
     str_fmt(pdesc, sizeof(pdesc), "Program %2u: %s\n", i, vm_progs[i].desc);
     str_cat(buf, pdesc, sizeof(buf));
@@ -233,14 +235,8 @@ void init_memory(struct netvm *vm, struct meminit *mi, size_t nmi)
 }
 
 
-void run_without_packets(struct netvm *vm, struct meminit *mi, size_t nmi)
+void print_vmret(int vmrv, uint64_t rc)
 {
-  int vmrv;
-  uint64_t rc;
-
-  init_memory(vm, mi, nmi);
-  vmrv = netvm_run(vm, -1, &rc);
-
   if ( vmrv == 0 ) {
     fprintf(stderr, "VM provided no return value\n");
   } else if (vmrv == 1) {
@@ -255,6 +251,16 @@ void run_without_packets(struct netvm *vm, struct meminit *mi, size_t nmi)
 }
 
 
+void run_without_packets(struct netvm *vm, struct meminit *mi, size_t nmi)
+{
+  int vmrv;
+  uint64_t rc;
+  init_memory(vm, mi, nmi);
+  vmrv = netvm_run(vm, -1, &rc);
+  print_vmret(vmrv, rc);
+}
+
+
 void run_with_packets(struct netvm *vm, int filter, struct meminit *mi, 
                       size_t nmi)
 {
@@ -262,41 +268,35 @@ void run_with_packets(struct netvm *vm, int filter, struct meminit *mi,
   int npkt = 0;
   int npass = 0;
   int vmrv;
+  int i;
   uint64_t rc;
 
   while ( pkt_file_read(stdin, &p) > 0 ) {
     ++npkt;
-    netvm_reset(vm);
+    netvm_restart(vm);
     netvm_loadpkt(vm, p, 0);
     init_memory(vm, mi, nmi);
     vmrv = netvm_run(vm, -1, &rc);
 
-    if ( vmrv == 0 ) {
-      fprintf(stderr, "Packet %u: no return value\n", npkt);
-    } else if (vmrv == 1) {
-      fprintf(stderr, "Packet %u: VM returned value %x\n", npkt, (unsigned)rc);
-      if ( rc )
-        ++npass;
-    } else if (vmrv == -1) {
-      fprintf(stderr, "Packet %u: VM returned error\n", npkt);
-    } else if (vmrv == -2) {
-      fprintf(stderr, "Packet %u: VM out of cycles\n", npkt);
-    } else {
-      abort_unless(0);
-    }
+    if ( (vmrv == 1) && rc )
+      ++npass;
+    fprintf(stderr, "Packet %u: ", npkt);
+    print_vmret(vmrv, rc);
 
     if ( filter ) {
-      p = netvm_clrpkt(vm, 0, 1);
-      if ( p ) {
-        if ( pkt_file_write(stdout, p) < 0 )
-          err("Error writing out packet %d\n", npkt);
-        pkt_free(p);
+      for ( i = 0; i < NETVM_MAXPKTS; ++i ) {
+        p = netvm_clrpkt(vm, i, 1);
+        if ( p ) {
+          if ( pkt_file_write(stdout, p) < 0 )
+            err("Error writing out packet %d\n", npkt);
+          pkt_free(p);
+        } 
       }
     }
   }
   netvm_reset(vm);
 
-  fprintf(stderr, "%u out of %u packets passed\n", npass, npkt);
+  fprintf(stderr, "%u out of %u packets returned 'true'\n", npass, npkt);
 }
 
 

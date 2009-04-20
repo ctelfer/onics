@@ -13,6 +13,8 @@
  * T -> with 1-byte load will treat as TCP offset and convert to byte length 
  * P -> with 1-byte load will treat as IP header len and convert to byte length 
  * M -> MOVEUP flag used for INS and CUT operations
+ * V -> Uses the "val" field of the instruction regardless (i.e. without
+ *      concern for the NETVM_IF_IMMED flag)
  *
  * Field types:
  * v, v1, v2 - a generic numeric value
@@ -28,9 +30,9 @@
 enum {
   NETVM_OC_NOP,         /* no operation */
   NETVM_OC_POP,         /* discards top of stack */
-  NETVM_OC_PUSH,        /* implied IMMED:  pushes immediate value onto stack */
+  NETVM_OC_PUSH,        /* [|V] pushes immediate value onto stack */
   NETVM_OC_DUP,         /* dupcliates top of stack */
-  NETVM_OC_SWAP,        /* [|W] swap stack positions "val" and "width" */
+  NETVM_OC_SWAP,        /* [|WV] swap stack positions "val" and "width" */
                         /* 0-based counting from the top of the stack */
   NETVM_OC_LDMEM,       /* [addr|WIS]: load from memory */
   NETVM_OC_STMEM,       /* [addr|WI]: store to memory */
@@ -83,10 +85,10 @@ enum {
                         /*      narg deep in the stack, pushing the rest up */
   NETVM_OC_RETURN,      /* [v,(rets..,)nret|I]: branch to the addr nret deep */
                         /*      in the stack.  shift the remaining items down */
-  NETVM_OC_PRBIN,       /* [v] print v in binary --  val == min string width */
-  NETVM_OC_PROCT,       /* [v] print v in octal  --  val == min string width */
-  NETVM_OC_PRDEC,       /* [v|S] print v in decimal --  val == min str width */
-  NETVM_OC_PRHEX,       /* [v] print v in hex --  val == min string width */
+  NETVM_OC_PRBIN,       /* [v|V] print v in binary: val == min string width */
+  NETVM_OC_PROCT,       /* [v|V] print v in octal: val == min string width */
+  NETVM_OC_PRDEC,       /* [v|VS] print v in decimal: val == min str width */
+  NETVM_OC_PRHEX,       /* [v|V] print v in hex: val == min string width */
   NETVM_OC_PRIP,        /* [v] print IP address (network byte order) */
   NETVM_OC_PRETH,       /* [v] print ethernet address (network byte order) */
   NETVM_OC_PRIPV6,      /* [vhi,vlo] print IPv6 address (network byte order) */
@@ -262,6 +264,15 @@ int netvm_setcode(struct netvm *vm, struct netvm_inst *inst, uint32_t ni);
 /* validate a netvm is properly set up and that all branches are correct */
 /* called by set_netvm_code implicitly:  returns 0 on success, -1 on error */
 int netvm_validate(struct netvm *vm);
+
+/* zero out non-read-only memory */
+void netvm_clrmem(struct netvm *vm);
+
+/* free all packets */
+void netvm_clrpkts(struct netvm *vm);
+
+/* pc <- 0, sp <- 0 */
+void netvm_restart(struct netvm *vm);
 
 /* clear memory, set pc <- 0, set sp <- 0, discard packets */
 void netvm_reset(struct netvm *vm);

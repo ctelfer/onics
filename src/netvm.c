@@ -1132,20 +1132,46 @@ struct pktbuf *netvm_clrpkt(struct netvm *vm, int slot, int keeppkb)
 }
 
 
-/* clear memory, set pc <= 0, discard packets */
-void netvm_reset(struct netvm *vm)
+/* clear memory up through read-only segment */
+void netvm_clrmem(struct netvm *vm)
+{
+  abort_unless(vm && vm->stack && vm->rosegoff <= vm->memsz && vm->inst && 
+               vm->ninst >= 0 && vm->ninst <= MAXINST);
+  if ( vm->mem )
+    memset(vm->mem, 0, vm->rosegoff);
+}
+
+
+/* discard all packets */
+void netvm_clrpkts(struct netvm *vm)
 {
   int i;
   abort_unless(vm && vm->stack && vm->rosegoff <= vm->memsz && vm->inst && 
                vm->ninst >= 0 && vm->ninst <= MAXINST);
-  vm->pc = 0;
-  vm->sp = 0;
   for ( i = 0; i < NETVM_MAXPKTS; ++i ) {
     metapkt_free(vm->packets[i], 1);
     vm->packets[i] = NULL;
   }
-  if ( vm->mem )
-    memset(vm->mem, 0, vm->rosegoff);
+}
+
+
+/* reinitialize for running but with same packet and memory state */
+void netvm_restart(struct netvm *vm)
+{
+  abort_unless(vm && vm->stack && vm->rosegoff <= vm->memsz && vm->inst && 
+               vm->ninst >= 0 && vm->ninst <= MAXINST);
+  vm->pc = 0;
+  vm->sp = 0;
+}
+
+
+/* clear memory, set pc <= 0, discard packets */
+void netvm_reset(struct netvm *vm)
+{
+  /* assume sanity checks in the called functions */
+  netvm_clrmem(vm);
+  netvm_clrpkts(vm);
+  netvm_restart(vm);
 }
 
 
