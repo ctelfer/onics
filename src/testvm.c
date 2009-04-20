@@ -107,6 +107,57 @@ struct netvm_inst vm_prog_helloworld[] = {
 };
 
 
+uint64_t fibX = 7;
+#define FIB_I0_OFFSET      (ROSEGOFF)
+#define FIB_I0_SIZE        sizeof(uint64_t)
+const char fibs1[] = "Fibonnaci number ";
+#define FIB_I1_OFFSET      (FIB_I0_OFFSET + FIB_I0_SIZE)
+#define FIB_I1_SIZE        (sizeof(fibs1)-1)
+const char fibs2[] = " is ";
+#define FIB_I2_OFFSET      (FIB_I1_OFFSET + FIB_I1_SIZE)
+#define FIB_I2_SIZE        (sizeof(fibs2)-1)
+const char fibs3[] = "\n";
+#define FIB_I3_OFFSET      (FIB_I2_OFFSET + FIB_I2_SIZE)
+#define FIB_I3_SIZE        (sizeof(fibs3)-1)
+struct meminit fibi[] = {
+  { (byte_t*)&fibX, FIB_I0_SIZE, FIB_I0_OFFSET },
+  { (byte_t*)fibs1, FIB_I1_SIZE, FIB_I1_OFFSET },
+  { (byte_t*)fibs2, FIB_I2_SIZE, FIB_I2_OFFSET },
+  { (byte_t*)fibs3, FIB_I3_SIZE, FIB_I3_OFFSET }
+};
+
+struct netvm_inst vm_prog_fib[] = { 
+  /* 0*/{ NETVM_OC_PRSTR, FIB_I1_SIZE, NETVM_IF_IMMED, FIB_I1_OFFSET },
+  /* 1*/{ NETVM_OC_LDMEM, 8, NETVM_IF_IMMED, FIB_I0_OFFSET },
+  /* 2*/{ NETVM_OC_DUP, 0, 0, 0 },
+  /* 3*/{ NETVM_OC_PRDEC, 8, 0, 0 },
+  /* 4*/{ NETVM_OC_PRSTR, FIB_I2_SIZE, NETVM_IF_IMMED, FIB_I2_OFFSET },
+  /* 5*/{ NETVM_OC_PUSH, 0, 0, NETVM_JA(10) },
+  /* 6*/{ NETVM_OC_CALL, 0, NETVM_IF_IMMED, 1 },
+  /* 7*/{ NETVM_OC_PRDEC, 8, 0, 0 },
+  /* 8*/{ NETVM_OC_PRSTR, FIB_I3_SIZE, NETVM_IF_IMMED, FIB_I3_OFFSET },
+  /* 9*/{ NETVM_OC_HALT, 0, 0, 0 },
+
+  /* (v) <- Fib(n) */
+  /*10*/{ NETVM_OC_DUP, 0, 0, 0 },
+  /*11*/{ NETVM_OC_GT, 0, NETVM_IF_IMMED, 2 },
+  /*12*/{ NETVM_OC_BRIF, 0, NETVM_IF_IMMED, NETVM_BRF(4) },
+  /*13*/{ NETVM_OC_POP, 0, 0, 0 },
+  /*14*/{ NETVM_OC_PUSH, 0, NETVM_IF_IMMED, 1 },
+  /*15*/{ NETVM_OC_RETURN, 0, NETVM_IF_IMMED, 1 },
+  /*16*/{ NETVM_OC_DUP, 0, 0, 0 },
+  /*17*/{ NETVM_OC_SUB, 0, NETVM_IF_IMMED, 1 },
+  /*18*/{ NETVM_OC_PUSH, 0, 0, NETVM_JA(10) },
+  /*19*/{ NETVM_OC_CALL, 0, NETVM_IF_IMMED, 1 },
+  /*20*/{ NETVM_OC_SWAP, 0, 0, 1},
+  /*21*/{ NETVM_OC_SUB, 0, NETVM_IF_IMMED, 2 },
+  /*22*/{ NETVM_OC_PUSH, 0, 0, NETVM_JA(10), },
+  /*23*/{ NETVM_OC_CALL, 0, NETVM_IF_IMMED, 1 },
+  /*24*/{ NETVM_OC_ADD, 0, 0, 0 },
+  /*25*/{ NETVM_OC_RETURN, 0, NETVM_IF_IMMED, 1 },
+};
+
+
 struct netvm_program {
   struct netvm_inst *   code;
   unsigned              codelen;
@@ -131,7 +182,9 @@ struct netvm_program {
     "count10 -- print out 10 '.'s followed by a newline", 1, 1, NULL, 0 },
   { vm_prog_helloworld, array_length(vm_prog_helloworld),
     "hello-world -- print out 'hello world' from a preinitialized string", 1, 1,
-    hwmi, array_length(hwmi) }
+    hwmi, array_length(hwmi) },
+  { vm_prog_fib, array_length(vm_prog_fib),
+    "fib -- compute Xth fibonacci number", 1, 1, fibi, array_length(fibi) },
 };
 unsigned prognum = 0;
 
@@ -139,7 +192,7 @@ unsigned prognum = 0;
 void usage()
 {
   char buf[4096];
-  char pdesc[80];
+  char pdesc[128];
   int i;
   optparse_print(&optparser, buf, sizeof(buf));
   for ( i = 0; i < array_length(vm_progs); ++i ) {

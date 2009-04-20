@@ -29,6 +29,8 @@ enum {
   NETVM_OC_NOP,         /* no operation */
   NETVM_OC_POP,         /* discards top of stack */
   NETVM_OC_PUSH,        /* implied IMMED:  pushes immediate value onto stack */
+  NETVM_OC_SWAP,        /* [|W] swap stack positions "val" and "width" */
+                        /* 0-based counting from the top of the stack */
   NETVM_OC_DUP,         /* dupcliates top of stack */
   NETVM_OC_LDMEM,       /* [addr|WIS]: load from memory */
   NETVM_OC_STMEM,       /* [addr|WI]: store to memory */
@@ -76,10 +78,11 @@ enum {
   NETVM_OC_MAX_MATCH = NETVM_OC_BRIF,
 
   /* not allowed in pure match run */
-  NETVM_OC_CALL,        /* [v,narg|I]: branch and link to v: put raddr narg */
-                        /*             deep in the stack, pushing the rest up */
-  NETVM_OC_RETURN,      /* [v,narg|I]: branch to the addr narg deep in the */
-                        /*           stack.  shift the remaining items down */
+  NETVM_OC_JUMP,        /* [addr|I] branch to absolute address addr */
+  NETVM_OC_CALL,        /* [(args..,)v,narg|I]: branch and link to v: put RA */
+                        /*      narg deep in the stack, pushing the rest up */
+  NETVM_OC_RETURN,      /* [v,(rets..,)nret|I]: branch to the addr nret deep */
+                        /*      in the stack.  shift the remaining items down */
   NETVM_OC_PRBIN,       /* [v] print v in binary --  val == min string width */
   NETVM_OC_PROCT,       /* [v] print v in octal  --  val == min string width */
   NETVM_OC_PRDEC,       /* [v|S] print v in decimal --  val == min str width */
@@ -216,6 +219,10 @@ struct netvm_inst {
   uint16_t              flags;  /* NETVM_IF_* */
   uint64_t              val;    /* Varies with instruction */
 };
+
+#define NETVM_JA(v)     ((uint32_t)(v)-1)
+#define NETVM_BRF(v)    ((uint32_t)(v)-1)
+#define NETVM_BRB(v)    ((uint32_t)0-(v)-1)
 
 #define NETVM_MAXPKTS   16
 struct netvm {

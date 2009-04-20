@@ -13,14 +13,20 @@
  * to load and store data values.  This can wait for later.
  */
 
+/* purely to set a breakpoint during debugging */
+static int dbgabrt()
+{
+  return 1;
+}
+
 #define MAXINST         0x7ffffffe
 #define IMMED(inst) ((inst)->flags & NETVM_IF_IMMED)
 #define ISSIGNED(inst) ((inst)->flags & NETVM_IF_SIGNED)
 
-#define VMERR(__vm) do { __vm->error = 1; return; } while (0)
+#define VMERR(__vm) do { __vm->error = 1; dbgabrt(); return; } while (0)
 
 #define FATAL(__vm, __cond) \
-  if (__cond) { __vm->error = 1; return; }
+  if (__cond) { __vm->error = 1; dbgabrt(); return; }
 
 #define S_EMPTY(__vm)           (__vm->sp == 0)
 #define S_HAS(__vm, __n)        (__vm->sp >= __n)
@@ -31,6 +37,10 @@
     FATAL((__vm), S_EMPTY(__vm));                                       \
     __v = __vm->stack[__vm->sp-1];                                      \
   } while (0)
+
+/* __n is a 0-based index from the top of the stack */
+#define S_GET(__vm, __n)        (__vm->stack[__vm->sp - __n - 1])
+#define S_SET(__vm, __n, __val) (__vm->stack[__vm->sp - __n - 1] = __val)
 
 #define S_POP(__vm, __v)                                                \
   do {                                                                  \
@@ -105,6 +115,17 @@ static void ni_push(struct netvm *vm)
 {
   struct netvm_inst *inst = &vm->inst[vm->pc];
   S_PUSH(vm, inst->val);
+}
+
+
+static void ni_swap(struct netvm *vm)
+{
+  struct netvm_inst *inst = &vm->inst[vm->pc];
+  uint64_t tmp = (inst->width > inst->val) ? inst->width : inst->val;
+  FATAL(vm, !S_HAS(vm, tmp + 1));
+  tmp = S_GET(vm, inst->width);
+  S_SET(vm, inst->width, S_GET(vm, inst->val));
+  S_SET(vm, inst->val, tmp);
 }
 
 
@@ -510,6 +531,20 @@ static void ni_branch(struct netvm *vm)
 }
 
 
+static void ni_jump(struct netvm *vm)
+{
+  struct netvm_inst *inst = &vm->inst[vm->pc];
+  uint64_t addr;
+  if ( IMMED(inst) ) {
+    addr = inst->val;
+  } else {
+    S_POP(vm, addr);
+  }
+  FATAL(vm, addr + 1 > vm->ninst);
+  vm->pc = addr;
+}
+
+
 static void ni_call(struct netvm *vm)
 {
   struct netvm_inst *inst = &vm->inst[vm->pc];
@@ -524,7 +559,7 @@ static void ni_call(struct netvm *vm)
   FATAL(vm, !S_HAS(vm, narg) || S_FULL(vm));
   sslot = vm->sp - narg;
   memmove(vm->stack + sslot + 1, vm->stack + sslot, narg*sizeof(vm->stack[0]));
-  vm->stack[sslot] = vm->pc + 1;
+  vm->stack[sslot] = vm->pc;
   ++vm->sp;
   vm->pc = addr;
 }
@@ -932,6 +967,7 @@ netvm_op g_netvm_ops[NETVM_OC_MAX+1] = {
   ni_nop,
   ni_pop,
   ni_push,
+  ni_swap,
   ni_dup,
   ni_ldmem,
   ni_stmem,
@@ -977,8 +1013,9 @@ netvm_op g_netvm_ops[NETVM_OC_MAX+1] = {
   ni_branch, /* BRIF */
 
   /* non-matching-only */
-  ni_call, /* CALL */
-  ni_return, /* RETURN */
+  ni_jump,
+  ni_call,
+  ni_return,
   ni_prnum, /* PRBIN */
   ni_prnum, /* PROCT */
   ni_prnum, /* PRDEC */
