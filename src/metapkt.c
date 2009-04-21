@@ -132,14 +132,16 @@ static int islink(int ppt)
 }
 
 
-static int istun(int ppt)
-{
-  return 0;
-}
-
-
 static int isnet(int ppt)
 {
+  switch(ppt) {
+  case PPT_IPV4:
+  case PPT_IPV6:
+  case PPT_ARP:
+    return 1;
+  default:
+    return 0;
+  }
   return (ppt == PPT_IPV4) || (ppt == PPT_IPV6) || (ppt == PPT_ARP); 
 }
 
@@ -163,9 +165,6 @@ void metapkt_set_layer(struct metapkt *pkt, struct hdr_parse *h)
   if ( islink(h->type) ) {
     if ( !pkt->layer[NETVM_HDI_LINK] )
       pkt->layer[NETVM_HDI_LINK] = h;
-  } else if ( istun(h->type) ) {
-    if ( !pkt->layer[NETVM_HDI_TUN] )
-      pkt->layer[NETVM_HDI_TUN] = h;
   } else if ( isnet(h->type) ) {
     if ( !pkt->layer[NETVM_HDI_NET] )
       pkt->layer[NETVM_HDI_NET] = h;

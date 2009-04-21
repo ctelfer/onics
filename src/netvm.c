@@ -5,6 +5,7 @@
 #include <cat/emit_format.h>
 #include <cat/emalloc.h>
 #include <cat/bitops.h>
+#include <cat/pack.h>
 #include "util.h"
 
 /* 
@@ -888,8 +889,6 @@ static void ni_fixlen(struct netvm *vm)
     FATAL(vm, hdr_fix_len(pkt->layer[NETVM_HDI_XPORT]) < 0);
   if ( pkt->layer[NETVM_HDI_NET] )
     FATAL(vm, hdr_fix_len(pkt->layer[NETVM_HDI_NET]) < 0);
-  if ( pkt->layer[NETVM_HDI_TUN] )
-    FATAL(vm, hdr_fix_len(pkt->layer[NETVM_HDI_TUN]) < 0);
   if ( pkt->layer[NETVM_HDI_LINK] )
     FATAL(vm, hdr_fix_len(pkt->layer[NETVM_HDI_LINK]) < 0);
 }
@@ -911,8 +910,6 @@ static void ni_fixcksum(struct netvm *vm)
     FATAL(vm, hdr_fix_cksum(pkt->layer[NETVM_HDI_XPORT]) < 0);
   if ( pkt->layer[NETVM_HDI_NET] )
     FATAL(vm, hdr_fix_cksum(pkt->layer[NETVM_HDI_NET]) < 0);
-  if ( pkt->layer[NETVM_HDI_TUN] )
-    FATAL(vm, hdr_fix_cksum(pkt->layer[NETVM_HDI_TUN]) < 0);
   if ( pkt->layer[NETVM_HDI_LINK] )
     FATAL(vm, hdr_fix_cksum(pkt->layer[NETVM_HDI_LINK]) < 0);
 }

@@ -3,6 +3,7 @@
 #include "pptcpip.h"
 #include "util.h"
 #include <cat/emalloc.h>
+#include <cat/pack.h>
 #include <string.h>
 #include <stdlib.h>
 

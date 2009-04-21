@@ -11,7 +11,6 @@
 
 enum {
   NETVM_HDI_LINK,       /* e.g. Ethernet */
-  NETVM_HDI_TUN,        /* e.g. ESP, GRE, IP in IP */
   NETVM_HDI_NET,        /* e.g. IPv4, IPv6 */
   NETVM_HDI_XPORT,      /* e.g. TCP, UDP, RTP, ICMP */
   NETVM_HDI_MAX = NETVM_HDI_XPORT
