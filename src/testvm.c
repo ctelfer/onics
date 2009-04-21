@@ -174,6 +174,58 @@ struct netvm_inst vm_prog_dup1st[] = {
 };
 
 
+char bms1[] = "Hello World\n";
+#define BMS1_OFFSET      (ROSEGOFF)
+#define BMS1_SIZE        (sizeof(bms1)-1)
+char bms2[] = "\n";
+#define BMS2_OFFSET      (BMS1_OFFSET + BMS1_SIZE)
+#define BMS2_SIZE        (sizeof(bms2)-1)
+struct meminit bmi[] = {
+  { (byte_t*)bms1, BMS1_SIZE, BMS1_OFFSET },
+  { (byte_t*)bms2, BMS2_SIZE, BMS2_OFFSET },
+};
+
+
+struct netvm_inst vm_prog_bulkmove[] = { 
+  /* only consider the 1st TCP packet with at least 16 bytes of payload */
+  /* 0*/{ NETVM_OC_LDHDRF, 0, NETVM_IF_IMMED, 
+          NETVM_HDESC(0, NETVM_HDLAYER, NETVM_HDI_XPORT, NETVM_HDR_TYPE, 0) },
+  /* 1*/{ NETVM_OC_NEQ, 0, NETVM_IF_IMMED, PPT_TCP},
+  /* 2*/{ NETVM_OC_BRIF, 0, NETVM_IF_IMMED, NETVM_BRF(10) },
+  /* 3*/{ NETVM_OC_LDHDRF, 0, NETVM_IF_IMMED, 
+          NETVM_HDESC(0, PPT_TCP, 0, NETVM_HDR_LEN, 0) },
+  /* 4*/{ NETVM_OC_LT, 0, NETVM_IF_IMMED, 16 },
+  /* 5*/{ NETVM_OC_BRIF, 0, NETVM_IF_IMMED, NETVM_BRF(7) },
+  /* 6*/{ NETVM_OC_LDMEM, 8, NETVM_IF_IMMED, DUP1ST_PNUM },
+  /* 7*/{ NETVM_OC_ADD, 0, NETVM_IF_IMMED, 1 },
+  /* 8*/{ NETVM_OC_DUP, 0, NETVM_IF_IMMED, 1 },
+  /* 9*/{ NETVM_OC_STMEM, 8, NETVM_IF_IMMED, DUP1ST_PNUM },
+  /*10*/{ NETVM_OC_LE, 0, NETVM_IF_IMMED, 1 },
+  /*11*/{ NETVM_OC_BRIF, 0, NETVM_IF_IMMED, NETVM_BRF(3) },
+  /*12*/{ NETVM_OC_PKTDEL, 0, NETVM_IF_IMMED, 0 },
+  /*13*/{ NETVM_OC_HALT, 0, 0, 0 },
+
+  /* First print the first 16 bytes of the payload */
+  /*14*/{ NETVM_OC_LDHDRF, 0, NETVM_IF_IMMED,
+          NETVM_HDESC(0, PPT_TCP, 0, NETVM_HDR_POFF, 0) },
+  /*15*/{ NETVM_OC_PUSH, 0, 0, 0 },
+  /*16*/{ NETVM_OC_PUSH, 0, 0, 16 },
+  /*17*/{ NETVM_OC_BULKP2M, 0, NETVM_IF_IMMED, 0 },
+  /*18*/{ NETVM_OC_LDMEM, 8, NETVM_IF_IMMED, 0 },
+  /*19*/{ NETVM_OC_PRHEX, 8, 0, 0 },
+  /*20*/{ NETVM_OC_LDMEM, 8, NETVM_IF_IMMED, 8 },
+  /*21*/{ NETVM_OC_PRHEX, 8, 0, 0 },
+  /*22*/{ NETVM_OC_PRSTR, BMS2_SIZE, NETVM_IF_IMMED, BMS2_OFFSET },
+
+  /* Next put "hello world" into the beginning of the packet */
+  /*23*/{ NETVM_OC_LDHDRF, 0, NETVM_IF_IMMED,
+          NETVM_HDESC(0, PPT_TCP, 0, NETVM_HDR_POFF, 0) },
+  /*24*/{ NETVM_OC_PUSH, 0, 0, BMS1_OFFSET },
+  /*25*/{ NETVM_OC_PUSH, 0, 0, BMS1_SIZE },
+  /*26*/{ NETVM_OC_BULKM2P, 0, NETVM_IF_IMMED, 0 }
+};
+
+
 struct netvm_program {
   struct netvm_inst *   code;
   unsigned              codelen;
@@ -203,6 +255,9 @@ struct netvm_program {
     "fib -- compute Xth fibonacci number", 1, 1, fibi, array_length(fibi) },
   { vm_prog_dup1st, array_length(vm_prog_dup1st),
     "dup1st -- duplicate the first packet and discard rest", 0, 1, NULL, 0 },
+  { vm_prog_bulkmove, array_length(vm_prog_bulkmove),
+    "bulkmove -- Bulk move data into and out of the 1st 16-byte TCPpacket", 0, 
+    1, bmi, array_length(bmi) },
 };
 unsigned prognum = 0;
 
@@ -327,7 +382,7 @@ int main(int argc, char *argv[])
   parse_options(argc, argv);
   install_default_proto_parsers();
   prog = &vm_progs[prognum];
-  file_emitter_init(&fe, stdout);
+  file_emitter_init(&fe, (prog->filter ? stderr : stdout));
   netvm_init(&vm, vm_stack, array_length(vm_stack), vm_memory, 
              array_length(vm_memory), ROSEGOFF, &fe.fe_emitter);
   if ( !prog->filter )

@@ -9,9 +9,9 @@
 #include "util.h"
 
 /* 
- * TODO:  If the chip doesn't support unaligned data access (e.g. xscale),
- * then the load and store operations need to be revamped to use memmove/memcpy
- * to load and store data values.  This can wait for later.
+ * TODO:  If the host processor doesn't support unaligned data access (e.g. 
+ * xscale),then the load and store operations need to be revamped to use 
+ * memmove/memcpy to load and store data values.  This can wait for later.
  */
 
 /* purely to set a breakpoint during debugging */
@@ -396,12 +396,12 @@ static void ni_blkmv(struct netvm *vm)
   S_POP(vm, poff);
   FATAL(vm, (len + maddr < len) || (len + poff < len)); /* overflow */
   hdr = pkt->headers;
-  FATAL(vm, (poff < hdr->poff) || (len > hdr_totlen(hdr)));
+  FATAL(vm, (poff < hdr->poff) || (poff + len > hdr_totlen(hdr)));
   FATAL(vm, !vm->mem || (maddr + len > vm->memsz));
   if ( inst->opcode == NETVM_OC_BULKP2M )
-    memcpy(vm->mem + maddr, hdr_payload(hdr), len);
+    memcpy(vm->mem + maddr, hdr->data + poff, len);
   else
-    memcpy(hdr_payload(hdr), vm->mem + maddr, len);
+    memcpy(hdr->data + poff, vm->mem + maddr, len);
 }
 
 static void ni_numop(struct netvm *vm)
@@ -593,7 +593,7 @@ static void ni_prnum(struct netvm *vm)
   register int swidth = inst->val;
   uint64_t val;
 
-  abort_unless(vm->outport);
+  abort_unless(vm->outport);    /* should be guaranteed by netvm_init() */
   CKWIDTH(vm, nwidth);
   FATAL(vm, swidth > 64 || swidth < 0); /* to prevent overflow of fmtbuf */
 
@@ -628,6 +628,7 @@ static void ni_prnum(struct netvm *vm)
       sprintf(fmtbuf, "%%0%d"FMT64"x", swidth);
     else
       sprintf(fmtbuf, "%%"FMT64"x");
+    break;
   default:
     abort_unless(0);
   }

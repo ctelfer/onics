@@ -96,7 +96,7 @@ enum {
   NETVM_OC_STPKT,       /* [v,hdesc|IWH] store into packet memory */
   NETVM_OC_STCLASS,     /* [v,pktnum|I] store into packet class */
   NETVM_OC_STTS,        /* [v,pktnum|I] store into timestamp */
-  NETVM_OC_BULKM2P,     /* [addr,pa,len,pktnum|I]: move bytes from pa to addr */
+  NETVM_OC_BULKM2P,     /* [pa,addr,len,pktnum|I]: move bytes from pa to addr */
   NETVM_OC_PKTNEW,      /* [hdesc|I] create packet: offset==len, htype==dl */
   NETVM_OC_PKTCOPY,     /* [pktnum2,pktnum1|I] copy packet in slot1 to slot2 */
   NETVM_OC_PKTDEL,      /* [pktnum|I] delete packet */
