@@ -37,6 +37,7 @@ struct metapkt *metapkt_new(size_t plen, int ppt)
   if ( dltype == PKTDL_INVALID )
     return NULL;
   pkt = ecalloc(1, sizeof(*pkt));
+  l_init(&pkt->entry);
   pkt_create(&pkt->pkb, plen, dltype);
   pkt->headers = hdr_create_parse(pkt->pkb->pkt_buffer, pkt->pkb->pkt_offset,
                                   pkt->pkb->pkt_buflen);
@@ -53,10 +54,11 @@ struct metapkt *pktbuf_to_metapkt(struct pktbuf *pkb)
   abort_unless(pkb);
   ppt = dltype_to_ppt(pkb->pkt_dltype);
   pkt = ecalloc(1, sizeof(*pkt));
+  l_init(&pkt->entry);
   pkt->pkb = pkb;
   if ( ppt != PPT_INVALID )
     pkt->headers = hdr_parse_packet(ppt,pkb->pkt_buffer, pkb->pkt_offset, 
-                                     pkb->pkt_len, pkb->pkt_buflen);
+                                    pkb->pkt_len, pkb->pkt_buflen);
   else
     pkt->headers = hdr_create_parse(pkt->pkb->pkt_buffer, pkt->pkb->pkt_offset,
                                     pkt->pkb->pkt_buflen);
@@ -98,6 +100,7 @@ struct metapkt *metapkt_copy(struct metapkt *pkt)
   int l;
   abort_unless(pkt && pkt->pkb && pkt->headers);
   pnew = ecalloc(1, sizeof(*pnew));
+  l_init(&pkt->entry);
   pkt_copy(pkt->pkb, &pnew->pkb);
   if ( !(pnew->headers = hdr_copy(pkt->headers, pnew->pkb->pkt_buffer)) ) {
     pkt_free(pnew->pkb);
@@ -114,6 +117,7 @@ struct metapkt *metapkt_copy(struct metapkt *pkt)
 void metapkt_free(struct metapkt *pkt, int keepbuf)
 {
   if ( pkt ) {
+    l_rem(&pkt->entry);
     if ( pkt->headers ) {
       hdr_free(pkt->headers, 1);
       pkt->headers = NULL;

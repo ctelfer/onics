@@ -6,6 +6,7 @@
 #define __metapkt_h
 #include <cat/cat.h>
 #include <cat/cattypes.h>
+#include <cat/list.h>
 #include "pktbuf.h"
 #include "protoparse.h"
 
@@ -21,6 +22,7 @@ enum {
 /* consider adding a list entry to this structure for easy queuing. */
 
 struct metapkt {
+  struct list           entry;
   struct pktbuf *       pkb;
   struct hdr_parse *    headers;
   struct hdr_parse *    layer[NETVM_HDI_MAX+1];
