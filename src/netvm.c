@@ -145,7 +145,7 @@ static void ni_ldmem(struct netvm *vm)
   register int width = inst->width;
   register uint32_t addr;
   FATAL(vm, !vm->mem || !vm->memsz);
-  CKWIDTH(vm, width);
+  CKWIDTH(vm, width);   /* TODO: check these during validation */
   if ( IMMED(inst) ) {
     addr = inst->val;
   } else {
@@ -594,7 +594,7 @@ static void ni_prnum(struct netvm *vm)
   uint64_t val;
 
   abort_unless(vm->outport);    /* should be guaranteed by netvm_init() */
-  CKWIDTH(vm, nwidth);
+  CKWIDTH(vm, nwidth); /* TODO: check during validation */
   FATAL(vm, swidth > 64 || swidth < 0); /* to prevent overflow of fmtbuf */
 
   switch (inst->opcode) {

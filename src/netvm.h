@@ -249,6 +249,26 @@ struct netvm {
 };
 
 
+enum {
+  NETVM_ERR_UNIMPL = 1,
+  NETVM_ERR_STKOVF,
+  NETVM_ERR_STKUNDF,
+  NETVM_ERR_INSTADDR,
+  NETVM_ERR_MEMADDR,
+  NETVM_ERR_PKTADDR,
+  NETVM_ERR_MRDONLY,
+  NETVM_ERR_NOPKT,
+  NETVM_ERR_NOHDR,
+  NETVM_ERR_NOHDRFLD,
+  NETVM_ERR_HDESC,
+  NETVM_ERR_HDRIDX,
+  NETVM_ERR_HDRFLD,
+  NETVM_ERR_OVERFLOW,
+  NETVM_ERR_NOMEM,
+  NETVM_ERR_EXTERN,
+};
+
+
 /* TODO: conser moving emitter setting out of initialization */
 /* this may become a more common practice if we also add queueing store and */
 /* input and output ports, a resolver, etc... */
