@@ -3,7 +3,6 @@
 #include <string.h>
 #include <stdlib.h>
 #include <cat/emit_format.h>
-#include <cat/emalloc.h>
 #include <cat/bitops.h>
 #include <cat/pack.h>
 #include "util.h"
