@@ -95,10 +95,8 @@ struct hdr_parse *hdr_create_parse(byte_t *buf, size_t off, size_t buflen)
     return NULL;
   }
   abort_unless(pp->ops && pp->ops->create);
-  if ( !(hdr = (*pp->ops->create)(buf, 0, buflen)) ) {
-    errno = ENOMEM;
+  if ( !(hdr = (*pp->ops->create)(buf, 0, buflen)) )
     return NULL;
-  }
   hdr->hoff = 0;
   hdr->poff = off;
   hdr->eoff = hdr->toff = buflen;

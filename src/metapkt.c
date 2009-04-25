@@ -1,7 +1,27 @@
+#include "config.h"
 #include "metapkt.h"
 #include <cat/emalloc.h>
 #include <string.h>
 #include <stdlib.h>
+#include <errno.h>
+
+
+/* NB: we pull these out because I'm thinking of changing the allocation */
+/* scheme for metapackets in the future.  If so, I need  to change newpmeta() */
+/* and freepmeta() */
+static INLINE struct metapkt *newpmeta() 
+{
+  struct metapkt *pkt = ecalloc(1, sizeof(struct metapkt));
+  if ( pkt )
+    l_init(&pkt->entry);
+  return pkt;
+}
+
+
+static INLINE void freepmeta(struct metapkt *pkt)
+{
+  free(pkt);
+}
 
 
 static unsigned dltype_to_ppt(uint32_t dltype)
@@ -34,13 +54,23 @@ struct metapkt *metapkt_new(size_t plen, int ppt)
 {
   struct metapkt *pkt;
   uint32_t dltype = ppt_to_dltype(ppt);
-  if ( dltype == PKTDL_INVALID )
+  if ( dltype == PKTDL_INVALID ) {
+    errno = EINVAL;
     return NULL;
-  pkt = ecalloc(1, sizeof(*pkt));
-  l_init(&pkt->entry);
-  pkt_create(&pkt->pkb, plen, dltype);
+  }
+  if ( !(pkt = newpmeta()) )
+    return NULL;
+  if ( pkt_create(&pkt->pkb, plen, dltype) < 0 ) {
+    free(pkt);
+    return NULL;
+  }
   pkt->headers = hdr_create_parse(pkt->pkb->pkt_buffer, pkt->pkb->pkt_offset,
                                   pkt->pkb->pkt_buflen);
+  if ( !pkt->headers ) {
+    pkt_free(pkt->pkb);
+    freepmeta(pkt);
+    return NULL;
+  }
   return pkt;
 }
 
@@ -53,8 +83,8 @@ struct metapkt *pktbuf_to_metapkt(struct pktbuf *pkb)
 
   abort_unless(pkb);
   ppt = dltype_to_ppt(pkb->pkt_dltype);
-  pkt = ecalloc(1, sizeof(*pkt));
-  l_init(&pkt->entry);
+  if ( !(pkt = newpmeta()) )
+    return NULL;
   pkt->pkb = pkb;
   if ( ppt != PPT_INVALID )
     pkt->headers = hdr_parse_packet(ppt,pkb->pkt_buffer, pkb->pkt_offset, 
@@ -62,7 +92,10 @@ struct metapkt *pktbuf_to_metapkt(struct pktbuf *pkb)
   else
     pkt->headers = hdr_create_parse(pkt->pkb->pkt_buffer, pkt->pkb->pkt_offset,
                                     pkt->pkb->pkt_buflen);
-  abort_unless(pkt->headers);
+  if ( !pkt->headers ) {
+    freepmeta(pkt);
+    return NULL;
+  }
   for ( hdr=hdr_child(pkt->headers); hdr->type != PPT_NONE; hdr=hdr_child(hdr) )
     metapkt_set_layer(pkt, hdr);
   return pkt;
@@ -99,12 +132,15 @@ struct metapkt *metapkt_copy(struct metapkt *pkt)
   struct metapkt *pnew;
   int l;
   abort_unless(pkt && pkt->pkb && pkt->headers);
-  pnew = ecalloc(1, sizeof(*pnew));
-  l_init(&pkt->entry);
-  pkt_copy(pkt->pkb, &pnew->pkb);
+  if ( !(pnew = newpmeta()) )
+    return NULL;
+  if ( pkt_copy(pkt->pkb, &pnew->pkb) < 0 ) {
+    freepmeta(pnew);
+    return NULL;
+  }
   if ( !(pnew->headers = hdr_copy(pkt->headers, pnew->pkb->pkt_buffer)) ) {
     pkt_free(pnew->pkb);
-    free(pnew);
+    freepmeta(pnew);
     return NULL;
   }
   for ( l = NETVM_HDI_LINK; l <= NETVM_HDI_MAX; ++l )
@@ -125,7 +161,7 @@ void metapkt_free(struct metapkt *pkt, int keepbuf)
     if ( pkt->pkb && !keepbuf )
       pkt_free(pkt->pkb);
     pkt->pkb = NULL;
-    free(pkt);
+    freepmeta(pkt);
   }
 }
 

@@ -1,3 +1,4 @@
+#include "config.h"
 #include "protoparse.h"
 #include "tcpip_hdrs.h"
 #include "pptcpip.h"
@@ -17,6 +18,10 @@ extern struct hparse_ops icmpv6_hparse_ops;
 extern struct hparse_ops udp_hparse_ops;
 extern struct hparse_ops tcp_hparse_ops;
 
+
+/* NB:  right now we are using emalloc() fpr header allocation, but we */
+/* may not do that in the future.  When that happens, we need to change */
+/* newhdr, crthdr, and freehdr */
 
 static struct hdr_parse *newhdr(size_t sz, unsigned type, 
                                 struct hdr_parse *phdr, struct hparse_ops *ops)
@@ -57,6 +62,12 @@ static struct hdr_parse *crthdr(size_t sz, unsigned type, byte_t *buf,
   hdr->ops = ops;
   l_init(&hdr->node);
   return hdr;
+}
+
+
+static INLINE void freehdr(struct hdr_parse *hdr)
+{
+  free(hdr);
 }
 
 
@@ -112,7 +123,7 @@ static struct hdr_parse *default_copy(struct hdr_parse *ohdr, byte_t *buffer)
 
 static void default_free(struct hdr_parse *hdr)
 {
-  free(hdr);
+  freehdr(hdr);
 }
 
 
@@ -170,6 +181,8 @@ static struct hdr_parse *eth_parse(struct hdr_parse *phdr)
     return NULL;
   }
   hdr = newhdr(sizeof(*hdr), PPT_ETHERNET, phdr, &eth_hparse_ops);
+  if ( !hdr )
+    return NULL;
   if ( hdr_hlen(hdr) < ETHHLEN ) { 
     hdr->error = PPERR_TOOSMALL;
     hdr->poff = hdr->toff = hdr->eoff = hdr->hoff;
@@ -229,6 +242,8 @@ static struct hdr_parse *arp_parse(struct hdr_parse *phdr)
     return NULL;
   }
   hdr = newhdr(sizeof(*hdr), PPT_ARP, phdr, &arp_hparse_ops);
+  if ( !hdr )
+    return NULL;
   if ( hdr_hlen(hdr) < 8 ) {
     hdr->error = PPERR_TOOSMALL;
     hdr->poff = hdr->toff = hdr->eoff = hdr->hoff;
@@ -340,6 +355,8 @@ static struct hdr_parse *ipv4_parse(struct hdr_parse *phdr)
   }
   /* TODO: change size when we add provisions for option parsing */
   hdr = newhdr(sizeof(*hdr), PPT_IPV4, phdr, &ipv4_hparse_ops);
+  if ( !hdr )
+    return NULL;
   ip = hdr_header(hdr, struct ipv4h);
   hlen = IPH_HLEN(*ip);
   tlen = hdr_totlen(hdr);
@@ -466,7 +483,7 @@ static struct hdr_parse *ipv4_copy(struct hdr_parse *ohdr, byte_t *buffer)
 static void ipv4_free(struct hdr_parse *hdr)
 {
   /* TODO: fix when option parsing is complete */
-  free(hdr);
+  freehdr(hdr);
 }
 
 
@@ -529,6 +546,8 @@ static struct hdr_parse *udp_parse(struct hdr_parse *phdr)
     return NULL;
   }
   hdr = newhdr(sizeof(*hdr), PPT_UDP, phdr, &udp_hparse_ops);
+  if ( !hdr )
+    return NULL;
   if ( hdr_hlen(hdr) < 8 ) {
     hdr->error |= PPERR_TOOSMALL;
     hdr->poff = hdr->toff = hdr->eoff = hdr->hoff;
@@ -639,6 +658,8 @@ static struct hdr_parse *tcp_parse(struct hdr_parse *phdr)
 
   /* TODO: change size when we add provisions for option parsing */
   hdr = newhdr(sizeof(*hdr), PPT_TCP, phdr, &tcp_hparse_ops);
+  if ( !hdr )
+    return NULL;
   tcp = hdr_header(hdr, struct tcph);
   hlen = TCPH_HLEN(*tcp);
   tlen = hdr_totlen(hdr);
@@ -741,7 +762,7 @@ static struct hdr_parse *tcp_copy(struct hdr_parse *ohdr, byte_t *buffer)
 static void tcp_free(struct hdr_parse *hdr)
 {
   /* TODO: fix when option parsing is complete */
-  free(hdr);
+  freehdr(hdr);
 }
 
 
@@ -767,6 +788,8 @@ static struct hdr_parse *icmp_parse(struct hdr_parse *phdr)
     return NULL;
   }
   hdr = newhdr(sizeof(*hdr), PPT_ICMP, phdr, &icmp_hparse_ops);
+  if ( !hdr )
+    return NULL;
   if ( hdr_hlen(hdr) < 8 ) {
     hdr->error |= PPERR_TOOSMALL;
     hdr->poff = hdr->toff = hdr->eoff = hdr->hoff;

@@ -1,18 +1,12 @@
 #include "pktbuf.h"
-#include <cat/emalloc.h>
 #include <cat/pack.h>
 #include <cat/io.h>
+#include <cat/emalloc.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
 #include <errno.h>
-
-#if CAT_USE_INLINE
-#define INLINE inline
-#else
-#define INLINE
-#endif
 
 #define PHLEN offsetof(struct pktbuf, pkt_buffer)
 #define DEFAULT_HPAD 256
@@ -37,17 +31,30 @@ static INLINE size_t offset_by_dltype(enum pktdltype_e dlt)
 }
 
 
+/* NB:  In the future I may change the allocation model for this part of */
+/* the library to a list of packet buffers, etc.... */
 static INLINE struct pktbuf * new_packet(const struct pktprehdr *pph)
 {
   size_t off = offset_by_dltype(pph->pph_dltype);
   size_t dlen = pph->pph_len + off;
   struct pktbuf *p = emalloc(PHLEN + dlen);
 
+  if ( !p )
+    return NULL;
+
   p->pkt_header = *pph;
   p->pkt_buflen = dlen;
   p->pkt_offset = off;
 
   return p;
+}
+
+
+/* NB:  In the future I may change the allocation model for this part of */
+/* the library to a list of packet buffers, etc.... */
+static INLINE struct pktbuf * resize_packet(struct pktbuf *p, size_t newlen)
+{
+  return erealloc(p, newlen);
 }
 
 
@@ -63,7 +70,10 @@ int pkt_create(struct pktbuf **p, size_t plen, enum pktdltype_e dltype)
   pph.pph_len = plen;
   pph.pph_class = 0;
   pph.pph_timestamp = 0;
-  *p = new_packet(&pph);
+  if ( !(*p = new_packet(&pph)) ) {
+    errno = ENOMEM;
+    return -1;
+  }
 
   return 0;
 }
@@ -77,7 +87,10 @@ int pkt_copy(const struct pktbuf *orig, struct pktbuf **newp)
     errno = EINVAL;
     return -1;
   }
-  p = new_packet(&orig->pkt_header);
+  if ( !(p = new_packet(&orig->pkt_header)) ) {
+    errno = ENOMEM;
+    return -1;
+  }
   memset(p->pkt_buffer, 0, p->pkt_offset);
   memcpy(pkt_data(p), pkt_data(orig), p->pkt_len);
   *newp = p;
@@ -89,6 +102,7 @@ int pkt_copy(const struct pktbuf *orig, struct pktbuf **newp)
 int pkt_resize(struct pktbuf **p, size_t plen)
 {
   size_t tlen;
+  struct pktbuf *npb;
 
   if (!p || !*p) {
     errno = EINTR;
@@ -99,7 +113,9 @@ int pkt_resize(struct pktbuf **p, size_t plen)
     return 0;
   }
   tlen = PHLEN + (*p)->pkt_offset + plen;
-  *p = erealloc(*p, tlen);
+  if ( !(npb = resize_packet(*p, tlen)) )
+    return -1;
+  *p = npb;
   (*p)->pkt_buflen = tlen - PHLEN;
 
   return 0;
@@ -129,7 +145,10 @@ int pkt_file_read(FILE *fp, struct pktbuf **p)
     errno = EIO;
     return -1;
   }
-  *p = new_packet(&pph2);
+  if ( !(*p = new_packet(&pph2)) ) {
+    errno = ENOMEM;
+    return -1;
+  }
   if ( fread(pkt_data(*p), 1, (*p)->pkt_len, fp) < (*p)->pkt_len ) {
     errno = EIO;
     return -1;
@@ -163,7 +182,11 @@ int pkt_fd_read(int fd, struct pktbuf **p)
     errno = EIO;
     return -1;
   }
-  *p = new_packet(&pph2);
+
+  if ( !(*p = new_packet(&pph2)) ) {
+    errno = ENOMEM;
+    return -1;
+  }
 
   while ( (rem = (*p)->pkt_len) > SSIZE_MAX ) {
     if ( io_read(fd, pkt_data(*p) + off, SSIZE_MAX) < SSIZE_MAX ) {
@@ -237,6 +260,8 @@ int pkt_fd_write(int fd, struct pktbuf *p)
 }
 
 
+/* NB:  In the future, if I change the allocation format in new_packet() */
+/* then this will also have to change.  */
 void pkt_free(struct pktbuf *p)
 {
   free(p);
