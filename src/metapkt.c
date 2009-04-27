@@ -9,7 +9,7 @@
 /* NB: we pull these out because I'm thinking of changing the allocation */
 /* scheme for metapackets in the future.  If so, I need  to change newpmeta() */
 /* and freepmeta() */
-static INLINE struct metapkt *newpmeta() 
+static NETTOOLS_INLINE struct metapkt *newpmeta() 
 {
   struct metapkt *pkt = ecalloc(1, sizeof(struct metapkt));
   if ( pkt )
@@ -18,7 +18,7 @@ static INLINE struct metapkt *newpmeta()
 }
 
 
-static INLINE void freepmeta(struct metapkt *pkt)
+static NETTOOLS_INLINE void freepmeta(struct metapkt *pkt)
 {
   free(pkt);
 }

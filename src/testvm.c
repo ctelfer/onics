@@ -384,7 +384,7 @@ int main(int argc, char *argv[])
   prog = &vm_progs[prognum];
   file_emitter_init(&fe, (prog->filter ? stderr : stdout));
   netvm_init(&vm, vm_stack, array_length(vm_stack), vm_memory, 
-             array_length(vm_memory), ROSEGOFF, &fe.fe_emitter);
+             array_length(vm_memory), &fe.fe_emitter);
   if ( !prog->filter )
     vm.matchonly = 1;
   if ( netvm_setcode(&vm, prog->code, prog->codelen) < 0)

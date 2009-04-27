@@ -12,13 +12,13 @@
 #define DEFAULT_HPAD 256
 
 
-static INLINE int dltype_is_valid(uint32_t dlt)
+static NETTOOLS_INLINE int dltype_is_valid(uint32_t dlt)
 {
   return (dlt >= PKTDL_MIN && dlt <= PKTDL_MAX);
 }
 
 
-static INLINE size_t offset_by_dltype(enum pktdltype_e dlt)
+static NETTOOLS_INLINE size_t offset_by_dltype(enum pktdltype_e dlt)
 {
   switch(dlt) { 
     case PKTDL_ETHERNET2:
@@ -33,7 +33,7 @@ static INLINE size_t offset_by_dltype(enum pktdltype_e dlt)
 
 /* NB:  In the future I may change the allocation model for this part of */
 /* the library to a list of packet buffers, etc.... */
-static INLINE struct pktbuf * new_packet(const struct pktprehdr *pph)
+static NETTOOLS_INLINE struct pktbuf * new_packet(const struct pktprehdr *pph)
 {
   size_t off = offset_by_dltype(pph->pph_dltype);
   size_t dlen = pph->pph_len + off;
@@ -52,7 +52,8 @@ static INLINE struct pktbuf * new_packet(const struct pktprehdr *pph)
 
 /* NB:  In the future I may change the allocation model for this part of */
 /* the library to a list of packet buffers, etc.... */
-static INLINE struct pktbuf * resize_packet(struct pktbuf *p, size_t newlen)
+static NETTOOLS_INLINE struct pktbuf * resize_packet(struct pktbuf *p, 
+                                                     size_t newlen)
 {
   return erealloc(p, newlen);
 }

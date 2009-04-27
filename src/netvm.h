@@ -15,6 +15,7 @@
  * M -> MOVEUP flag used for INS and CUT operations
  * V -> Uses the "val" field of the instruction regardless (i.e. without
  *      concern for the NETVM_IF_IMMED flag)
+ * R -> Load offset from read-only segment offset
  *
  * Field types:
  * v, v1, v2 - a generic numeric value
@@ -34,7 +35,7 @@ enum {
   NETVM_OC_DUP,         /* dupcliates top of stack */
   NETVM_OC_SWAP,        /* [|WV] swap stack positions "val" and "width" */
                         /* 0-based counting from the top of the stack */
-  NETVM_OC_LDMEM,       /* [addr|WIS]: load from memory */
+  NETVM_OC_LDMEM,       /* [addr|WISR]: load from memory */
   NETVM_OC_STMEM,       /* [v,addr|WI]: store to memory */
   NETVM_OC_LDPKT,       /* [hdesc|WSHTP]: load bytes from packet */
   NETVM_OC_LDCLASS,     /* [pktnum|I]: load packet class */
@@ -163,6 +164,7 @@ enum {
   NETVM_IF_IPHLEN =    0x10, /* on 1 byte packet load instructions */
   NETVM_IF_TCPHLEN =   0x20, /* on 1 byte packet load instructions */
   NETVM_IF_MOVEUP =    0x40, /* only used HDRINS and HDRCUT */
+  NETVM_IF_RDONLY =    0x80, /* load from read-only segment */
 };
 
 enum {
@@ -276,11 +278,13 @@ enum {
 /* mem may be NULL and memsz 0.  roseg must be <= memsz.  stack must not be */
 /* 0 and ssz is the number of stack elements.  outport may be NULL */
 void netvm_init(struct netvm *vm, uint64_t *stack, uint32_t ssz,
-                byte_t *mem, uint32_t memsz, uint32_t roseg, 
-                struct emitter *outport);
+                byte_t *mem, uint32_t memsz, struct emitter *outport);
 
 /* set the instruction code and validate the vm: 0 on success, -1 on error */
 int netvm_setcode(struct netvm *vm, struct netvm_inst *inst, uint32_t ni);
+
+/* set the offset of the read-only segment for the VM */
+int netvm_setrooff(struct netvm *vm, uint32_t rooff);
 
 /* validate a netvm is properly set up and that all branches are correct */
 /* called by set_netvm_code implicitly:  returns 0 on success, -1 on error */
@@ -297,6 +301,9 @@ void netvm_restart(struct netvm *vm);
 
 /* clear memory, set pc <- 0, set sp <- 0, discard packets */
 void netvm_reset(struct netvm *vm);
+
+/* set matchonly */
+void netvm_set_matchonly(struct netvm *vm, int matchonly);
 
 /* will free existing packets if they are slotted.  Note this gives up */
 /* control of the packet.  netvm_clrpkt() or netvm_reset() or other native */

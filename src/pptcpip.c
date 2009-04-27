@@ -65,7 +65,7 @@ static struct hdr_parse *crthdr(size_t sz, unsigned type, byte_t *buf,
 }
 
 
-static INLINE void freehdr(struct hdr_parse *hdr)
+static NETTOOLS_INLINE void freehdr(struct hdr_parse *hdr)
 {
   free(hdr);
 }

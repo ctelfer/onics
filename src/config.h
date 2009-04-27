@@ -7,9 +7,9 @@
 /* #define FMT64   "l" */ /* use this one for 64-bit machines */
 
 #if CAT_USE_INLINE
-#define INLINE inline
+#define NETTOOLS_INLINE inline
 #else
-#define INLINE
+#define NETTOOLS_INLINE
 #endif
 
 #endif /* __pkttools_config_h */

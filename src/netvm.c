@@ -150,6 +150,10 @@ static void ni_ldmem(struct netvm *vm)
   } else {
     S_POP(vm, addr);
   }
+  if ( inst->flags & NETVM_IF_RDONLY ) {
+    FATAL(vm, addr + vm->rosegoff < addr);
+    addr += vm->rosegoff;
+  }
   FATAL(vm, addr > vm->memsz || addr + width > vm->memsz);
   if ( ISSIGNED(inst) )
     width = -width;
@@ -1057,15 +1061,14 @@ netvm_op g_netvm_ops[NETVM_OC_MAX+1] = {
 
 
 void netvm_init(struct netvm *vm, uint64_t *stack, uint32_t ssz,
-                byte_t *mem, uint32_t memsz, uint32_t roseg, 
-                struct emitter *outport)
+                byte_t *mem, uint32_t memsz, struct emitter *outport)
 {
-  abort_unless(vm && stack && ssz > 0 && roseg <= memsz);
+  abort_unless(vm && stack && ssz > 0 );
   vm->stack = stack;
   vm->stksz = ssz;
   vm->mem = mem;
   vm->memsz = memsz;
-  vm->rosegoff = roseg;
+  vm->rosegoff = memsz;
   if ( outport )
     vm->outport = outport;
   else
@@ -1075,8 +1078,6 @@ void netvm_init(struct netvm *vm, uint64_t *stack, uint32_t ssz,
   vm->pc = 0;
   vm->sp = 0;
   vm->matchonly = 0;
-  if ( vm->mem )
-    memset(vm->mem, 0, roseg);
   memset(vm->packets, 0, sizeof(vm->packets));
 }
 
@@ -1111,12 +1112,32 @@ int netvm_validate(struct netvm *vm)
 }
 
 
+/* set the read-only segment offset for the VM */
+int netvm_setrooff(struct netvm *vm, uint32_t rooff)
+{
+  abort_unless(vm);
+  if ( rooff > vm->memsz )
+    return -1;
+  vm->rosegoff = rooff;
+  return 0;
+}
+
+
+
 /* set up netvm code */
 int netvm_setcode(struct netvm *vm, struct netvm_inst *inst, uint32_t ni)
 {
-    vm->inst = inst;
-    vm->ninst = ni;
-    return netvm_validate(vm);
+  abort_unless(vm && inst);
+  vm->inst = inst;
+  vm->ninst = ni;
+  return netvm_validate(vm);
+}
+
+
+void netvm_set_matchonly(struct netvm *vm, int matchonly)
+{
+  abort_unless(vm);
+  vm->matchonly = matchonly;
 }
 
 
