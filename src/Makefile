@@ -13,7 +13,8 @@ BINDIR=../bin
 TARGETS=${BINDIR}/pcapin \
 	${BINDIR}/pcapout \
 	${BINDIR}/testpp \
-	${BINDIR}/testvm
+	${BINDIR}/testvm \
+	${BINDIR}/ped
 
 all: ${TARGETS}
 
@@ -30,9 +31,15 @@ ${BINDIR}/testpp: testpp.o protoparse.o pptcpip.o util.o pktbuf.o
 		${DEFS} ${OPTS} ${INCS} ${LIBS}
 
 ${BINDIR}/testvm: testvm.o protoparse.o pptcpip.o util.o pktbuf.o netvm.o \
-	          metapkt.o netvm.h protoparse.h pktbuf.h metapkt.c
+	          metapkt.o netvm.h protoparse.h pktbuf.h metapkt.h
 	${CC} -o ../bin/testvm testvm.o pktbuf.o protoparse.o pptcpip.o util.o \
 		netvm.o metapkt.o \
+		${DEFS} ${OPTS} ${INCS} ${LIBS}
+
+${BINDIR}/ped: ped.o protoparse.o pptcpip.o util.o pktbuf.o netvm.o netvm_rt.o \
+	          metapkt.o netvm.h protoparse.h pktbuf.h metapkt.h netvm_rt.h
+	${CC} -o ../bin/ped ped.o pktbuf.o protoparse.o pptcpip.o util.o \
+		netvm.o metapkt.o netvm_rt.o \
 		${DEFS} ${OPTS} ${INCS} ${LIBS}
 
 .c.o: $<

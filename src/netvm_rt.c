@@ -1,5 +1,8 @@
 #include "netvm_rt.h"
-#include <cat/stdlib.h>
+#include <cat/stduse.h>
+#include <cat/grow.h>
+#include <stdlib.h>
+#include <string.h>
 
 #define MMMAXSIZE  (128 * 1024)
 
@@ -16,7 +19,7 @@ void nprg_init(struct netvm_program *prog, int matchonly)
   prog->inst = NULL;
   prog->ninst = 0;
   prog->isiz = 0;
-  prog->isymtab = ht_new(64, CAT_DT_STR);
+  prog->labels = ht_new(64, CAT_DT_STR);
   prog->ipatches = clist_newlist();
   prog->vars = ht_new(64, CAT_DT_STR);
   prog->varlist = clist_newlist();;
@@ -29,7 +32,6 @@ void nprg_init(struct netvm_program *prog, int matchonly)
 int nprg_add_code(struct netvm_program *prog, struct netvm_inst *inst,
                   uint32_t ninst, uint32_t *iaddr)
 {
-  struct netvm_sym *sym = NULL;
   abort_unless(prog && inst);
   if ( (ninst == 0) || (prog->ninst >= ~(uint32_t)0 - ninst) )
     return -1;
@@ -43,7 +45,7 @@ int nprg_add_code(struct netvm_program *prog, struct netvm_inst *inst,
   if ( iaddr )
     *iaddr = prog->ninst;
   prog->ninst += ninst;
-  return sym;
+  return 0;
 }
 
 
@@ -55,12 +57,12 @@ int nprg_add_label(struct netvm_program *prog, const char *name, uint32_t iaddr)
     return -1;
   if ( iaddr >= prog->ninst )
     return -1;
-  if ( ht_get(name) )
+  if ( ht_get(prog->labels, (void *)name) )
     return -1;
   nl = emalloc(sizeof(*nl));
   nl->name = estrdup(name);
   nl->addr = iaddr;
-  ht_put(name, nl);
+  ht_put(prog->labels, (void *)name, nl);
   return 0;
 }
 
@@ -91,26 +93,26 @@ struct netvm_var *nprg_add_var(struct netvm_program *prog, const char *name,
 {
   struct netvm_var *var;
   byte_t *p;
-  abort_unless(prog && prog->vars, && name);
-  if ( ht_get(prog->vars, name) )
+  abort_unless(prog && prog->vars && name);
+  if ( ht_get(prog->vars, (void*)name) )
     return NULL;
 
   if ( isrdonly ) {
-    if ( !(p = mem_get(&prog->romm, len)) )
+    if ( !(p = mem_get(&prog->romm.mm, len)) )
       return NULL;
   } else {
-    if ( !(p = mem_get(&prog->rwmm, len)) )
+    if ( !(p = mem_get(&prog->rwmm.mm, len)) )
       return NULL;
   }
   var = emalloc(sizeof(*var));
   var->name = estrdup(name);
-  var->addr = p - (byte_t)0;
+  var->addr = p - (byte_t*)0;
   var->len = len;
   var->inittype = NETVM_ITYPE_NONE;
   var->isrdonly = isrdonly;
   var->datalen = 0;
   var->init_type_u.data = NULL;
-  ht_put(prog->vars, var);
+  ht_put(prog->vars, (void *)var->name, var);
   clist_enq(prog->varlist, struct netvm_var *, var);
   return var;
 }
@@ -119,9 +121,10 @@ struct netvm_var *nprg_add_var(struct netvm_program *prog, const char *name,
 static void freevar(void *varp, void *realfree)
 {
   struct netvm_var *var = varp;
-  if ( var->type == NETVM_ITYPE_DATA )
+  if ( var->inittype == NETVM_ITYPE_DATA )
     free(var->init_type_u.data);
-  else if ( (var->type==NETVM_ITYPE_LABEL) || (var->type==NETVM_ITYPE_VADDR) )
+  else if ( (var->inittype == NETVM_ITYPE_LABEL) || 
+            (var->inittype == NETVM_ITYPE_VADDR) )
     free(var->init_type_u.symname);
   if ( realfree != NULL ) {
     free(var->name);
@@ -134,7 +137,7 @@ int nprg_vinit_data(struct netvm_var *var, void *data, uint32_t len)
 {
   abort_unless(var && data && len <= var->len);
   freevar(var, NULL);
-  var->type = NETVM_ITYPE_DATA;
+  var->inittype = NETVM_ITYPE_DATA;
   var->init_type_u.data = emalloc(len);
   memcpy(var->init_type_u.data, data,len);
   var->datalen = len;
@@ -146,17 +149,17 @@ int nprg_vinit_ilabel(struct netvm_var *var, const char *label, uint64_t delta)
 {
   abort_unless(var && label);
   freevar(var, NULL);
-  var->type = NETVM_ITYPE_LABEL;
+  var->inittype = NETVM_ITYPE_LABEL;
   var->init_type_u.symname = estrdup(label);
   return 0;
 }
 
 int nprg_vinit_vaddr(struct netvm_var *var, const char *varname, uint64_t delta)
 {
-  abort_unless(var && label);
+  abort_unless(var && varname);
   freevar(var, NULL);
-  var->type = NETVM_ITYPE_VADDR;
-  var->init_type_u.symname = estrdup(label);
+  var->inittype = NETVM_ITYPE_VADDR;
+  var->init_type_u.symname = estrdup(varname);
   return 0;
 }
 
@@ -170,23 +173,25 @@ int nprg_vinit_fill(struct netvm_var *var, uint64_t val, int width)
     return -1;
   }
   freevar(var, NULL);
-  var->type = NETVM_INIT_FILL;
+  var->inittype = NETVM_ITYPE_FILL;
   var->datalen = width;
   var->init_type_u.fill = val;
   return 0;
 }
 
 
-static void label_free_aux(void *labelp, void *)
+static void label_free_aux(void *labelp, void *unused)
 {
   struct netvm_label *label = labelp;
+  (void)unused;
   free(label->name);
 }
 
 
-static void ipatch_free_aux(void *iptchp, void *)
+static void ipatch_free_aux(void *iptchp, void *unused)
 {
   struct netvm_ipatch *iptch = iptchp;
+  (void)unused;
   free(iptch->symname);
 }
 
@@ -194,12 +199,12 @@ static void ipatch_free_aux(void *iptchp, void *)
 static void linkfree(struct netvm_program *prog)
 {
   if ( prog->labels ) {
-    ht_apply(prog->labels, sym_free_aux, NULL);
+    ht_apply(prog->labels, label_free_aux, NULL);
     ht_free(prog->labels);
-    prog->isymtab = NULL;
+    prog->labels = NULL;
   }
   if ( prog->ipatches ) {
-    l_apply(prog->ipatches, sympatch_free_aux, NULL);
+    l_apply(prog->ipatches, ipatch_free_aux, NULL);
     clist_freelist(prog->ipatches);
     prog->ipatches = NULL;
   }
@@ -226,17 +231,17 @@ int nprg_link(struct netvm_program *prog)
     iptch = clist_dptr(l, struct netvm_ipatch);
     abort_unless(iptch->iaddr < prog->ninst);
     inst = prog->inst + iptch->iaddr;
-    if ( l->type == NETVM_IPTYPE_LABEL ) {
+    if ( iptch->type == NETVM_IPTYPE_LABEL ) {
       label = ht_get(prog->labels, iptch->symname);
       if ( label == NULL )
         return -1;
-      iptch->val = label->addr;
+      inst->val = label->addr;
     } else {
-      abort_unless(l->type == NETVM_IPTYPE_VAR);
+      abort_unless(iptch->type == NETVM_IPTYPE_VAR);
       var = ht_get(prog->vars, iptch->symname);
       if ( var == NULL )
         return -1;
-      iptch->val = addr;
+      inst->val = var->addr;
     }
   }
 
@@ -265,7 +270,7 @@ int nprg_link(struct netvm_program *prog)
   }
 
   for ( l = l_head(prog->varlist); l != l_end(prog->varlist); l = l->next )
-    ht_del(var->name);
+    ht_clr(prog->vars, var->name);
   linkfree(prog);
   prog->linked = 1;
 
@@ -280,12 +285,12 @@ static void loadvar(byte_t *mem, struct netvm_var *var)
   case NETVM_ITYPE_NONE:
     break;
   case NETVM_ITYPE_FILL:
-    for ( i = 0; i < len; i += var->datalen ) {
+    for ( i = 0; i < var->len; i += var->datalen ) {
       switch(var->datalen) {
-      case 1: *(uint8_t *)(mem + i) = var->fill; break;
-      case 2: *(uint16_t *)(mem + i) = var->fill; break;
-      case 4: *(uint32_t *)(mem + i) = var->fill; break;
-      case 8: *(uint64_t *)(mem + i) = var->fill; break;
+      case 1: *(uint8_t *)(mem + i) = var->init_type_u.fill; break;
+      case 2: *(uint16_t *)(mem + i) = var->init_type_u.fill; break;
+      case 4: *(uint32_t *)(mem + i) = var->init_type_u.fill; break;
+      case 8: *(uint64_t *)(mem + i) = var->init_type_u.fill; break;
       default:
         abort_unless(0);
       }
@@ -342,8 +347,8 @@ void nprg_release(struct netvm_program *prog)
 
 
 
-void nvmmrt_init(struct netvm_mrt *mrt, struct netvm *vm, pktin_f inf,
-                 void *inctx, pktout_f outf, void *outctx)
+void nvmmrt_init(struct netvm_mrt *mrt, struct netvm *vm, netvm_pktin_f inf,
+                 void *inctx, netvm_pktout_f outf, void *outctx)
 {
   abort_unless(mrt && vm && inf && outf);
   mrt->vm = vm;
@@ -357,7 +362,7 @@ void nvmmrt_init(struct netvm_mrt *mrt, struct netvm *vm, pktin_f inf,
 }
 
 
-int nvmmrt_set_begin(struct netvm_mrt *mrt, struct netvm_prog *prog)
+int nvmmrt_set_begin(struct netvm_mrt *mrt, struct netvm_program *prog)
 {
   abort_unless(mrt && prog);
   mrt->begin = prog;
@@ -365,7 +370,7 @@ int nvmmrt_set_begin(struct netvm_mrt *mrt, struct netvm_prog *prog)
 }
 
 
-int nvmmrt_set_end(struct netvm_mrt *mrt, struct netvm_prog *prog)
+int nvmmrt_set_end(struct netvm_mrt *mrt, struct netvm_program *prog)
 {
   abort_unless(mrt && prog);
   mrt->end = prog;
@@ -373,8 +378,8 @@ int nvmmrt_set_end(struct netvm_mrt *mrt, struct netvm_prog *prog)
 }
 
 
-int nvmmrt_add_pktprog(struct netvm_mrt *mrt, struct netvm_prog *match,
-                       struct netvm_prog *action)
+int nvmmrt_add_pktprog(struct netvm_mrt *mrt, struct netvm_program *match,
+                       struct netvm_program *action)
 {
   struct netvm_matchedprog mp;
   abort_unless(mrt && mrt->pktprogs && action && match);
@@ -389,10 +394,10 @@ int nvmmrt_add_pktprog(struct netvm_mrt *mrt, struct netvm_prog *match,
 int nvmmrt_execute(struct netvm_mrt *mrt)
 {
   struct pktbuf *pkb;
-  struct metapacket *pkt;
   struct netvm_matchedprog *mprog;
   int i, rv, send;
   uint64_t rc;
+  struct list *l;
 
   abort_unless(mrt);
   if ( mrt->begin && (nprg_load(mrt->vm, mrt->begin) < 0) )
@@ -404,13 +409,13 @@ int nvmmrt_execute(struct netvm_mrt *mrt)
     send = 1;
     for ( l = l_head(mrt->pktprogs); l != l_end(mrt->pktprogs); l = l->next ) {
       mprog = clist_data(l, struct netvm_matchedprog *);
-      if ( nprt_load(mrt->vm, mprog->match) < 0 )
+      if ( nprg_load(mrt->vm, mprog->match) < 0 )
         return -1;
       if ( (rv = netvm_run(mrt->vm, -1, &rc)) < 0 )
         return -1;
       if ( !rc )
         continue;
-      if ( nprt_load(mrt->vm, mprog->action) < 0 )
+      if ( nprg_load(mrt->vm, mprog->action) < 0 )
         return -1;
       /* clear all packets on an error */
       if ( (rv = netvm_run(mrt->vm, -1, &rc)) < 0 ) {

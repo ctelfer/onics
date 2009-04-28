@@ -3,7 +3,8 @@
 
 #include "netvm.h"
 #include <cat/list.h>
-#include <cat/htab.h>
+#include <cat/hash.h>
+#include <cat/mem.h>
 
 
 #define NETVM_IPTYPE_LABEL      1
@@ -12,13 +13,13 @@
 struct netvm_ipatch {
   uint32_t              iaddr;
   uint64_t              delta;
-  const char *          symname;
+  char *                symname;
   int                   type;
 };
 
 
 struct netvm_label {
-  const char *          name;
+  char *                name;
   uint32_t              addr;
 };
 
@@ -31,14 +32,14 @@ struct netvm_label {
 
 
 struct netvm_var {
-  const char *          name;
+  char *                name;
   uint32_t              addr;
   uint32_t              len;
   int                   inittype;
   int                   isrdonly;
   uint32_t              datalen;
   union {
-    const char *        symname;
+    char *              symname;
     void *              data;
     uint64_t            fill;
   } init_type_u;
@@ -76,13 +77,13 @@ struct netvm_var *nprg_add_var(struct netvm_program *prog, const char *name,
 int nprg_vinit_data(struct netvm_var *var, void *data, uint32_t len);
 int nprt_vinit_label(struct netvm_var *var, const char *label, uint64_t delta);
 int nprt_vinit_vaddr(struct netvm_var *var, const char *varnam, uint64_t delta);
-void nprg_vinit_fill(struct netvm_var *var, uint64_t val, int width);
+int nprg_vinit_fill(struct netvm_var *var, uint64_t val, int width);
 
 /* get the amount of memory required by the program */
 size_t mem_required(struct netvm_program *prog);
 
 /* resolve all instruction patches in the system */
-int nprg_link(struct netvm *vm);
+int nprg_link(struct netvm_program *prog);
 
 /* load a program onto a VM */
 int nprg_load(struct netvm *vm, struct netvm_program *prog);
@@ -96,8 +97,8 @@ void nprg_release(struct netvm_program *prog);
 
 
 struct netvm_matchedprog {
-  struct netvm_prog             match;
-  struct netvm_prog             action;
+  struct netvm_program *        match;
+  struct netvm_program *        action;
 };
 
 typedef struct pktbuf *(*netvm_pktin_f)(void *ctx);
@@ -105,21 +106,21 @@ typedef int (*netvm_pktout_f)(void *ctx, struct pktbuf *pb);
 
 struct netvm_mrt {
   struct netvm *                vm;
-  pktin_f                       pktin;
+  netvm_pktin_f                 pktin;
   void *                        inctx;
-  pktout_f                      pktout;
+  netvm_pktout_f                pktout;
   void *                        outctx;
-  struct netvm_prog *           begin;
-  struct netvm_prog *           end;
+  struct netvm_program *        begin;
+  struct netvm_program *        end;
   struct list *                 pktprogs;
 };
 
-void nvmmrt_init(struct netvm_mrt *mrt, struct netvm *vm, pktin_f inf, 
-                 void *inctx, pktout_f outf, void *outctx);
-int nvmmrt_set_begin(struct netvm_mrt *rt, struct netvm_prog *prog);
-int nvmmrt_set_end(struct netvm_mrt *rt, struct netvm_prog *prog);
-int nvmmrt_add_pktprog(struct netvm_mrt *rt, struct netvm_prog *match,
-                       struct netvm_prog *action);
+void nvmmrt_init(struct netvm_mrt *mrt, struct netvm *vm, netvm_pktin_f inf, 
+                 void *inctx, netvm_pktout_f outf, void *outctx);
+int nvmmrt_set_begin(struct netvm_mrt *rt, struct netvm_program *prog);
+int nvmmrt_set_end(struct netvm_mrt *rt, struct netvm_program *prog);
+int nvmmrt_add_pktprog(struct netvm_mrt *rt, struct netvm_program *match,
+                       struct netvm_program *action);
 int nvmmrt_execute(struct netvm_mrt *rt);
 void nvmmrt_release(struct netvm_mrt *rt, void (*progfree)(void *));
 
