@@ -120,8 +120,10 @@ static void ni_push(struct netvm *vm)
 
 static void ni_dup(struct netvm *vm)
 {
+  struct netvm_inst *inst = &vm->inst[vm->pc];
   uint64_t val;
-  S_TOP(vm, val);
+  FATAL(vm, !S_HAS(vm, inst->val+1));
+  val = S_GET(vm, inst->val);
   S_PUSH(vm, val);
 }
 
