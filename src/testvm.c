@@ -162,7 +162,7 @@ struct netvm_inst vm_prog_fib[] = {
 struct netvm_inst vm_prog_dup1st[] = { 
   /* 0*/{ NETVM_OC_LDMEM, 8, NETVM_IF_IMMED, DUP1ST_PNUM },
   /* 1*/{ NETVM_OC_ADD, 0, NETVM_IF_IMMED, 1 },
-  /* 2*/{ NETVM_OC_DUP, 0, NETVM_IF_IMMED, 1 },
+  /* 2*/{ NETVM_OC_DUP, 0, 0, 0 },
   /* 3*/{ NETVM_OC_STMEM, 8, NETVM_IF_IMMED, DUP1ST_PNUM },
   /* 4*/{ NETVM_OC_LE, 0, NETVM_IF_IMMED, 1 },
   /* 5*/{ NETVM_OC_BRIF, 0, NETVM_IF_IMMED, NETVM_BRF(3) },
@@ -198,7 +198,7 @@ struct netvm_inst vm_prog_bulkmove[] = {
   /* 5*/{ NETVM_OC_BRIF, 0, NETVM_IF_IMMED, NETVM_BRF(7) },
   /* 6*/{ NETVM_OC_LDMEM, 8, NETVM_IF_IMMED, DUP1ST_PNUM },
   /* 7*/{ NETVM_OC_ADD, 0, NETVM_IF_IMMED, 1 },
-  /* 8*/{ NETVM_OC_DUP, 0, NETVM_IF_IMMED, 1 },
+  /* 8*/{ NETVM_OC_DUP, 0, 0, 0 },
   /* 9*/{ NETVM_OC_STMEM, 8, NETVM_IF_IMMED, DUP1ST_PNUM },
   /*10*/{ NETVM_OC_LE, 0, NETVM_IF_IMMED, 1 },
   /*11*/{ NETVM_OC_BRIF, 0, NETVM_IF_IMMED, NETVM_BRF(3) },
