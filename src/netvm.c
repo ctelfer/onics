@@ -346,6 +346,7 @@ static void ni_ldhdrf(struct netvm *vm)
   FATAL(vm, !NETVM_HDRFLDOK(hd0.field));
   if ( hd0.htype == NETVM_HDLAYER ) {
     FATAL(vm, (hd0.pktnum >= NETVM_MAXPKTS) || (hd0.idx > NETVM_HDI_MAX));
+    FATAL(vm, vm->packets[hd0.pktnum] == NULL);
     hdr = vm->packets[hd0.pktnum]->layer[hd0.idx];
     /* Special case to make it easy to check for layer headers */
   } else {
@@ -772,6 +773,25 @@ static void ni_stpmeta(struct netvm *vm)
 }
 
 
+static void ni_pktswap(struct netvm *vm)
+{
+  struct netvm_inst *inst = &vm->inst[vm->pc];
+  int p1, p2;
+  struct metapkt *tmp;
+  if ( IMMED(inst) ) {
+    p1 = inst->width;
+    p2 = inst->val;
+  } else {
+    S_POP(vm, p2);
+    S_POP(vm, p1);
+  }
+  FATAL(vm, (p1 >= NETVM_MAXPKTS) || (p2 >= NETVM_MAXPKTS));
+  tmp = vm->packets[p1];
+  vm->packets[p1] = vm->packets[p2];
+  vm->packets[p2] = tmp;
+}
+
+
 static void ni_pktnew(struct netvm *vm)
 {
   struct netvm_inst *inst = &vm->inst[vm->pc];
@@ -1053,6 +1073,7 @@ netvm_op g_netvm_ops[NETVM_OC_MAX+1] = {
   ni_stpmeta, /* STTSSEC */
   ni_stpmeta, /* STTSNSEC */
   ni_blkmv, /* BULKP2M */
+  ni_pktswap,
   ni_pktnew,
   ni_pktcopy,
   ni_pktdel,
