@@ -54,7 +54,7 @@ static int dbgabrt()
     __vm->stack[__vm->sp++] = (__v);                                    \
   } while (0)
 
-#define CKWIDTH(__vm, __w) FATAL((__vm), !__w || (__w & (__w - 1)) || (__w > 8))
+#define CKWIDTH(__vm, __w) FATAL((__vm), !__w || (__w & (__w - 1)) || (__w > 4))
 
 
 typedef void (*netvm_op)(struct netvm *vm);
@@ -106,7 +106,7 @@ static void ni_nop(struct netvm *vm)
 
 static void ni_pop(struct netvm *vm)
 {
-  uint64_t v;
+  uint32_t v;
   S_POP(vm, v);
 }
 
@@ -121,7 +121,7 @@ static void ni_push(struct netvm *vm)
 static void ni_dup(struct netvm *vm)
 {
   struct netvm_inst *inst = &vm->inst[vm->pc];
-  uint64_t val;
+  uint32_t val;
   FATAL(vm, !S_HAS(vm, inst->val+1));
   val = S_GET(vm, inst->val);
   S_PUSH(vm, val);
@@ -131,7 +131,7 @@ static void ni_dup(struct netvm *vm)
 static void ni_swap(struct netvm *vm)
 {
   struct netvm_inst *inst = &vm->inst[vm->pc];
-  uint64_t tmp = (inst->width > inst->val) ? inst->width : inst->val;
+  uint32_t tmp = (inst->width > inst->val) ? inst->width : inst->val;
   FATAL(vm, !S_HAS(vm, tmp + 1));
   tmp = S_GET(vm, inst->width);
   S_SET(vm, inst->width, S_GET(vm, inst->val));
@@ -142,7 +142,7 @@ static void ni_swap(struct netvm *vm)
 static void ni_ldmem(struct netvm *vm)
 {
   struct netvm_inst *inst = &vm->inst[vm->pc];
-  uint64_t val;
+  uint32_t val;
   register int width = inst->width;
   register uint32_t addr;
   FATAL(vm, !vm->mem || !vm->memsz);
@@ -160,14 +160,12 @@ static void ni_ldmem(struct netvm *vm)
   if ( ISSIGNED(inst) )
     width = -width;
   switch(width) {
-  case -1: val = (int64_t)*(int8_t *)(vm->mem + addr); break;
-  case -2: val = (int64_t)*(int16_t *)(vm->mem + addr); break;
-  case -4: val = (int64_t)*(int32_t *)(vm->mem + addr); break;
-  case -8: val = (int64_t)*(int64_t *)(vm->mem + addr); break;
+  case -1: val = (int32_t)*(int8_t *)(vm->mem + addr); break;
+  case -2: val = (int32_t)*(int16_t *)(vm->mem + addr); break;
+  case -4: val = (int32_t)*(int32_t *)(vm->mem + addr); break;
   case 1: val = *(uint8_t *)(vm->mem + addr); break;
   case 2: val = *(uint16_t *)(vm->mem + addr); break;
   case 4: val = *(uint32_t *)(vm->mem + addr); break;
-  case 8: val = *(uint64_t *)(vm->mem + addr); break;
   default:
     VMERR(vm);
   }
@@ -178,7 +176,7 @@ static void ni_ldmem(struct netvm *vm)
 static void ni_stmem(struct netvm *vm)
 {
   struct netvm_inst *inst = &vm->inst[vm->pc];
-  uint64_t val;
+  uint32_t val;
   register int width = inst->width;
   register uint32_t addr;
   CKWIDTH(vm, width);
@@ -193,7 +191,6 @@ static void ni_stmem(struct netvm *vm)
   case 1: *(uint8_t *)(vm->mem + addr) = val; break;
   case 2: *(uint16_t *)(vm->mem + addr) = val; break;
   case 4: *(uint32_t *)(vm->mem + addr) = val; break;
-  case 8: *(uint64_t *)(vm->mem + addr) = val; break;
   default:
     VMERR(vm);
   }
@@ -203,16 +200,25 @@ static void ni_stmem(struct netvm *vm)
 static void get_hd(struct netvm *vm, struct netvm_inst *inst,
                    struct netvm_hdr_desc *hd)
 {
-  uint64_t val;
-  if ( IMMED(inst) )
+  uint32_t val;
+  if ( IMMED(inst) && !(inst->flags & NETVM_IF_STKOFF) ) {
     val = inst->val;
-  else
-    S_POP(vm, val);
-  hd->pktnum = (val >> 56) & 0xff;
-  hd->htype = (val >> 48) & 0xff;
-  hd->idx = (val >> 40) & 0xff;
-  hd->field = (val >> 32) & 0xff;
-  hd->offset = val & 0xffffffff;
+    hd->pktnum = 0;
+    hd->htype = (val >> 24) & 0xff;
+    hd->idx = (val >> 21) & 0x7;
+    hd->field = (val >> 17) & 0xf;
+    hd->offset = val & 0x1ffff;
+  } else { 
+    if ( IMMED(inst) )
+      val = inst->val;
+    else
+      S_POP(vm, val);
+    hd->pktnum = (val >> 28) & 0xf;
+    hd->htype = (val >> 20) & 0xff;
+    hd->idx = (val >> 12) & 0xff;
+    hd->field = val & 0xfff;
+    S_POP(vm, hd->offset);
+  }
 }
 
 
@@ -268,7 +274,7 @@ static void ni_ldpkt(struct netvm *vm)
   struct netvm_hdr_desc hd0;
   struct hdr_parse *hdr;
   uint32_t addr;
-  uint64_t val;
+  uint32_t val;
 
   get_hdr_info(vm, inst, &hd0, &addr, &hdr);
   if ( vm->error )
@@ -276,7 +282,7 @@ static void ni_ldpkt(struct netvm *vm)
 
   switch(inst->width) {
   case 1: 
-    val = (int64_t)*(int8_t *)(hdr->data + addr); 
+    val = *(uint8_t *)(hdr->data + addr); 
     if ( inst->flags & NETVM_IF_IPHLEN ) { 
       val = (val & 0xf) << 2;
     } else if ( inst->flags & NETVM_IF_TCPHLEN ) {
@@ -299,11 +305,6 @@ static void ni_ldpkt(struct netvm *vm)
       val = ntoh32(val);
     if ( ISSIGNED(inst) )
       val |= -(val & 0x80000000);
-    break;
-  case 8: 
-    val = *(uint64_t *)(hdr->data + addr); 
-    if ( inst->flags & NETVM_IF_TOHOST )
-      val = ntoh64(val);
     break;
   default:
     VMERR(vm);
@@ -378,8 +379,8 @@ static void ni_ldhdrf(struct netvm *vm)
     fid = hd0.offset & 0xffff;
     idx = (hd0.offset >> 16) & 0xffff;
     off = hdr_get_field(hdr, fid, idx, &len);
-    S_PUSH(vm, (uint64_t)off); 
-    S_PUSH(vm, (uint64_t)len); 
+    S_PUSH(vm, (uint32_t)off); 
+    S_PUSH(vm, (uint32_t)len); 
   } break;
   default:
     abort_unless(0);
@@ -390,7 +391,7 @@ static void ni_blkmv(struct netvm *vm)
 {
   struct netvm_inst *inst = &vm->inst[vm->pc];
   int pktnum;
-  uint64_t poff, maddr, len;
+  uint32_t poff, maddr, len;
   struct metapkt *pkt;
   struct hdr_parse *hdr;
   if ( IMMED(inst) ) {
@@ -415,7 +416,7 @@ static void ni_blkmv(struct netvm *vm)
 static void ni_numop(struct netvm *vm)
 {
   struct netvm_inst *inst = &vm->inst[vm->pc];
-  uint64_t out, v1, v2;
+  uint32_t out, v1, v2;
   int amt;
   if ( (inst->opcode < NETVM_OC_NOT) || (inst->opcode > NETVM_OC_SIGNX)) {
     if ( IMMED(inst) )  {
@@ -432,19 +433,18 @@ static void ni_numop(struct netvm *vm)
   case NETVM_OC_POPL: /* fall through */
   case NETVM_OC_NLZ: 
     CKWIDTH(vm, inst->width);
-    if ( inst->width < sizeof(uint64_t) )
+    if ( inst->width < sizeof(uint32_t) )
       v1 &= (1 << (inst->width * 8)) - 1;
     if ( inst->opcode == NETVM_OC_POPL )
-      out = pop_64(v1);
+      out = pop_32(v1);
     else
-      out = nlz_64(v1);
+      out = nlz_32(v1);
     break;
   case NETVM_OC_TONET: 
     CKWIDTH(vm, inst->width);
     switch (inst->width) {
     case 2: out = hton16(v1); break;
     case 4: out = hton32(v1); break;
-    case 8: out = hton64(v1); break;
     }
     break;
   case NETVM_OC_TOHOST: 
@@ -452,25 +452,23 @@ static void ni_numop(struct netvm *vm)
     switch (inst->width) {
     case 2: out = hton16(v1); break;
     case 4: out = hton32(v1); break;
-    case 8: out = hton64(v1); break;
     }
     break;
   case NETVM_OC_SIGNX: 
     CKWIDTH(vm, inst->width);
     case 1: out = v1 | -(v1 & 0x80); break;
     case 2: out = v1 | -(v1 & 0x8000); break;
-    case 4: out = v1 | -(v1 & 0x80000000); break;
     break;
   case NETVM_OC_ADD: out = v1 + v2; break;
   case NETVM_OC_SUB: out = v1 - v2; break;
   case NETVM_OC_MUL: out = v1 * v2; break;
   case NETVM_OC_DIV: out = v1 / v2; break;
   case NETVM_OC_MOD: out = v1 % v2; break;
-  case NETVM_OC_SHL: out = v1 << (v2 & 0x3F); break;
-  case NETVM_OC_SHR: out = v1 >> (v2 & 0x3F); break;
+  case NETVM_OC_SHL: out = v1 << (v2 & 0x1F); break;
+  case NETVM_OC_SHR: out = v1 >> (v2 & 0x1F); break;
   case NETVM_OC_SHRA:
-    amt = v2 & 0x3F;
-    out = (v1 >> amt) | ~(1 << (63 - amt));
+    amt = v2 & 0x1F;
+    out = (v1 >> amt) | -((v1 & 0x80000000) >> amt);
     break;
   case NETVM_OC_AND: out = v1 & v2; break;
   case NETVM_OC_OR: out = v1 | v2; break;
@@ -481,10 +479,10 @@ static void ni_numop(struct netvm *vm)
   case NETVM_OC_LE: out = v1 <= v2; break;
   case NETVM_OC_GT: out = v1 > v2; break;
   case NETVM_OC_GE: out = v1 >= v2; break;
-  case NETVM_OC_SLT: out = (int64_t)v1 < (int64_t)v2; break;
-  case NETVM_OC_SLE: out = (int64_t)v1 <= (int64_t)v2; break;
-  case NETVM_OC_SGT: out = (int64_t)v1 > (int64_t)v2; break;
-  case NETVM_OC_SGE: out = (int64_t)v1 >= (int64_t)v2; break;
+  case NETVM_OC_SLT: out = (int32_t)v1 < (int32_t)v2; break;
+  case NETVM_OC_SLE: out = (int32_t)v1 <= (int32_t)v2; break;
+  case NETVM_OC_SGT: out = (int32_t)v1 > (int32_t)v2; break;
+  case NETVM_OC_SGE: out = (int32_t)v1 >= (int32_t)v2; break;
   default:
     abort_unless(0);
   }
@@ -496,7 +494,7 @@ static void ni_hashdr(struct netvm *vm)
 {
   struct netvm_inst *inst = &vm->inst[vm->pc];
   struct netvm_hdr_desc hd0;
-  uint64_t val;
+  uint32_t val;
   struct metapkt *pkt;
   get_hd(vm, inst, &hd0);
   if ( vm->error )
@@ -530,7 +528,7 @@ static void ni_branch(struct netvm *vm)
     FATAL(vm, vm->pc + off + 1 > vm->ninst);
   }
   if ( inst->opcode == NETVM_OC_BRIF ) {
-    uint64_t cond;
+    uint32_t cond;
     S_POP(vm, cond);
     if ( !cond )
       return;
@@ -543,7 +541,7 @@ static void ni_branch(struct netvm *vm)
 static void ni_jump(struct netvm *vm)
 {
   struct netvm_inst *inst = &vm->inst[vm->pc];
-  uint64_t addr;
+  uint32_t addr;
   if ( IMMED(inst) ) {
     addr = inst->val;
   } else {
@@ -557,7 +555,7 @@ static void ni_jump(struct netvm *vm)
 static void ni_call(struct netvm *vm)
 {
   struct netvm_inst *inst = &vm->inst[vm->pc];
-  uint64_t addr, narg, sslot;
+  uint32_t addr, narg, sslot;
   if ( IMMED(inst) ) {
     narg = inst->val;
   } else {
@@ -577,7 +575,7 @@ static void ni_call(struct netvm *vm)
 static void ni_return(struct netvm *vm)
 {
   struct netvm_inst *inst = &vm->inst[vm->pc];
-  uint64_t addr, narg, sslot;
+  uint32_t addr, narg, sslot;
   if ( IMMED(inst) ) {
     narg = inst->val;
   } else {
@@ -599,7 +597,7 @@ static void ni_prnum(struct netvm *vm)
   char fmtbuf[12];
   register int nwidth = inst->width;
   register int swidth = inst->val;
-  uint64_t val;
+  uint32_t val;
 
   abort_unless(vm->outport);    /* should be guaranteed by netvm_init() */
   CKWIDTH(vm, nwidth); /* TODO: check during validation */
@@ -608,34 +606,34 @@ static void ni_prnum(struct netvm *vm)
   switch (inst->opcode) {
   case NETVM_OC_PRBIN: 
     if ( swidth )
-      sprintf(fmtbuf, "%%0%d"FMT64"b", swidth);
+      sprintf(fmtbuf, "%%0%d"FMT32"b", swidth);
     else
-      sprintf(fmtbuf, "%%"FMT64"b");
+      sprintf(fmtbuf, "%%"FMT32"b");
     break;
   case NETVM_OC_PROCT:
     if ( swidth )
-      sprintf(fmtbuf, "%%0%d"FMT64"o", swidth);
+      sprintf(fmtbuf, "%%0%d"FMT32"o", swidth);
     else
-      sprintf(fmtbuf, "%%"FMT64"o");
+      sprintf(fmtbuf, "%%"FMT32"o");
     break;
   case NETVM_OC_PRDEC:
     if ( swidth ) {
       if ( ISSIGNED(inst) )
-        sprintf(fmtbuf, "%%0%d"FMT64"d", swidth);
+        sprintf(fmtbuf, "%%0%d"FMT32"d", swidth);
       else
-        sprintf(fmtbuf, "%%0%d"FMT64"u", swidth);
+        sprintf(fmtbuf, "%%0%d"FMT32"u", swidth);
     } else { 
       if ( ISSIGNED(inst) )
-        sprintf(fmtbuf, "%%"FMT64"d");
+        sprintf(fmtbuf, "%%"FMT32"d");
       else
-        sprintf(fmtbuf, "%%"FMT64"u");
+        sprintf(fmtbuf, "%%"FMT32"u");
     }
     break;
   case NETVM_OC_PRHEX:
     if ( swidth )
-      sprintf(fmtbuf, "%%0%d"FMT64"x", swidth);
+      sprintf(fmtbuf, "%%0%d"FMT32"x", swidth);
     else
-      sprintf(fmtbuf, "%%"FMT64"x");
+      sprintf(fmtbuf, "%%"FMT32"x");
     break;
   default:
     abort_unless(0);
@@ -643,7 +641,7 @@ static void ni_prnum(struct netvm *vm)
 
   S_POP(vm, val);
   /* mask out all irrelevant bits */
-  if ( nwidth < 8 )
+  if ( nwidth < 4 )
     val &= ~((1 << (nwidth * 8)) - 1);
   /* sign extend the result if we are printing a signed decimal */
   if ( ISSIGNED(inst) && (inst->opcode == NETVM_OC_PRDEC) )
@@ -677,7 +675,7 @@ static void ni_preth(struct netvm *vm)
 
 static void ni_pripv6(struct netvm *vm)
 {
-  uint64_t vhi, vlo;
+  uint32_t vhi, vlo;
   byte_t *bhi = (byte_t *)&vhi, *blo = (byte_t *)&vlo;
   abort_unless(vm->outport);
   S_POP(vm, vlo);
@@ -715,7 +713,7 @@ static void ni_stpkt(struct netvm *vm)
   struct netvm_hdr_desc hd0;
   struct hdr_parse *hdr;
   uint32_t addr;
-  uint64_t val;
+  uint32_t val;
 
   get_hdr_info(vm, inst, &hd0, &addr, &hdr);
   if ( vm->error )
@@ -738,11 +736,6 @@ static void ni_stpkt(struct netvm *vm)
       v = hton32(v);
     *(uint32_t *)(hdr->data + addr) = v;
   } break;
-  case 8: {
-    if ( inst->flags & NETVM_IF_TOHOST )
-      val = hton64(val);
-    *(uint64_t *)(hdr->data + addr) = val;
-  } break;
   default:
     abort_unless(0); /* should be checked in get_hdr_info() */
   }
@@ -754,7 +747,7 @@ static void ni_stpmeta(struct netvm *vm)
   struct netvm_inst *inst = &vm->inst[vm->pc];
   int pktnum;
   struct metapkt *pkt;
-  uint64_t val;
+  uint32_t val;
   if ( IMMED(inst) ) {
     pktnum = inst->val;
   } else {
@@ -984,7 +977,7 @@ static void ni_hdradj(struct netvm *vm)
   struct netvm_inst *inst = &vm->inst[vm->pc];
   struct netvm_hdr_desc hd0;
   struct hdr_parse *hdr;
-  uint64_t val;
+  uint32_t val;
   ptrdiff_t amt;
   int rv;
   get_hd(vm, inst, &hd0);
@@ -993,7 +986,7 @@ static void ni_hdradj(struct netvm *vm)
   hdr = find_header(vm, &hd0);
   FATAL(vm, hdr == NULL);
   S_POP(vm, val);
-  amt = (int64_t)val;
+  amt = (int32_t)val;
   switch(hd0.field) {
   case NETVM_HDR_HOFF: rv = hdr_adj_hstart(hdr, amt); break;
   case NETVM_HDR_HLEN: rv = hdr_adj_hlen(hdr, amt); break;
@@ -1089,7 +1082,7 @@ netvm_op g_netvm_ops[NETVM_OC_MAX+1] = {
 };
 
 
-void netvm_init(struct netvm *vm, uint64_t *stack, uint32_t ssz,
+void netvm_init(struct netvm *vm, uint32_t *stack, uint32_t ssz,
                 byte_t *mem, uint32_t memsz, struct emitter *outport)
 {
   abort_unless(vm && stack && ssz > 0 );
@@ -1240,7 +1233,7 @@ void netvm_reset(struct netvm *vm)
 
 
 /* 0 if run ok and no retval, 1 if run ok and stack not empty, -1 if err */
-int netvm_run(struct netvm *vm, int maxcycles, uint64_t *rv)
+int netvm_run(struct netvm *vm, int maxcycles, uint32_t *rv)
 {
   struct netvm_inst *inst;
 

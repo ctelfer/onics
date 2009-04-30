@@ -67,7 +67,7 @@ int nprg_add_label(struct netvm_program *prog, const char *name, uint32_t iaddr)
 }
 
 
-int nprg_add_ipatch(struct netvm_program *prog, uint32_t iaddr, uint64_t delta,
+int nprg_add_ipatch(struct netvm_program *prog, uint32_t iaddr, uint32_t delta,
                     const char *symname, int type)
 {
   struct netvm_ipatch iptch;
@@ -145,7 +145,7 @@ int nprg_vinit_data(struct netvm_var *var, void *data, uint32_t len)
 }
 
 
-int nprg_vinit_ilabel(struct netvm_var *var, const char *label, uint64_t delta)
+int nprg_vinit_ilabel(struct netvm_var *var, const char *label, uint32_t delta)
 {
   abort_unless(var && label);
   freevar(var, NULL);
@@ -154,7 +154,7 @@ int nprg_vinit_ilabel(struct netvm_var *var, const char *label, uint64_t delta)
   return 0;
 }
 
-int nprg_vinit_vaddr(struct netvm_var *var, const char *varname, uint64_t delta)
+int nprg_vinit_vaddr(struct netvm_var *var, const char *varname, uint32_t delta)
 {
   abort_unless(var && varname);
   freevar(var, NULL);
@@ -163,7 +163,7 @@ int nprg_vinit_vaddr(struct netvm_var *var, const char *varname, uint64_t delta)
   return 0;
 }
 
-int nprg_vinit_fill(struct netvm_var *var, uint64_t val, int width)
+int nprg_vinit_fill(struct netvm_var *var, uint32_t val, int width)
 {
   abort_unless(var);
   switch(width) {
@@ -290,7 +290,6 @@ static void loadvar(byte_t *mem, struct netvm_var *var)
       case 1: *(uint8_t *)(mem + i) = var->init_type_u.fill; break;
       case 2: *(uint16_t *)(mem + i) = var->init_type_u.fill; break;
       case 4: *(uint32_t *)(mem + i) = var->init_type_u.fill; break;
-      case 8: *(uint64_t *)(mem + i) = var->init_type_u.fill; break;
       default:
         abort_unless(0);
       }
@@ -396,7 +395,7 @@ int nvmmrt_execute(struct netvm_mrt *mrt)
   struct pktbuf *pkb;
   struct netvm_matchedprog *mprog;
   int i, rv, send;
-  uint64_t rc;
+  uint32_t rc;
   struct list *l;
 
   abort_unless(mrt);

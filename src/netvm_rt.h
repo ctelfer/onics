@@ -12,7 +12,7 @@
 
 struct netvm_ipatch {
   uint32_t              iaddr;
-  uint64_t              delta;
+  uint32_t              delta;
   char *                symname;
   int                   type;
 };
@@ -41,7 +41,7 @@ struct netvm_var {
   union {
     char *              symname;
     void *              data;
-    uint64_t            fill;
+    uint32_t            fill;
   } init_type_u;
 };
 
@@ -68,16 +68,16 @@ int nprg_add_code(struct netvm_program *prog, struct netvm_inst *inst,
                   uint32_t ninst, uint32_t *iaddr);
 int nprg_add_label(struct netvm_program *prog, const char *name, uint32_t iadd);
 /* creates a patch for the instruction at iaddr */
-int nprg_add_ipatch(struct netvm_program *prog, uint32_t iaddr, uint64_t delta,
+int nprg_add_ipatch(struct netvm_program *prog, uint32_t iaddr, uint32_t delta,
                     const char *symname, int type);
 
 /* variables and variable symbols */
 struct netvm_var *nprg_add_var(struct netvm_program *prog, const char *name,
                                uint32_t len, int isrdonly);
 int nprg_vinit_data(struct netvm_var *var, void *data, uint32_t len);
-int nprt_vinit_label(struct netvm_var *var, const char *label, uint64_t delta);
-int nprt_vinit_vaddr(struct netvm_var *var, const char *varnam, uint64_t delta);
-int nprg_vinit_fill(struct netvm_var *var, uint64_t val, int width);
+int nprt_vinit_label(struct netvm_var *var, const char *label, uint32_t delta);
+int nprt_vinit_vaddr(struct netvm_var *var, const char *varnam, uint32_t delta);
+int nprg_vinit_fill(struct netvm_var *var, uint32_t val, int width);
 
 /* get the amount of memory required by the program */
 size_t mem_required(struct netvm_program *prog);

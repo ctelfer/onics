@@ -56,9 +56,9 @@ enum {
   NETVM_OC_MUL,         /* [v1,v2|I] multiply v1 from v2 */
   NETVM_OC_DIV,         /* [v1,v2|I] divide v1 by v2 */
   NETVM_OC_MOD,         /* [v1,v2|I] remainder of v1 / v2 */
-  NETVM_OC_SHL,         /* [v1,v2|I] v1 left shifted by (v2 % 64) */
-  NETVM_OC_SHR,         /* [v1,v2|I] v1 right shifted by (v2 % 64) */
-  NETVM_OC_SHRA,        /* [v1,v2|I] v1 right arithmatic shifted by (v2 % 64) */
+  NETVM_OC_SHL,         /* [v1,v2|I] v1 left shifted by (v2 % 32) */
+  NETVM_OC_SHR,         /* [v1,v2|I] v1 right shifted by (v2 % 32) */
+  NETVM_OC_SHRA,        /* [v1,v2|I] v1 right arithmatic shifted by (v2 % 32) */
   NETVM_OC_AND,         /* [v1,v2|I] bitwise v1 and v2 */
   NETVM_OC_OR,          /* [v1,v2|I] bitwise v1 or v2 */
   NETVM_OC_XOR,         /* [v1,v2|I] bitwise v1 exclusive or v2 */
@@ -168,6 +168,7 @@ enum {
   NETVM_IF_TCPHLEN =   0x20, /* on 1 byte packet load instructions */
   NETVM_IF_MOVEUP =    0x40, /* only used HDRINS and HDRCUT */
   NETVM_IF_RDONLY =    0x80, /* load from read-only segment */
+  NETVM_IF_STKOFF =    0x100, /* header descpritor offset is on stack */
 };
 
 enum {
@@ -194,15 +195,14 @@ enum {
  *
  * If immed is not set for a header instruction then the instruction 
  * expects a struct netvm_hdr_desc to be the value on the stack packed into a
- * 64-bit word.
+ * 32-bit word.
  */
 
-#define NETVM_HDESC(pn, ht, idx, fld, off) \
-  ((((uint64_t)(pn) & 0xFF) << 56)|\
-   (((uint64_t)(ht) & 0xFF) << 48)|\
-   (((uint64_t)(idx) & 0xFF) << 40)|\
-   (((uint64_t)(fld) & 0xFF) << 32)|\
-   ((uint64_t)(off) & 0xFFFFFFFF))
+#define NETVM_HDESC(ht, idx, fld, off) \
+  ((((uint32_t)(ht) & 0xFF) << 24)|\
+   (((uint32_t)(idx) & 0x7) << 21)|\
+   (((uint32_t)(fld) & 0xF) << 17)|\
+   ((uint32_t)(off) & 0x1FFFF))
 
 #define NETVM_HDLAYER   255   /* find header of type NETVM_HDI_* */
 /* 
@@ -215,8 +215,8 @@ enum {
 struct netvm_hdr_desc {
   uint8_t               pktnum;     /* which packet entry */
   uint8_t               htype;      /* PPT_*;  PPT_NONE == absolute idx */
-  uint8_t               idx;        /* 0 == 1st hdr, 1 == 2nd hdr,... */
-  uint8_t               field;      /* NETVM_HDR_* */
+  uint16_t              idx;        /* 0 == 1st hdr, 1 == 2nd hdr,... */
+  uint32_t              field;      /* NETVM_HDR_* or hdr field id */
   uint32_t              offset;     /* offset into packet for LD/STPKT */
                                     /* or proto field index for PRFLD */
 };
@@ -225,7 +225,7 @@ struct netvm_inst {
   uint8_t               opcode; /* NETVM_OC_* */
   uint8_t               width;  /* 1, 2, 4 or 8 for most operations */
   uint16_t              flags;  /* NETVM_IF_* */
-  uint64_t              val;    /* Varies with instruction */
+  uint32_t              val;    /* Varies with instruction */
 };
 
 #define NETVM_JA(v)     ((uint32_t)(v)-1)
@@ -238,7 +238,7 @@ struct netvm {
   uint32_t              ninst;
   uint32_t              pc;
 
-  uint64_t *            stack;
+  uint32_t *            stack;
   uint32_t              stksz;
   uint32_t              sp;
 
@@ -280,7 +280,7 @@ enum {
 
 /* mem may be NULL and memsz 0.  roseg must be <= memsz.  stack must not be */
 /* 0 and ssz is the number of stack elements.  outport may be NULL */
-void netvm_init(struct netvm *vm, uint64_t *stack, uint32_t ssz,
+void netvm_init(struct netvm *vm, uint32_t *stack, uint32_t ssz,
                 byte_t *mem, uint32_t memsz, struct emitter *outport);
 
 /* set the instruction code and validate the vm: 0 on success, -1 on error */
@@ -321,6 +321,6 @@ struct pktbuf *netvm_clrpkt(struct netvm *vm, int slot, int keeppktbuf);
 
 /* 0 if run ok and no retval, 1 if run ok and stack not empty, -1 if err, -2 */
 /* if out of cycles */
-int netvm_run(struct netvm *vm, int maxcycles, uint64_t *rv);
+int netvm_run(struct netvm *vm, int maxcycles, uint32_t *rv);
 
 #endif /* __netvm_h */

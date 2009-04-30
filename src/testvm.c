@@ -19,7 +19,7 @@ struct clopt options[] = {
 struct clopt_parser optparser = CLOPTPARSER_INIT(options,array_length(options));
 
 
-uint64_t vm_stack[64];
+uint32_t vm_stack[64];
 byte_t vm_memory[1024];
 #define ROSEGOFF (sizeof(vm_memory)/2)
 
@@ -32,25 +32,25 @@ struct meminit {
 
 
 struct netvm_inst vm_prog_istcp[] = { 
-  { NETVM_OC_HASHDR, 0, NETVM_IF_IMMED, NETVM_HDESC(0,PPT_TCP,0,0,0) },
+  { NETVM_OC_HASHDR, 0, NETVM_IF_IMMED, NETVM_HDESC(PPT_TCP,0,0,0) },
   { NETVM_OC_HALT, 0, 0, 0 },
 };
 
 
 struct netvm_inst vm_prog_tcperr[] = { 
-  /*0*/{ NETVM_OC_HASHDR, 0, NETVM_IF_IMMED, NETVM_HDESC(0,PPT_TCP,0,0,0) },
+  /*0*/{ NETVM_OC_HASHDR, 0, NETVM_IF_IMMED, NETVM_HDESC(PPT_TCP,0,0,0) },
   /*1*/{ NETVM_OC_DUP, 0, 0, 0 },
   /*2*/{ NETVM_OC_NOT, 0, 0, 0 },
   /*3*/{ NETVM_OC_BRIF, 0, NETVM_IF_IMMED, /* END */ 2 },
   /*4*/{ NETVM_OC_LDHDRF, 0, NETVM_IF_IMMED, 
-         NETVM_HDESC(0,PPT_TCP,0,NETVM_HDR_ERR,0) },
+         NETVM_HDESC(PPT_TCP,0,NETVM_HDR_ERR,0) },
   /*5*/{ NETVM_OC_TOBOOL, 0, 0, 0 },
 };
 
 
 struct netvm_inst vm_prog_isudp[] = { 
   { NETVM_OC_LDHDRF, 0, NETVM_IF_IMMED, 
-    NETVM_HDESC(0, NETVM_HDLAYER, NETVM_HDI_XPORT, NETVM_HDR_TYPE, 0) },
+    NETVM_HDESC(NETVM_HDLAYER, NETVM_HDI_XPORT, NETVM_HDR_TYPE, 0) },
   { NETVM_OC_EQ, 0, NETVM_IF_IMMED, PPT_UDP },
 };
 
@@ -60,35 +60,35 @@ struct netvm_inst vm_prog_fixcksum[] = {
 
 struct netvm_inst vm_prog_toggledf[] = { 
   /*0*/{ NETVM_OC_LDHDRF, 0, NETVM_IF_IMMED, 
-         NETVM_HDESC(0, NETVM_HDLAYER, NETVM_HDI_NET, NETVM_HDR_TYPE, 0) },
+         NETVM_HDESC(NETVM_HDLAYER, NETVM_HDI_NET, NETVM_HDR_TYPE, 0) },
   /*1*/{ NETVM_OC_NEQ, 0, NETVM_IF_IMMED, PPT_IPV4 },
   /*2*/{ NETVM_OC_BRIF, 0, NETVM_IF_IMMED, 4 /* END of prog */ },
   /*3*/{ NETVM_OC_LDPKT, 2, NETVM_IF_IMMED | NETVM_IF_TOHOST, 
          /* 2 bytes starting 8 from IP hdr */
-         NETVM_HDESC(0, PPT_IPV4, 0, NETVM_HDR_HOFF, 6) },
+         NETVM_HDESC(PPT_IPV4, 0, NETVM_HDR_HOFF, 6) },
   /* toggle the DF bit */
   /*4*/{ NETVM_OC_XOR, 0, NETVM_IF_IMMED, IPH_DFMASK },
   /*5*/{ NETVM_OC_STPKT, 2, NETVM_IF_IMMED | NETVM_IF_TONET, 
-         NETVM_HDESC(0, PPT_IPV4, 0, NETVM_HDR_HOFF, 6) },
+         NETVM_HDESC(PPT_IPV4, 0, NETVM_HDR_HOFF, 6) },
   /*6*/{ NETVM_OC_FIXCKSUM, 0, NETVM_IF_IMMED, 0 }
 };
 
 
 struct netvm_inst vm_prog_count10[] = { 
   /*0*/{ NETVM_OC_PUSH, 0, 0, 0x2E }, 
-  /*1*/{ NETVM_OC_STMEM, 8, NETVM_IF_IMMED, 64 },
+  /*1*/{ NETVM_OC_STMEM, 4, NETVM_IF_IMMED, 64 },
   /*2*/{ NETVM_OC_PUSH, 0, 0, 0xA }, 
-  /*3*/{ NETVM_OC_STMEM, 8, NETVM_IF_IMMED, 72 },
+  /*3*/{ NETVM_OC_STMEM, 4, NETVM_IF_IMMED, 72 },
   /*4*/{ NETVM_OC_PUSH, 0, 0, 0x0 }, 
-  /*5*/{ NETVM_OC_STMEM, 8, NETVM_IF_IMMED, 0 },
-  /*6*/{ NETVM_OC_LDMEM, 8, NETVM_IF_IMMED, 0 },
+  /*5*/{ NETVM_OC_STMEM, 4, NETVM_IF_IMMED, 0 },
+  /*6*/{ NETVM_OC_LDMEM, 4, NETVM_IF_IMMED, 0 },
   /*7*/{ NETVM_OC_DUP, 0, 0, 0 },
   /*8*/{ NETVM_OC_GE, 0, NETVM_IF_IMMED, 10 },
   /*9*/{ NETVM_OC_BRIF, 0, NETVM_IF_IMMED,  4 },
   /*10*/{ NETVM_OC_PRSTR, 1, NETVM_IF_IMMED, 64 },
   /*11*/{ NETVM_OC_ADD, 0, NETVM_IF_IMMED, 1 },
-  /*12*/{ NETVM_OC_STMEM, 8, NETVM_IF_IMMED, 0 },
-  /*13*/{ NETVM_OC_BR, 0, NETVM_IF_IMMED, (uint64_t)0 - 8 },
+  /*12*/{ NETVM_OC_STMEM, 4, NETVM_IF_IMMED, 0 },
+  /*13*/{ NETVM_OC_BR, 0, NETVM_IF_IMMED, (uint32_t)0 - 8 },
   /*14*/{ NETVM_OC_POP, 0, 0, 0 },
   /*15*/{ NETVM_OC_PRSTR, 1, NETVM_IF_IMMED, 72 },
 };
@@ -107,9 +107,9 @@ struct netvm_inst vm_prog_helloworld[] = {
 };
 
 
-uint64_t fibX = 7;
+uint32_t fibX = 7;
 #define FIB_I0_OFFSET      (ROSEGOFF)
-#define FIB_I0_SIZE        sizeof(uint64_t)
+#define FIB_I0_SIZE        sizeof(uint32_t)
 const char fibs1[] = "Fibonnaci number ";
 #define FIB_I1_OFFSET      (FIB_I0_OFFSET + FIB_I0_SIZE)
 #define FIB_I1_SIZE        (sizeof(fibs1)-1)
@@ -128,13 +128,13 @@ struct meminit fibi[] = {
 
 struct netvm_inst vm_prog_fib[] = { 
   /* 0*/{ NETVM_OC_PRSTR, FIB_I1_SIZE, NETVM_IF_IMMED, FIB_I1_OFFSET },
-  /* 1*/{ NETVM_OC_LDMEM, 8, NETVM_IF_IMMED, FIB_I0_OFFSET },
+  /* 1*/{ NETVM_OC_LDMEM, 4, NETVM_IF_IMMED, FIB_I0_OFFSET },
   /* 2*/{ NETVM_OC_DUP, 0, 0, 0 },
-  /* 3*/{ NETVM_OC_PRDEC, 8, 0, 0 },
+  /* 3*/{ NETVM_OC_PRDEC, 4, 0, 0 },
   /* 4*/{ NETVM_OC_PRSTR, FIB_I2_SIZE, NETVM_IF_IMMED, FIB_I2_OFFSET },
   /* 5*/{ NETVM_OC_PUSH, 0, 0, NETVM_JA(10) },
   /* 6*/{ NETVM_OC_CALL, 0, NETVM_IF_IMMED, 1 },
-  /* 7*/{ NETVM_OC_PRDEC, 8, 0, 0 },
+  /* 7*/{ NETVM_OC_PRDEC, 4, 0, 0 },
   /* 8*/{ NETVM_OC_PRSTR, FIB_I3_SIZE, NETVM_IF_IMMED, FIB_I3_OFFSET },
   /* 9*/{ NETVM_OC_HALT, 0, 0, 0 },
 
@@ -160,10 +160,10 @@ struct netvm_inst vm_prog_fib[] = {
 
 #define DUP1ST_PNUM     0
 struct netvm_inst vm_prog_dup1st[] = { 
-  /* 0*/{ NETVM_OC_LDMEM, 8, NETVM_IF_IMMED, DUP1ST_PNUM },
+  /* 0*/{ NETVM_OC_LDMEM, 4, NETVM_IF_IMMED, DUP1ST_PNUM },
   /* 1*/{ NETVM_OC_ADD, 0, NETVM_IF_IMMED, 1 },
   /* 2*/{ NETVM_OC_DUP, 0, 0, 0 },
-  /* 3*/{ NETVM_OC_STMEM, 8, NETVM_IF_IMMED, DUP1ST_PNUM },
+  /* 3*/{ NETVM_OC_STMEM, 4, NETVM_IF_IMMED, DUP1ST_PNUM },
   /* 4*/{ NETVM_OC_LE, 0, NETVM_IF_IMMED, 1 },
   /* 5*/{ NETVM_OC_BRIF, 0, NETVM_IF_IMMED, NETVM_BRF(3) },
   /* 6*/{ NETVM_OC_PKTDEL, 0, NETVM_IF_IMMED, 0 },
@@ -189,17 +189,17 @@ struct meminit bmi[] = {
 struct netvm_inst vm_prog_bulkmove[] = { 
   /* only consider the 1st TCP packet with at least 16 bytes of payload */
   /* 0*/{ NETVM_OC_LDHDRF, 0, NETVM_IF_IMMED, 
-          NETVM_HDESC(0, NETVM_HDLAYER, NETVM_HDI_XPORT, NETVM_HDR_TYPE, 0) },
+          NETVM_HDESC(NETVM_HDLAYER, NETVM_HDI_XPORT, NETVM_HDR_TYPE, 0) },
   /* 1*/{ NETVM_OC_NEQ, 0, NETVM_IF_IMMED, PPT_TCP},
   /* 2*/{ NETVM_OC_BRIF, 0, NETVM_IF_IMMED, NETVM_BRF(10) },
   /* 3*/{ NETVM_OC_LDHDRF, 0, NETVM_IF_IMMED, 
-          NETVM_HDESC(0, PPT_TCP, 0, NETVM_HDR_LEN, 0) },
+          NETVM_HDESC(PPT_TCP, 0, NETVM_HDR_LEN, 0) },
   /* 4*/{ NETVM_OC_LT, 0, NETVM_IF_IMMED, 16 },
   /* 5*/{ NETVM_OC_BRIF, 0, NETVM_IF_IMMED, NETVM_BRF(7) },
-  /* 6*/{ NETVM_OC_LDMEM, 8, NETVM_IF_IMMED, DUP1ST_PNUM },
+  /* 6*/{ NETVM_OC_LDMEM, 4, NETVM_IF_IMMED, DUP1ST_PNUM },
   /* 7*/{ NETVM_OC_ADD, 0, NETVM_IF_IMMED, 1 },
   /* 8*/{ NETVM_OC_DUP, 0, 0, 0 },
-  /* 9*/{ NETVM_OC_STMEM, 8, NETVM_IF_IMMED, DUP1ST_PNUM },
+  /* 9*/{ NETVM_OC_STMEM, 4, NETVM_IF_IMMED, DUP1ST_PNUM },
   /*10*/{ NETVM_OC_LE, 0, NETVM_IF_IMMED, 1 },
   /*11*/{ NETVM_OC_BRIF, 0, NETVM_IF_IMMED, NETVM_BRF(3) },
   /*12*/{ NETVM_OC_PKTDEL, 0, NETVM_IF_IMMED, 0 },
@@ -207,22 +207,26 @@ struct netvm_inst vm_prog_bulkmove[] = {
 
   /* First print the first 16 bytes of the payload */
   /*14*/{ NETVM_OC_LDHDRF, 0, NETVM_IF_IMMED,
-          NETVM_HDESC(0, PPT_TCP, 0, NETVM_HDR_POFF, 0) },
+          NETVM_HDESC(PPT_TCP, 0, NETVM_HDR_POFF, 0) },
   /*15*/{ NETVM_OC_PUSH, 0, 0, 0 },
   /*16*/{ NETVM_OC_PUSH, 0, 0, 16 },
   /*17*/{ NETVM_OC_BULKP2M, 0, NETVM_IF_IMMED, 0 },
-  /*18*/{ NETVM_OC_LDMEM, 8, NETVM_IF_IMMED, 0 },
-  /*19*/{ NETVM_OC_PRHEX, 8, 0, 0 },
-  /*20*/{ NETVM_OC_LDMEM, 8, NETVM_IF_IMMED, 8 },
-  /*21*/{ NETVM_OC_PRHEX, 8, 0, 0 },
-  /*22*/{ NETVM_OC_PRSTR, BMS2_SIZE, NETVM_IF_IMMED, BMS2_OFFSET },
+  /*18*/{ NETVM_OC_LDMEM, 4, NETVM_IF_IMMED, 0 },
+  /*19*/{ NETVM_OC_PRHEX, 4, 0, 0 },
+  /*20*/{ NETVM_OC_LDMEM, 4, NETVM_IF_IMMED, 4 },
+  /*21*/{ NETVM_OC_PRHEX, 4, 0, 0 },
+  /*22*/{ NETVM_OC_LDMEM, 4, NETVM_IF_IMMED, 8 },
+  /*23*/{ NETVM_OC_PRHEX, 4, 0, 0 },
+  /*24*/{ NETVM_OC_LDMEM, 4, NETVM_IF_IMMED, 12 },
+  /*25*/{ NETVM_OC_PRHEX, 4, 0, 0 },
+  /*26*/{ NETVM_OC_PRSTR, BMS2_SIZE, NETVM_IF_IMMED, BMS2_OFFSET },
 
   /* Next put "hello world" into the beginning of the packet */
-  /*23*/{ NETVM_OC_LDHDRF, 0, NETVM_IF_IMMED,
-          NETVM_HDESC(0, PPT_TCP, 0, NETVM_HDR_POFF, 0) },
-  /*24*/{ NETVM_OC_PUSH, 0, 0, BMS1_OFFSET },
-  /*25*/{ NETVM_OC_PUSH, 0, 0, BMS1_SIZE },
-  /*26*/{ NETVM_OC_BULKM2P, 0, NETVM_IF_IMMED, 0 }
+  /*27*/{ NETVM_OC_LDHDRF, 0, NETVM_IF_IMMED,
+          NETVM_HDESC(PPT_TCP, 0, NETVM_HDR_POFF, 0) },
+  /*28*/{ NETVM_OC_PUSH, 0, 0, BMS1_OFFSET },
+  /*29*/{ NETVM_OC_PUSH, 0, 0, BMS1_SIZE },
+  /*30*/{ NETVM_OC_BULKM2P, 0, NETVM_IF_IMMED, 0 }
 };
 
 
@@ -308,7 +312,7 @@ void init_memory(struct netvm *vm, struct meminit *mi, size_t nmi)
 }
 
 
-void print_vmret(int vmrv, uint64_t rc)
+void print_vmret(int vmrv, uint32_t rc)
 {
   if ( vmrv == 0 ) {
     fprintf(stderr, "VM provided no return value\n");
@@ -327,7 +331,7 @@ void print_vmret(int vmrv, uint64_t rc)
 void run_without_packets(struct netvm *vm, struct meminit *mi, size_t nmi)
 {
   int vmrv;
-  uint64_t rc;
+  uint32_t rc;
   init_memory(vm, mi, nmi);
   vmrv = netvm_run(vm, -1, &rc);
   print_vmret(vmrv, rc);
@@ -342,7 +346,7 @@ void run_with_packets(struct netvm *vm, int filter, struct meminit *mi,
   int npass = 0;
   int vmrv;
   int i;
-  uint64_t rc;
+  uint32_t rc;
 
   while ( pkt_file_read(stdin, &p) > 0 ) {
     ++npkt;
