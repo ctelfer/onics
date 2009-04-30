@@ -70,7 +70,8 @@ int pkt_create(struct pktbuf **p, size_t plen, enum pktdltype_e dltype)
   pph.pph_dltype = dltype;
   pph.pph_len = plen;
   pph.pph_class = 0;
-  pph.pph_timestamp = 0;
+  pph.pph_tssec = 0;
+  pph.pph_tsnsec = 0;
   if ( !(*p = new_packet(&pph)) ) {
     errno = ENOMEM;
     return -1;
@@ -140,8 +141,8 @@ int pkt_file_read(FILE *fp, struct pktbuf **p)
       return 0;
     }
   }
-  unpack(&pph, sizeof(pph), "wwj", &pph2.pph_dltype, &pph2.pph_len,
-         &pph2.pph_timestamp);
+  unpack(&pph, sizeof(pph), "wwww", &pph2.pph_dltype, &pph2.pph_len,
+         &pph2.pph_tssec, &pph2.pph_tsnsec);
   if ( !dltype_is_valid(pph2.pph_dltype) ) {
     errno = EIO;
     return -1;
@@ -177,8 +178,8 @@ int pkt_fd_read(int fd, struct pktbuf **p)
       return 0;
     }
   }
-  unpack(&pph, sizeof(pph), "wwj", &pph2.pph_dltype, &pph2.pph_len,
-         &pph2.pph_timestamp);
+  unpack(&pph, sizeof(pph), "wwww", &pph2.pph_dltype, &pph2.pph_len,
+         &pph2.pph_tssec, &pph2.pph_tsnsec);
   if ( !dltype_is_valid(pph2.pph_dltype) ) {
     errno = EIO;
     return -1;
@@ -215,7 +216,8 @@ int pkt_file_write(FILE *fp, struct pktbuf *p)
     errno = EINVAL;
     return -1;
   }
-  pack(&pph, sizeof(pph), "wwj", p->pkt_dltype, p->pkt_len, p->pkt_timestamp);
+  pack(&pph, sizeof(pph), "wwww", p->pkt_dltype, p->pkt_len, p->pkt_tssec,
+       p->pkt_tsnsec);
   if ( (nr = fwrite(&pph, 1, sizeof(pph), fp)) < sizeof(pph) ) {
     errno = EIO;
     return -1;
@@ -238,7 +240,8 @@ int pkt_fd_write(int fd, struct pktbuf *p)
     errno = EINVAL;
     return -1;
   }
-  pack(&pph, sizeof(pph), "wwj", p->pkt_dltype, p->pkt_len, p->pkt_timestamp);
+  pack(&pph, sizeof(pph), "wwww", p->pkt_dltype, p->pkt_len, p->pkt_tssec,
+       p->pkt_tsnsec);
   if ( io_write(fd, &pph, sizeof(pph)) < sizeof(pph) ) {
     errno = EIO;
     return -1;

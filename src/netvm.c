@@ -325,9 +325,11 @@ static void ni_ldpmeta(struct netvm *vm)
   FATAL(vm, (pktnum >= NETVM_MAXPKTS) || !(pkt = vm->packets[pktnum]));
   if ( inst->opcode == NETVM_OC_LDCLASS ) {
     S_PUSH(vm, pkt->pkb->pkt_class);
+  } else if ( inst->opcode == NETVM_OC_LDTSSEC ) {
+    S_PUSH(vm, pkt->pkb->pkt_tssec);
   } else {
-    abort_unless(inst->opcode == NETVM_OC_LDTS);
-    S_PUSH(vm, pkt->pkb->pkt_timestamp);
+    abort_unless(inst->opcode == NETVM_OC_LDTSNSEC);
+    S_PUSH(vm, pkt->pkb->pkt_tsnsec);
   }
 }
 
@@ -761,9 +763,11 @@ static void ni_stpmeta(struct netvm *vm)
   S_POP(vm, val);
   if ( inst->opcode == NETVM_OC_STCLASS ) {
     pkt->pkb->pkt_class = val;
+  } else if ( inst->opcode == NETVM_OC_STTSSEC ) {
+    pkt->pkb->pkt_tssec = val;
   } else {
-    abort_unless(inst->opcode == NETVM_OC_STTS);
-    pkt->pkb->pkt_timestamp = val;
+    abort_unless(inst->opcode == NETVM_OC_STTSNSEC);
+    pkt->pkb->pkt_tsnsec = val;
   }
 }
 
@@ -992,7 +996,8 @@ netvm_op g_netvm_ops[NETVM_OC_MAX+1] = {
   ni_stmem,
   ni_ldpkt,
   ni_ldpmeta, /* LDCLASS */
-  ni_ldpmeta, /* LDTS */
+  ni_ldpmeta, /* LDTSSEC */
+  ni_ldpmeta, /* LDTSNSEC */
   ni_ldhdrf,
   ni_blkmv, /* BULKP2M */
   ni_numop, /* NOT */
@@ -1045,7 +1050,8 @@ netvm_op g_netvm_ops[NETVM_OC_MAX+1] = {
   ni_prstr,
   ni_stpkt,
   ni_stpmeta, /* STCLASS */
-  ni_stpmeta, /* STTS */
+  ni_stpmeta, /* STTSSEC */
+  ni_stpmeta, /* STTSNSEC */
   ni_blkmv, /* BULKP2M */
   ni_pktnew,
   ni_pktcopy,

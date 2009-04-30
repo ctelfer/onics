@@ -109,8 +109,8 @@ int main(int argc, char *argv[])
     if ( g_dumper != NULL ) {
       pcapph.len = p->pkt_len;
       pcapph.caplen = p->pkt_len;
-      pcapph.ts.tv_sec = p->pkt_timestamp / 1000000000;
-      pcapph.ts.tv_usec = (p->pkt_timestamp % 1000000000) * 1000;
+      pcapph.ts.tv_sec = p->pkt_tssec; 
+      pcapph.ts.tv_usec = p->pkt_tsnsec / 1000;
       pcap_dump((u_char *)g_dumper, &pcapph, pkt_data(p));
     } else {
       if ( pcap_inject(g_pcap, pkt_data(p), p->pkt_len) < 0 )

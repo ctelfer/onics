@@ -13,7 +13,8 @@ struct pktprehdr {
   uint32_t  pph_dltype;
   uint32_t  pph_len;
   uint32_t  pph_class;
-  uint64_t  pph_timestamp;
+  uint32_t  pph_tssec;
+  uint32_t  pph_tsnsec;
 };
 
 struct pktbuf {
@@ -25,7 +26,8 @@ struct pktbuf {
 #define pkt_dltype    pkt_header.pph_dltype
 #define pkt_len       pkt_header.pph_len
 #define pkt_class     pkt_header.pph_class
-#define pkt_timestamp pkt_header.pph_timestamp
+#define pkt_tssec     pkt_header.pph_tssec
+#define pkt_tsnsec    pkt_header.pph_tsnsec
 #define pkt_data(p)   ((p)->pkt_buffer + (p)->pkt_offset)
 
 enum pktdltype_e {
