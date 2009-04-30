@@ -193,9 +193,28 @@ enum {
  * from or store to is on top of the stack.  Store operations always take their
  * values from the stack as well.  (but not PUSH operations)
  *
- * If immed is not set for a header instruction then the instruction 
- * expects a struct netvm_hdr_desc to be the value on the stack packed into a
- * 32-bit word.
+ * Header descriptors have 2 forms.
+ * Packed:
+ * 	packet number = 0;
+ * 	8 bits - ppt
+ * 	3 bits - hdr index
+ * 	4 bits - field
+ * 	17 bits - offset 
+ * 
+ * Full:
+ * 	(top of stack)
+ * 	pkt number:4  PPT: 8  hdr index:8  field:12
+ * 	offset:32 or field index:32
+ *
+ * When no flags are set the hdesc comes on top of the stack and the offset 
+ * follows.  When IMMED is set but not STKOFF, the hdesc is in packed form 
+ * encoded in the instruction.  When IMMED and STKOFF are both set set, the 
+ * header descriptor is immediate but uses the "Full" format.  The offset is 
+ * then on the stack.  So, there are 3 modes of operation:
+ * 	1) all static           -- most common
+ * 	2) offset on stack      -- for BIG packets 
+ * 	3) all hdesc on stack   -- for programatic manipulation of fields
+ * 	                           or really strange index or field values
  */
 
 #define NETVM_HDESC(ht, idx, fld, off) \
