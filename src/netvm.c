@@ -387,7 +387,24 @@ static void ni_ldhdrf(struct netvm *vm)
   }
 }
 
+
 static void ni_blkmv(struct netvm *vm)
+{
+  struct netvm_inst *inst = &vm->inst[vm->pc];
+  uint32_t saddr, daddr, len;
+  if ( IMMED(inst) )
+    len = inst->val;
+  else
+    S_POP(vm, len);
+  S_POP(vm, daddr);
+  S_POP(vm, saddr);
+  FATAL(vm, (saddr + len < len) || (daddr + len < len));
+  FATAL(vm, (saddr + len >= vm->memsz) || (daddr + len >= vm->memsz));
+  memmove(vm->mem + saddr, vm->mem + daddr, len);
+}
+
+
+static void ni_blkpmv(struct netvm *vm)
 {
   struct netvm_inst *inst = &vm->inst[vm->pc];
   int pktnum;
@@ -1012,7 +1029,8 @@ netvm_op g_netvm_ops[NETVM_OC_MAX+1] = {
   ni_ldpmeta, /* LDTSSEC */
   ni_ldpmeta, /* LDTSNSEC */
   ni_ldhdrf,
-  ni_blkmv, /* BULKP2M */
+  ni_blkmv, /* BULMP2M */
+  ni_blkpmv, /* BULKP2M */
   ni_numop, /* NOT */
   ni_numop, /* INVERT */
   ni_numop, /* TOBOOL */
@@ -1065,7 +1083,7 @@ netvm_op g_netvm_ops[NETVM_OC_MAX+1] = {
   ni_stpmeta, /* STCLASS */
   ni_stpmeta, /* STTSSEC */
   ni_stpmeta, /* STTSNSEC */
-  ni_blkmv, /* BULKP2M */
+  ni_blkpmv, /* BULKP2M */
   ni_pktswap,
   ni_pktnew,
   ni_pktcopy,

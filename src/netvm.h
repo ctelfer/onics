@@ -42,6 +42,7 @@ enum {
   NETVM_OC_LDTSSEC,     /* [pktnum|I]: load packet timestamp */
   NETVM_OC_LDTSNSEC,    /* [pktnum|I]: load packet timestamp */
   NETVM_OC_LDHDRF,      /* [hdesc|I]: load field from header parse */
+  NETVM_OC_BULKM2M,     /* [saddr,daddr,lenI]: move bytes from saddr to daddr */
   NETVM_OC_BULKP2M,     /* [pa,addr,len,pktnum|I]: move bytes from pa to addr */
   NETVM_OC_NOT,         /* [v] logcal not (1 or 0) */
   NETVM_OC_INVERT,      /* [v] bit-wise inversion */
