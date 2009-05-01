@@ -42,8 +42,11 @@ enum {
   NETVM_OC_LDTSSEC,     /* [pktnum|I]: load packet timestamp */
   NETVM_OC_LDTSNSEC,    /* [pktnum|I]: load packet timestamp */
   NETVM_OC_LDHDRF,      /* [hdesc|I]: load field from header parse */
-  NETVM_OC_BULKM2M,     /* [saddr,daddr,lenI]: move bytes from saddr to daddr */
+  NETVM_OC_BULKM2M,     /* [saddr,daddr,len|I]: move data from saddr to daddr */
   NETVM_OC_BULKP2M,     /* [pa,addr,len,pktnum|I]: move bytes from pa to addr */
+  NETVM_OC_MEMCMP,      /* [addr1,addr2,len|I]: compare bytes in mem */
+  NETVM_OC_PFXCMP,      /* [addr1,addr2,pfx,len|I] compare bits via prefix */
+  NETVM_OC_MASKEQ,      /* [addr1,addr2,maddr,len|I] compare bytes via mask */
   NETVM_OC_NOT,         /* [v] logcal not (1 or 0) */
   NETVM_OC_INVERT,      /* [v] bit-wise inversion */
   NETVM_OC_TOBOOL,      /* [v] if v != 0, 1, otherwise 0 */
@@ -78,9 +81,10 @@ enum {
   NETVM_OC_MREX,        /* [addr,len,rxaddr,rxlen]: regex on memory data */
   NETVM_OC_HALT,        /* halt program */
   NETVM_OC_BR,          /* [v|I] set PC to v (must be > PC in matchonly mode */
-  NETVM_OC_BRIF,        /* [c,v|I] set PC to v if c is non-zero */
+  NETVM_OC_BNZ,         /* [c,v|I] set PC to v if c is non-zero */
+  NETVM_OC_BZ,          /* [c,v|I] set PC to v if c is zero */
                         /*         (must be > PC in matchonly mode */
-  NETVM_OC_MAX_MATCH = NETVM_OC_BRIF,
+  NETVM_OC_MAX_MATCH = NETVM_OC_BZ,
 
   /* not allowed in pure match run */
   NETVM_OC_JUMP,        /* [addr|I] branch to absolute address addr */

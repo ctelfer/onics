@@ -430,6 +430,77 @@ static void ni_blkpmv(struct netvm *vm)
     memcpy(hdr->data + poff, vm->mem + maddr, len);
 }
 
+
+static void ni_memcmp(struct netvm *vm)
+{
+  struct netvm_inst *inst = &vm->inst[vm->pc];
+  uint32_t addr1, addr2, len, nbytes, val;
+  if ( IMMED(inst) )
+    len = inst->val;
+  else
+    S_POP(vm, len);
+  S_POP(vm, addr1);
+  S_POP(vm, addr2);
+  if ( inst->opcode == NETVM_OC_MEMCMP )
+    nbytes = len;
+  else
+    nbytes = (len + 7) >> 3;
+  FATAL(vm, (addr1 + nbytes < nbytes) || (addr2 + nbytes < nbytes));
+  FATAL(vm, (addr1 + nbytes >= vm->memsz) || (addr2 + nbytes >= vm->memsz));
+  if ( inst->opcode == NETVM_OC_PFXCMP ) {
+    byte_t *p1 = vm->mem + addr1;
+    byte_t *p2 = vm->mem + addr2;
+    val = 0;
+    while ( len > 8 ) {
+      if (*p1 != *p2) {
+        val = (*p1 < *p2) ? (0 - (uint32_t)1) : 1;
+        S_PUSH(vm, val);
+        break;
+      }
+      ++p1; ++p2; len -= 8;
+    }
+    if ( (len > 0) && !val ) {
+      byte_t b1 = *p1 & -(1 << (8 - len));
+      byte_t b2 = *p2 & -(1 << (8 - len));
+      if ( b1 != b2 )
+        val = (b1 < b2) ? (0 - (uint32_t)1) : 1;
+    }
+  } else {
+    val = memcmp(vm->mem + addr1, vm->mem + addr2, len);
+  }
+  S_PUSH(vm, val);
+}
+
+
+static void ni_maskeq(struct netvm *vm)
+{
+  struct netvm_inst *inst = &vm->inst[vm->pc];
+  uint32_t saddr, daddr, maddr, len;
+  byte_t *src, *dst, *mask;
+  if ( IMMED(inst) )
+    len = inst->val;
+  else
+    S_POP(vm, len);
+  S_POP(vm, maddr);
+  S_POP(vm, daddr);
+  S_POP(vm, saddr);
+  FATAL(vm, (saddr + len < len) || (daddr + len < len) || (maddr + len < len));
+  FATAL(vm, (saddr + len >= vm->memsz) || (daddr + len >= vm->memsz) ||
+            (maddr + len >= vm->memsz));
+  src = (byte_t *)vm->mem + saddr;
+  dst = (byte_t *)vm->mem + daddr;
+  mask = (byte_t *)vm->mem + maddr;
+  while ( len > 0 ) {
+    if ( (*src++ & *mask) != (*dst++ & *mask++) ) {
+      S_PUSH(vm, 0);
+      return;
+    }
+    --len;
+  }
+  S_PUSH(vm, 1);
+}
+
+
 static void ni_numop(struct netvm *vm)
 {
   struct netvm_inst *inst = &vm->inst[vm->pc];
@@ -544,9 +615,11 @@ static void ni_branch(struct netvm *vm)
     S_POP(vm, off);
     FATAL(vm, vm->pc + off + 1 > vm->ninst);
   }
-  if ( inst->opcode == NETVM_OC_BRIF ) {
+  if ( inst->opcode != NETVM_OC_BR ) {
     uint32_t cond;
     S_POP(vm, cond);
+    if ( inst->opcode == NETVM_OC_BZ )
+      cond = !cond;
     if ( !cond )
       return;
   }
@@ -1031,6 +1104,9 @@ netvm_op g_netvm_ops[NETVM_OC_MAX+1] = {
   ni_ldhdrf,
   ni_blkmv, /* BULMP2M */
   ni_blkpmv, /* BULKP2M */
+  ni_memcmp, /* MEMCMP */
+  ni_memcmp, /* PFXCMP */
+  ni_maskeq, /* MASKEQ*/
   ni_numop, /* NOT */
   ni_numop, /* INVERT */
   ni_numop, /* TOBOOL */
@@ -1065,7 +1141,8 @@ netvm_op g_netvm_ops[NETVM_OC_MAX+1] = {
   ni_unimplemented, /* MREX */
   ni_halt,
   ni_branch, /* BR */
-  ni_branch, /* BRIF */
+  ni_branch, /* BNZ */
+  ni_branch, /* BZ */
 
   /* non-matching-only */
   ni_jump,
@@ -1135,7 +1212,8 @@ int netvm_validate(struct netvm *vm)
     inst = &vm->inst[i];
     if ( inst->opcode > maxi )
       return -1;
-    if ( (inst->opcode == NETVM_OC_BR) || (inst->opcode == NETVM_OC_BRIF) ) {
+    if ( (inst->opcode == NETVM_OC_BR) || (inst->opcode == NETVM_OC_BNZ) ||
+         (inst->opcode == NETVM_OC_BZ) ) {
       if ( IMMED(inst) ) {
         newpc = (uint32_t)inst->val + 1 + i;
         if ( newpc > vm->ninst )
