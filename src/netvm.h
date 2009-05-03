@@ -280,21 +280,28 @@ struct netvm {
 
 enum {
   NETVM_ERR_UNIMPL = 1,
-  NETVM_ERR_STKOVF,
+  NETVM_ERR_STKOVFL,
   NETVM_ERR_STKUNDF,
+  NETVM_ERR_WIDTH,
   NETVM_ERR_INSTADDR,
   NETVM_ERR_MEMADDR,
   NETVM_ERR_PKTADDR,
   NETVM_ERR_MRDONLY,
+  NETVM_ERR_PKTNUM,
   NETVM_ERR_NOPKT,
   NETVM_ERR_NOHDR,
   NETVM_ERR_NOHDRFLD,
   NETVM_ERR_HDESC,
   NETVM_ERR_HDRIDX,
   NETVM_ERR_HDRFLD,
-  NETVM_ERR_OVERFLOW,
+  NETVM_ERR_FIXLEN,
+  NETVM_ERR_CKSUM,
+  NETVM_ERR_PKTINS,
+  NETVM_ERR_PKTCUT,
+  NETVM_ERR_HDRADJ,
   NETVM_ERR_NOMEM,
-  NETVM_ERR_EXTERN,
+  NETVM_ERR_IOVFL,
+  NETVM_ERR_MAX = NETVM_ERR_IOVFL,
 };
 
 
@@ -346,5 +353,8 @@ struct pktbuf *netvm_clrpkt(struct netvm *vm, int slot, int keeppktbuf);
 /* 0 if run ok and no retval, 1 if run ok and stack not empty, -1 if err, -2 */
 /* if out of cycles */
 int netvm_run(struct netvm *vm, int maxcycles, uint32_t *rv);
+
+/* returns the error string corresponding to the netvm error */
+const char *netvm_estr(int error);
 
 #endif /* __netvm_h */
