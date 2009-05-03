@@ -292,6 +292,32 @@ struct netvm_inst vm_prog_hexdump[] = {
   /*30*/{ NETVM_OC_PKTDEL, 0, NETVM_IF_IMMED, 0 },
 };
 
+
+char meqs1[] = "\x45\x00\x00\x34";
+#define MEQ_VAL_OFFSET      (ROSEGOFF)
+#define MEQ_VAL_SIZE        (sizeof(meqs1)-1)
+char meqs2[] = "\xff\x00\xff\xff";
+#define MEQ_MASK_OFFSET     (MEQ_VAL_OFFSET + MEQ_VAL_SIZE)
+#define MEQ_MASK_SIZE       (sizeof(meqs2)-1)
+struct meminit meqsi[] = {
+  { (byte_t*)meqs1, MEQ_VAL_SIZE, MEQ_VAL_OFFSET },
+  { (byte_t*)meqs2, MEQ_MASK_SIZE, MEQ_MASK_OFFSET },
+};
+
+
+struct netvm_inst vm_prog_maskeq[] = { 
+  /*00*/{ NETVM_OC_LDHDRF, 0, NETVM_IF_IMMED, 
+          NETVM_HDESC(NETVM_HDLAYER, NETVM_HDI_NET, NETVM_HDR_HOFF, 0) },
+  /*01*/{ NETVM_OC_PUSH, 0, 0, 0 },
+  /*02*/{ NETVM_OC_PUSH, 0, 0, MEQ_VAL_SIZE },
+  /*03*/{ NETVM_OC_BULKP2M, 0, NETVM_IF_IMMED, 0 },
+  /*04*/{ NETVM_OC_PUSH, 0, 0, 0 },
+  /*05*/{ NETVM_OC_PUSH, 0, 0, MEQ_VAL_OFFSET },
+  /*06*/{ NETVM_OC_PUSH, 0, 0, MEQ_MASK_OFFSET },
+  /*07*/{ NETVM_OC_MASKEQ, 0, NETVM_IF_IMMED, MEQ_MASK_SIZE },
+};
+
+
 struct netvm_program {
   struct netvm_inst *   code;
   unsigned              codelen;
@@ -326,6 +352,9 @@ struct netvm_program {
     1, bmi, array_length(bmi) },
   { vm_prog_hexdump, array_length(vm_prog_hexdump),
     "hexdump -- Hex dump the packets", 0, 1, hdi, array_length(hdi) },
+  { vm_prog_maskeq, array_length(vm_prog_maskeq),
+    "mask equality -- Compare with 45000034 hex", 0, 0, meqsi, 
+    array_length(meqsi) },
 };
 unsigned prognum = 0;
 
@@ -453,6 +482,8 @@ int main(int argc, char *argv[])
   file_emitter_init(&fe, (prog->filter ? stderr : stdout));
   netvm_init(&vm, vm_stack, array_length(vm_stack), vm_memory, 
              array_length(vm_memory), &fe.fe_emitter);
+  netvm_setrooff(&vm, ROSEGOFF);
+
   if ( !prog->filter )
     vm.matchonly = 1;
   if ( netvm_setcode(&vm, prog->code, prog->codelen) < 0)
