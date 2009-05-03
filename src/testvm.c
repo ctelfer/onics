@@ -230,6 +230,68 @@ struct netvm_inst vm_prog_bulkmove[] = {
 };
 
 
+#define HD_IDX          (ROSEGOFF - 8)
+#define HD_PKNADDR      (ROSEGOFF - 4)
+char hds1[] = "Packet ";
+#define HDS1_OFFSET     (ROSEGOFF)
+#define HDS1_SIZE       (sizeof(hds1)-1)
+char hds2[] = ": ";
+#define HDS2_OFFSET     (HDS1_OFFSET + HDS1_SIZE)
+#define HDS2_SIZE       (sizeof(hds2)-1)
+char hds3[] = " bytes";
+#define HDS3_OFFSET     (HDS2_OFFSET + HDS2_SIZE)
+#define HDS3_SIZE       (sizeof(hds3)-1)
+char hds4[] = "\n\n";
+#define HDS4_OFFSET     (HDS3_OFFSET + HDS3_SIZE)
+#define HDS4_SIZE       (sizeof(hds4)-1)
+char hds5[] = "\n\t";
+#define HDS5_OFFSET     (HDS4_OFFSET + HDS4_SIZE)
+#define HDS5_SIZE       (sizeof(hds5)-1)
+struct meminit hdi[] = {
+  { (byte_t*)hds1, HDS1_SIZE, HDS1_OFFSET },
+  { (byte_t*)hds2, HDS2_SIZE, HDS2_OFFSET },
+  { (byte_t*)hds3, HDS3_SIZE, HDS3_OFFSET },
+  { (byte_t*)hds4, HDS4_SIZE, HDS4_OFFSET },
+  { (byte_t*)hds5, HDS5_SIZE, HDS5_OFFSET },
+};
+
+struct netvm_inst vm_prog_hexdump[] = { 
+  /*00*/{ NETVM_OC_PRSTR, HDS1_SIZE, NETVM_IF_IMMED, HDS1_OFFSET },
+  /*01*/{ NETVM_OC_LDMEM, 4, NETVM_IF_IMMED, HD_PKNADDR },
+  /*02*/{ NETVM_OC_ADD, 0, NETVM_IF_IMMED, 1 },
+  /*03*/{ NETVM_OC_DUP, 0, 0, 0 },
+  /*04*/{ NETVM_OC_STMEM, 4, NETVM_IF_IMMED, HD_PKNADDR },
+  /*05*/{ NETVM_OC_PRDEC, 4, 0, 0 },
+  /*06*/{ NETVM_OC_PRSTR, HDS2_SIZE, NETVM_IF_IMMED, HDS2_OFFSET },
+  /*07*/{ NETVM_OC_LDHDRF, 0, NETVM_IF_IMMED, 
+          NETVM_HDESC(PPT_NONE, 0, NETVM_HDR_PLEN, 0) },
+  /*08*/{ NETVM_OC_PRDEC, 4, 0, 0 },
+  /*09*/{ NETVM_OC_PRSTR, HDS3_SIZE, NETVM_IF_IMMED, HDS3_OFFSET },
+  /*10*/{ NETVM_OC_PUSH, 0, 0, 0 }, 
+  /*11*/{ NETVM_OC_STMEM, 4, NETVM_IF_IMMED, HD_IDX }, 
+  /*12*/{ NETVM_OC_LDMEM, 4, NETVM_IF_IMMED, HD_IDX }, 
+  /*13*/{ NETVM_OC_DUP, 0, 0, 0 },
+  /*14*/{ NETVM_OC_LDHDRF, 0, NETVM_IF_IMMED, 
+          NETVM_HDESC(PPT_NONE, 0, NETVM_HDR_PLEN, 0) },
+  /*15*/{ NETVM_OC_GE, 0, 0, 0 },
+  /*16*/{ NETVM_OC_BNZ, 0, NETVM_IF_IMMED, NETVM_BRF(12) },
+  /*17*/{ NETVM_OC_DUP, 0, 0, 0 },
+  /*18*/{ NETVM_OC_MOD, 0, NETVM_IF_IMMED, 16 },
+  /*19*/{ NETVM_OC_BNZ, 0, NETVM_IF_IMMED, NETVM_BRF(2) },
+  /*20*/{ NETVM_OC_PRSTR, HDS5_SIZE, NETVM_IF_IMMED, HDS5_OFFSET },
+  /*21*/{ NETVM_OC_PUSH, 0, 0, 
+          NETVM_FULL_HDESC(0, PPT_NONE, 0, NETVM_HDR_POFF) },
+  /*22*/{ NETVM_OC_LDPKT, 1, 0, 0 },
+  /*23*/{ NETVM_OC_PRHEX, 4, 0, 2 },
+  /*24*/{ NETVM_OC_LDMEM, 4, NETVM_IF_IMMED, HD_IDX }, 
+  /*25*/{ NETVM_OC_ADD, 0, NETVM_IF_IMMED, 1 },
+  /*26*/{ NETVM_OC_STMEM, 4, NETVM_IF_IMMED, HD_IDX }, 
+  /*27*/{ NETVM_OC_BR, 0, NETVM_IF_IMMED, NETVM_BRB(15) }, 
+  /*28*/{ NETVM_OC_POP, 0, 0, 0 },
+  /*29*/{ NETVM_OC_PRSTR, HDS4_SIZE, NETVM_IF_IMMED, HDS4_OFFSET },
+  /*30*/{ NETVM_OC_PKTDEL, 0, NETVM_IF_IMMED, 0 },
+};
+
 struct netvm_program {
   struct netvm_inst *   code;
   unsigned              codelen;
@@ -238,7 +300,7 @@ struct netvm_program {
   int                   filter;
   struct meminit *      mi;
   int                   nmi;
-} vm_progs[] = { 
+} vm_progs[] = {
   { vm_prog_istcp, array_length(vm_prog_istcp), 
     "istcp -- Test if the packet has a TCP header", 0, 0, NULL, 0 },
   { vm_prog_tcperr, array_length(vm_prog_tcperr),
@@ -262,6 +324,8 @@ struct netvm_program {
   { vm_prog_bulkmove, array_length(vm_prog_bulkmove),
     "bulkmove -- Bulk move data into and out of the 1st 16-byte TCPpacket", 0, 
     1, bmi, array_length(bmi) },
+  { vm_prog_hexdump, array_length(vm_prog_hexdump),
+    "hexdump -- Hex dump the packets", 0, 1, hdi, array_length(hdi) },
 };
 unsigned prognum = 0;
 
