@@ -37,7 +37,7 @@ enum {
                         /* 0-based counting from the top of the stack */
   NETVM_OC_LDMEM,       /* [addr|WISR]: load from memory */
   NETVM_OC_STMEM,       /* [v,addr|WI]: store to memory */
-  NETVM_OC_LDPKT,       /* [hdesc|WSHTP]: load bytes from packet */
+  NETVM_OC_LDPKT,       /* [hdesc|IWSHTP]: load bytes from packet */
   NETVM_OC_LDCLASS,     /* [pktnum|I]: load packet class */
   NETVM_OC_LDTSSEC,     /* [pktnum|I]: load packet timestamp */
   NETVM_OC_LDTSNSEC,    /* [pktnum|I]: load packet timestamp */
@@ -212,14 +212,8 @@ enum {
  * 	offset:32 or field index:32
  *
  * When no flags are set the hdesc comes on top of the stack and the offset 
- * follows.  When IMMED is set but not STKOFF, the hdesc is in packed form 
- * encoded in the instruction.  When IMMED and STKOFF are both set set, the 
- * header descriptor is immediate but uses the "Full" format.  The offset is 
- * then on the stack.  So, there are 3 modes of operation:
- * 	1) all static           -- most common
- * 	2) offset on stack      -- for BIG packets 
- * 	3) all hdesc on stack   -- for programatic manipulation of fields
- * 	                           or really strange index or field values
+ * follows.  When IMMED is set, the hdesc is in packed form encoded in the 
+ * instruction.  Otherwise the header descriptor is on the stack in "full" form:
  */
 
 #define NETVM_HDESC(ht, idx, fld, off) \
@@ -227,6 +221,12 @@ enum {
    (((uint32_t)(idx) & 0x7) << 21)|\
    (((uint32_t)(fld) & 0xF) << 17)|\
    ((uint32_t)(off) & 0x1FFFF))
+
+#define NETVM_FULL_HDESC(pn, ht, idx, fld) \
+  ((((uint32_t)(pn) & 0xF) << 28)|\
+   (((uint32_t)(ht) & 0xFF) << 20)|\
+   (((uint32_t)(idx) & 0xFF) << 12)|\
+   ((uint32_t)(fld) & 0xFFF))
 
 #define NETVM_HDLAYER   255   /* find header of type NETVM_HDI_* */
 /* 

@@ -201,7 +201,7 @@ static void get_hd(struct netvm *vm, struct netvm_inst *inst,
                    struct netvm_hdr_desc *hd)
 {
   uint32_t val;
-  if ( IMMED(inst) && !(inst->flags & NETVM_IF_STKOFF) ) {
+  if ( IMMED(inst) ) {
     val = inst->val;
     hd->pktnum = 0;
     hd->htype = (val >> 24) & 0xff;
@@ -209,10 +209,7 @@ static void get_hd(struct netvm *vm, struct netvm_inst *inst,
     hd->field = (val >> 17) & 0xf;
     hd->offset = val & 0x1ffff;
   } else { 
-    if ( IMMED(inst) )
-      val = inst->val;
-    else
-      S_POP(vm, val);
+    S_POP(vm, val);
     hd->pktnum = (val >> 28) & 0xf;
     hd->htype = (val >> 20) & 0xff;
     hd->idx = (val >> 12) & 0xff;
@@ -248,15 +245,15 @@ static void get_hdr_info(struct netvm *vm, struct netvm_inst *inst,
 
   switch(hd->field) {
   case NETVM_HDR_HOFF:
-    FATAL(vm, hd->offset + width >= hdr_hlen(hdr));
+    FATAL(vm, hd->offset + width > hdr_hlen(hdr));
     *addr = hdr->hoff + hd->offset;
     break;
   case NETVM_HDR_POFF:
-    FATAL(vm, hd->offset + width >= hdr_plen(hdr));
+    FATAL(vm, hd->offset + width > hdr_plen(hdr));
     *addr = hdr->poff + hd->offset;
     break;
   case NETVM_HDR_TOFF:
-    FATAL(vm, hd->offset + width >= hdr_tlen(hdr));
+    FATAL(vm, hd->offset + width > hdr_tlen(hdr));
     *addr = hdr->toff + hd->offset;
     break;
   case NETVM_HDR_EOFF:
