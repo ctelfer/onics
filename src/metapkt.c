@@ -65,6 +65,7 @@ struct metapkt *metapkt_new(size_t plen, int ppt)
     return NULL;
   }
   pkt->headers = hdr_create_parse(pkt->pkb->pkt_buffer, pkt->pkb->pkt_offset,
+                                  pkt->pkb->pkt_buflen - pkt->pkb->pkt_offset,
                                   pkt->pkb->pkt_buflen);
   if ( !pkt->headers ) {
     pkt_free(pkt->pkb);
@@ -91,7 +92,7 @@ struct metapkt *pktbuf_to_metapkt(struct pktbuf *pkb)
                                     pkb->pkt_len, pkb->pkt_buflen);
   else
     pkt->headers = hdr_create_parse(pkt->pkb->pkt_buffer, pkt->pkb->pkt_offset,
-                                    pkt->pkb->pkt_buflen);
+                                    pkb->pkt_len, pkt->pkb->pkt_buflen);
   if ( !pkt->headers ) {
     freepmeta(pkt);
     return NULL;

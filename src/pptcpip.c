@@ -43,12 +43,10 @@ static struct hdr_parse *newhdr(size_t sz, unsigned type,
 }
 
 static struct hdr_parse *crthdr(size_t sz, unsigned type, byte_t *buf,
-                                size_t off, size_t hlen, size_t len, 
-                                struct hparse_ops *ops)
+                                size_t off, size_t hlen, size_t plen, 
+                                size_t tlen, struct hparse_ops *ops)
 {
   struct hdr_parse *hdr;
-  if ( hlen > len )
-    return NULL;
   abort_unless(sz >= sizeof(struct hdr_parse));
   hdr = emalloc(sz);
   hdr->size = sz;
@@ -57,8 +55,8 @@ static struct hdr_parse *crthdr(size_t sz, unsigned type, byte_t *buf,
   hdr->error = 0;
   hdr->hoff = off;
   hdr->poff = off + hlen;
-  hdr->toff = off + len;
-  hdr->eoff = hdr->poff;
+  hdr->toff = hdr->poff + plen;
+  hdr->eoff = hdr->toff + tlen;
   hdr->ops = ops;
   l_init(&hdr->node);
   return hdr;
@@ -83,7 +81,8 @@ static struct hdr_parse *default_parse(struct hdr_parse *phdr)
 }
 
 
-static struct hdr_parse *default_create(byte_t *start, size_t off, size_t len)
+static struct hdr_parse *default_create(byte_t *start, size_t off, size_t len,
+                                        size_t poff, size_t plen, int mode)
 {
   return NULL;
 }
@@ -155,11 +154,18 @@ static struct hdr_parse *none_parse(struct hdr_parse *phdr)
 }
 
 
-static struct hdr_parse *none_create(byte_t *start, size_t off, size_t len)
+static struct hdr_parse *none_create(byte_t *start, size_t off, size_t len,
+                                     size_t poff, size_t plen, int mode)
 {
   struct hdr_parse *hdr;
-  hdr = crthdr(sizeof(struct hdr_parse), PPT_NONE, start, off, 0, len, 
-               &none_hparse_ops);
+  size_t hlen;
+  abort_unless(poff >= off && plen <= len && poff + plen >= poff && off <= len 
+               && start);
+  if ( mode != PPCF_PUSH_FILL )
+    return NULL;
+  hlen = poff - off;
+  hdr = crthdr(sizeof(struct hdr_parse), PPT_NONE, start + off, 0, hlen,
+               plen, len - plen - hlen, &none_hparse_ops);
   return hdr;
 }
 
@@ -193,13 +199,27 @@ static struct hdr_parse *eth_parse(struct hdr_parse *phdr)
 }
 
 
-static struct hdr_parse *eth_create(byte_t *start, size_t off, size_t len)
+static struct hdr_parse *eth_create(byte_t *start, size_t off, size_t len,
+                                    size_t poff, size_t plen, int mode)
 {
   struct hdr_parse *hdr;
-  if ( start == NULL || len < ETHHLEN )
-    return NULL;
-  hdr = crthdr(sizeof(struct hdr_parse), PPT_ETHERNET, start, off, ETHHLEN, len,
-               &eth_hparse_ops);
+  abort_unless(poff >= off && plen <= len && poff + plen >= poff && off <= len 
+               && start);
+  if ( mode == PPCF_PUSH_FILL ) { 
+    if ( len - off < ETHHLEN )
+      return NULL;
+    plen = len - off - ETHHLEN;
+  } else if ( mode == PPCF_PUSH_WRAP ) { 
+    if ( poff - off < ETHHLEN )
+      return NULL;
+    off = poff - ETHHLEN;
+  } else { 
+    abort_unless(mode == PPCF_PUSH_SET);
+    if ( poff - off != ETHHLEN )
+      return NULL;
+  }
+  hdr = crthdr(sizeof(struct hdr_parse), PPT_ETHERNET, start, off, ETHHLEN, 
+               plen, 0, &eth_hparse_ops);
   if ( hdr ) {
     memset(start + off, 0, ETHHLEN);
   }
@@ -295,13 +315,16 @@ static int arp_fixlen(struct hdr_parse *hdr)
 }
 
 
-static struct hdr_parse *arp_create(byte_t *start, size_t off, size_t len)
+static struct hdr_parse *arp_create(byte_t *start, size_t off, size_t len,
+                                    size_t poff, size_t plen, int mode)
 {
   struct hdr_parse *hdr;
   struct arph *arp;
-  if ( start == NULL || len < sizeof(*arp) )
+  abort_unless(poff >= off && plen <= len && poff + plen >= poff && off <= len 
+               && start);
+  if ( (mode != PPCF_PUSH_FILL) || (len < 8) )
     return NULL;
-  hdr = crthdr(sizeof(struct hdr_parse), PPT_ARP, start, off, sizeof(*arp), len,
+  hdr = crthdr(sizeof(struct hdr_parse), PPT_ARP, start, off, 8, len - 8, 0, 
                &arp_hparse_ops);
   if ( hdr ) {
     memset(start + off, 0, hdr_totlen(hdr));
@@ -395,21 +418,42 @@ static struct hdr_parse *ipv4_parse(struct hdr_parse *phdr)
 }
 
 
-static struct hdr_parse *ipv4_create(byte_t *start, size_t off, size_t len)
+static struct hdr_parse *ipv4_create(byte_t *start, size_t off, size_t len,
+                                     size_t poff, size_t plen, int mode)
 {
   struct hdr_parse *hdr;
   struct ipv4h *ip;
-  if ( start == NULL || len < sizeof(*ip) )
-    return NULL;
-  if ( len > 65535 )
-    len = 65535;
-  hdr = crthdr(sizeof(struct hdr_parse), PPT_IPV4, start, off, sizeof(*ip), len,
+  size_t hlen;
+  abort_unless(poff >= off && plen <= len && poff + plen >= poff && off <= len 
+               && start);
+  if ( mode == PPCF_PUSH_FILL ) {
+    if ( (len - off < 20) || (len - off > 65535) )
+      return NULL;
+    hlen = 20;
+    poff = off + hlen;
+    plen = len - 20;
+  } else if ( mode == PPCF_PUSH_WRAP ) { 
+    if ( poff - off < 20 )
+      return NULL;
+    if ( len - off > 65535 ) 
+      len = off + 65535;
+    hlen = 20;
+    off = poff - 20;
+  } else { 
+    abort_unless(mode == PPCF_PUSH_SET);
+    hlen = poff - off;
+    if ( (hlen < 20) || (hlen > 60) || (len - off > 65535) || 
+         (poff + plen < len) )
+      return NULL;
+  }
+  hdr = crthdr(sizeof(struct hdr_parse), PPT_IPV4, start, off, hlen, plen, 0, 
                &ipv4_hparse_ops);
   if ( hdr ) {
     ip = hdr_header(hdr, struct ipv4h);
-    memset(ip, 0, sizeof(*ip));
-    ip->vhl = 0x45;
+    memset(ip, 0, hdr_hlen(hdr));
+    ip->vhl = 0x40 | (hlen >> 2);
     ip->len = ntoh16(hdr_totlen(hdr));
+    /* TODO: fill options with noops if header > 20? */
   }
   return hdr;
 }
@@ -565,15 +609,31 @@ static struct hdr_parse *udp_parse(struct hdr_parse *phdr)
 }
 
 
-static struct hdr_parse *udp_create(byte_t *start, size_t off, size_t len)
+static struct hdr_parse *udp_create(byte_t *start, size_t off, size_t len,
+                                    size_t poff, size_t plen, int mode)
 {
   struct hdr_parse *hdr;
   struct udph *udp;
-  if ( start == NULL || len < sizeof(*udp) )
-    return NULL;
-  if ( len > 65535 ) 
-    len = 65535;
-  hdr = crthdr(sizeof(struct hdr_parse), PPT_UDP, start, off, sizeof(*udp), len,
+  abort_unless(poff >= off && plen <= len && poff + plen >= poff && off <= len 
+               && start);
+  if ( mode == PPCF_PUSH_FILL ) {
+    if ( len - off < 8 )
+      return NULL;
+    plen = len - off - 8;
+    if ( plen > 65527 )
+      return NULL;
+  } else if ( mode == PPCF_PUSH_WRAP ) { 
+    if ( poff - off < 8 )
+      return NULL;
+    off = poff - 8;
+    if ( plen > 65527 )
+      plen = 65527;
+  } else { 
+    abort_unless(mode == PPCF_PUSH_SET);
+    if ( (poff - off != 8) || ( plen > 65527) )
+      return NULL;
+  }
+  hdr = crthdr(sizeof(struct hdr_parse), PPT_UDP, start, off, 8, len - 8, 0,
                &udp_hparse_ops);
   if ( hdr ) {
     udp = hdr_header(hdr, struct udph);
@@ -685,18 +745,37 @@ static struct hdr_parse *tcp_parse(struct hdr_parse *phdr)
 }
 
 
-static struct hdr_parse *tcp_create(byte_t *start, size_t off, size_t len)
+static struct hdr_parse *tcp_create(byte_t *start, size_t off, size_t len,
+                                    size_t poff, size_t plen, int mode)
 {
   struct hdr_parse *hdr;
   struct tcph *tcp;
-  if ( start == NULL || len < sizeof(*tcp) )
-    return NULL;
-  hdr = crthdr(sizeof(struct hdr_parse), PPT_TCP, start, off, sizeof(*tcp), len,
-                &tcp_hparse_ops);
+  size_t hlen;
+  abort_unless(poff >= off && plen <= len && poff + plen >= poff && off <= len 
+               && start);
+  if ( mode == PPCF_PUSH_FILL ) {
+    if ( len - off < 20 )
+      return NULL;
+    hlen = 20;
+    poff = off + hlen;
+    plen = len - 20;
+  } else if ( mode == PPCF_PUSH_WRAP ) { 
+    if ( poff - off < 20 )
+      return NULL;
+    hlen = 20;
+    off = poff - 20;
+  } else { 
+    abort_unless(mode == PPCF_PUSH_SET);
+    hlen = poff - off;
+    if ( (hlen < 20) || (hlen > 60) || (poff + plen < len) )
+      return NULL;
+  }
+  hdr = crthdr(sizeof(struct hdr_parse), PPT_TCP, start, off, hlen, plen, 0,
+               &tcp_hparse_ops);
   if ( hdr ) {
-    memset(hdr_header(hdr, void), 0, sizeof(*tcp));
+    memset(hdr_header(hdr, void), 0, hdr_hlen(hdr));
     tcp = hdr_header(hdr, struct tcph);
-    tcp->doff = 0x50;
+    tcp->doff = hlen << 2;
   }
   return hdr;
 }
@@ -807,14 +886,28 @@ static struct hdr_parse *icmp_parse(struct hdr_parse *phdr)
 }
 
 
-static struct hdr_parse *icmp_create(byte_t *start, size_t off, size_t len)
+static struct hdr_parse *icmp_create(byte_t *start, size_t off, size_t len,
+                                     size_t poff, size_t plen, int mode)
 {
   struct hdr_parse *hdr;
   struct icmph *icmp;
-  if ( start == NULL || len < sizeof(*icmp) )
-    return NULL;
-  hdr = crthdr(sizeof(struct hdr_parse), PPT_ICMP, start, off, sizeof(*icmp), 
-               len, &icmp_hparse_ops);
+  abort_unless(poff >= off && plen <= len && poff + plen >= poff && off <= len 
+               && start);
+  if ( mode == PPCF_PUSH_FILL ) {
+    if ( len - off < 8 )
+      return NULL;
+    plen = len - off - 8;
+  } else if ( mode == PPCF_PUSH_WRAP ) { 
+    if ( poff - off < 8 )
+      return NULL;
+    off = poff - 8;
+  } else { 
+    abort_unless(mode == PPCF_PUSH_SET);
+    if ( (poff - off != 8) )
+      return NULL;
+  }
+  hdr = crthdr(sizeof(struct hdr_parse), PPT_ICMP, start, off, 8, plen, 0,
+               &icmp_hparse_ops);
   if ( hdr ) {
     icmp = hdr_header(hdr, struct icmph);
     memset(icmp, 0, sizeof(*icmp));

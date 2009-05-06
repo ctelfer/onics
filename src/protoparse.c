@@ -86,20 +86,34 @@ void install_default_proto_parsers()
 }
 
 
-struct hdr_parse *hdr_create_parse(byte_t *buf, size_t off, size_t buflen)
+int hdr_can_follow(unsigned partype, unsigned cldtype)
+{
+  struct proto_parser *ppp, *cpp;
+  struct list *l;
+  if ( (partype > PPT_MAX) || !(ppp = &proto_parsers[partype])->valid )
+    return 0;
+  if ( (cldtype > PPT_MAX) || !(cpp = &proto_parsers[cldtype])->valid )
+    return 0;
+  l_for_each(l, ppp->children)
+    if ( clist_data(l, unsigned) == cldtype )
+      return 1;
+  return 0;
+}
+
+
+struct hdr_parse *hdr_create_parse(byte_t *buf, size_t off, size_t pktlen,
+                                   size_t buflen)
 {
   struct proto_parser *pp;
   struct hdr_parse *hdr;
-  if ( (off > buflen) || !(pp = &proto_parsers[PPT_NONE])->valid || !buf ) {
+  if ( (off > buflen) || !(pp = &proto_parsers[PPT_NONE])->valid || !buf ||
+       (pktlen > buflen) ) {
     errno = EINVAL;
     return NULL;
   }
   abort_unless(pp->ops && pp->ops->create);
-  if ( !(hdr = (*pp->ops->create)(buf, 0, buflen)) )
+  if ( !(hdr = (*pp->ops->create)(buf, 0, buflen, off, pktlen,PPCF_PUSH_FILL)) )
     return NULL;
-  hdr->hoff = 0;
-  hdr->poff = off;
-  hdr->eoff = hdr->toff = buflen;
   return hdr;
 }
 
@@ -118,7 +132,7 @@ struct hdr_parse *hdr_parse_packet(unsigned ppidx, byte_t *pkt, size_t off,
     errno = EINVAL;
     return NULL;
   }
-  if ( !(first = hdr_create_parse(pkt, off, buflen)) )
+  if ( !(first = hdr_create_parse(pkt, off, pktlen, buflen)) )
     return NULL;
   if ( ppidx == PPT_NONE )
     return first;
@@ -168,7 +182,8 @@ int hdr_add(unsigned ppidx, struct hdr_parse *phdr)
     errno = EINVAL;
     return -1;
   }
-  if ( (*pp->ops->create)(phdr->data, phdr->poff, hdr_plen(phdr)) == NULL )
+  if ( (*pp->ops->create)(phdr->data, phdr->poff, phdr->poff + hdr_plen(phdr),
+                          0, 0, PPCF_PUSH_FILL) == NULL )
     return -1;
   else
     return 0;

@@ -25,12 +25,17 @@
 
 #define PPERR_HLENMASK          (PPERR_TOOSMALL|PPERR_HLEN)
 
+#define PPCF_PUSH_FILL          1       /* push inner (fill completely) */
+#define PPCF_PUSH_WRAP          2       /* push outer (wrap tightly) */
+#define PPCF_PUSH_SET           3       /* push in middle (exact fit) */
+
 struct hdr_parse;
 
 struct pparse_ops {
   int			(*follows)(struct hdr_parse *phdr);
   struct hdr_parse *	(*parse)(struct hdr_parse *phdr);
-  struct hdr_parse *	(*create)(byte_t *start, size_t off, size_t maxlen);
+  struct hdr_parse *	(*create)(byte_t *start, size_t off, size_t maxlen,
+                                  size_t poff, size_t plen, int mode);
 };
 
 struct proto_parser {
@@ -97,9 +102,11 @@ int register_proto_parser(unsigned type, struct pparse_ops *ops);
 int add_proto_parser_parent(unsigned cldtype, unsigned partype);
 void deregister_proto_parser(unsigned type);
 void install_default_proto_parsers();
+int hdr_can_follow(unsigned partype, unsigned cldtype);
 
 /* header creation, parse and deletion */
-struct hdr_parse *hdr_create_parse(byte_t *buf, size_t off, size_t buflen);
+struct hdr_parse *hdr_create_parse(byte_t *buf, size_t off, size_t pktlen, 
+                                   size_t buflen);
 int hdr_add(unsigned ppidx, struct hdr_parse *hdr);
 struct hdr_parse *hdr_parse_packet(unsigned firstpp, byte_t *pbuf, size_t off, 
                                    size_t pktlen, size_t buflen);
