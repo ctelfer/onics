@@ -161,7 +161,7 @@ static struct hdr_parse *none_create(byte_t *start, size_t off, size_t len,
   size_t hlen;
   abort_unless(poff >= off && plen <= len && poff + plen >= poff && off <= len 
                && start);
-  if ( mode != PPCF_PUSH_FILL )
+  if ( mode != PPCF_FILL )
     return NULL;
   hlen = poff - off;
   hdr = crthdr(sizeof(struct hdr_parse), PPT_NONE, start + off, 0, hlen,
@@ -205,16 +205,16 @@ static struct hdr_parse *eth_create(byte_t *start, size_t off, size_t len,
   struct hdr_parse *hdr;
   abort_unless(poff >= off && plen <= len && poff + plen >= poff && off <= len 
                && start);
-  if ( mode == PPCF_PUSH_FILL ) { 
+  if ( mode == PPCF_FILL ) { 
     if ( len - off < ETHHLEN )
       return NULL;
     plen = len - off - ETHHLEN;
-  } else if ( mode == PPCF_PUSH_WRAP ) { 
+  } else if ( mode == PPCF_WRAP ) { 
     if ( poff - off < ETHHLEN )
       return NULL;
     off = poff - ETHHLEN;
   } else { 
-    abort_unless(mode == PPCF_PUSH_SET);
+    abort_unless(mode == PPCF_SET);
     if ( poff - off != ETHHLEN )
       return NULL;
   }
@@ -322,7 +322,7 @@ static struct hdr_parse *arp_create(byte_t *start, size_t off, size_t len,
   struct arph *arp;
   abort_unless(poff >= off && plen <= len && poff + plen >= poff && off <= len 
                && start);
-  if ( (mode != PPCF_PUSH_FILL) || (len < 8) )
+  if ( (mode != PPCF_FILL) || (len < 8) )
     return NULL;
   hdr = crthdr(sizeof(struct hdr_parse), PPT_ARP, start, off, 8, len - 8, 0, 
                &arp_hparse_ops);
@@ -426,13 +426,13 @@ static struct hdr_parse *ipv4_create(byte_t *start, size_t off, size_t len,
   size_t hlen;
   abort_unless(poff >= off && plen <= len && poff + plen >= poff && off <= len 
                && start);
-  if ( mode == PPCF_PUSH_FILL ) {
+  if ( mode == PPCF_FILL ) {
     if ( (len - off < 20) || (len - off > 65535) )
       return NULL;
     hlen = 20;
     poff = off + hlen;
     plen = len - 20;
-  } else if ( mode == PPCF_PUSH_WRAP ) { 
+  } else if ( mode == PPCF_WRAP ) { 
     if ( poff - off < 20 )
       return NULL;
     if ( len - off > 65535 ) 
@@ -440,7 +440,7 @@ static struct hdr_parse *ipv4_create(byte_t *start, size_t off, size_t len,
     hlen = 20;
     off = poff - 20;
   } else { 
-    abort_unless(mode == PPCF_PUSH_SET);
+    abort_unless(mode == PPCF_SET);
     hlen = poff - off;
     if ( (hlen < 20) || (hlen > 60) || (len - off > 65535) || 
          (poff + plen < len) )
@@ -616,20 +616,20 @@ static struct hdr_parse *udp_create(byte_t *start, size_t off, size_t len,
   struct udph *udp;
   abort_unless(poff >= off && plen <= len && poff + plen >= poff && off <= len 
                && start);
-  if ( mode == PPCF_PUSH_FILL ) {
+  if ( mode == PPCF_FILL ) {
     if ( len - off < 8 )
       return NULL;
     plen = len - off - 8;
     if ( plen > 65527 )
       return NULL;
-  } else if ( mode == PPCF_PUSH_WRAP ) { 
+  } else if ( mode == PPCF_WRAP ) { 
     if ( poff - off < 8 )
       return NULL;
     off = poff - 8;
     if ( plen > 65527 )
       plen = 65527;
   } else { 
-    abort_unless(mode == PPCF_PUSH_SET);
+    abort_unless(mode == PPCF_SET);
     if ( (poff - off != 8) || ( plen > 65527) )
       return NULL;
   }
@@ -753,19 +753,19 @@ static struct hdr_parse *tcp_create(byte_t *start, size_t off, size_t len,
   size_t hlen;
   abort_unless(poff >= off && plen <= len && poff + plen >= poff && off <= len 
                && start);
-  if ( mode == PPCF_PUSH_FILL ) {
+  if ( mode == PPCF_FILL ) {
     if ( len - off < 20 )
       return NULL;
     hlen = 20;
     poff = off + hlen;
     plen = len - 20;
-  } else if ( mode == PPCF_PUSH_WRAP ) { 
+  } else if ( mode == PPCF_WRAP ) { 
     if ( poff - off < 20 )
       return NULL;
     hlen = 20;
     off = poff - 20;
   } else { 
-    abort_unless(mode == PPCF_PUSH_SET);
+    abort_unless(mode == PPCF_SET);
     hlen = poff - off;
     if ( (hlen < 20) || (hlen > 60) || (poff + plen < len) )
       return NULL;
@@ -893,16 +893,16 @@ static struct hdr_parse *icmp_create(byte_t *start, size_t off, size_t len,
   struct icmph *icmp;
   abort_unless(poff >= off && plen <= len && poff + plen >= poff && off <= len 
                && start);
-  if ( mode == PPCF_PUSH_FILL ) {
+  if ( mode == PPCF_FILL ) {
     if ( len - off < 8 )
       return NULL;
     plen = len - off - 8;
-  } else if ( mode == PPCF_PUSH_WRAP ) { 
+  } else if ( mode == PPCF_WRAP ) { 
     if ( poff - off < 8 )
       return NULL;
     off = poff - 8;
   } else { 
-    abort_unless(mode == PPCF_PUSH_SET);
+    abort_unless(mode == PPCF_SET);
     if ( (poff - off != 8) )
       return NULL;
   }

@@ -98,7 +98,7 @@ struct metapkt *pktbuf_to_metapkt(struct pktbuf *pkb)
     return NULL;
   }
   for ( hdr=hdr_child(pkt->headers); hdr->type != PPT_NONE; hdr=hdr_child(hdr) )
-    metapkt_set_layer(pkt, hdr);
+    metapkt_set_layer(pkt, hdr, -1);
   return pkt;
 }
 
@@ -144,7 +144,7 @@ struct metapkt *metapkt_copy(struct metapkt *pkt)
     freepmeta(pnew);
     return NULL;
   }
-  for ( l = NETVM_HDI_LINK; l <= NETVM_HDI_MAX; ++l )
+  for ( l = MPKT_LAYER_LINK; l <= MPKT_LAYER_MAX; ++l )
     if ( pkt->layer[l] )
       pnew->layer[l] = get_hdr_byindex(pnew, get_hdr_index(pkt, pkt->layer[l]));
   return pnew;
@@ -201,50 +201,68 @@ static int isxport(int ppt)
 }
 
 
-void metapkt_set_layer(struct metapkt *pkt, struct hdr_parse *h)
+void metapkt_set_layer(struct metapkt *pkt, struct hdr_parse *h, int layer)
 {
-  if ( islink(h->type) ) {
-    if ( !pkt->layer[NETVM_HDI_LINK] )
-      pkt->layer[NETVM_HDI_LINK] = h;
-  } else if ( isnet(h->type) ) {
-    if ( !pkt->layer[NETVM_HDI_NET] )
-      pkt->layer[NETVM_HDI_NET] = h;
-  } else if ( isxport(h->type) ) {
-    if ( !pkt->layer[NETVM_HDI_XPORT] )
-      pkt->layer[NETVM_HDI_XPORT] = h;
+  abort_unless(pkt && h && (layer <= MPKT_LAYER_MAX));
+  /* XXX : should we sanity check that h in in pkt? */
+  if ( layer >= 0 ) {
+    pkt->layer[layer] = h;
+  } else {
+    if ( islink(h->type) ) {
+      if ( !pkt->layer[MPKT_LAYER_LINK] )
+        pkt->layer[MPKT_LAYER_LINK] = h;
+    } else if ( isnet(h->type) ) {
+      if ( !pkt->layer[MPKT_LAYER_NET] )
+        pkt->layer[MPKT_LAYER_NET] = h;
+    } else if ( isxport(h->type) ) {
+      if ( !pkt->layer[MPKT_LAYER_XPORT] )
+        pkt->layer[MPKT_LAYER_XPORT] = h;
+    }
   }
 }
 
 
 void metapkt_clr_layer(struct metapkt *pkt, int layer)
 {
-  abort_unless(layer >= 0 && layer <= NETVM_HDI_MAX);
+  abort_unless(layer >= 0 && layer <= MPKT_LAYER_MAX);
   pkt->layer[layer] = NULL;
 }
 
 
 int metapkt_pushhdr(struct metapkt *pkt, int htype)
 {
-  if ( hdr_add(htype, hdr_parent(pkt->headers)) < 0 )
+  if ( hdr_push(htype, hdr_parent(pkt->headers), PPCF_FILL) < 0 )
     return -1;
-  metapkt_set_layer(pkt, hdr_parent(pkt->headers));
+  metapkt_set_layer(pkt, hdr_parent(pkt->headers), -1);
   return 0;
 }
 
 
-void metapkt_pophdr(struct metapkt *pkt)
+int metapkt_wraphdr(struct metapkt *pkt, int htype)
 {
-  struct hdr_parse *last;
+  if ( hdr_push(htype, pkt->headers, PPCF_WRAP) < 0 )
+    return -1;
+  metapkt_set_layer(pkt, hdr_child(pkt->headers), -1);
+  return 0;
+}
+
+
+void metapkt_pophdr(struct metapkt *pkt, int fromfront)
+{
+  struct hdr_parse *topop;
   int i;
-  last = hdr_parent(pkt->headers);
-  if ( last->type != PPT_NONE ) {
-    for ( i = 0; i <= NETVM_HDI_MAX; ++i ) {
-      if ( pkt->layer[i] == last ) {
+  if ( fromfront )
+    topop = hdr_child(pkt->headers);
+  else
+    topop = hdr_parent(pkt->headers);
+  if ( topop->type != PPT_NONE ) {
+    for ( i = 0; i <= MPKT_LAYER_MAX; ++i ) {
+      if ( pkt->layer[i] == topop ) {
         pkt->layer[i] = NULL;
         break;
       }
     }
-    hdr_free(last, 0);
+    hdr_free(topop, 0);
   }
 }
 
@@ -252,8 +270,8 @@ void metapkt_pophdr(struct metapkt *pkt)
 void metapkt_fixdlt(struct metapkt *pkt)
 {
   uint32_t dltype = PKTDL_NONE;
-  if ( pkt->layer[NETVM_HDI_LINK] != NULL ) {
-    dltype = ppt_to_dltype(pkt->layer[NETVM_HDI_LINK]->type);
+  if ( pkt->layer[MPKT_LAYER_LINK] != NULL ) {
+    dltype = ppt_to_dltype(pkt->layer[MPKT_LAYER_LINK]->type);
     abort_unless(dltype != PKTDL_INVALID);
   }
   pkt->pkb->pkt_dltype = dltype;

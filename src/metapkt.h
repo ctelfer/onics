@@ -11,10 +11,10 @@
 #include "protoparse.h"
 
 enum {
-  NETVM_HDI_LINK,       /* e.g. Ethernet */
-  NETVM_HDI_NET,        /* e.g. IPv4, IPv6 */
-  NETVM_HDI_XPORT,      /* e.g. TCP, UDP, RTP, ICMP */
-  NETVM_HDI_MAX = NETVM_HDI_XPORT
+  MPKT_LAYER_LINK,       /* e.g. Ethernet */
+  MPKT_LAYER_NET,        /* e.g. IPv4, IPv6 */
+  MPKT_LAYER_XPORT,      /* e.g. TCP, UDP, RTP, ICMP */
+  MPKT_LAYER_MAX = MPKT_LAYER_XPORT
 };
 
 /* we probably want to move this out of here and call it something else */
@@ -25,7 +25,7 @@ struct metapkt {
   struct list           entry;
   struct pktbuf *       pkb;
   struct hdr_parse *    headers;
-  struct hdr_parse *    layer[NETVM_HDI_MAX+1];
+  struct hdr_parse *    layer[MPKT_LAYER_MAX+1];
 };
 
 
@@ -33,10 +33,12 @@ struct metapkt *metapkt_new(size_t plen, int ppt);
 struct metapkt *pktbuf_to_metapkt(struct pktbuf *pb);
 struct metapkt *metapkt_copy(struct metapkt *pkt);
 void metapkt_free(struct metapkt *pkt, int freebuf);
-void metapkt_set_layer(struct metapkt *pkt, struct hdr_parse *h);
+/* layer == -1 for auto */
+void metapkt_set_layer(struct metapkt *pkt, struct hdr_parse *h, int layer);
 void metapkt_clr_layer(struct metapkt *pkt, int layer);
 int metapkt_pushhdr(struct metapkt *pkt, int htype);
-void metapkt_pophdr(struct metapkt *pkt);
+int metapkt_wraphdr(struct metapkt *pkt, int htype);
+void metapkt_pophdr(struct metapkt *pkt, int fromfront);
 void metapkt_fixdlt(struct metapkt *pkt);
 
 

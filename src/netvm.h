@@ -109,6 +109,8 @@ enum {
   NETVM_OC_PKTNEW,      /* [hdesc|I] create packet: offset==len, htype==dl */
   NETVM_OC_PKTCOPY,     /* [pktnum2,pktnum1|I] copy packet in slot1 to slot2 */
   NETVM_OC_PKTDEL,      /* [pktnum|I] delete packet */
+  NETVM_OC_SETLAYER,    /* [hdesc|I] set header to layer stored in 'width' */
+  NETVM_OC_CLRLAYER,    /* [pktnum|I] clear layer stored in 'width' */
   NETVM_OC_HDRPUSH,     /* [hdesc|I] create header of htype in packet pktnum */
   NETVM_OC_HDRPOP,      /* [pktnum|I] pop the top header off of packet pktnum */
   NETVM_OC_HDRUP,       /* [hdesc|I] update the fields in the header */
@@ -228,7 +230,7 @@ enum {
    (((uint32_t)(idx) & 0xFF) << 12)|\
    ((uint32_t)(fld) & 0xFFF))
 
-#define NETVM_HDLAYER   255   /* find header of type NETVM_HDI_* */
+#define NETVM_HDLAYER   255   /* find header of type MPKT_LAYER_* */
 /* 
  * When htype == NETVM_HDLAYER, the header referred to is one of the layer
  * pointers stored in metapkt.  This allows quick access to the network, 
@@ -294,6 +296,7 @@ enum {
   NETVM_ERR_HDESC,
   NETVM_ERR_HDRIDX,
   NETVM_ERR_HDRFLD,
+  NETVM_ERR_LAYER,
   NETVM_ERR_FIXLEN,
   NETVM_ERR_CKSUM,
   NETVM_ERR_PKTINS,

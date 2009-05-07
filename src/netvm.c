@@ -235,7 +235,7 @@ static void get_hdr_info(struct netvm *vm, struct netvm_inst *inst,
   CKWIDTH(vm, width);
 
   if ( hd->htype == NETVM_HDLAYER ) {
-    FATAL(vm, NETVM_ERR_HDRIDX, hd->idx > NETVM_HDI_MAX);
+    FATAL(vm, NETVM_ERR_HDRIDX, hd->idx > MPKT_LAYER_MAX);
     FATAL(vm, NETVM_ERR_PKTNUM, (hd->pktnum >= NETVM_MAXPKTS));
     FATAL(vm, NETVM_ERR_NOPKT, !(pkt=vm->packets[hd->pktnum]));
     hdr = pkt->layer[hd->idx];
@@ -349,7 +349,7 @@ static void ni_ldhdrf(struct netvm *vm)
   if ( hd0.htype == NETVM_HDLAYER ) {
     FATAL(vm, NETVM_ERR_PKTNUM, (hd0.pktnum >= NETVM_MAXPKTS));
     FATAL(vm, NETVM_ERR_NOPKT, !vm->packets[hd0.pktnum]);
-    FATAL(vm, NETVM_ERR_HDRIDX, (hd0.idx > NETVM_HDI_MAX));
+    FATAL(vm, NETVM_ERR_HDRIDX, (hd0.idx > MPKT_LAYER_MAX));
     hdr = vm->packets[hd0.pktnum]->layer[hd0.idx];
     /* Special case to make it easy to check for layer headers */
   } else {
@@ -597,7 +597,7 @@ static void ni_hashdr(struct netvm *vm)
   if ( vm->error )
     return;
   if ( hd0.htype == NETVM_HDLAYER ) {
-    FATAL(vm, NETVM_ERR_HDRIDX, hd0.idx > NETVM_HDI_MAX);
+    FATAL(vm, NETVM_ERR_LAYER, hd0.idx > MPKT_LAYER_MAX);
     FATAL(vm, NETVM_ERR_PKTNUM, (hd0.pktnum >= NETVM_MAXPKTS));
     FATAL(vm, NETVM_ERR_NOPKT, !(pkt=vm->packets[hd0.pktnum]));
     val = pkt->layer[hd0.idx] != NULL;
@@ -955,6 +955,36 @@ static void ni_pktdel(struct netvm *vm)
 }
 
 
+static void ni_setlayer(struct netvm *vm)
+{
+  struct netvm_inst *inst = &vm->inst[vm->pc];
+  struct netvm_hdr_desc hd0;
+  struct hdr_parse *hdr;
+  get_hd(vm, inst, &hd0);
+  if ( vm->error )
+    return;
+  hdr = find_header(vm, &hd0);
+  FATAL(vm, NETVM_ERR_NOHDR, hdr == NULL);
+  metapkt_set_layer(vm->packets[hd0.pktnum], hdr, inst->width);
+}
+
+
+static void ni_clrlayer(struct netvm *vm)
+{
+  struct netvm_inst *inst = &vm->inst[vm->pc];
+  unsigned pktnum;
+  struct metapkt *pkt;
+  if ( IMMED(inst) ) {
+    pktnum = inst->val;
+  } else { 
+    S_POP(vm, pktnum);
+  }
+  FATAL(vm, NETVM_ERR_PKTNUM, (pktnum >= NETVM_MAXPKTS));
+  FATAL(vm, NETVM_ERR_NOPKT, !(pkt=vm->packets[pktnum]));
+  metapkt_clr_layer(vm->packets[pktnum], inst->width);
+}
+
+
 static void ni_hdrpush(struct netvm *vm)
 {
   struct netvm_inst *inst = &vm->inst[vm->pc];
@@ -966,7 +996,11 @@ static void ni_hdrpush(struct netvm *vm)
   FATAL(vm, NETVM_ERR_PKTNUM, (hd0.pktnum >= NETVM_MAXPKTS));
   FATAL(vm, NETVM_ERR_NOPKT, !(pkt=vm->packets[hd0.pktnum]));
   /* XXX is this the right error? */
-  FATAL(vm, NETVM_ERR_NOMEM, metapkt_pushhdr(pkt, hd0.htype) < 0);
+  if ( inst->width ) { /* outer push */
+    FATAL(vm, NETVM_ERR_NOMEM, metapkt_wraphdr(pkt, hd0.htype) < 0);
+  } else { /* inner push */
+    FATAL(vm, NETVM_ERR_NOMEM, metapkt_pushhdr(pkt, hd0.htype) < 0);
+  }
 }
 
 
@@ -982,7 +1016,8 @@ static void ni_hdrpop(struct netvm *vm)
   }
   FATAL(vm, NETVM_ERR_PKTNUM, (pktnum >= NETVM_MAXPKTS));
   FATAL(vm, NETVM_ERR_NOPKT, !(pkt=vm->packets[pktnum]));
-  metapkt_pophdr(pkt);
+  /* width tells whether to pop from the front (non-zero) or back */
+  metapkt_pophdr(pkt, inst->width);
 }
 
 
@@ -1029,12 +1064,12 @@ static void ni_fixlen(struct netvm *vm)
   /* TODO: allow more precise selection of which lengths to fix */
   FATAL(vm, NETVM_ERR_PKTNUM, (pktnum >= NETVM_MAXPKTS));
   FATAL(vm, NETVM_ERR_NOPKT, !(pkt=vm->packets[pktnum]));
-  if ( pkt->layer[NETVM_HDI_XPORT] )
-    FATAL(vm, NETVM_ERR_FIXLEN, hdr_fix_len(pkt->layer[NETVM_HDI_XPORT]) < 0);
-  if ( pkt->layer[NETVM_HDI_NET] )
-    FATAL(vm, NETVM_ERR_FIXLEN, hdr_fix_len(pkt->layer[NETVM_HDI_NET]) < 0);
-  if ( pkt->layer[NETVM_HDI_LINK] )
-    FATAL(vm, NETVM_ERR_FIXLEN, hdr_fix_len(pkt->layer[NETVM_HDI_LINK]) < 0);
+  if ( pkt->layer[MPKT_LAYER_XPORT] )
+    FATAL(vm, NETVM_ERR_FIXLEN, hdr_fix_len(pkt->layer[MPKT_LAYER_XPORT]) < 0);
+  if ( pkt->layer[MPKT_LAYER_NET] )
+    FATAL(vm, NETVM_ERR_FIXLEN, hdr_fix_len(pkt->layer[MPKT_LAYER_NET]) < 0);
+  if ( pkt->layer[MPKT_LAYER_LINK] )
+    FATAL(vm, NETVM_ERR_FIXLEN, hdr_fix_len(pkt->layer[MPKT_LAYER_LINK]) < 0);
 }
 
 
@@ -1051,12 +1086,12 @@ static void ni_fixcksum(struct netvm *vm)
   /* TODO: allow more precise selection of which checksums to fix */
   FATAL(vm, NETVM_ERR_PKTNUM, (pktnum >= NETVM_MAXPKTS));
   FATAL(vm, NETVM_ERR_NOPKT, !(pkt=vm->packets[pktnum]));
-  if ( pkt->layer[NETVM_HDI_XPORT] )
-    FATAL(vm, NETVM_ERR_CKSUM, hdr_fix_cksum(pkt->layer[NETVM_HDI_XPORT]) < 0);
-  if ( pkt->layer[NETVM_HDI_NET] )
-    FATAL(vm, NETVM_ERR_CKSUM, hdr_fix_cksum(pkt->layer[NETVM_HDI_NET]) < 0);
-  if ( pkt->layer[NETVM_HDI_LINK] )
-    FATAL(vm, NETVM_ERR_CKSUM, hdr_fix_cksum(pkt->layer[NETVM_HDI_LINK]) < 0);
+  if ( pkt->layer[MPKT_LAYER_XPORT] )
+    FATAL(vm, NETVM_ERR_CKSUM, hdr_fix_cksum(pkt->layer[MPKT_LAYER_XPORT]) < 0);
+  if ( pkt->layer[MPKT_LAYER_NET] )
+    FATAL(vm, NETVM_ERR_CKSUM, hdr_fix_cksum(pkt->layer[MPKT_LAYER_NET]) < 0);
+  if ( pkt->layer[MPKT_LAYER_LINK] )
+    FATAL(vm, NETVM_ERR_CKSUM, hdr_fix_cksum(pkt->layer[MPKT_LAYER_LINK]) < 0);
 }
 
 
@@ -1201,6 +1236,8 @@ netvm_op g_netvm_ops[NETVM_OC_MAX+1] = {
   ni_pktnew,
   ni_pktcopy,
   ni_pktdel,
+  ni_setlayer,
+  ni_clrlayer,
   ni_hdrpush,
   ni_hdrpop,
   ni_hdrup,
@@ -1240,6 +1277,8 @@ int netvm_validate(struct netvm *vm)
   struct netvm_inst *inst;
   uint32_t i, maxi, newpc;
 
+  /* TODO: specific error types here? */
+
   if ( !vm || !vm->stack || (vm->rosegoff > vm->memsz) || !vm->inst ||
        (vm->ninst < 0) || (vm->ninst > MAXINST) )
     return -1;
@@ -1260,6 +1299,10 @@ int netvm_validate(struct netvm *vm)
         if ( vm->matchonly )
           return -1;
       }
+    } else if ( (inst->opcode == NETVM_OC_SETLAYER) || 
+                (inst->opcode == NETVM_OC_CLRLAYER) ) {
+      if ( inst->width >= MPKT_LAYER_MAX )
+        return -1;
     }
   }
   return 0;
@@ -1423,6 +1466,7 @@ const char *error_strings[] = {
   "erroneously formed header descriptor",
   "bad header index",
   "bad header field",
+  "bad header layer in instruction",
   "error fixing length",
   "error fixing checksum",
   "error inserting into packet",

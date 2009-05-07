@@ -112,7 +112,7 @@ struct hdr_parse *hdr_create_parse(byte_t *buf, size_t off, size_t pktlen,
     return NULL;
   }
   abort_unless(pp->ops && pp->ops->create);
-  if ( !(hdr = (*pp->ops->create)(buf, 0, buflen, off, pktlen,PPCF_PUSH_FILL)) )
+  if ( !(hdr = (*pp->ops->create)(buf, 0, buflen, off, pktlen,PPCF_FILL)) )
     return NULL;
   return hdr;
 }
@@ -174,16 +174,37 @@ err:
 }
 
 
-int hdr_add(unsigned ppidx, struct hdr_parse *phdr)
+int hdr_push(unsigned ppidx, struct hdr_parse *phdr, int mode)
 {
   struct proto_parser *pp;
-  if ( (ppidx > PPT_MAX) || !(pp = &proto_parsers[ppidx])->valid || !phdr ||
-       !hdr_islast(phdr) ) {
+  size_t hoff, buflen, poff, plen;
+  if ( (ppidx > PPT_MAX) || !(pp = &proto_parsers[ppidx])->valid || !phdr ) {
     errno = EINVAL;
     return -1;
   }
-  if ( (*pp->ops->create)(phdr->data, phdr->poff, phdr->poff + hdr_plen(phdr),
-                          0, 0, PPCF_PUSH_FILL) == NULL )
+
+  hoff = phdr->poff;
+  buflen = phdr->poff = hdr_plen(phdr);
+  if ( mode == PPCF_FILL ) { 
+    if ( !hdr_islast(phdr) ) {
+      errno = EINVAL;
+      return -1;
+    }
+    poff = 0;
+    plen = 0;
+  } else if ( (mode == PPCF_WRAP) || (mode == PPCF_SET) ) {
+    if ( hdr_islast(phdr) ) {
+      errno = EINVAL;
+      return -1;
+    }
+    poff = hdr_child(phdr)->hoff;
+    plen = hdr_totlen(hdr_child(phdr));
+  } else {
+    errno = EINVAL;
+    return -1;
+  }
+
+  if ( (*pp->ops->create)(phdr->data, hoff, buflen, poff, plen, mode) == NULL )
     return -1;
   else
     return 0;
