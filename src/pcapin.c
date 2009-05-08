@@ -95,19 +95,19 @@ int main(int argc, char *argv[])
   default: 
     err("unsupported datalink type: %d", dlt);
   }
-  if ( pkt_create(&p, PKTMAX, dltype) < 0 ) 
+  if ( pkb_create(&p, PKTMAX, dltype) < 0 ) 
     errsys("ptk_create: ");
-  p->pkt_offset = 0;
-  p->pkt_class = 0;
+  p->pkb_offset = 0;
+  p->pkb_class = 0;
   while ( (packet = (byte_t*)pcap_next(g_pcap, &pcapph)) != NULL ) { 
-    p->pkt_len = pcapph.len;
-    p->pkt_tssec = pcapph.ts.tv_sec;
-    p->pkt_tsnsec = pcapph.ts.tv_usec * 1000;
-    memcpy(p->pkt_buffer, packet, p->pkt_len); 
-    if ( pkt_file_write(stdout, p) < 0 ) 
-      errsys("pkt_file_write: ");
+    p->pkb_len = pcapph.len;
+    p->pkb_tssec = pcapph.ts.tv_sec;
+    p->pkb_tsnsec = pcapph.ts.tv_usec * 1000;
+    memcpy(p->pkb_buffer, packet, p->pkb_len); 
+    if ( pkb_file_write(stdout, p) < 0 ) 
+      errsys("pkb_file_write: ");
   }
-  pkt_free(p);
+  pkb_free(p);
   pcap_close(g_pcap);
 
   return 0;

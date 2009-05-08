@@ -60,15 +60,15 @@ struct metapkt *metapkt_new(size_t plen, int ppt)
   }
   if ( !(pkt = newpmeta()) )
     return NULL;
-  if ( pkt_create(&pkt->pkb, plen, dltype) < 0 ) {
+  if ( pkb_create(&pkt->pkb, plen, dltype) < 0 ) {
     free(pkt);
     return NULL;
   }
-  pkt->headers = hdr_create_parse(pkt->pkb->pkt_buffer, pkt->pkb->pkt_offset,
-                                  pkt->pkb->pkt_buflen - pkt->pkb->pkt_offset,
-                                  pkt->pkb->pkt_buflen);
+  pkt->headers = hdr_create_parse(pkt->pkb->pkb_buffer, pkt->pkb->pkb_offset,
+                                  pkt->pkb->pkb_buflen - pkt->pkb->pkb_offset,
+                                  pkt->pkb->pkb_buflen);
   if ( !pkt->headers ) {
-    pkt_free(pkt->pkb);
+    pkb_free(pkt->pkb);
     freepmeta(pkt);
     return NULL;
   }
@@ -83,16 +83,16 @@ struct metapkt *pktbuf_to_metapkt(struct pktbuf *pkb)
   unsigned ppt;
 
   abort_unless(pkb);
-  ppt = dltype_to_ppt(pkb->pkt_dltype);
+  ppt = dltype_to_ppt(pkb->pkb_dltype);
   if ( !(pkt = newpmeta()) )
     return NULL;
   pkt->pkb = pkb;
   if ( ppt != PPT_INVALID )
-    pkt->headers = hdr_parse_packet(ppt,pkb->pkt_buffer, pkb->pkt_offset, 
-                                    pkb->pkt_len, pkb->pkt_buflen);
+    pkt->headers = hdr_parse_packet(ppt, pkb->pkb_buffer, pkb->pkb_offset, 
+                                    pkb->pkb_len, pkb->pkb_buflen);
   else
-    pkt->headers = hdr_create_parse(pkt->pkb->pkt_buffer, pkt->pkb->pkt_offset,
-                                    pkb->pkt_len, pkt->pkb->pkt_buflen);
+    pkt->headers = hdr_create_parse(pkt->pkb->pkb_buffer, pkt->pkb->pkb_offset,
+                                    pkb->pkb_len, pkt->pkb->pkb_buflen);
   if ( !pkt->headers ) {
     freepmeta(pkt);
     return NULL;
@@ -135,12 +135,12 @@ struct metapkt *metapkt_copy(struct metapkt *pkt)
   abort_unless(pkt && pkt->pkb && pkt->headers);
   if ( !(pnew = newpmeta()) )
     return NULL;
-  if ( pkt_copy(pkt->pkb, &pnew->pkb) < 0 ) {
+  if ( pkb_copy(pkt->pkb, &pnew->pkb) < 0 ) {
     freepmeta(pnew);
     return NULL;
   }
-  if ( !(pnew->headers = hdr_copy(pkt->headers, pnew->pkb->pkt_buffer)) ) {
-    pkt_free(pnew->pkb);
+  if ( !(pnew->headers = hdr_copy(pkt->headers, pnew->pkb->pkb_buffer)) ) {
+    pkb_free(pnew->pkb);
     freepmeta(pnew);
     return NULL;
   }
@@ -160,7 +160,7 @@ void metapkt_free(struct metapkt *pkt, int keepbuf)
       pkt->headers = NULL;
     }
     if ( pkt->pkb && !keepbuf )
-      pkt_free(pkt->pkb);
+      pkb_free(pkt->pkb);
     pkt->pkb = NULL;
     freepmeta(pkt);
   }
@@ -274,6 +274,6 @@ void metapkt_fixdlt(struct metapkt *pkt)
     dltype = ppt_to_dltype(pkt->layer[MPKT_LAYER_LINK]->type);
     abort_unless(dltype != PKTDL_INVALID);
   }
-  pkt->pkb->pkt_dltype = dltype;
+  pkt->pkb->pkb_dltype = dltype;
 }
 

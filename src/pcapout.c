@@ -72,13 +72,13 @@ int main(int argc, char *argv[])
   optparse_reset(&g_oparser, argc, argv);
   parse_options();
 
-  if ( (rv = pkt_file_read(g_file, &p)) <= 0 ) {
+  if ( (rv = pkb_file_read(g_file, &p)) <= 0 ) {
     if ( rv == 0 )
       return 0;
     if ( rv < 0 )
       errsys("Reading first packet: ");
   }
-  first_dltype = p->pkt_dltype;
+  first_dltype = p->pkb_dltype;
   switch(first_dltype) {
   case PKTDL_ETHERNET2:
     pcap_dlt = DLT_EN10MB;
@@ -103,25 +103,25 @@ int main(int argc, char *argv[])
   }
 
   do {
-    if ( first_dltype != p->pkt_dltype )
+    if ( first_dltype != p->pkb_dltype )
       err("Datalink type mismatch.  Pkt 1 type = %d Pkt %u type = %d", 
-          first_dltype, pktnum, p->pkt_dltype);
+          first_dltype, pktnum, p->pkb_dltype);
     if ( g_dumper != NULL ) {
-      pcapph.len = p->pkt_len;
-      pcapph.caplen = p->pkt_len;
-      pcapph.ts.tv_sec = p->pkt_tssec; 
-      pcapph.ts.tv_usec = p->pkt_tsnsec / 1000;
-      pcap_dump((u_char *)g_dumper, &pcapph, pkt_data(p));
+      pcapph.len = p->pkb_len;
+      pcapph.caplen = p->pkb_len;
+      pcapph.ts.tv_sec = p->pkb_tssec; 
+      pcapph.ts.tv_usec = p->pkb_tsnsec / 1000;
+      pcap_dump((u_char *)g_dumper, &pcapph, pkb_data(p));
     } else {
-      if ( pcap_inject(g_pcap, pkt_data(p), p->pkt_len) < 0 )
+      if ( pcap_inject(g_pcap, pkb_data(p), p->pkb_len) < 0 )
         err("pcap_inject: %s\n", pcap_geterr(g_pcap));
     }
-    pkt_free(p);
+    pkb_free(p);
     ++pktnum;
-  } while ( (rv = pkt_file_read(g_file, &p)) > 0 );
+  } while ( (rv = pkb_file_read(g_file, &p)) > 0 );
 
   if ( rv < 0 )
-     errsys("pkt_file_read: ");
+     errsys("pkb_file_read: ");
 
   if ( g_dumper != NULL )
     pcap_dump_close(g_dumper);

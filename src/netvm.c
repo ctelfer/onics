@@ -326,12 +326,12 @@ static void ni_ldpmeta(struct netvm *vm)
   FATAL(vm, NETVM_ERR_PKTNUM, (pktnum >= NETVM_MAXPKTS));
   FATAL(vm, NETVM_ERR_NOPKT, !(pkt=vm->packets[pktnum]));
   if ( inst->opcode == NETVM_OC_LDCLASS ) {
-    S_PUSH(vm, pkt->pkb->pkt_class);
+    S_PUSH(vm, pkt->pkb->pkb_class);
   } else if ( inst->opcode == NETVM_OC_LDTSSEC ) {
-    S_PUSH(vm, pkt->pkb->pkt_tssec);
+    S_PUSH(vm, pkt->pkb->pkb_tssec);
   } else {
     abort_unless(inst->opcode == NETVM_OC_LDTSNSEC);
-    S_PUSH(vm, pkt->pkb->pkt_tsnsec);
+    S_PUSH(vm, pkt->pkb->pkb_tsnsec);
   }
 }
 
@@ -869,12 +869,12 @@ static void ni_stpmeta(struct netvm *vm)
   FATAL(vm, NETVM_ERR_NOPKT, !(pkt=vm->packets[pktnum]));
   S_POP(vm, val);
   if ( inst->opcode == NETVM_OC_STCLASS ) {
-    pkt->pkb->pkt_class = val;
+    pkt->pkb->pkb_class = val;
   } else if ( inst->opcode == NETVM_OC_STTSSEC ) {
-    pkt->pkb->pkt_tssec = val;
+    pkt->pkb->pkb_tssec = val;
   } else {
     abort_unless(inst->opcode == NETVM_OC_STTSNSEC);
-    pkt->pkb->pkt_tsnsec = val;
+    pkt->pkb->pkb_tsnsec = val;
   }
 }
 

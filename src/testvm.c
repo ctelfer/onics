@@ -441,7 +441,7 @@ void run_with_packets(struct netvm *vm, int filter, struct meminit *mi,
   int i;
   uint32_t rc;
 
-  while ( pkt_file_read(stdin, &p) > 0 ) {
+  while ( pkb_file_read(stdin, &p) > 0 ) {
     ++npkt;
     netvm_restart(vm);
     netvm_loadpkt(vm, p, 0);
@@ -457,9 +457,9 @@ void run_with_packets(struct netvm *vm, int filter, struct meminit *mi,
       for ( i = 0; i < NETVM_MAXPKTS; ++i ) {
         p = netvm_clrpkt(vm, i, 1);
         if ( p ) {
-          if ( pkt_file_write(stdout, p) < 0 )
+          if ( pkb_file_write(stdout, p) < 0 )
             err("Error writing out packet %d\n", npkt);
-          pkt_free(p);
+          pkb_free(p);
         } 
       }
     }

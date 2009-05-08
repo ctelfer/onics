@@ -8,7 +8,7 @@
 #include <unistd.h>
 #include <errno.h>
 
-#define PHLEN offsetof(struct pktbuf, pkt_buffer)
+#define PHLEN offsetof(struct pktbuf, pkb_buffer)
 #define DEFAULT_HPAD 256
 
 
@@ -42,9 +42,9 @@ static NETTOOLS_INLINE struct pktbuf * new_packet(const struct pktprehdr *pph)
   if ( !p )
     return NULL;
 
-  p->pkt_header = *pph;
-  p->pkt_buflen = dlen;
-  p->pkt_offset = off;
+  p->pkb_header = *pph;
+  p->pkb_buflen = dlen;
+  p->pkb_offset = off;
 
   return p;
 }
@@ -59,7 +59,7 @@ static NETTOOLS_INLINE struct pktbuf * resize_packet(struct pktbuf *p,
 }
 
 
-int pkt_create(struct pktbuf **p, size_t plen, enum pktdltype_e dltype)
+int pkb_create(struct pktbuf **p, size_t plen, enum pktdltype_e dltype)
 {
   struct pktprehdr pph;
 
@@ -81,7 +81,7 @@ int pkt_create(struct pktbuf **p, size_t plen, enum pktdltype_e dltype)
 }
 
 
-int pkt_copy(const struct pktbuf *orig, struct pktbuf **newp)
+int pkb_copy(const struct pktbuf *orig, struct pktbuf **newp)
 {
   struct pktbuf *p;
 
@@ -89,19 +89,19 @@ int pkt_copy(const struct pktbuf *orig, struct pktbuf **newp)
     errno = EINVAL;
     return -1;
   }
-  if ( !(p = new_packet(&orig->pkt_header)) ) {
+  if ( !(p = new_packet(&orig->pkb_header)) ) {
     errno = ENOMEM;
     return -1;
   }
-  memset(p->pkt_buffer, 0, p->pkt_offset);
-  memcpy(pkt_data(p), pkt_data(orig), p->pkt_len);
+  memset(p->pkb_buffer, 0, p->pkb_offset);
+  memcpy(pkb_data(p), pkb_data(orig), p->pkb_len);
   *newp = p;
 
   return 0;
 }
 
 
-int pkt_resize(struct pktbuf **p, size_t plen)
+int pkb_resize(struct pktbuf **p, size_t plen)
 {
   size_t tlen;
   struct pktbuf *npb;
@@ -110,21 +110,21 @@ int pkt_resize(struct pktbuf **p, size_t plen)
     errno = EINTR;
     return -1;
   }
-  if ( plen <= (*p)->pkt_buflen - (*p)->pkt_offset ) {
-    (*p)->pkt_len = plen;
+  if ( plen <= (*p)->pkb_buflen - (*p)->pkb_offset ) {
+    (*p)->pkb_len = plen;
     return 0;
   }
-  tlen = PHLEN + (*p)->pkt_offset + plen;
+  tlen = PHLEN + (*p)->pkb_offset + plen;
   if ( !(npb = resize_packet(*p, tlen)) )
     return -1;
   *p = npb;
-  (*p)->pkt_buflen = tlen - PHLEN;
+  (*p)->pkb_buflen = tlen - PHLEN;
 
   return 0;
 }
 
 
-int pkt_file_read(FILE *fp, struct pktbuf **p)
+int pkb_file_read(FILE *fp, struct pktbuf **p)
 {
   struct pktprehdr pph, pph2;
   size_t nr;
@@ -151,7 +151,7 @@ int pkt_file_read(FILE *fp, struct pktbuf **p)
     errno = ENOMEM;
     return -1;
   }
-  if ( fread(pkt_data(*p), 1, (*p)->pkt_len, fp) < (*p)->pkt_len ) {
+  if ( fread(pkb_data(*p), 1, (*p)->pkb_len, fp) < (*p)->pkb_len ) {
     errno = EIO;
     return -1;
   }
@@ -160,7 +160,7 @@ int pkt_file_read(FILE *fp, struct pktbuf **p)
 }
 
 
-int pkt_fd_read(int fd, struct pktbuf **p)
+int pkb_fd_read(int fd, struct pktbuf **p)
 {
   struct pktprehdr pph, pph2;
   ssize_t nr;
@@ -190,15 +190,15 @@ int pkt_fd_read(int fd, struct pktbuf **p)
     return -1;
   }
 
-  while ( (rem = (*p)->pkt_len) > SSIZE_MAX ) {
-    if ( io_read(fd, pkt_data(*p) + off, SSIZE_MAX) < SSIZE_MAX ) {
+  while ( (rem = (*p)->pkb_len) > SSIZE_MAX ) {
+    if ( io_read(fd, pkb_data(*p) + off, SSIZE_MAX) < SSIZE_MAX ) {
       errno = EIO;
       return -1;
     }
     rem -= SSIZE_MAX;
     off += SSIZE_MAX;
   }
-  if ( io_read(fd, pkt_data(*p) + off, rem) < rem ) {
+  if ( io_read(fd, pkb_data(*p) + off, rem) < rem ) {
     errno = EIO;
     return -1;
   }
@@ -207,7 +207,7 @@ int pkt_fd_read(int fd, struct pktbuf **p)
 }
 
 
-int pkt_file_write(FILE *fp, struct pktbuf *p)
+int pkb_file_write(FILE *fp, struct pktbuf *p)
 {
   struct pktprehdr pph;
   size_t nr;
@@ -216,13 +216,13 @@ int pkt_file_write(FILE *fp, struct pktbuf *p)
     errno = EINVAL;
     return -1;
   }
-  pack(&pph, sizeof(pph), "wwww", p->pkt_dltype, p->pkt_len, p->pkt_tssec,
-       p->pkt_tsnsec);
+  pack(&pph, sizeof(pph), "wwww", p->pkb_dltype, p->pkb_len, p->pkb_tssec,
+       p->pkb_tsnsec);
   if ( (nr = fwrite(&pph, 1, sizeof(pph), fp)) < sizeof(pph) ) {
     errno = EIO;
     return -1;
   }
-  if ( (nr = fwrite(pkt_data(p), 1, p->pkt_len, fp)) < p->pkt_len ) {
+  if ( (nr = fwrite(pkb_data(p), 1, p->pkb_len, fp)) < p->pkb_len ) {
     errno = EIO;
     return -1;
   }
@@ -231,7 +231,7 @@ int pkt_file_write(FILE *fp, struct pktbuf *p)
 }
 
 
-int pkt_fd_write(int fd, struct pktbuf *p)
+int pkb_fd_write(int fd, struct pktbuf *p)
 {
   struct pktprehdr pph;
   size_t rem, off = 0;
@@ -240,22 +240,22 @@ int pkt_fd_write(int fd, struct pktbuf *p)
     errno = EINVAL;
     return -1;
   }
-  pack(&pph, sizeof(pph), "wwww", p->pkt_dltype, p->pkt_len, p->pkt_tssec,
-       p->pkt_tsnsec);
+  pack(&pph, sizeof(pph), "wwww", p->pkb_dltype, p->pkb_len, p->pkb_tssec,
+       p->pkb_tsnsec);
   if ( io_write(fd, &pph, sizeof(pph)) < sizeof(pph) ) {
     errno = EIO;
     return -1;
   }
-  rem = p->pkt_len;
+  rem = p->pkb_len;
   while ( rem > SSIZE_MAX ) {
-    if ( io_write(fd, pkt_data(p) + off, SSIZE_MAX) < SSIZE_MAX ) {
+    if ( io_write(fd, pkb_data(p) + off, SSIZE_MAX) < SSIZE_MAX ) {
       errno = EIO;
       return -1;
     }
     rem -= SSIZE_MAX;
     off += SSIZE_MAX;
   }
-  if ( io_write(fd, pkt_data(p) + off, rem) < rem ) {
+  if ( io_write(fd, pkb_data(p) + off, rem) < rem ) {
     errno = EIO;
     return -1;
   }
@@ -266,7 +266,7 @@ int pkt_fd_write(int fd, struct pktbuf *p)
 
 /* NB:  In the future, if I change the allocation format in new_packet() */
 /* then this will also have to change.  */
-void pkt_free(struct pktbuf *p)
+void pkb_free(struct pktbuf *p)
 {
   free(p);
 }

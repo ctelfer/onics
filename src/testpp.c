@@ -12,14 +12,14 @@ int main(int argc, char *argv[])
 
   install_default_proto_parsers();
 
-  while ( pkt_file_read(stdin, &p) > 0 ) {
+  while ( pkb_file_read(stdin, &p) > 0 ) {
     ++npkt;
-    if ( p->pkt_dltype != PKTDL_ETHERNET2 ) {
+    if ( p->pkb_dltype != PKTDL_ETHERNET2 ) {
       printf("Unknown data type for packet %u\n", npkt);
       continue;
     }
-    hdr = hdr_parse_packet(PPT_ETHERNET, p->pkt_buffer, p->pkt_offset, 
-                           p->pkt_len, p->pkt_buflen);
+    hdr = hdr_parse_packet(PPT_ETHERNET, p->pkb_buffer, p->pkb_offset, 
+                           p->pkb_len, p->pkb_buflen);
     if ( hdr == NULL ) {
       printf("Could not parse ethernet packet %u\n", npkt);
       continue;
@@ -57,7 +57,7 @@ int main(int argc, char *argv[])
       printf("\t\tTrailer length:%8u\n", (unsigned)hdr_tlen(t));
     } 
     printf("\n");
-    pkt_free(p);
+    pkb_free(p);
   }
 
   return 0;

@@ -18,17 +18,17 @@ struct pktprehdr {
 };
 
 struct pktbuf {
-  struct pktprehdr      pkt_header;
-  uint32_t		pkt_buflen;
-  uint32_t		pkt_offset;
-  byte_t		pkt_buffer[1];
+  struct pktprehdr      pkb_header;
+  uint32_t		pkb_buflen;
+  uint32_t		pkb_offset;
+  byte_t		pkb_buffer[1];
 };
-#define pkt_dltype    pkt_header.pph_dltype
-#define pkt_len       pkt_header.pph_len
-#define pkt_class     pkt_header.pph_class
-#define pkt_tssec     pkt_header.pph_tssec
-#define pkt_tsnsec    pkt_header.pph_tsnsec
-#define pkt_data(p)   ((p)->pkt_buffer + (p)->pkt_offset)
+#define pkb_dltype    pkb_header.pph_dltype
+#define pkb_len       pkb_header.pph_len
+#define pkb_class     pkb_header.pph_class
+#define pkb_tssec     pkb_header.pph_tssec
+#define pkb_tsnsec    pkb_header.pph_tsnsec
+#define pkb_data(p)   ((p)->pkb_buffer + (p)->pkb_offset)
 
 enum pktdltype_e {
   PKTDL_MIN =       0x1,
@@ -40,13 +40,13 @@ enum pktdltype_e {
   PKTDL_INVALID =   PKTDL_MAX+1 /* not valid in packet, but used internally */
 };
 
-int  pkt_create(struct pktbuf **p, size_t plen, enum pktdltype_e dltype);
-int  pkt_copy(const struct pktbuf *orig, struct pktbuf **newp);
-int  pkt_resize(struct pktbuf **p, size_t newsize);
-int  pkt_file_read(FILE *fp, struct pktbuf **p);
-int  pkt_fd_read(int fd, struct pktbuf **p);
-int  pkt_file_write(FILE *fp, struct pktbuf *p);
-int  pkt_fd_write(int fd, struct pktbuf *p);
-void pkt_free(struct pktbuf *p);
+int  pkb_create(struct pktbuf **p, size_t plen, enum pktdltype_e dltype);
+int  pkb_copy(const struct pktbuf *orig, struct pktbuf **newp);
+int  pkb_resize(struct pktbuf **p, size_t newsize);
+int  pkb_file_read(FILE *fp, struct pktbuf **p);
+int  pkb_fd_read(int fd, struct pktbuf **p);
+int  pkb_file_write(FILE *fp, struct pktbuf *p);
+int  pkb_fd_write(int fd, struct pktbuf *p);
+void pkb_free(struct pktbuf *p);
 
 #endif /* __pktbuf_h */
