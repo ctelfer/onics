@@ -149,9 +149,6 @@ enum {
    * do it in the same style as NETVM_OC_PR*.  I.e. have input and output
    * interfaces that can be set or not.
    *
-   * POP - population count
-   * NLZ - number of leading zeros
-   *
    * TOREG - queue an instruction address on a timer list with one argument
    *         and issue a CALL when the timer expires.  2 types of timers:
    *         real-time and instruction tick?  Pushes a handle which one can
@@ -308,20 +305,19 @@ enum {
 };
 
 
-/* TODO: conser moving emitter setting out of initialization */
-/* this may become a more common practice if we also add queueing store and */
-/* input and output ports, a resolver, etc... */
-
 /* mem may be NULL and memsz 0.  roseg must be <= memsz.  stack must not be */
 /* 0 and ssz is the number of stack elements.  outport may be NULL */
 void netvm_init(struct netvm *vm, uint32_t *stack, uint32_t ssz,
-                byte_t *mem, uint32_t memsz, struct emitter *outport);
+                byte_t *mem, uint32_t memsz);
 
 /* set the instruction code and validate the vm: 0 on success, -1 on error */
 int netvm_setcode(struct netvm *vm, struct netvm_inst *inst, uint32_t ni);
 
 /* set the offset of the read-only segment for the VM */
 int netvm_setrooff(struct netvm *vm, uint32_t rooff);
+
+/* set the emitter for the VM */
+void netvm_setoutport(struct netvm *vm, struct emitter *outport);
 
 /* validate a netvm is properly set up and that all branches are correct */
 /* called by set_netvm_code implicitly:  returns 0 on success, -1 on error */

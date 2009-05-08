@@ -50,7 +50,7 @@ struct netvm_inst vm_prog_tcperr[] = {
 
 struct netvm_inst vm_prog_isudp[] = { 
   { NETVM_OC_LDHDRF, 0, NETVM_IF_IMMED, 
-    NETVM_HDESC(NETVM_HDLAYER, NETVM_HDI_XPORT, NETVM_HDR_TYPE, 0) },
+    NETVM_HDESC(NETVM_HDLAYER, MPKT_LAYER_XPORT, NETVM_HDR_TYPE, 0) },
   { NETVM_OC_EQ, 0, NETVM_IF_IMMED, PPT_UDP },
 };
 
@@ -60,7 +60,7 @@ struct netvm_inst vm_prog_fixcksum[] = {
 
 struct netvm_inst vm_prog_toggledf[] = { 
   /*0*/{ NETVM_OC_LDHDRF, 0, NETVM_IF_IMMED, 
-         NETVM_HDESC(NETVM_HDLAYER, NETVM_HDI_NET, NETVM_HDR_TYPE, 0) },
+         NETVM_HDESC(NETVM_HDLAYER, MPKT_LAYER_NET, NETVM_HDR_TYPE, 0) },
   /*1*/{ NETVM_OC_NEQ, 0, NETVM_IF_IMMED, PPT_IPV4 },
   /*2*/{ NETVM_OC_BNZ, 0, NETVM_IF_IMMED, 4 /* END of prog */ },
   /*3*/{ NETVM_OC_LDPKT, 2, NETVM_IF_IMMED | NETVM_IF_TOHOST, 
@@ -189,7 +189,7 @@ struct meminit bmi[] = {
 struct netvm_inst vm_prog_bulkmove[] = { 
   /* only consider the 1st TCP packet with at least 16 bytes of payload */
   /* 0*/{ NETVM_OC_LDHDRF, 0, NETVM_IF_IMMED, 
-          NETVM_HDESC(NETVM_HDLAYER, NETVM_HDI_XPORT, NETVM_HDR_TYPE, 0) },
+          NETVM_HDESC(NETVM_HDLAYER, MPKT_LAYER_XPORT, NETVM_HDR_TYPE, 0) },
   /* 1*/{ NETVM_OC_NEQ, 0, NETVM_IF_IMMED, PPT_TCP},
   /* 2*/{ NETVM_OC_BNZ, 0, NETVM_IF_IMMED, NETVM_BRF(10) },
   /* 3*/{ NETVM_OC_LDHDRF, 0, NETVM_IF_IMMED, 
@@ -307,7 +307,7 @@ struct meminit meqsi[] = {
 
 struct netvm_inst vm_prog_maskeq[] = { 
   /*00*/{ NETVM_OC_LDHDRF, 0, NETVM_IF_IMMED, 
-          NETVM_HDESC(NETVM_HDLAYER, NETVM_HDI_NET, NETVM_HDR_HOFF, 0) },
+          NETVM_HDESC(NETVM_HDLAYER, MPKT_LAYER_NET, NETVM_HDR_HOFF, 0) },
   /*01*/{ NETVM_OC_PUSH, 0, 0, 0 },
   /*02*/{ NETVM_OC_PUSH, 0, 0, MEQ_VAL_SIZE },
   /*03*/{ NETVM_OC_BULKP2M, 0, NETVM_IF_IMMED, 0 },
@@ -481,8 +481,9 @@ int main(int argc, char *argv[])
   prog = &vm_progs[prognum];
   file_emitter_init(&fe, (prog->filter ? stderr : stdout));
   netvm_init(&vm, vm_stack, array_length(vm_stack), vm_memory, 
-             array_length(vm_memory), &fe.fe_emitter);
+             array_length(vm_memory));
   netvm_setrooff(&vm, ROSEGOFF);
+  netvm_setoutport(&vm, &fe.fe_emitter);
 
   if ( !prog->filter )
     vm.matchonly = 1;

@@ -1251,7 +1251,7 @@ netvm_op g_netvm_ops[NETVM_OC_MAX+1] = {
 
 
 void netvm_init(struct netvm *vm, uint32_t *stack, uint32_t ssz,
-                byte_t *mem, uint32_t memsz, struct emitter *outport)
+                byte_t *mem, uint32_t memsz)
 {
   abort_unless(vm && stack && ssz > 0 );
   vm->stack = stack;
@@ -1259,10 +1259,7 @@ void netvm_init(struct netvm *vm, uint32_t *stack, uint32_t ssz,
   vm->mem = mem;
   vm->memsz = memsz;
   vm->rosegoff = memsz;
-  if ( outport )
-    vm->outport = outport;
-  else
-    vm->outport = &null_emitter;
+  vm->outport = &null_emitter;
   vm->inst = NULL;
   vm->ninst = 0;
   vm->pc = 0;
@@ -1328,6 +1325,14 @@ int netvm_setcode(struct netvm *vm, struct netvm_inst *inst, uint32_t ni)
   vm->inst = inst;
   vm->ninst = ni;
   return netvm_validate(vm);
+}
+
+
+/* set the outport for the VM */
+void netvm_setoutport(struct netvm *vm, struct emitter *outport)
+{
+  abort_unless(outport);
+  vm->outport = outport;
 }
 
 
