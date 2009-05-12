@@ -16,6 +16,7 @@
  * V -> Uses the "val" field of the instruction regardless (i.e. without
  *      concern for the NETVM_IF_IMMED flag)
  * R -> Load offset from read-only segment offset
+ * B -> Offsets are from base pointer upwardes, not stack pointer downwards
  *
  * Field types:
  * v, v1, v2 - a generic numeric value
@@ -32,8 +33,8 @@ enum {
   NETVM_OC_NOP,         /* no operation */
   NETVM_OC_POP,         /* discards top of stack */
   NETVM_OC_PUSH,        /* [|V] pushes immediate value onto stack */
-  NETVM_OC_DUP,         /* dupcliates top of stack */
-  NETVM_OC_SWAP,        /* [|WV] swap stack positions "val" and "width" */
+  NETVM_OC_DUP,         /* [|BV] dupcliates "val" from the top of stack */
+  NETVM_OC_SWAP,        /* [|BWV] swap stack positions "val" and "width" */
                         /* 0-based counting from the top of the stack */
   NETVM_OC_LDMEM,       /* [addr|WISR]: load from memory */
   NETVM_OC_STMEM,       /* [v,addr|WI]: store to memory */
@@ -172,7 +173,7 @@ enum {
   NETVM_IF_TCPHLEN =   0x20, /* on 1 byte packet load instructions */
   NETVM_IF_MOVEUP =    0x40, /* only used HDRINS and HDRCUT */
   NETVM_IF_RDONLY =    0x80, /* load from read-only segment */
-  NETVM_IF_STKOFF =    0x100, /* header descpritor offset is on stack */
+  NETVM_IF_BPOFF =     0x01, /* DUP or SWAP offsets are from base pointer */
 };
 
 enum {
@@ -264,6 +265,7 @@ struct netvm {
   uint32_t *            stack;
   uint32_t              stksz;
   uint32_t              sp;
+  uint32_t              bp;
 
   byte_t *              mem;
   uint32_t              memsz;

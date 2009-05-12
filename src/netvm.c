@@ -28,9 +28,10 @@ static int dbgabrt()
 #define FATAL(__vm, __e, __cond) \
   if (__cond) { __vm->error = __e; dbgabrt(); return; }
 
-#define S_EMPTY(__vm)           (__vm->sp == 0)
-#define S_HAS(__vm, __n)        (__vm->sp >= __n)
+#define S_EMPTY(__vm)           (__vm->sp == __vm->bp)
+#define S_HAS(__vm, __n)        (__vm->sp - __vm->bp >= __n)
 #define S_FULL(__vm)            (__vm->sp >= __vm->stksz)
+#define S_AVAIL(__vm)           (__vm->stksz - __vm->sp)
 
 #define S_TOP(__vm, __v)                                                \
   do {                                                                  \
@@ -124,7 +125,11 @@ static void ni_dup(struct netvm *vm)
   struct netvm_inst *inst = &vm->inst[vm->pc];
   uint32_t val;
   FATAL(vm, NETVM_ERR_STKUNDF, !S_HAS(vm, inst->val+1));
-  val = S_GET(vm, inst->val);
+  if ( inst->flags & NETVM_IF_BPOFF ) {
+    val = vm->stack[vm->bp + 1 + inst->val];
+  } else {
+    val = S_GET(vm, inst->val);
+  }
   S_PUSH(vm, val);
 }
 
@@ -133,10 +138,16 @@ static void ni_swap(struct netvm *vm)
 {
   struct netvm_inst *inst = &vm->inst[vm->pc];
   uint32_t tmp = (inst->width > inst->val) ? inst->width : inst->val;
-  FATAL(vm, NETVM_ERR_STKUNDF, !S_HAS(vm, tmp + 1));
-  tmp = S_GET(vm, inst->width);
-  S_SET(vm, inst->width, S_GET(vm, inst->val));
-  S_SET(vm, inst->val, tmp);
+  FATAL(vm, NETVM_ERR_STKUNDF, !S_HAS(vm, tmp+1));
+  if ( inst->flags & NETVM_IF_BPOFF ) {
+    tmp = vm->stack[vm->bp + 1 + inst->width];
+    vm->stack[vm->bp + 1 + inst->width] = vm->stack[vm->bp + 1 + inst->val];
+    vm->stack[vm->bp + 1 + inst->val] = tmp;
+  } else {
+    tmp = S_GET(vm, inst->width);
+    S_SET(vm, inst->width, S_GET(vm, inst->val));
+    S_SET(vm, inst->val, tmp);
+  }
 }
 
 
@@ -316,7 +327,7 @@ static void ni_ldpkt(struct netvm *vm)
 static void ni_ldpmeta(struct netvm *vm)
 {
   struct netvm_inst *inst = &vm->inst[vm->pc];
-  unsigned pktnum;
+  uint32_t pktnum;
   struct metapkt *pkt;
   if ( IMMED(inst) ) {
     pktnum = inst->val;
@@ -410,7 +421,7 @@ static void ni_blkmv(struct netvm *vm)
 static void ni_blkpmv(struct netvm *vm)
 {
   struct netvm_inst *inst = &vm->inst[vm->pc];
-  unsigned pktnum;
+  uint32_t pktnum;
   uint32_t poff, maddr, len;
   struct metapkt *pkt;
   struct hdr_parse *hdr;
@@ -664,11 +675,13 @@ static void ni_call(struct netvm *vm)
   S_POP(vm, addr);
   FATAL(vm, NETVM_ERR_INSTADDR, addr + 1 > vm->ninst);
   FATAL(vm, NETVM_ERR_STKUNDF, !S_HAS(vm, narg)); 
-  FATAL(vm, NETVM_ERR_STKOVFL, S_FULL(vm));
+  FATAL(vm, NETVM_ERR_STKOVFL, S_AVAIL(vm) < 2);
   sslot = vm->sp - narg;
-  memmove(vm->stack + sslot + 1, vm->stack + sslot, narg*sizeof(vm->stack[0]));
+  memmove(vm->stack + sslot + 2, vm->stack + sslot, narg*sizeof(vm->stack[0]));
   vm->stack[sslot] = vm->pc;
-  ++vm->sp;
+  vm->stack[sslot+1] = vm->bp;
+  vm->bp = sslot + 2;
+  vm->sp += 2;
   vm->pc = addr;
 }
 
@@ -676,19 +689,23 @@ static void ni_call(struct netvm *vm)
 static void ni_return(struct netvm *vm)
 {
   struct netvm_inst *inst = &vm->inst[vm->pc];
-  uint32_t addr, narg, sslot;
+  uint32_t addr, bp, narg, sslot;
   if ( IMMED(inst) ) {
     narg = inst->val;
   } else {
     S_POP(vm, narg);
   }
-  FATAL(vm, NETVM_ERR_IOVFL, (narg + 1 < narg));
-  FATAL(vm, NETVM_ERR_STKUNDF, !S_HAS(vm, narg + 1));
-  sslot = vm->sp - narg - 1;
+  FATAL(vm, NETVM_ERR_IOVFL, (narg + 2 < narg));
+  FATAL(vm, NETVM_ERR_STKUNDF, !S_HAS(vm, narg) || (vm->bp < 2));
+  sslot = vm->bp - 2;
   addr = vm->stack[sslot];
+  bp = vm->stack[sslot + 1];
   FATAL(vm, NETVM_ERR_INSTADDR, addr + 1 > vm->ninst);
-  memmove(vm->stack + sslot, vm->stack + sslot + 1, narg*sizeof(vm->stack[0]));
-  --vm->sp;
+  FATAL(vm, NETVM_ERR_STKOVFL, bp > vm->bp - 2);
+  memmove(vm->stack + sslot, vm->stack + vm->sp - narg, 
+          narg*sizeof(vm->stack[0]));
+  vm->sp -= (vm->sp - narg) - sslot;
+  vm->bp = bp;
   vm->pc = addr;
 }
 
@@ -857,7 +874,7 @@ static void ni_stpkt(struct netvm *vm)
 static void ni_stpmeta(struct netvm *vm)
 {
   struct netvm_inst *inst = &vm->inst[vm->pc];
-  unsigned pktnum;
+  uint32_t pktnum;
   struct metapkt *pkt;
   uint32_t val;
   if ( IMMED(inst) ) {
@@ -918,7 +935,7 @@ static void ni_pktnew(struct netvm *vm)
 static void ni_pktcopy(struct netvm *vm)
 {
   struct netvm_inst *inst = &vm->inst[vm->pc];
-  unsigned pktnum, slot;
+  uint32_t pktnum, slot;
   struct metapkt *pkt, *pnew;
   if ( IMMED(inst) ) {
     pktnum = inst->val;
@@ -939,7 +956,7 @@ static void ni_pktcopy(struct netvm *vm)
 static void ni_pktdel(struct netvm *vm)
 {
   struct netvm_inst *inst = &vm->inst[vm->pc];
-  unsigned pktnum;
+  uint32_t pktnum;
   struct metapkt *pkt;
   if ( IMMED(inst) ) {
     pktnum = inst->val;
@@ -972,7 +989,7 @@ static void ni_setlayer(struct netvm *vm)
 static void ni_clrlayer(struct netvm *vm)
 {
   struct netvm_inst *inst = &vm->inst[vm->pc];
-  unsigned pktnum;
+  uint32_t pktnum;
   struct metapkt *pkt;
   if ( IMMED(inst) ) {
     pktnum = inst->val;
@@ -1007,7 +1024,7 @@ static void ni_hdrpush(struct netvm *vm)
 static void ni_hdrpop(struct netvm *vm)
 {
   struct netvm_inst *inst = &vm->inst[vm->pc];
-  unsigned pktnum;
+  uint32_t pktnum;
   struct metapkt *pkt;
   if ( IMMED(inst) ) {
     pktnum = inst->val;
@@ -1038,7 +1055,7 @@ static void ni_hdrup(struct netvm *vm)
 static void ni_fixdlt(struct netvm *vm)
 {
   struct netvm_inst *inst = &vm->inst[vm->pc];
-  unsigned pktnum;
+  uint32_t pktnum;
   struct metapkt *pkt;
   if ( IMMED(inst) ) {
     pktnum = inst->val;
@@ -1054,7 +1071,7 @@ static void ni_fixdlt(struct netvm *vm)
 static void ni_fixlen(struct netvm *vm)
 {
   struct netvm_inst *inst = &vm->inst[vm->pc];
-  unsigned pktnum;
+  uint32_t pktnum;
   struct metapkt *pkt;
   if ( IMMED(inst) ) {
     pktnum = inst->val;
@@ -1076,7 +1093,7 @@ static void ni_fixlen(struct netvm *vm)
 static void ni_fixcksum(struct netvm *vm)
 {
   struct netvm_inst *inst = &vm->inst[vm->pc];
-  unsigned pktnum;
+  uint32_t pktnum;
   struct metapkt *pkt;
   if ( IMMED(inst) ) {
     pktnum = inst->val;
@@ -1264,6 +1281,7 @@ void netvm_init(struct netvm *vm, uint32_t *stack, uint32_t ssz,
   vm->ninst = 0;
   vm->pc = 0;
   vm->sp = 0;
+  vm->bp = 0;
   vm->matchonly = 0;
   memset(vm->packets, 0, sizeof(vm->packets));
 }
@@ -1399,6 +1417,7 @@ void netvm_restart(struct netvm *vm)
                vm->ninst >= 0 && vm->ninst <= MAXINST);
   vm->pc = 0;
   vm->sp = 0;
+  vm->bp = 0;
 }
 
 
