@@ -126,39 +126,42 @@ void nvmmrt_release(struct netvm_mrt *rt, void (*progfree)(void *));
 
 
 /* "Default registers" in memory local to functions (save between calls) */
-#define NETVM_LOC_0     0
-#define NETVM_LOC_1     8
-#define NETVM_LOC_2     16
-#define NETVM_LOC_3     24
-#define NETVM_LOC_4     32
-#define NETVM_LOC_5     40
-#define NETVM_LOC_6     48
-#define NETVM_LOC_7     56
-#define NETVM_LOC_8     64
-#define NETVM_LOC_9     72
-#define NETVM_LOC_10    80
-#define NETVM_LOC_11    88
-#define NETVM_LOC_12    96
-#define NETVM_LOC_13    104
-#define NETVM_LOC_14    112
-#define NETVM_LOC_15    120
-#define NETVM_ARG_0     128
-#define NETVM_ARG_1     136
-#define NETVM_ARG_2     144
-#define NETVM_ARG_3     152
-#define NETVM_ARG_4     160
-#define NETVM_ARG_5     168
-#define NETVM_ARG_6     176
-#define NETVM_ARG_7     184
-#define NETVM_ARG_8     192
-#define NETVM_ARG_9     200
-#define NETVM_ARG_10    208
-#define NETVM_ARG_11    216
-#define NETVM_ARG_12    224
-#define NETVM_ARG_13    232
-#define NETVM_ARG_14    240
-#define NETVM_ARG_15    248
+#define NETVM_REG_0     0
+#define NETVM_REG_1     4
+#define NETVM_REG_2     8
+#define NETVM_REG_3     12
+#define NETVM_REG_4     16
+#define NETVM_REG_5     20
+#define NETVM_REG_6     24
+#define NETVM_REG_7     28
+#define NETVM_REG_8     32
+#define NETVM_REG_9     36
+#define NETVM_REG_10    40
+#define NETVM_REG_11    44
+#define NETVM_REG_12    48
+#define NETVM_REG_13    52
+#define NETVM_REG_14    56
+#define NETVM_REG_15    60
 
-#define NETVM_RW_BASE   256
+/* program arguments: can be integers or pointers into RO mem */
+#define NETVM_ARG_0     64
+#define NETVM_ARG_1     68
+#define NETVM_ARG_2     72
+#define NETVM_ARG_3     76
+#define NETVM_ARG_4     80
+#define NETVM_ARG_5     84
+#define NETVM_ARG_6     88
+#define NETVM_ARG_7     92
+#define NETVM_ARG_8     96
+#define NETVM_ARG_9     100
+#define NETVM_ARG_10    104
+#define NETVM_ARG_11    108
+#define NETVM_ARG_12    112
+#define NETVM_ARG_13    116
+#define NETVM_ARG_14    120
+#define NETVM_ARG_15    124
+
+/* start of "regular" memory */
+#define NETVM_RW_BASE   128
 
 #endif /* __netvm_rt_h */
