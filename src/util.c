@@ -39,6 +39,10 @@ uint16_t ones_sum(void *p, size_t len, uint16_t val)
 }
 
 
+#define LEFTMASK(bits) (-(0x100 >> (bits)))
+#define RIGHTMASK(bits) ((0x100 >> (bits)) - 1)
+
+
 /*
  * 01001011 11001001 11001110
  * off 3 len 2: bitlen = 5 
@@ -48,23 +52,77 @@ uint16_t ones_sum(void *p, size_t len, uint16_t val)
  */
 
 
-unsigned long bitfield(byte_t *p, size_t bitoff, size_t bitlen)
+unsigned long getbitfield(const byte_t *p, size_t bitoff, size_t bitlen)
 {
   unsigned long v;
 
-  abort_unless(bitlen <= sizeof(unsigned long) << 3);
-  p += bitoff >> 3;
-  v = *p & ((256 >> (bitoff & 7)) - 1);
+  abort_unless(p && bitlen <= sizeof(unsigned long) << 3);
 
-  bitlen += (bitoff & 7);
+  /* get to the correct start byte */
+  p += bitoff >> 3;
+  bitoff &= 7;
+
+  /* XXX currently, this will fail, if the bitlen is near the size of */
+  /* long, but overlaps multiple bytes */
+  /* extract header from first byte */
+  v = *p & RIGHTMASK(bitoff);
+
+  /* add in remaining bytes */
+  bitlen += bitoff;
   while ( bitlen >= 8 ) {
     bitlen -= 8;
-    v = (v << 8) | *p++;
+    v |= (v << 8) | *p++;
   }
-  v &= -(256 >> (bitlen & 7));
+
+  /* mask off trailing bits that don't matter */
+  v &= LEFTMASK(bitlen);
 
   /* shift into position */
-  v >>= (8 - (bitlen & 7)) & 7;
+  v >>= (8 - bitlen) & 7;
 
   return v;
+}
+
+
+/*
+ * 01001011 11001001 11001110
+ * off 3 len 3:  set to 0x10
+ *
+ */
+
+void setbitfield(byte_t *p, size_t bitoff, size_t bitlen, unsigned long val)
+{
+  int exlen;
+  unsigned char m;
+
+  abort_unless(p && (bitlen <= sizeof(unsigned long) << 3));
+
+  /* get to the correct start byte */
+  p += bitoff >> 8;
+  bitoff &= 7;
+
+  /* header */
+  exlen = (8 - bitoff) & 7;
+  if ( exlen > bitlen )
+    exlen = bitlen;
+  if ( exlen > 0 ) {
+    m = (1 << (8 - bitoff)) - 1;
+    m &= LEFTMASK(bitoff + exlen); /* clear rightmost bits if within 1 byte */
+    *p &= m;
+    /* the RIGHTMASK here should be unnecessary, but do for sanity sake */
+    *p++ |= (val >> (bitlen - exlen)) & RIGHTMASK(exlen);
+    bitlen -= exlen;
+  }
+
+  /* body */
+  while ( bitlen >= 8 ) {
+    *p++ = (val >> (bitlen - 8)) & 0xFF;
+    bitlen -= 8;
+  }
+
+  /* trailer */
+  if ( bitlen > 0 ) {
+    *p &= LEFTMASK(bitlen);
+    *p |= (val & RIGHTMASK(bitlen)) << (8 - bitlen);
+  }
 }

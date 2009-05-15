@@ -19,6 +19,8 @@ uint16_t ones_sum(void *p, size_t len, uint16_t val);
  *   uint32_t flowlabel = bitfield((byte_t *)v6p, 12, 20);
  *   
  */
-unsigned long bitfield(byte_t *p, size_t bitoff, size_t bitlen);
+unsigned long getbitfield(const byte_t *p, size_t bitoff, size_t bitlen);
+
+void setbitfield(byte_t *p, size_t bitoff, size_t bitlen, unsigned long val);
 
 #endif /* __util_h */
