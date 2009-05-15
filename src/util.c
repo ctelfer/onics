@@ -37,3 +37,34 @@ uint16_t ones_sum(void *p, size_t len, uint16_t val)
   }
   return ones_sum_h(p, len, sum);
 }
+
+
+/*
+ * 01001011 11001001 11001110
+ * off 3 len 2: bitlen = 5 
+ * 00011111  (0x100 >> 3 - 1) == 0x20 - 1 == 31 = 0x1F
+ * 11111000  -(0x100 >> 5) == -0x08 == 0xff...f8
+ *
+ */
+
+
+unsigned long bitfield(byte_t *p, size_t bitoff, size_t bitlen)
+{
+  unsigned long v;
+
+  abort_unless(bitlen <= sizeof(unsigned long) << 3);
+  p += bitoff >> 3;
+  v = *p & ((256 >> (bitoff & 7)) - 1);
+
+  bitlen += (bitoff & 7);
+  while ( bitlen >= 8 ) {
+    bitlen -= 8;
+    v = (v << 8) | *p++;
+  }
+  v &= -(256 >> (bitlen & 7));
+
+  /* shift into position */
+  v >>= (8 - (bitlen & 7)) & 7;
+
+  return v;
+}
