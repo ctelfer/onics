@@ -109,6 +109,69 @@ void ns_remove(struct ns_element *elem)
 }
 
 
+int ns_cmp_scalar(struct ns_element *elem, unsigned long val)
+{
+  abort_unless(elem);
+  if ( (elem->nstype != NSTYPE_SCALAR) && (elem->nstype != NSTYPE_SRANGE) )
+    return 0;
+
+  if ( elem->nstype == NSTYPE_SCALAR ) {
+    struct ns_scalar *scalar = (ns_scalar *)elem;
+    return scalar->value == val;
+  } else {
+    struct ns_ranges *ranges = (ns_ranges *)elem;
+    struct list *l;
+    l_for_each(l, ranges->ranges) {
+      struct ns_srange *sr = clist_dptr(l, struct ns_srange);
+      if ( val >= sr->low && val <= sr->high )
+        return 1;
+    }
+    return 0;
+  }
+ 
+}
+
+
+int ns_cmp_raw(struct ns_element *elem, void *p, size_t len)
+{
+  abort_unless(elem && p && len);
+  if ( elem->nstype == NSTYPE_RAW ) {
+    struct ns_rawval *rawval = (struct ns_rawval *)elem;
+    if ( len != rawval->value->len )
+      return 0;
+    return !memcmp(rawval->value->data, p, len);
+  } else if ( elem->nstype == NSTYPE_MASKED ) {
+    struct ns_masked *masked = (struct ns_rawval *)elem;
+    byte_t *rvp, *rmp, *pp = p, *ep = pp + len;
+    if ( len != masked->value->len )
+      return 0;
+    rvp = masked->value->data;
+    rmp = masked->mask->data;
+    while ( pp < ep ) {
+      if ( (*rvp & *rmp) != (*rmp & *pp) )
+        return 0;
+      rvp++;
+      rmp++;
+      pp++;
+    }
+  } else if ( elem->nstype == NSTYPE_RRANGE ) {
+    struct ns_ranges *ranges = (struct ns_ranges *)elem;
+    struct list *l;
+    if ( len != ranges->len )
+      return 0;
+    l_for_each(l, ranges->ranges) {
+      struct ns_rrange *rr = clist_dptr(l, struct ns_rrange);
+      if ( memcmp(rr->low->data, p, len) >= 0 && 
+           memcmp(rr->high->data, p, len) <= 0 )
+        return 1;
+    }
+    return 0;
+  } else {
+    return 0;
+  }
+}
+
+
 struct ns_namespace *ns_new_namespace(const char *name, int id)
 {
   struct ns_namespace *ns;
@@ -230,6 +293,7 @@ struct ns_ranges *ns_new_srange(const char *name, unsigned long low,
   ranges->nstype = NSTYPE_SRANGE;
   ranges->id = -1;
   ranges->name = estrdup(name);
+  ranges->len = 0;
   ranges->parent = NULL;
   ranges->ranges = clist_newlist();
   sr.low = low;
@@ -269,6 +333,7 @@ struct ns_ranges *ns_new_rrange(const char *name, struct raw *low,
   ranges->nstype = NSTYPE_SRANGE;
   ranges->id = -1;
   ranges->name = estrdup(name);
+  ranges->len  = low->len;
   ranges->parent = NULL;
   ranges->ranges = clist_newlist();
   rr->low = erawdup(low);

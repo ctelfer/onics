@@ -27,6 +27,7 @@ uint16_t ones_sum_h(void *p, uint16_t len, uint16_t val)
   return (uint16_t)sum;
 }
 
+
 uint16_t ones_sum(void *p, size_t len, uint16_t val)
 {
   uint16_t sum = val;
@@ -39,9 +40,9 @@ uint16_t ones_sum(void *p, size_t len, uint16_t val)
 }
 
 
+
 #define LEFTMASK(bits) (-(0x100 >> (bits)))
 #define RIGHTMASK(bits) ((0x100 >> (bits)) - 1)
-
 
 /*
  * 01001011 11001001 11001110
@@ -50,11 +51,10 @@ uint16_t ones_sum(void *p, size_t len, uint16_t val)
  * 11111000  -(0x100 >> 5) == -0x08 == 0xff...f8
  *
  */
-
-
 unsigned long getbitfield(const byte_t *p, size_t bitoff, size_t bitlen)
 {
   unsigned long v;
+  int n;
 
   abort_unless(p && bitlen <= sizeof(unsigned long) << 3);
 
@@ -62,23 +62,27 @@ unsigned long getbitfield(const byte_t *p, size_t bitoff, size_t bitlen)
   p += bitoff >> 3;
   bitoff &= 7;
 
-  /* XXX currently, this will fail, if the bitlen is near the size of */
-  /* long, but overlaps multiple bytes */
   /* extract header from first byte */
   v = *p & RIGHTMASK(bitoff);
+  n = bitoff + bitlen;
+  if ( n < 8 ) { 
+    v &= LEFTMASK(n);
+    v >>= 8 - n;
+    bitlen = 0;
+  } else {
+    bitlen -= 8 - bitoff;
+  }
 
-  /* add in remaining bytes */
-  bitlen += bitoff;
+  /* whole bytes in body */
   while ( bitlen >= 8 ) {
     bitlen -= 8;
     v |= (v << 8) | *p++;
   }
 
   /* mask off trailing bits that don't matter */
-  v &= LEFTMASK(bitlen);
-
-  /* shift into position */
-  v >>= (8 - bitlen) & 7;
+  if ( bitlen > 0 ) {
+    v = (v << bitlen) | ((*p & LEFTMASK(bitlen)) >> (8 - bitlen));
+  }
 
   return v;
 }
@@ -125,4 +129,23 @@ void setbitfield(byte_t *p, size_t bitoff, size_t bitlen, unsigned long val)
     *p &= LEFTMASK(bitlen);
     *p |= (val & RIGHTMASK(bitlen)) << (8 - bitlen);
   }
+}
+
+
+int getbit(const byte_t *p, size_t n)
+{
+  abort_unless(p);
+  p += n >> 3;
+  return (*p & (0x80 >> (n & 7))) != 0;
+}
+
+
+void setbit(byte_t *p, size_t n, int v)
+{
+  abort_unless(p);
+  p += n >> 3;
+  if ( v ) 
+    *p |= 0x80 >> (n & 7);
+  else
+    *p &= ~(0x80 >> (n & 7));
 }

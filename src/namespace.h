@@ -97,6 +97,7 @@ struct ns_ranges {
   int                   nstype;         /* NST_SRANGE | NST_RRANGE */
   int                   id;
   const char *          name;
+  size_t                len;
   struct list *         ranges;
 };
 
@@ -111,6 +112,9 @@ struct ns_element *ns_id_lookup(int *id, int nids, int type);
 void ns_register(struct ns_namespace *ns);
 void ns_insert(struct ns_namespace *ns, struct ns_element *elem);
 void ns_remove(struct ns_element *elem);
+
+int ns_cmp_scalar(struct ns_element *elem, unsigned long val);
+int ns_cmp_raw(struct ns_element *elem, void *p, size_t len);
 
 struct ns_namespace *ns_new_namespace(const char *name, int id);
 struct ns_field *ns_new_field(const char *name, size_t off, size_t len);
