@@ -1,0 +1,405 @@
+Copyright 2009 Chris Telfer
+
+Nettools Open Source Software Project Preliminary Design
+--------------------------------------------------------
+The general idea is a set of small, primarily command-line utilities to 
+manipulate streams of packets.  One could imagine the tool suite as the 
+equivalent of tools like ed, sed, awk, cat, more, etc... for packet streams
+rather than text streams.  Long term plans will probably include porting
+versions of these tools into scripting language runtimes (e.g. Ruby or Python)
+to facilitate scripting in said languages similar to the command-line
+shell scripting that the tools provide.  Also, some of the tools may be
+embeddable in constrained environments, such as an OS kernel.  This might allow
+certain tools and frameworks to be moved to said environments.  (Why?  Not sure
+yet other than to demonstrate the flexibility of the architecture, but uses
+may present themselves.)  The purpose of this document is to provide an
+overview of the design of the system which, as of this writing, is not yet
+built.
+
+
+
+---------------
+Core Components
+---------------
+
+Catlib
+  - A C utility library that I have been working on for over 10 years now
+  - Contains lots of data structure implementations, networking wrappers, 
+    pattern matching algorithms, memory management, a C standard library
+    replacement, data packing/extraction, etc...
+  - Used in my thesis once upon an earlier incarnation
+  - Fundamental to the build of the system (because I'm not going to rewrite
+    all that code for the nettools)
+  - Will be distrubed under the same OSS license
+
+
+Lemon Parser generator
+  - Used in sqlite originally
+  - Public domain software
+  - LALR parser I believe
+  - Generates reentrant parsers
+  - The only piece of code external to the project I plan to include
+  - The glibc version of the standard C library _might_ be considered another, 
+    but I have my own replacement for such in Catlib
+ 
+
+Packet Buffers
+  - Unit of storage for a packet both internal and external
+  - Datalink type carried with the packet (unlike pcap)
+  - API to create, read from fd, read from file and free them
+  - Classification metadata with each one
+
+
+Protocol Parser
+  - A set of operations for parsing a particular protocol
+  - Produces a "header parse" structure which encapsulates protocol specific
+    operations to operate on the header
+  - Protocol parsers can be registered or deregistered dynamically according
+    to type
+  - Each protocol parser registers the protocols that can precede it
+  - Each protocol parser has an operation for determining whether it
+    indeed follows a given parent protocol (which can be itself)
+  - All packets have an outermost header parse of type PPT_NONE which 
+    gives the offset and the length of the packet within the buffer
+  - Each protocol parser can instantiate a new header parse in an existing
+    packet in one of three modes:
+     Fill - the header parse fills up all available space within the 
+            innermost header
+     Wrap - the header parse wraps as tightly as possible around the 
+            outermost header
+     Set - the header parse is set in place between existing header parses
+ 
+
+Header Parse
+  - Meta information about a particular protocol in a packet
+  - A header parse has: header, payload and trailer sections
+  - Independent of the data structures that contain the packet
+  - Presently assumes a contiguous packet buffer (no scatter-gather)
+  - Contains offsets into a packet buffer for the start of packet, 
+    end of header/start of payload, end of payload/start of trailer and end 
+    of protocol.
+  - All header parses are nested without overlap within the payloads of other
+    header parses.
+  - As stated above, the outermost header parse is of PPT_NONE and gives the
+    offset of the beginning of the packet in its buffer and the endpoint of
+    said packet.
+  - Protocol specific operations include: 
+    + Update (header parse information) -- Called presumably because the
+      packet data has been changed.
+    + Get field -- Gets sub fields within a protocol (e.g. IP options, 
+      TCP options)  Returns the field offset and length.
+    + Fix length -- fix any length fields in the packet based on adjustments
+      to header parse offsets
+    + Fix checksum -- fix any checksums in the packet due to modified data
+    + Copy -- copy the parse (usually done while copying a packet)
+    + Free -- free the parse and all associated metadata
+  - There are calls to insert and cut space within a set of header parses
+    while adjusting all appropriate header parse offsets in the process
+  - There are also calls to move the various header parse offsets while 
+    correctly checking that inner offsets can't move outside outer offsets
+
+Initial protocol parser list:
+  NONE, ARP, IP, Ethernet II, TCP, UDP, ICMP, IPv6, ICMPv6
+Planned some other time:
+  ESP, AH, IPComp, GRE, DCCP, RTP, SCTP, Ethernet SNAP, 802.3 Ethernet, 
+  LLC Ethernet, STP, MPLS, etc...
+Extensible framework: easy to add new protocols to the mix as we go along.
+I anticipate this to be a major area for community assistance.
+
+
+Metapacket
+  - A parsed packet
+  - A packet buffer plus header parse
+  - Also has pointers to the link layer header, network header, transport
+    header for fast access
+  - Includes constructors and destructors based on read packet buffers or 
+    freshly created packets
+  - Basically a wrapper data type to tie packet buffers to header parses
+
+
+NetVM
+  - A virtual machine for processing network packets
+  - Intended to be a compile target for various tools
+  - Designed to be embedable in low mem environments
+    * Fixed memory array during run time
+  - Designed to be "safe" in several ways:
+    * no-loop match-only mode w/ no external access
+    * type-safe operation with all memory accesses checked
+    * bounded run-time available
+    * instruction-level validation before run
+    * no "writes" to instruction store
+  - Simple stack machine
+  - Typical mathematical operations, branch instructions, etc
+  - Bulk data movement into and out of packets
+  - Can access and manipulate header parse and metapacket information and 
+    operations
+  - Bulk data comparisons and masked comparisons
+  - Can have up to a 16-packet working set
+  - Several configuralble and optional subsystems.  Some of these would be
+    inappropriate for constrained environments (e.g. the kernel).
+    * regex matching
+    * formatted output
+    * read-only segment of memory
+    * DNS resolver 
+    * packet "backing store"
+  - Call / Return operations for passing multiple arguments and getting
+    multiple return values from functions.
+
+
+NetVM Match/Action Runtime
+  - A runtime for processing a stream of packets according to the following
+    paradigm:  
+    * For each packet
+      * For each match/action program
+        * Run the match program in matchonly mode
+	* If the match succeeds run the action program
+      * Send all packets left in memory if no errors occurred
+  - Target for ped and pmangle at the very least
+  - Also includes a loader and linker
+
+
+Namespace
+  - A framework for a hierarchy of names, protocol fields and values
+  - A field is a fixed-width/fixed-offset block of data
+  - A value can be a scalar value, list of ranges of scalar values, 
+    an exact octet string, a masked octet string or a list of ranges of 
+    octet strings
+  - Namespaces can be globally or locally known and registered
+  - This will be used to make the parsing language extensible with new protocols
+    (i.e. contributors can add new protocols, fields and values)
+  - Example fields:  tcp.sport, tcp.syn, udp.cksum ...
+  - Example values:  ipv6.addrtype.unicast, tcp.ports.http ...
+
+
+NCL - Nettool Classificaiton Language
+  - A classification language like tcpdump's, wireshark's or cisco ACLs use
+  - Runs on the NetVM and uses the NetVM loader and linker
+  - Extensible with new protocol fields and values
+  - Compiles to NetVM matchonly mode
+  - Usable in any utility requiring packet pattern matching
+  - Will use Lemon to define the grammar
+
+
+Flow Event Monitor
+  - A simple abstraction to representing the set of flow events (create, 
+    destroy, handshake, data)
+  - Stateful inspection of packets according to protocol
+  - Will probably follow the PPT_ model for registering and deregistering
+    protocol flow monitors
+
+
+------------------
+Roadmap Components (may not make initial release)
+------------------
+
+PreParsed Packet
+  - Library code to help accelerate packet parsing
+  - Idea is to fast-track protocol parsing using classification tags
+  - Used for common case packets
+  - Would probably be tied into metapacket creation which could then be used
+    within other tools (especially netvm dependent ones)
+
+
+Tcpdump Matcher
+  - a compiler to compile tcpdump expressions to NetVM matchonly code
+  - used to allow Ped or Pmangle matching to use alternate expression syntax
+  - may be a similar tool for wireshark variant as well
+
+
+
+--------------------------
+Intended Initial Utilities
+--------------------------
+
+pcapin/pcapout
+  - Programs to convert from pcap format to nettools format and visa versa
+  - Can also capture/send live using libpcap
+
+
+classify -- Classify Packets
+  - Affix classification tags to packets
+  - Use NCL and maybe other matching languages for rules
+  - This could probably be done with ped, but it's lighter weight
+  - In other words, building classify will probably be a step to developing ped
+
+
+ped -- Packet Editor
+  - sed equivalent for packets
+  - enables simple operations on packet streams such as drop,
+    pass, (simple) subsitution operations and print
+  - Lemon parser generator to generate AST
+  - Simple compiler to compile AST to NetVM match/action programs
+  - May support alternate matching languages like tcpdump (see below)
+  - Building ped will probably be a step to developing pmangle
+
+
+pmangle -- Closer to AWK for packets
+  - Lemon parser generator to generate AST
+  - Will compile to NetVM match/action runtime
+  - BEGIN and END actions
+  - Will have full flow control constructs as well
+  - Maybe associative arrays
+  - Probably encompasses everything Ped can do but will probably come out
+    in a later version of the tools
+  - Pattern matching syntax will probably be identical to Ped
+  - Will have variables and subroutines, etc...
+  - This may become unnecessary if long term plans pan out and I build Ruby 
+    or Python bindings for a good deal of the other functionality.  
+
+
+pktdump
+  - tcpdump-alike written on top of ped or pmangle or some such
+  - just simple dumping capabilities
+
+
+pdemux
+  - A utility to demultiplex a traffic stream between 2+ output streams
+  - Demux is based on classification tags stored in packets
+
+
+pmux
+  - A utility to multiplex multiple incoming traffic streams
+  - Will probably set classificaiton tags to denote incoming "interface"
+
+
+timedrelease
+  - Will read in a packet stream an send the packets out spaced according to 
+    deltas in the timestamps between packets
+  - Useful for replaying a stream with the correct inter-packet time deltas
+
+
+pktdiff
+  - hopefully the equivalent of 'diff' for two packet streams
+  - this one is tricky since it will aim to tell if there are extra packets
+    in one stream or another as well as if only certain fields have changed
+    within a packet
+  - meta-information in the packet (timestamp, classificaiton tag, etc..) might
+    be used to help synchronize stream position informaiton
+  - really really useful for testing, but very hard to do right: may require
+    some research into edit-distance when there are different "levels" of 
+    editing
+
+
+newdata
+  - Create a new empty packet with just payload data
+  - idea is that when passing to pmangle, one can build headers on top 
+    to create a full packet
+  - used to generate individual packets on the fly or from a script
+
+
+tcpstream
+  - Generate a stream of tcp packets from a set of data
+  - takes endpoint paramters (addr, port, etc...) 
+  - Might take traffic parameters such as loss and rexmit
+
+
+flowsplit
+  - Takes in a stream of packets and splits into separate files for each
+    flow
+  - Flow is defined generally be the protocol for connection oriented protocols
+    (e.g. TCP, SCTP, etc..)
+  - Flow is defined by 5-tuple and perhaps configurable idle time for non
+    connection oriented protocols (UDP)
+  - MIGHT split flows or round robin or load balance them among output
+    fds: not sure yet
+
+
+-------------
+Roadmap Tools (may not make initial release)
+-------------
+
+
+fragit/defragit
+  - Fragment/reassemble packets according to a set of rules
+  - v4 or v6
+  - rules may be based on classification tags
+  - or may be based on NetVM program in matchonly mode
+
+gennetflow
+  - generate netflow records for a packet stream
+  - It's been a while since I looked at netflow so I'll have to review for
+    more data about what this provides
+
+
+--------------
+Roadmap ideas:
+--------------
+
+netvmas/netvmld - NetVM Assembler / NetVM Linker
+  - Planned, but not yet designed
+  - Will probably leverage the aforementioned loader and linker
+  - May also include external data format for netvm programs 
+    (not currently designed) and match/action programs.
+
+
+NetVM Kernel Retarget
+  - Planned, but not yet thought through
+  - Idea is to create a NetVM version that runs inside a kernel (linux or BSD)
+  - Would include runtime
+  - Would probably add additional program verification steps
+  - Idea is to create a way to push Ped or Pmangle programs into the kernel
+    packet streams 
+  - Could alternately be used for more flexible system to route packets to the
+    host or some such
+
+
+Kernel Filter Stages
+  - The idea would be to create a packet pipelining system within kernel space
+  - would need Ped/Pmangle, plus pktmux/pktdemux 
+  - would need to add conversion from Packet Buffer to raw device packet 
+    and back  (equivalent of pcapin/pcapout for skbuffs or mbufs)
+  - goal would be to allow flexible processing/diversion in kernel space
+  - might create mechanism to reroute flows through user-space as well using
+    packet buffers as the core data format
+
+
+Scripting Language (Ruby and/or Python) bindings
+  - Provide access to metapackets within some HLL
+  - Might provide access to NetVM as well, but probably only useful for 
+    matchonly mode, and even then, this is questionable in its usefulness
+  - Might provide access to the Flow Event Monitor API
+
+
+
+----------------
+Possible tools I won't consider without explicit authorization becuase they 
+are _way_too_close_ to the work I do at Netronome now:
+----------------
+
+SSLStream
+  - like TCP stream but generates SSL data stream (which can be wrapped
+    using tcpstream)
+  - bidirectional data generation
+
+
+SSLClassify
+  - Perform cert/handshake validation on an SSL stream
+  - Collect SSL information
+  - Possibly affix classification tag
+
+
+IPsecIn
+  - Decapsulate, verify and decrypt IPsec packets
+
+
+IPsecOut
+  - Encapsulate and encrypt packets using IPsec
+
+
+
+-----------------------------
+Netronome-specific Tool Ideas
+-----------------------------
+  * Obviously, I won't consider these without explicit authorization to
+    release 
+
+Receive from NFE/Send to NFE
+
+NFM-to-metapkt conversion
+  * use NFM Rules engine to affix classification tags
+
+NetVM embedded in an IXP/NFP
+
+Other tools at IXP/NFP level?  
+
+Graph system - nettool integration
