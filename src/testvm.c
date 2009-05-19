@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <cat/err.h>
-#include <cat/stdemit.h>
+#include <cat/stdclio.h>
 #include <cat/optparse.h>
 #include <cat/str.h>
 #include "pktbuf.h"
