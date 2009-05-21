@@ -6,7 +6,17 @@
 #define KWMAXLEN                16      /* includes a null terminator */
 
 
-struct ncl_keyword {
+struct ncl_token {
+  int                           id;
+  union {
+    const char *                sval;
+    unsigned long               uival;
+    long                        ival;
+  } u;
+};
+
+
+struct ncl_reserved {
   struct rbnode                 node;
   char                          word[KWMAXLEN];
   int                           token;
@@ -16,6 +26,7 @@ struct ncl_keyword {
 struct ncl_tokenizer {
   struct inport *               inport;
   struct rbtree                 keywords;
+  struct rbtree                 operators;
   struct catstr *               strbuf;
   int                           save;
 };
@@ -75,34 +86,61 @@ struct ncl_tokenizer {
 
 #define NCLTOK_COMMA            42
 
+#define NCLTOK_MAXPUNCTLEN      2
+
 
 int ncl_tkz_init(struct ncl_tokenizer *tkz);
 void ncl_tkz_clear(struct ncl_tokenizer *tkz);
 void ncl_tkz_addkw(struct ncl_tokenizer *tkz, const char *kw, int token);
 void ncl_tkz_reset(struct ncl_tokenizer *tkz, struct inport *inport);
-int ncl_tkz_next(struct ncl_tokenizer *tkz, const char **token);
+int ncl_tkz_next(struct ncl_tokenizer *tkz, struct ncl_token *tok);
 
 
 #include <cat/emalloc.h>
 
-void ncl_tok_addkw(struct ncl_tokenizer *tkz, const char *kw, int token)
+static void ncl_tok_add_rb(struct ncl_tokenizer *tkz, const char *str, 
+                           int token, int iskw)
 {
-  struct ncl_keyword *kwn;
+  struct ncl_reserved *rn;
   struct rbnode *node;
   int dir;
-  node = rb_lkup(&tkz->keywords, kw, &dir);
+  struct rbtree  *rbt;
+  abort_unless(tkz && str && token > 0);
+
+  rbt = iskw ? &tkz->keywords : tkz->operators;
+  node = rb_lkup(rbt, str, &dir);
   if ( dir != CRB_N ) {
-    kwn = node->data;
-    if ( kwn->token != token )
-      err("Multiple defines for keyword '%s' w/ different token values\n", kw);
+    rn = node->data;
+    if ( rn->token != token )
+      err("Multiple defines for '%s' with different token values\n", str);
     return;
   }
-  kwn = emalloc(sizeof(struct ncl_keyword));
-  rb_ninit(&kwn->node, &kwn->word, &kwn);
-  if ( str_copy(kwn->word, kw, sizeof(kwn->word)) > sizeof(kwn->word) )
-    err("keyword '%s' is longer than %u\n", kw, sizeof(kwn->word));
-  kwn->token = token;
-  rb_ins(&tkz->keywords, &kwn->node, node, dir);
+  rn = emalloc(sizeof(struct ncl_reserved));
+  rb_ninit(&rn->node, &rn->word, &rn);
+  if ( str_copy(rn->word, str, sizeof(rn->word)) > sizeof(rn->word) )
+    err("'%s' is longer than %u\n", str, sizeof(rn->word));
+  rn->token = token;
+  rb_ins(rbt, &rn->node, node, dir);
+}
+
+
+
+void ncl_tok_addkw(struct ncl_tokenizer *tkz, const char *str, int token)
+{
+  const char *s = str;
+  abort_unless(tkz && str && token > 0);
+  if ( !isalpha(*str) )
+    err("Keyword must start with an alphabetic character: '%c'", *s);
+  ncl_tok_add_rb(tkz, str, token, 1);
+}
+
+
+void ncl_tok_addop(struct ncl_tokenizer *tkz, const char *str, int token)
+{
+  abort_unless(tkz && str && token > 0);
+  if ( !ispunct(*str) )
+    err("Operator must start with a punctuation character: '%c'", *s);
+  ncl_tok_add_rb(tkz, str, token, 0);
 }
 
 
@@ -112,9 +150,11 @@ int ncl_init_tokenizer(struct ncl_tokenizer *tkz)
   memset(tkz, 0, sizeof(struct ncl_tokenizer));
   tkz->inport = NULL;
   rb_init(&tkz->keywords);
+  rb_init(&tkz->operators);
   tkz->strbuf = cs_alloc(16);
   tkz->save = 0;
-  /* ADD keywords here */
+  /* Add keywords here */
+  /* Add operators here */
   return 0;
 }
 
@@ -124,9 +164,14 @@ void ncl_clear_tokenizer(struct ncl_tokenizer *tkz)
   struct rbnode *node;
   abort_unless(tkz);
   while ( (node = rb_getroot(&tkz->keywords)) ) {
-    struct ncl_keyword *kwn = node->data;
+    struct ncl_reserved *kwn = node->data;
     rb_rem(node);
     free(kwn);
+  }
+  while ( (node = rb_getroot(&tkz->operators)) ) {
+    struct ncl_reserved *opn = node->data;
+    rb_rem(node);
+    free(opn);
   }
   cs_free(tkz->strbuf);
   tkz->strbuf = NULL;
@@ -156,12 +201,16 @@ static int nextchar(struct ncl_tokenizer *tkz, char *chp)
 }
 
 
-static int parse_strchr(struct ncl_tokenizer *tkz, char ch, const char **toks);
-static int parse_punct(struct ncl_tokenizer *tkz, char ch);
-static int parse_idkw(struct ncl_tokenizer *tkz, char ch, const char **toks);
-static int parse_num(struct ncl_tokenizer *tkz, char ch);
+static int parse_strchr(struct ncl_tokenizer *tkz, char ch,
+                        struct ncl_token *tok);
+static int parse_punct(struct ncl_tokenizer *tkz, char ch,
+                       struct ncl_token *tok);
+static int parse_idkw(struct ncl_tokenizer *tkz, char ch, 
+                      struct ncl_token *tok);
+static int parse_num(struct ncl_tokenizer *tkz, char ch,
+                     struct ncl_token *tok);
 
-int ncl_tkz_next(struct ncl_tokenizer *tkz, const char **tokstr);
+int ncl_tkz_next(struct ncl_tokenizer *tkz, struct ncl_token *tok);
 {
   char ch, ch2;
   int comment, string;
@@ -185,7 +234,7 @@ int ncl_tkz_next(struct ncl_tokenizer *tkz, const char **tokstr);
     }
 
     if ( string ) {
-      if ( (rv = parse_strchr(tkz, ch, tokstr)) )
+      if ( (rv = parse_strchr(tkz, ch, tok)) )
         return rv;
     } else if ( comment ) {
       /* ignore until the end of the line */
@@ -203,12 +252,12 @@ int ncl_tkz_next(struct ncl_tokenizer *tkz, const char **tokstr);
         string = 1;
         continue;
       default:
-        return parse_punct(tkz, ch);
+        return parse_punct(tkz, ch, tok);
       }
     } else if ( isalpha(ch) ) {
-      return parse_idkw(tkz, ch);
+      return parse_idkw(tkz, ch, tok);
     } else if ( isdigit(ch) ) {
-      return parse_num(tkz, ch);
+      return parse_num(tkz, ch, tok);
     } else {
       return NCLTOK_UNKNOWNSYM;
     }
@@ -231,13 +280,14 @@ static char xstr2ch(char buf[2])
 }
 
 
-static int parse_strchr(struct ncl_tokenizer *tkz, char ch, const char **toks)
+static int parse_strchr(struct ncl_tokenizer *tkz, char ch,
+                        struct ncl_token *tok)
 {
   if ( ch != '\\' ) {
     if ( ch == '"' ) {
-      if ( toks )
-        *toks = cs_to_cstr(tkz->strbuf);
-      return NCLTOK_STRING;
+      tok->id = NCLTOK_STRING;
+      tok->u.sval = cs_to_cstr(tkz->strbuf);
+      return tok->id;
     }
     cs_addch(tkz->strbuf, ch);
     return 0;
@@ -269,24 +319,51 @@ static int parse_strchr(struct ncl_tokenizer *tkz, char ch, const char **toks)
 }
 
 
-static int parse_punct(struct ncl_tokenizer *tkz, char ch)
+static int parse_punct(struct ncl_tokenizer *tkz, char ch,
+                       struct ncl_token *tok)
 {
-  /*
-      case '?':
-        if ( readchar(tkz->inport, &ch2) || (ch2 != '-') )
+  char buf[NCLTOK_MAXPUNCTLEN+1] = { ch , '\0' };
+  struct rbnode *node;
+  int np = 1, rv, dir;
+  struct ncl_reserved *op;
+
+  while ( np < NCLTOK_MAXPUNCTLEN+1 ) {
+    rv = readchar(tkz->inport, &ch);
+    if ( rv == READCHAR_CHAR ) {
+      if ( ispunct(ch) ) {
+        if ( np == NCLTOK_NUMPUNCTLEN )
           return NCLTOK_UNKNOWNSYM;
-        return NCLTOK_PPEND;
-  */
+        buf[np] = ch;
+        ++np;
+      } else {
+        tkz->save = ch;
+        break;
+      }
+    } else if ( rv == READCHAR_END ) {
+      break;
+    } else { 
+      return NCLTOK_ERROR;
+    }
+  }
+
+  buf[np] = '\0';
+  node = rb_lkup(tkz->operators, cs_to_cstr(buf), &dir);
+  if ( dir == CRB_N )
+    return NCLTOK_UNKNOWNSYM;
+  op = node->data;
+  tok->id = op->token;
+  return tok->id;
 }
 
 
-static int parse_idkw(struct ncl_tokenizer *tkz, char ch, const char **toks)
+static int parse_idkw(struct ncl_tokenizer *tkz, char ch, 
+                      struct ncl_token *tok)
 {
   int nopush = 0, rv = 0, dir;
   struct rbnode *node;
 
   cs_clear(tkz->strbuf);
-  while ( isalnum(ch) ) {
+  while ( isalnum(ch) || (ch == '_') ) {
     cs_addch(tkz->strbuf, ch);
     rv = readchar(tkz->inport, &ch);
     if ( rv == READCHAR_CHAR ) {
@@ -299,20 +376,21 @@ static int parse_idkw(struct ncl_tokenizer *tkz, char ch, const char **toks)
   }
   if ( rv != READCHAR_END )
     tkz->save = ch;
-  if ( toks )
-    *toks = cs_to_cstr(tkz->strbuf);
+  tok->u.sval = cs_to_cstr(tkz->strbuf);
 
   /* check for keyword */
   node = rb_lkup(tkz->keywords, cs_to_cstr(tkz->strbuf), &dir);
   if ( dir == CRB_N ) {
-    return NCLTOK_ID;
+    tok->id = NCLTOK_ID;
   } else {
-    struct ncl_keyword *kwn = node->data;
-    return kwn->token;
+    struct ncl_reserved *kwn = node->data;
+    tok->id = kwn->token;
   }
+  return tok->id;
 }
 
 
-static int parse_num(struct ncl_tokenizer *tkz, char ch)
+static int parse_num(struct ncl_tokenizer *tkz, char ch,
+                     struct ncl_token *tok)
 {
 }
