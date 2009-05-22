@@ -1,5 +1,6 @@
 #include <cat/inport.h>
 #include <cat/catstr.h>
+#include <cat/mem.h>
 #include "netvm.h"
 
 
@@ -10,6 +11,7 @@ struct ncl_token {
   int                           id;
   union {
     const char *                sval;
+    struct raw                  rawval;
     unsigned long               uival;
     long                        ival;
   } u;
@@ -29,9 +31,12 @@ struct ncl_tokenizer {
   struct rbtree                 operators;
   struct catstr *               strbuf;
   int                           save;
+  struct memmgr                 mm;
 };
 
 
+#define NCLTOK_NUMBASEERR       -7
+#define NCLTOK_NOMEM            -6
 #define NCLTOK_ENCERROR         -5
 #define NCLTOK_UNTERMSTR        -4
 #define NCLTOK_UNKNOWNSYM       -3
@@ -89,17 +94,15 @@ struct ncl_tokenizer {
 #define NCLTOK_MAXPUNCTLEN      2
 
 
-int ncl_tkz_init(struct ncl_tokenizer *tkz);
-void ncl_tkz_clear(struct ncl_tokenizer *tkz);
-void ncl_tkz_addkw(struct ncl_tokenizer *tkz, const char *kw, int token);
-void ncl_tkz_reset(struct ncl_tokenizer *tkz, struct inport *inport);
+int ncl_tkz_init(struct ncl_tokenizer *tkz, struct memmgr *mm);
+void ncl_tkz_destroy(struct ncl_tokenizer *tkz);
+int ncl_tkz_addkw(struct ncl_tokenizer *tkz, const char *kw, int token);
+int ncl_tkz_reset(struct ncl_tokenizer *tkz, struct inport *inport);
 int ncl_tkz_next(struct ncl_tokenizer *tkz, struct ncl_token *tok);
 
 
-#include <cat/emalloc.h>
-
-static void ncl_tok_add_rb(struct ncl_tokenizer *tkz, const char *str, 
-                           int token, int iskw)
+static int ncl_tkz_add_rb(struct ncl_tokenizer *tkz, const char *str, 
+                          int token, int iskw)
 {
   struct ncl_reserved *rn;
   struct rbnode *node;
@@ -112,54 +115,60 @@ static void ncl_tok_add_rb(struct ncl_tokenizer *tkz, const char *str,
   if ( dir != CRB_N ) {
     rn = node->data;
     if ( rn->token != token )
-      err("Multiple defines for '%s' with different token values\n", str);
-    return;
+      return -1;
+    return 0;
   }
-  rn = emalloc(sizeof(struct ncl_reserved));
+  if ( (rn = mem_get(&tkz->mm, sizeof(struct ncl_reserved))) == NULL )
+    return -1;
   rb_ninit(&rn->node, &rn->word, &rn);
   if ( str_copy(rn->word, str, sizeof(rn->word)) > sizeof(rn->word) )
     err("'%s' is longer than %u\n", str, sizeof(rn->word));
   rn->token = token;
   rb_ins(rbt, &rn->node, node, dir);
+
+  return 0;
 }
 
 
 
-void ncl_tok_addkw(struct ncl_tokenizer *tkz, const char *str, int token)
+int ncl_tkz_addkw(struct ncl_tokenizer *tkz, const char *str, int token)
 {
   const char *s = str;
   abort_unless(tkz && str && token > 0);
   if ( !isalpha(*str) )
-    err("Keyword must start with an alphabetic character: '%c'", *s);
-  ncl_tok_add_rb(tkz, str, token, 1);
+    return -1;
+  return ncl_tkz_add_rb(tkz, str, token, 1);
 }
 
 
-void ncl_tok_addop(struct ncl_tokenizer *tkz, const char *str, int token)
+int ncl_tkz_addop(struct ncl_tokenizer *tkz, const char *str, int token)
 {
   abort_unless(tkz && str && token > 0);
   if ( !ispunct(*str) )
-    err("Operator must start with a punctuation character: '%c'", *s);
-  ncl_tok_add_rb(tkz, str, token, 0);
+    return -1;
+  return ncl_tkz_add_rb(tkz, str, token, 0);
 }
 
 
-int ncl_init_tokenizer(struct ncl_tokenizer *tkz)
+int ncl_tkz_init(struct ncl_tokenizer *tkz, struct memmgr *mm)
 {
   abort_unless(tkz);
   memset(tkz, 0, sizeof(struct ncl_tokenizer));
   tkz->inport = NULL;
   rb_init(&tkz->keywords);
   rb_init(&tkz->operators);
-  tkz->strbuf = cs_alloc(16);
+  if ( !(tkz->strbuf = cs_alloc(16)) )
+    return -1;
   tkz->save = 0;
-  /* Add keywords here */
-  /* Add operators here */
+  if ( mm )
+    tkz->mm = *mm;
+  else
+    tkz->mm = estdmem;
   return 0;
 }
 
 
-void ncl_clear_tokenizer(struct ncl_tokenizer *tkz)
+void ncl_tkz_destroy(struct ncl_tokenizer *tkz)
 {
   struct rbnode *node;
   abort_unless(tkz);
@@ -191,7 +200,9 @@ void ncl_tkz_reset(struct ncl_tokenizer *tkz, struct inport *inport)
 static int nextchar(struct ncl_tokenizer *tkz, char *chp)
 {
   /* at most one character of pushback */
-  if ( tkz->save > 0 ) {
+  if ( tkz->save == EOF ) {
+    return READCHAR_END;
+  } else if ( tkz->save > 0 ) {
     *chp = tkz->save;
     tkz->save = 0;
     return READCHAR_CHAR;
@@ -205,6 +216,7 @@ static int parse_strchr(struct ncl_tokenizer *tkz, char ch,
                         struct ncl_token *tok);
 static int parse_punct(struct ncl_tokenizer *tkz, char ch,
                        struct ncl_token *tok);
+static int parse_bytestr(struct ncl_tokenizer *tkz, struct ncl_token *tok);
 static int parse_idkw(struct ncl_tokenizer *tkz, char ch, 
                       struct ncl_token *tok);
 static int parse_num(struct ncl_tokenizer *tkz, char ch,
@@ -220,10 +232,11 @@ int ncl_tkz_next(struct ncl_tokenizer *tkz, struct ncl_token *tok);
   if ( !tkz->inport )
     return NCLTOK_NOINPORT;
 
+  cs_clear(tkz->strbuf);
   comment = 0;
   string = 0;
   while ( 1 ) {
-    switch(readchar(tkz->inport, &ch)) {
+    switch(nextchar(tkz, &ch)) {
     case READCHAR_CHAR: break;
     case READCHAR_END:
       return NCLTOK_EOF;
@@ -289,7 +302,8 @@ static int parse_strchr(struct ncl_tokenizer *tkz, char ch,
       tok->u.sval = cs_to_cstr(tkz->strbuf);
       return tok->id;
     }
-    cs_addch(tkz->strbuf, ch);
+    if ( !cs_addch(tkz->strbuf, ch) )
+      return NCLTOK_NOMEM;
     return 0;
   } else {
     char buf[4];
@@ -298,9 +312,11 @@ static int parse_strchr(struct ncl_tokenizer *tkz, char ch,
     if ( readchar(tkz->inport, buf) )
       return NCLTOK_UNTERMSTR;
     if ( buf[0] == '\\' ) {
-      cs_addch(tkz->strbuf, '\\');
+      if ( !cs_addch(tkz->strbuf, '\\') )
+        return NCLTOK_NOMEM;
     } else if ( buf[0] == '"' ) {
-      cs_addch(tkz->strbuf, '"');
+      if ( !cs_addch(tkz->strbuf, '"') )
+        return NCLTOK_NOMEM;
     } else if ( buf[0] == 'x' ) {
       if ( readchar(tkz->inport, buf+1) )
         return NCLTOK_UNTERMSTR;
@@ -310,7 +326,8 @@ static int parse_strchr(struct ncl_tokenizer *tkz, char ch,
         return NCLTOK_UNTERMSTR;
       if ( !isxdigit(buf[2]) )
         return NCLTOK_ENCERROR;
-      cs_addch(tkz->strbuf, xstr2ch(buf + 1));
+      if ( !cs_addch(tkz->strbuf, xstr2ch(buf + 1)) )
+        return NCLTOK_NOMEM;
     } else {
       return NCLTOK_ENCERROR;
     }
@@ -336,10 +353,13 @@ static int parse_punct(struct ncl_tokenizer *tkz, char ch,
         buf[np] = ch;
         ++np;
       } else {
+        if ( (np == 1) && (buf[0] == '\\') && (ch == 'x') )
+          return parse_bytestr(tkz, tok);
         tkz->save = ch;
         break;
       }
     } else if ( rv == READCHAR_END ) {
+      tkz->save = EOF;
       break;
     } else { 
       return NCLTOK_ERROR;
@@ -355,6 +375,34 @@ static int parse_punct(struct ncl_tokenizer *tkz, char ch,
   return tok->id;
 }
 
+#define xval(c) (isdigit(c) ? (c) - '0' : (tolower(c) - 'a' + 10))
+static int parse_bytestr(struct ncl_tokenizer *tkz, struct ncl_token *tok)
+{
+  char digits[2];
+  unsigned int i = 0, rv;
+
+  while ( !(rv = readchar(tkz->inport, &digits[i&1])) && isxdigit(ch) ) {
+    if ( ++i & 1 == 0 )
+      if ( !cs_addch(tkz->strbuf, xval(digits[0]) << 4 | xval(digits[1])) )
+        return NCLTOK_NOMEM;
+  }
+  if ( rv == READCHAR_CHAR )
+    tkz->save = ch;
+  else if ( rv == READCHAR_END )
+    tkz->save = EOF;
+  else
+    return NCLTOK_ERROR;
+
+  if ( i & 1 )
+    if ( !cs_addch(tkz->strbuf, xval(digits[0]) << 4) )
+        return NCLTOK_NOMEM;
+
+  tok->u.rawval.data = (byte_t)tkz->strbuf->cs_data;
+  tok->u.rawval.len = tkz->strbuf->cs_dlen;
+  tok->id = NCLTOK_BYTESTR;
+  return tok->id;
+}
+
 
 static int parse_idkw(struct ncl_tokenizer *tkz, char ch, 
                       struct ncl_token *tok)
@@ -362,13 +410,14 @@ static int parse_idkw(struct ncl_tokenizer *tkz, char ch,
   int nopush = 0, rv = 0, dir;
   struct rbnode *node;
 
-  cs_clear(tkz->strbuf);
   while ( isalnum(ch) || (ch == '_') ) {
-    cs_addch(tkz->strbuf, ch);
+    if ( !cs_addch(tkz->strbuf, ch) )
+      return NCLTOK_NOMEM;
     rv = readchar(tkz->inport, &ch);
     if ( rv == READCHAR_CHAR ) {
       /* do nothing but add */
     } else if ( rv == READCHAR_END ) {
+      tkz->save = EOF;
       break;
     } else { 
       return NCLTOK_ERROR;
@@ -393,4 +442,43 @@ static int parse_idkw(struct ncl_tokenizer *tkz, char ch,
 static int parse_num(struct ncl_tokenizer *tkz, char ch,
                      struct ncl_token *tok)
 {
+  int base = 10, rv;
+  char cp;
+
+  if ( !cs_addch(tkz->strbuf, ch) )
+    return NCLTOK_NOMEM;
+
+  tkz->save = 0;
+  rv = readchar(tkz->inport, &ch);
+  if ( rv == READCHAR_END ) {
+    tkz->save = EOF;
+  } else if ( !isdigit(ch) ) {
+    if ( (tkz->strbuf->cs_data[0] != '0') || (ch != 'x') )
+      tkz->save = ch;
+  } else {
+    if ( !cs_addch(tkz->strbuf, ch) )
+      return NCLTOK_NOMEM;
+    if ( tkz->strbuf->cs_data[0] == '0' )
+      base = 8;
+  }
+
+  while ( !(rv = readchar(tkz->inport, &ch)) ) {
+    /* will catch 8's and 9's in base-8 below */
+    if ( !isdigit(ch) && ((base != 16) || !isxdigit(ch)) ) {
+      tkz->save = ch;
+      break;
+    }
+    if ( !cs_addch(tkz->strbuf, ch) )
+      return NCLTOK_NOMEM;
+  }
+  if ( rv == READCHAR_END )
+    tkz->save = EOF;
+  else if ( rv != READCHAR_CHAR )
+    return NCLTOK_ERROR;
+
+  tok->id = NCLTOK_NUM;
+  tok->u.uival = strtoul(cs_to_cstr(tkz->strbuf), &cp, base);
+  if ( cp != cs_to_cstr(tkz->strbuf) + tkz->strbuf->cs_dlen )
+    return NCLTOK_NUMBASEERR;
+  return tok->id;
 }
