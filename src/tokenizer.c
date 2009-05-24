@@ -17,7 +17,7 @@ struct tokenizer *tkz_new(struct memmgr *mm)
     if ( !(tkz->strbuf = cs_alloc(16)) )
       return -1;
     tkz->save = 0;
-    tkz->mm = *mm;
+    tkz->mm = mm;
   }
   return tkz;
 }
@@ -26,7 +26,7 @@ struct tokenizer *tkz_new(struct memmgr *mm)
 void tkz_free(struct tokenizer *tkz)
 {
   struct rbnode *node;
-  struct memmgr mm;
+  struct memmgr *mm;
   abort_unless(tkz);
   mm = tkz->mm;
   while ( (node = rb_getroot(&tkz->keywords)) ) {
@@ -42,7 +42,7 @@ void tkz_free(struct tokenizer *tkz)
   cs_free(tkz->strbuf);
   tkz->strbuf = NULL;
   tkz->save = 0;
-  mem_free(&mm, tkz);
+  mem_free(mm, tkz);
 }
 
 
@@ -63,7 +63,7 @@ static int tkz_add_rb(struct tokenizer *tkz, const char *str, int token,
       return -1;
     return 0;
   }
-  if ( (rn = mem_get(&tkz->mm, sizeof(struct tkz_reserved))) == NULL )
+  if ( (rn = mem_get(tkz->mm, sizeof(struct tkz_reserved))) == NULL )
     return -1;
   rb_ninit(&rn->node, &rn->word, &rn);
   if ( str_copy(rn->word, str, sizeof(rn->word)) > sizeof(rn->word) )

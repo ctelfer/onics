@@ -32,7 +32,7 @@ struct tokenizer {
   struct rbtree                 operators;
   struct catstr *               strbuf;
   int                           save;
-  struct memmgr                 mm;
+  struct memmgr *               mm;
 };
 
 
