@@ -37,6 +37,7 @@ struct ns_namespace {
   int                   nstype;         /* always NST_NS */
   int                   id;
   char *                name;
+  struct ns_namespace * parent;
   struct rbtree *       nametab;
   struct rbtree *       idtab;
 };
@@ -50,6 +51,7 @@ struct ns_field {
   int                   nstype;         /* always NST_FIELD */
   int                   id;
   char *                name;
+  struct ns_namespace * parent;
   int                   inbits;
   size_t                off;
   size_t                size;
@@ -72,6 +74,7 @@ struct ns_scalar {
   int                   nstype;         /* NST_SCALAR */
   int                   id;
   const char *          name;
+  struct ns_namespace * parent;
   unsigned long         value;
 };
 
@@ -80,6 +83,7 @@ struct ns_rawval {
   int                   nstype;         /* NST_RAW */
   int                   id;
   const char *          name;
+  struct ns_namespace * parent;
   struct raw *          value;
 };
 
@@ -88,6 +92,7 @@ struct ns_masked {
   int                   nstype;         /* NST_MASKED */
   int                   id;
   const char *          name;
+  struct ns_namespace * parent;
   struct raw *          value;
   struct raw *          mask;
 };
@@ -97,6 +102,7 @@ struct ns_ranges {
   int                   nstype;         /* NST_SRANGE | NST_RRANGE */
   int                   id;
   const char *          name;
+  struct ns_namespace * parent;
   size_t                len;
   struct list *         ranges;
 };
@@ -109,8 +115,8 @@ struct ns_ranges {
 struct ns_element *ns_name_lookup(const char *name, int type);
 struct ns_element *ns_id_lookup(int *id, int nids, int type);
 
-void ns_register(struct ns_namespace *ns);
-void ns_insert(struct ns_namespace *ns, struct ns_element *elem);
+int ns_register(struct ns_namespace *ns);
+int ns_insert(struct ns_namespace *ns, struct ns_element *elem);
 void ns_remove(struct ns_element *elem);
 
 int ns_cmp_scalar(struct ns_element *elem, unsigned long val);

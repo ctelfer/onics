@@ -9,14 +9,14 @@ OPTS=-g
 LIBS=-L${CATLIB_ROOT}/lib -lcat_dbg -lpcap
 DEFS=
 BINDIR=../bin
+LIBOBJS= metapkt.o namespace.o ncl.o netvm.o netvm_rt.o pktbuf.o pptcpip.o \
+	protoparse.o tokenizer.o util.o
 
 TARGETS=${BINDIR}/pcapin \
 	${BINDIR}/pcapout \
-	${BINDIR}/testpp \
-	${BINDIR}/testvm \
 	${BINDIR}/ped
 
-all: ${TARGETS}
+all: ${LIBOBJS} ${TARGETS}
 
 ${BINDIR}/pcapin: pcapin.o pktbuf.o
 	${CC} -o ../bin/pcapin pcapin.o pktbuf.o ${DEFS} ${OPTS} \

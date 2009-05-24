@@ -1,8 +1,9 @@
 #ifndef __tokenizer_h
-#ifndef __tokenizer_h
+#define __tokenizer_h
 #include <cat/inport.h>
 #include <cat/catstr.h>
 #include <cat/mem.h>
+#include <cat/rbtree.h>
 
 
 #define KWMAXLEN                16      /* includes a null terminator */
@@ -54,7 +55,7 @@ struct tokenizer *tkz_new(struct memmgr *mm);
 void tkz_free(struct tokenizer *tkz);
 int tkz_addkw(struct tokenizer *tkz, const char *kw, int token);
 int tkz_addop(struct tokenizer *tkz, const char *op, int token);
-int tkz_reset(struct tokenizer *tkz, struct inport *inport);
+void tkz_reset(struct tokenizer *tkz, struct inport *inport);
 int tkz_next(struct tokenizer *tkz, struct tkz_token *tok);
 
 

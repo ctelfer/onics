@@ -1,5 +1,11 @@
 #include "tokenizer.h"
 #include <cat/stduse.h>
+#include <cat/aux.h>
+#include <cat/err.h>
+#include <string.h>
+#include <stdlib.h>
+#include <ctype.h>
+
 
 #define TKZ_MAXPUNCTLEN         3
 
@@ -12,10 +18,10 @@ struct tokenizer *tkz_new(struct memmgr *mm)
   if ( (tkz = mem_get(mm, sizeof(struct tokenizer))) ) {
     memset(tkz, 0, sizeof(struct tokenizer));
     tkz->inport = NULL;
-    rb_init(&tkz->keywords);
-    rb_init(&tkz->operators);
+    rb_init(&tkz->keywords, cmp_str);
+    rb_init(&tkz->operators, cmp_str);
     if ( !(tkz->strbuf = cs_alloc(16)) )
-      return -1;
+      return NULL;
     tkz->save = 0;
     tkz->mm = mm;
   }
@@ -52,11 +58,11 @@ static int tkz_add_rb(struct tokenizer *tkz, const char *str, int token,
   struct tkz_reserved *rn;
   struct rbnode *node;
   int dir;
-  struct rbtree  *rbt;
+  struct rbtree *rbt;
   abort_unless(tkz && str && token > 0);
 
-  rbt = iskw ? &tkz->keywords : tkz->operators;
-  node = rb_lkup(rbt, str, &dir);
+  rbt = iskw ? &tkz->keywords : &tkz->operators;
+  node = rb_lkup(rbt, (void *)str, &dir);
   if ( dir != CRB_N ) {
     rn = node->data;
     if ( rn->token != token )
@@ -77,7 +83,6 @@ static int tkz_add_rb(struct tokenizer *tkz, const char *str, int token,
 
 int tkz_addkw(struct tokenizer *tkz, const char *str, int token)
 {
-  const char *s = str;
   abort_unless(tkz && str && token > 0);
   if ( !isalpha(*str) )
     return -1;
@@ -96,7 +101,7 @@ int tkz_addop(struct tokenizer *tkz, const char *str, int token)
 
 void tkz_reset(struct tokenizer *tkz, struct inport *inport)
 {
-  abort_unlkess(tkz && inport);
+  abort_unless(tkz && inport);
   tkz->inport = inport;
   tkz->save = 0;
   cs_clear(tkz->strbuf);
@@ -111,9 +116,9 @@ static int parse_idkw(struct tokenizer *tkz, char ch, struct tkz_token *tok);
 static int parse_num(struct tokenizer *tkz, char ch, struct tkz_token *tok);
 
 
-int tkz_next(struct tokenizer *tkz, struct tkz_token *tok);
+int tkz_next(struct tokenizer *tkz, struct tkz_token *tok)
 {
-  char ch, ch2;
+  char ch;
   int comment, string;
   int rv;
 
@@ -210,7 +215,6 @@ static int parse_strchr(struct tokenizer *tkz, char ch, struct tkz_token *tok)
     return 0;
   } else {
     char buf[4];
-    unsigned char ch;
     memset(buf, '\0', 4);
     if ( readchar(tkz->inport, buf) )
       return TKZ_UNTERMSTR;
@@ -250,7 +254,7 @@ static int parse_punct(struct tokenizer *tkz, char ch, struct tkz_token *tok)
     rv = readchar(tkz->inport, &ch);
     if ( rv == READCHAR_CHAR ) {
       if ( ispunct(ch) ) {
-        if ( np == TKZ_NUMPUNCTLEN )
+        if ( np == TKZ_MAXPUNCTLEN )
           return TKZ_UNKNOWNSYM;
         buf[np] = ch;
         ++np;
@@ -269,7 +273,7 @@ static int parse_punct(struct tokenizer *tkz, char ch, struct tkz_token *tok)
   }
 
   buf[np] = '\0';
-  node = rb_lkup(tkz->operators, cs_to_cstr(buf), &dir);
+  node = rb_lkup(&tkz->operators, buf, &dir);
   if ( dir == CRB_N )
     return TKZ_UNKNOWNSYM;
   op = node->data;
@@ -281,11 +285,12 @@ static int parse_punct(struct tokenizer *tkz, char ch, struct tkz_token *tok)
 #define xval(c) (isdigit(c) ? (c) - '0' : (tolower(c) - 'a' + 10))
 static int parse_bytestr(struct tokenizer *tkz, struct tkz_token *tok)
 {
-  char digits[2];
+  char digits[2], ch;
   unsigned int i = 0, rv;
 
-  while ( !(rv = readchar(tkz->inport, &digits[i&1])) && isxdigit(ch) ) {
-    if ( ++i & 1 == 0 )
+  while ( !(rv = readchar(tkz->inport, &ch)) && isxdigit(ch) ) {
+    digits[i&1] = ch;
+    if ( (++i & 1) == 0 )
       if ( !cs_addch(tkz->strbuf, xval(digits[0]) << 4 | xval(digits[1])) )
         return TKZ_NOMEM;
   }
@@ -300,7 +305,7 @@ static int parse_bytestr(struct tokenizer *tkz, struct tkz_token *tok)
     if ( !cs_addch(tkz->strbuf, xval(digits[0]) << 4) )
         return TKZ_NOMEM;
 
-  tok->u.rawval.data = (byte_t)tkz->strbuf->cs_data;
+  tok->u.rawval.data = (byte_t*)tkz->strbuf->cs_data;
   tok->u.rawval.len = tkz->strbuf->cs_dlen;
   tok->id = TKZ_BYTESTR;
   return tok->id;
@@ -309,7 +314,7 @@ static int parse_bytestr(struct tokenizer *tkz, struct tkz_token *tok)
 
 static int parse_idkw(struct tokenizer *tkz, char ch, struct tkz_token *tok)
 {
-  int nopush = 0, rv = 0, dir;
+  int rv = 0, dir;
   struct rbnode *node;
 
   while ( isalnum(ch) || (ch == '_') ) {
@@ -330,7 +335,7 @@ static int parse_idkw(struct tokenizer *tkz, char ch, struct tkz_token *tok)
   tok->u.sval = cs_to_cstr(tkz->strbuf);
 
   /* check for keyword */
-  node = rb_lkup(tkz->keywords, cs_to_cstr(tkz->strbuf), &dir);
+  node = rb_lkup(&tkz->keywords, cs_to_cstr(tkz->strbuf), &dir);
   if ( dir == CRB_N ) {
     tok->id = TKZ_ID;
   } else {
@@ -344,7 +349,7 @@ static int parse_idkw(struct tokenizer *tkz, char ch, struct tkz_token *tok)
 static int parse_num(struct tokenizer *tkz, char ch, struct tkz_token *tok)
 {
   int base = 10, rv;
-  char cp;
+  char *cp;
 
   if ( !cs_addch(tkz->strbuf, ch) )
     return TKZ_NOMEM;

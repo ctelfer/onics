@@ -1,4 +1,5 @@
 #include "ncltok.h"
+#include <cat/stduse.h>
 
 #define ADDOP(s, n) \
   if ( tkz_addop(tkz, (s), (n)) ) \
