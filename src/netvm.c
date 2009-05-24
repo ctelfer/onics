@@ -334,8 +334,14 @@ static void ni_ldpmeta(struct netvm *vm)
   } else {
     S_POP(vm, pktnum);
   }
+
   FATAL(vm, NETVM_ERR_PKTNUM, (pktnum >= NETVM_MAXPKTS));
+  if ( inst->opcode == NETVM_OC_LDPEXST ) {
+    S_PUSH(vm, vm->packets[pktnum] != NULL);
+    return;
+  }
   FATAL(vm, NETVM_ERR_NOPKT, !(pkt=vm->packets[pktnum]));
+
   if ( inst->opcode == NETVM_OC_LDCLASS ) {
     S_PUSH(vm, pkt->pkb->pkb_class);
   } else if ( inst->opcode == NETVM_OC_LDTSSEC ) {
@@ -1177,7 +1183,50 @@ static void ni_hdradj(struct netvm *vm)
 }
 
 
-netvm_op g_netvm_ops[NETVM_OC_MAX+1] = { 
+static void ni_qempty(struct netvm *vm)
+{
+  struct netvm_inst *inst = &vm->inst[vm->pc];
+  uint32_t qnum;
+  if ( IMMED(inst) ) {
+    qnum = inst->val;
+  } else { 
+    S_POP(vm, qnum);
+  }
+  FATAL(vm, NETVM_ERR_NOQUEUE, qnum >= NETVM_MAXQS);
+  S_PUSH(vm, l_isempty(&vm->pktqs[qnum]));
+}
+
+
+static void ni_qop(struct netvm *vm)
+{
+  struct netvm_inst *inst = &vm->inst[vm->pc];
+  uint32_t pktnum, qnum;
+  struct metapkt *pkt;
+  struct list *l;
+  if ( IMMED(inst) ) {
+    pktnum = inst->val;
+  } else { 
+    S_POP(vm, pktnum);
+  }
+  S_POP(vm, qnum);
+  FATAL(vm, NETVM_ERR_PKTNUM, pktnum >= NETVM_MAXPKTS);
+  FATAL(vm, NETVM_ERR_NOQUEUE, qnum >= NETVM_MAXQS);
+
+  if ( inst->opcode == NETVM_OC_ENQ ) {
+    FATAL(vm, NETVM_ERR_NOPKT, !(pkt=vm->packets[pktnum]));
+    l_enq(&vm->pktqs[qnum], &pkt->entry);
+    vm->packets[pktnum] = NULL;
+  } else {
+    if ( (l = l_deq(&vm->pktqs[qnum])) ) {
+      metapkt_free(vm->packets[pktnum], 1);
+      vm->packets[pktnum] = container(l, struct metapkt, entry);
+    }
+  }
+}
+
+
+
+netvm_op g_netvm_ops[NETVM_OC_MAX+1] = {
   ni_nop,
   ni_pop,
   ni_push,
@@ -1186,6 +1235,7 @@ netvm_op g_netvm_ops[NETVM_OC_MAX+1] = {
   ni_ldmem,
   ni_stmem,
   ni_ldpkt,
+  ni_ldpmeta, /* LDPEXST */
   ni_ldpmeta, /* LDCLASS */
   ni_ldpmeta, /* LDTSSEC */
   ni_ldpmeta, /* LDTSNSEC */
@@ -1264,12 +1314,16 @@ netvm_op g_netvm_ops[NETVM_OC_MAX+1] = {
   ni_hdrins,
   ni_hdrcut,
   ni_hdradj,
+  ni_qempty,
+  ni_qop, /* ENQ */
+  ni_qop, /* DEQ */
 };
 
 
 void netvm_init(struct netvm *vm, uint32_t *stack, uint32_t ssz,
                 byte_t *mem, uint32_t memsz)
 {
+  int i;
   abort_unless(vm && stack && ssz > 0 );
   vm->stack = stack;
   vm->stksz = ssz;
@@ -1284,6 +1338,8 @@ void netvm_init(struct netvm *vm, uint32_t *stack, uint32_t ssz,
   vm->bp = 0;
   vm->matchonly = 0;
   memset(vm->packets, 0, sizeof(vm->packets));
+  for ( i = 0; i < NETVM_MAXQS; ++i )
+    l_init(&vm->pktqs[i]);
 }
 
 
@@ -1361,15 +1417,14 @@ void netvm_set_matchonly(struct netvm *vm, int matchonly)
 }
 
 
-void netvm_loadpkt(struct netvm *vm, struct pktbuf *p, int slot)
+int netvm_loadpkt(struct netvm *vm, struct pktbuf *p, int slot)
 {
   struct metapkt *pkt;
-  if ( (slot < 0) || (slot >= NETVM_MAXPKTS) )
-    return;
-  pkt = pktbuf_to_metapkt(p);
-  abort_unless(pkt);
+  if ( (slot < 0) || (slot >= NETVM_MAXPKTS) || !(pkt = pktbuf_to_metapkt(p)) )
+    return -1;
   metapkt_free(vm->packets[slot], 1);
   vm->packets[slot] = pkt;
+  return 0;
 }
 
 
@@ -1380,7 +1435,7 @@ struct pktbuf *netvm_clrpkt(struct netvm *vm, int slot, int keeppkb)
   if ( (slot >= 0) && (slot < NETVM_MAXPKTS) && (pkt = vm->packets[slot]) ) {
     if ( keeppkb )
       pkb = pkt->pkb;
-    metapkt_free(pkt, keeppkb);
+    metapkt_free(pkt, !keeppkb);
     vm->packets[slot] = NULL;
   }
   return pkb;
@@ -1406,6 +1461,11 @@ void netvm_clrpkts(struct netvm *vm)
   for ( i = 0; i < NETVM_MAXPKTS; ++i ) {
     metapkt_free(vm->packets[i], 1);
     vm->packets[i] = NULL;
+  }
+  for ( i = 0; i < NETVM_MAXQS; ++i ) {
+    struct list *l;
+    while ( (l = l_deq(&vm->pktqs[i])) )
+      metapkt_free(container(l, struct metapkt, entry), 1);
   }
 }
 
@@ -1484,6 +1544,7 @@ const char *error_strings[] = {
   "packet address error",
   "write attempt to read-only segment",
   "bad packet number",
+  "bad queue number ",
   "attempt to access non-existant packet",
   "attempt to access non-existant header",
   "attempt to access non-existant header field",

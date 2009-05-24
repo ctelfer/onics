@@ -3,6 +3,7 @@
 #include "tcpip_hdrs.h"
 #include "metapkt.h"
 #include <cat/emit.h>
+#include <cat/match.h>
 
 /* 
  * W -> uses width field to determine now many bytes to manipulate
@@ -36,16 +37,17 @@ enum {
   NETVM_OC_DUP,         /* [|BV] dupcliates "val" from the top of stack */
   NETVM_OC_SWAP,        /* [|BWV] swap stack positions "val" and "width" */
                         /* 0-based counting from the top of the stack */
-  NETVM_OC_LDMEM,       /* [addr|WISR]: load from memory */
-  NETVM_OC_STMEM,       /* [v,addr|WI]: store to memory */
-  NETVM_OC_LDPKT,       /* [hdesc|IWSHTP]: load bytes from packet */
-  NETVM_OC_LDCLASS,     /* [pktnum|I]: load packet class */
-  NETVM_OC_LDTSSEC,     /* [pktnum|I]: load packet timestamp */
-  NETVM_OC_LDTSNSEC,    /* [pktnum|I]: load packet timestamp */
-  NETVM_OC_LDHDRF,      /* [hdesc|I]: load field from header parse */
-  NETVM_OC_BULKM2M,     /* [saddr,daddr,len|I]: move data from saddr to daddr */
-  NETVM_OC_BULKP2M,     /* [pa,addr,len,pktnum|I]: move bytes from pa to addr */
-  NETVM_OC_MEMCMP,      /* [addr1,addr2,len|I]: compare bytes in mem */
+  NETVM_OC_LDMEM,       /* [addr|WISR] load from memory */
+  NETVM_OC_STMEM,       /* [v,addr|WI] store to memory */
+  NETVM_OC_LDPKT,       /* [hdesc|IWSHTP] load bytes from packet */
+  NETVM_OC_LDPEXST,     /* [pktnum|I] push true if pktnum exists */
+  NETVM_OC_LDCLASS,     /* [pktnum|I] load packet class */
+  NETVM_OC_LDTSSEC,     /* [pktnum|I] load packet timestamp */
+  NETVM_OC_LDTSNSEC,    /* [pktnum|I] load packet timestamp */
+  NETVM_OC_LDHDRF,      /* [hdesc|I] load field from header parse */
+  NETVM_OC_BULKM2M,     /* [saddr,daddr,len|I] move data from saddr to daddr */
+  NETVM_OC_BULKP2M,     /* [pa,addr,len,pktnum|I] move bytes from pa to addr */
+  NETVM_OC_MEMCMP,      /* [addr1,addr2,len|I] compare bytes in mem */
   NETVM_OC_PFXCMP,      /* [addr1,addr2,pfx,len|I] compare bits via prefix */
   NETVM_OC_MASKEQ,      /* [addr1,addr2,maddr,len|I] compare bytes via mask */
   NETVM_OC_NOT,         /* [v] logcal not (1 or 0) */
@@ -78,8 +80,8 @@ enum {
   NETVM_OC_SGT,         /* [v1,v2|I] v1 greater than v2 (signed) */
   NETVM_OC_SGE,         /* [v1,v2|I] v1 greater than or equal to v2 (signed) */
   NETVM_OC_HASHDR,      /* [hdesc|I] true if has header (field in HD ignored) */
-  NETVM_OC_PREX,        /* [pa,len,rxaddr,rxlen]: regex on packet data */
-  NETVM_OC_MREX,        /* [addr,len,rxaddr,rxlen]: regex on memory data */
+  NETVM_OC_PREX,        /* [pa,len,rxidx]: regex on packet data */
+  NETVM_OC_MREX,        /* [addr,len,rxidx]: regex on memory data */
   NETVM_OC_HALT,        /* halt program */
   NETVM_OC_BR,          /* [v|I] set PC to v (must be > PC in matchonly mode */
   NETVM_OC_BNZ,         /* [c,v|I] set PC to v if c is non-zero */
@@ -105,8 +107,8 @@ enum {
   NETVM_OC_STCLASS,     /* [v,pktnum|I] store into packet class */
   NETVM_OC_STTSSEC,     /* [v,pktnum|I] store into timestamp */
   NETVM_OC_STTSNSEC,    /* [v,pktnum|I] store into timestamp */
-  NETVM_OC_BULKM2P,     /* [pa,addr,len,pktnum|I]: move bytes from pa to addr */
-  NETVM_OC_PKTSWAP,     /* [p1,p2|I]: swap packets.  If "I", p1 in width */
+  NETVM_OC_BULKM2P,     /* [pa,addr,len,pktnum|I] move bytes from pa to addr */
+  NETVM_OC_PKTSWAP,     /* [p1,p2|I] swap packets.  If "I", p1 in width */
   NETVM_OC_PKTNEW,      /* [hdesc|I] create packet: offset==len, htype==dl */
   NETVM_OC_PKTCOPY,     /* [pktnum2,pktnum1|I] copy packet in slot1 to slot2 */
   NETVM_OC_PKTDEL,      /* [pktnum|I] delete packet */
@@ -121,8 +123,11 @@ enum {
   NETVM_OC_PKTINS,      /* [len,hdesc|I] insert len bytes at hd.offset */
   NETVM_OC_PKTCUT,      /* [len,hdesc|I] cut len bytes at hd.offset */
   NETVM_OC_HDRADJ,      /* [amt,hdesc|I] adjust offset field by amt (signed) */
+  NETVM_OC_QEMPTY,      /* [qnumI] return whether a queue is empty */
+  NETVM_OC_ENQ,         /* [qnum,pktnum|I] enqueue onto queue qnum */
+  NETVM_OC_DEQ,         /* [qnum,pktnum|I] dequeue from queue qnum */
 
-  NETVM_OC_MAX = NETVM_OC_HDRADJ
+  NETVM_OC_MAX = NETVM_OC_DEQ
 
   /* 
    * Still to consider:
@@ -130,18 +135,6 @@ enum {
    * RESOLVE - resolve names to addresses or visa versa (mem to mem)
    *
    * If we do this, should it be synchronous or asynchronous?  See below.
-   *
-   * ENQ - enqueue a packet (desc in mem?, if not: where?)
-   *       any way to order them?  Pass address of compare function?
-   * DEQ - dequeue a packet (desc in mem?, if not: where?)
-   *       front only or arbitrary indices in?
-   *
-   * One possible way to do ENQ/DEQ is to have an unbounded list of saved
-   * packets and have an instruction that returns a handle to the packet.
-   * The netvm could then store queues of handles in main memory.  This is 
-   * better than any other way I've come up with so far.  Obviously, for 
-   * restricted operation, the saved packets should be bounded.  If we do this,
-   * we could conceivably remove the packet array or maybe limit it to 2.
    *
    * PRECV - read in next packet?  Not sure I want this in the VM, but...
    * PSEND - send out a packet?  Not sure I want this in the VM either...
@@ -256,7 +249,10 @@ struct netvm_inst {
 #define NETVM_BRF(v)    ((uint32_t)(v)-1)
 #define NETVM_BRB(v)    ((uint32_t)0-(v)-1)
 
+#ifndef NETVM_MAXPKTS
 #define NETVM_MAXPKTS   16
+#endif /* NETVM_MAXPKTS */
+#define NETVM_MAXQS     16
 struct netvm {
   struct netvm_inst *   inst;
   uint32_t              ninst;
@@ -271,8 +267,12 @@ struct netvm {
   uint32_t              memsz;
   uint32_t              rosegoff;
 
+  struct list           pktqs[NETVM_MAXQS];
+
   struct emitter *      outport;
+
   struct metapkt *      packets[NETVM_MAXPKTS];
+
   int                   matchonly;
   int                   running;
   int                   error;
@@ -290,6 +290,7 @@ enum {
   NETVM_ERR_MRDONLY,
   NETVM_ERR_PKTNUM,
   NETVM_ERR_NOPKT,
+  NETVM_ERR_NOQUEUE,
   NETVM_ERR_NOHDR,
   NETVM_ERR_NOHDRFLD,
   NETVM_ERR_HDESC,
@@ -345,7 +346,7 @@ void netvm_set_matchonly(struct netvm *vm, int matchonly);
 /* netvm instructions will free it.  Make a copy if this isn't desired or */
 /* be careful of the program that you run and call clrpkt with the don't free */
 /* flag set before calling netvm_reset() */
-void netvm_loadpkt(struct netvm *vm, struct pktbuf *p, int slot);
+int netvm_loadpkt(struct netvm *vm, struct pktbuf *p, int slot);
 
 /* free the packet in a slot:  note this destroys existin packet buffer */
 /* unless keeppktbuf is set */

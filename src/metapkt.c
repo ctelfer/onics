@@ -151,7 +151,7 @@ struct metapkt *metapkt_copy(struct metapkt *pkt)
 }
 
 
-void metapkt_free(struct metapkt *pkt, int keepbuf)
+void metapkt_free(struct metapkt *pkt, int freebuf)
 {
   if ( pkt ) {
     l_rem(&pkt->entry);
@@ -159,7 +159,7 @@ void metapkt_free(struct metapkt *pkt, int keepbuf)
       hdr_free(pkt->headers, 1);
       pkt->headers = NULL;
     }
-    if ( pkt->pkb && !keepbuf )
+    if ( pkt->pkb && freebuf )
       pkb_free(pkt->pkb);
     pkt->pkb = NULL;
     freepmeta(pkt);
