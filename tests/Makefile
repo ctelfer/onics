@@ -11,7 +11,8 @@ LIBOBJS= ../src/metapkt.o ../src/namespace.o ../src/ncl.o ../src/netvm.o \
 	 ../src/tokenizer.o ../src/util.o
 
 TARGETS= ${BINDIR}/testpp \
-	${BINDIR}/testvm 
+	${BINDIR}/testvm  \
+	${BINDIR}/testns
 
 all: ${TARGETS}
 
@@ -26,6 +27,10 @@ ${BINDIR}/testvm: ../src/protoparse.o ../src/pptcpip.o ../src/util.o \
 	../src/protoparse.h ../src/pktbuf.h ../src/metapkt.h
 	${CC} -o ../bin/testvm testvm.c ../src/pktbuf.o ../src/protoparse.o \
 		../src/pptcpip.o ../src/util.o ../src/netvm.o ../src/metapkt.o \
+		${DEFS} ${OPTS} ${INCS} ${LIBS}
+
+${BINDIR}/testns: testns.c ../src/namespace.o
+	${CC} -o ../bin/testns testns.c ../src/namespace.o \
 		${DEFS} ${OPTS} ${INCS} ${LIBS}
 
 ${LIBOBJS}: 

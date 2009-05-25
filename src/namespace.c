@@ -9,14 +9,22 @@ struct ns_namespace rootns = { NSTYPE_NS, 0, ".", NULL };
 #define TYPEOK(t) ((t) >= NSTYPE_NS && (t) <= NSTYPE_RRANGE)
 
 
-struct ns_element *ns_lookup(const char *name, int type)
+struct ns_element *ns_name_lookup(struct ns_namespace *ns, const char *name,
+                                  int type)
 {
-  struct ns_namespace *ns;
-  struct ns_element *elem = (struct ns_element *)&rootns;
+  struct ns_element *elem;
   char *s, *p, *e;
+
   abort_unless(name);
-  if ( !rootns.nametab )
-    return NULL;
+
+  if ( !ns ) {
+    elem = (struct ns_element *)&rootns;
+    if ( !rootns.nametab )
+      return NULL;
+  } else {
+    elem = (struct ns_element *)ns;
+  }
+
   p = s = estrdup(name);
   do { 
     if ( elem->nstype != NSTYPE_NS ) {
@@ -27,8 +35,6 @@ struct ns_element *ns_lookup(const char *name, int type)
       *e++ = '\0';
     ns = (struct ns_namespace *)elem;
     if ( !(elem = rb_get(ns->nametab, p)) )
-      break;
-    if ( !(elem = rb_get(ns->idtab, p)) )
       break;
     p = e;
   } while ( p != NULL );
@@ -44,14 +50,20 @@ struct ns_element *ns_lookup(const char *name, int type)
 }
 
 
-struct ns_element *ns_id_lookup(int *ida, int nids, int type)
+struct ns_element *ns_id_lookup(struct ns_namespace *ns, int *ida, int nids, 
+                                int type)
 {
-  struct ns_namespace *ns;
-  struct ns_element *elem = (struct ns_element *)&rootns;
+  struct ns_element *elem;
 
   abort_unless(ida && nids > 0);
-  if ( !rootns.nametab )
-    return NULL;
+
+  if ( !ns ) {
+    elem = (struct ns_element *)&rootns;
+    if ( !rootns.nametab )
+      return NULL;
+  } else {
+    elem = (struct ns_element *)ns;
+  }
 
   while ( nids > 0 ) {
     if ( elem->nstype != NSTYPE_NS )
@@ -78,7 +90,7 @@ int ns_register(struct ns_namespace *ns)
 {
   if ( !rootns.nametab ) {
     rootns.nametab = rb_new(CAT_DT_STR);
-    rootns.idtab = rb_new(CAT_DT_STR);
+    rootns.idtab = rb_new(CAT_DT_NUM);
   }
   return ns_insert(&rootns, (struct ns_element *)ns);
 }
@@ -92,9 +104,9 @@ int ns_insert(struct ns_namespace *ns, struct ns_element *elem)
     return -1;
   if ( (elem->id >= 0) && rb_get(ns->idtab, (void *)elem->id) )
     return -1;
-  rb_put(ns->nametab, ns->name, elem);
+  rb_put(ns->nametab, elem->name, elem);
   if ( elem->id >= 0 )
-    rb_put(ns->idtab, (void *)ns->id, elem);
+    rb_put(ns->idtab, (void *)elem->id, elem);
   elem->parent = ns;
   return 0;
 }
@@ -200,7 +212,7 @@ struct ns_field *ns_new_field_h(const char *name, size_t off, size_t len,
   abort_unless(name);
   field = emalloc(sizeof(struct ns_field));
   field->nstype = NSTYPE_FIELD;
-  field->id = 1;
+  field->id = -1;
   field->parent = NULL;
   field->name = estrdup(name);
   field->inbits = inbits;

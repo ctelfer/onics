@@ -112,17 +112,9 @@ struct ns_ranges {
  * if type >= 0, then only return non-null if the type of the element matches
  * the type provided.  The caller can pass in NSTYPE_VALUE for all value types.
  */
-struct ns_element *ns_name_lookup(const char *name, int type);
-struct ns_element *ns_id_lookup(int *id, int nids, int type);
-
-int ns_register(struct ns_namespace *ns);
+struct ns_namespace *ns_new_namespace(const char *name, int id);
 int ns_insert(struct ns_namespace *ns, struct ns_element *elem);
 void ns_remove(struct ns_element *elem);
-
-int ns_cmp_scalar(struct ns_element *elem, unsigned long val);
-int ns_cmp_raw(struct ns_element *elem, void *p, size_t len);
-
-struct ns_namespace *ns_new_namespace(const char *name, int id);
 struct ns_field *ns_new_field(const char *name, size_t off, size_t len);
 struct ns_field *ns_new_bitfield(const char *name, size_t off, size_t len);
 
@@ -138,7 +130,16 @@ void ns_add_srange(struct ns_ranges *ranges, unsigned long low,
 struct ns_ranges *ns_new_rrange(const char *name, struct raw *low, 
                                 struct raw *high);
 void ns_add_rrange(struct ns_ranges *ranges, struct raw *low, struct raw *high);
-
 void ns_free(struct ns_element *elem);
+
+
+int ns_register(struct ns_namespace *ns);
+struct ns_element *ns_name_lookup(struct ns_namespace *ns, const char *name, 
+                                  int type);
+struct ns_element *ns_id_lookup(struct ns_namespace *ns, int *id, int nids, 
+                                int type);
+int ns_cmp_scalar(struct ns_element *elem, unsigned long val);
+int ns_cmp_raw(struct ns_element *elem, void *p, size_t len);
+
 
 #endif /* __namespace_h */
