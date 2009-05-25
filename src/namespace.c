@@ -128,8 +128,8 @@ void ns_remove(struct ns_element *elem)
 
 int ns_cmp_scalar(struct ns_element *elem, unsigned long val)
 {
-  abort_unless(elem);
-  if ( (elem->nstype != NSTYPE_SCALAR) && (elem->nstype != NSTYPE_SRANGE) )
+  if ( !elem || 
+       ((elem->nstype != NSTYPE_SCALAR) && (elem->nstype != NSTYPE_SRANGE)) )
     return 0;
 
   if ( elem->nstype == NSTYPE_SCALAR ) {
@@ -151,8 +151,10 @@ int ns_cmp_scalar(struct ns_element *elem, unsigned long val)
 
 int ns_cmp_raw(struct ns_element *elem, void *p, size_t len)
 {
-  abort_unless(elem && p && len);
-  if ( elem->nstype == NSTYPE_RAW ) {
+  abort_unless(p && len);
+  if ( !elem )
+    return 0;
+  else if ( elem->nstype == NSTYPE_RAW ) {
     struct ns_rawval *rawval = (struct ns_rawval *)elem;
     if ( len != rawval->value->len )
       return 0;

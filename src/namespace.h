@@ -4,6 +4,7 @@
 #include <cat/rbtree.h>
 #include <cat/list.h>
 
+#define NSTYPE_ANY              -1
 #define NSTYPE_NS               1
 #define NSTYPE_FIELD            2
 #define NSTYPE_SCALAR           3       /* exact scalar value */

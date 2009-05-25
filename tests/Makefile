@@ -29,8 +29,8 @@ ${BINDIR}/testvm: ../src/protoparse.o ../src/pptcpip.o ../src/util.o \
 		../src/pptcpip.o ../src/util.o ../src/netvm.o ../src/metapkt.o \
 		${DEFS} ${OPTS} ${INCS} ${LIBS}
 
-${BINDIR}/testns: testns.c ../src/namespace.o
-	${CC} -o ../bin/testns testns.c ../src/namespace.o \
+${BINDIR}/testns: testns.c ../src/namespace.o ../src/util.o
+	${CC} -o ../bin/testns testns.c ../src/namespace.o ../src/util.o \
 		${DEFS} ${OPTS} ${INCS} ${LIBS}
 
 ${LIBOBJS}: 
