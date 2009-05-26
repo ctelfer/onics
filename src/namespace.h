@@ -135,6 +135,7 @@ void ns_free(struct ns_element *elem);
 
 
 int ns_register(struct ns_namespace *ns);
+int ns_deregister(struct ns_namespace *ns);
 struct ns_element *ns_name_lookup(struct ns_namespace *ns, const char *name, 
                                   int type);
 struct ns_element *ns_id_lookup(struct ns_namespace *ns, int *id, int nids, 

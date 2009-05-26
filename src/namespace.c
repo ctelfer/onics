@@ -96,6 +96,21 @@ int ns_register(struct ns_namespace *ns)
 }
 
 
+int ns_deregister(struct ns_namespace *ns)
+{
+  struct ns_namespace *ns2;
+  if ( ns == NULL )
+    return -1;
+  ns2 = (struct ns_namespace *)ns_name_lookup(&rootns, ns->name, NSTYPE_NS);
+  if ( (ns2 == NULL) || (ns2 != ns) )
+    return -1;
+  rb_clr(rootns.nametab, ns->name);
+  if ( ns->id >= 0 )
+    rb_clr(rootns.idtab, (void *)ns->id);
+  return 0;
+}
+
+
 int ns_insert(struct ns_namespace *ns, struct ns_element *elem)
 {
   abort_unless(ns && ns->nametab && ns->idtab && elem && elem->name &&
@@ -295,7 +310,7 @@ struct ns_masked *ns_new_prefixed(const char *name, struct raw *val, size_t len)
   masked->value = erawdup(val);
   masked->mask = erawdup(val);
   n = (len + 7) / 8;
-  memset(masked->mask, 0xff, n - 1);
+  memset(masked->mask->data, 0xff, n - 1);
   masked->mask->data[n-1] = -(1 << (8 - len % 8));
   if ( n < masked->mask->len )
     memset(&masked->mask->data[n], 0, masked->mask->len - n);
@@ -350,7 +365,7 @@ struct ns_ranges *ns_new_rrange(const char *name, struct raw *low,
     }
   }
   ranges = emalloc(sizeof(struct ns_ranges));
-  ranges->nstype = NSTYPE_SRANGE;
+  ranges->nstype = NSTYPE_RRANGE;
   ranges->id = -1;
   ranges->name = estrdup(name);
   ranges->len  = low->len;
