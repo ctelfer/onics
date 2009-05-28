@@ -2,6 +2,7 @@
 #include <cat/pack.h>
 #include <cat/io.h>
 #include <cat/emalloc.h>
+#include <limits.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
