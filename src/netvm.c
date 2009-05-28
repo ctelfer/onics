@@ -103,6 +103,7 @@ static void ni_unimplemented(struct netvm *vm)
 
 static void ni_nop(struct netvm *vm)
 {
+  (void)ni_unimplemented;
 }
 
 
@@ -417,10 +418,11 @@ static void ni_blkmv(struct netvm *vm)
     S_POP(vm, len);
   S_POP(vm, daddr);
   S_POP(vm, saddr);
-  FATAL(vm, NETVM_ERR_IOVFL,(saddr + len < len) || (daddr + len < len));
+  FATAL(vm, NETVM_ERR_IOVFL, (saddr + len < len) || (daddr + len < len));
+  FATAL(vm, NETVM_ERR_NOMEM, vm->mem == NULL);
   FATAL(vm, NETVM_ERR_MEMADDR, 
-        (saddr + len >= vm->memsz) || (daddr + len >= vm->memsz));
-  memmove(vm->mem + saddr, vm->mem + daddr, len);
+        (saddr + len > vm->memsz) || (daddr + len > vm->memsz));
+  memmove(vm->mem + daddr, vm->mem + saddr, len);
 }
 
 
@@ -470,7 +472,7 @@ static void ni_memcmp(struct netvm *vm)
   FATAL(vm, NETVM_ERR_IOVFL, 
         (addr1 + nbytes < nbytes) || (addr2 + nbytes < nbytes));
   FATAL(vm, NETVM_ERR_MEMADDR, 
-        (addr1 + nbytes >= vm->memsz) || (addr2 + nbytes >= vm->memsz));
+        (addr1 + nbytes > vm->memsz) || (addr2 + nbytes > vm->memsz));
   if ( inst->opcode == NETVM_OC_PFXCMP ) {
     byte_t *p1 = vm->mem + addr1;
     byte_t *p2 = vm->mem + addr2;
@@ -511,8 +513,8 @@ static void ni_maskeq(struct netvm *vm)
   FATAL(vm, NETVM_ERR_IOVFL, 
         (saddr + len < len) || (daddr + len < len) || (maddr + len < len));
   FATAL(vm, NETVM_ERR_MEMADDR,
-        (saddr + len >= vm->memsz) || (daddr + len >= vm->memsz) ||
-        (maddr + len >= vm->memsz));
+        (saddr + len > vm->memsz) || (daddr + len > vm->memsz) ||
+        (maddr + len > vm->memsz));
   src = (byte_t *)vm->mem + saddr;
   dst = (byte_t *)vm->mem + daddr;
   mask = (byte_t *)vm->mem + maddr;
@@ -622,6 +624,75 @@ static void ni_hashdr(struct netvm *vm)
     val = find_header(vm, &hd0) != NULL;
   }
   S_PUSH(vm, val);
+}
+
+
+static void rexmatch(struct netvm *vm, struct rex_pat *pat, struct raw *loc)
+{
+  struct netvm_inst *inst = &vm->inst[vm->pc];
+  struct rex_match_loc m[NETVM_MAXREXMATCH];
+  int rv, i;
+  FATAL(vm, NETVM_ERR_WIDTH, (inst->width > NETVM_MAXREXMATCH));
+  rv = rex_match(pat, loc, m, inst->width);
+  FATAL(vm, NETVM_ERR_REX, (rv == REX_ERROR));
+  if ( rv == REX_MATCH ) {
+    for ( i = inst->width - 1; i >= 0; --i ) {
+      S_PUSH(vm, m[i].valid);
+      if ( !m[i].valid ) {
+        S_PUSH(vm, (uint32_t)-1);
+        S_PUSH(vm, (uint32_t)-1);
+      } else {
+        S_PUSH(vm, (uint32_t)m[i].start);
+        S_PUSH(vm, (uint32_t)m[i].len);
+      }
+    }
+  }
+  S_PUSH(vm, rv == REX_MATCH);
+}
+
+
+static void ni_prex(struct netvm *vm)
+{
+  struct netvm_inst *inst = &vm->inst[vm->pc];
+  uint32_t pktnum, poff, len, ridx;
+  struct metapkt *pkt;
+  struct hdr_parse *hdr;
+  struct raw r;
+  if ( IMMED(inst) ) {
+    pktnum = inst->val;
+  } else {
+    S_POP(vm, pktnum);
+  }
+  FATAL(vm, NETVM_ERR_PKTNUM, (pktnum >= NETVM_MAXPKTS));
+  FATAL(vm, NETVM_ERR_NOPKT, !(pkt=vm->packets[pktnum]));
+  S_POP(vm, ridx);
+  FATAL(vm, NETVM_ERR_REXNUM, (ridx >= vm->nrexes));
+  S_POP(vm, len);
+  S_POP(vm, poff);
+  FATAL(vm, NETVM_ERR_IOVFL, (len + poff < len));
+  hdr = pkt->headers;
+  FATAL(vm, NETVM_ERR_PKTADDR, 
+        (poff < hdr->poff) || (poff + len > hdr_totlen(hdr)));
+  r.data = hdr->data + poff;
+  r.len = len;
+  rexmatch(vm, vm->rexes + ridx, &r);
+}
+
+
+static void ni_mrex(struct netvm *vm)
+{
+  uint32_t addr, len, ridx;
+  struct raw r;
+  S_POP(vm, ridx);
+  FATAL(vm, NETVM_ERR_REXNUM, (ridx >= vm->nrexes));
+  S_POP(vm, len);
+  S_POP(vm, addr);
+  FATAL(vm, NETVM_ERR_IOVFL, (addr + len < len));
+  FATAL(vm, NETVM_ERR_NOMEM, vm->mem == NULL);
+  FATAL(vm, NETVM_ERR_MEMADDR, (addr + len > vm->memsz));
+  r.data = vm->mem + addr;
+  r.len = len;
+  rexmatch(vm, vm->rexes + ridx, &r);
 }
 
 
@@ -1192,7 +1263,7 @@ static void ni_qempty(struct netvm *vm)
   } else { 
     S_POP(vm, qnum);
   }
-  FATAL(vm, NETVM_ERR_NOQUEUE, qnum >= NETVM_MAXQS);
+  FATAL(vm, NETVM_ERR_QNUM, qnum >= NETVM_MAXQS);
   S_PUSH(vm, l_isempty(&vm->pktqs[qnum]));
 }
 
@@ -1210,7 +1281,7 @@ static void ni_qop(struct netvm *vm)
   }
   S_POP(vm, qnum);
   FATAL(vm, NETVM_ERR_PKTNUM, pktnum >= NETVM_MAXPKTS);
-  FATAL(vm, NETVM_ERR_NOQUEUE, qnum >= NETVM_MAXQS);
+  FATAL(vm, NETVM_ERR_QNUM, qnum >= NETVM_MAXQS);
 
   if ( inst->opcode == NETVM_OC_ENQ ) {
     FATAL(vm, NETVM_ERR_NOPKT, !(pkt=vm->packets[pktnum]));
@@ -1275,8 +1346,8 @@ netvm_op g_netvm_ops[NETVM_OC_MAX+1] = {
   ni_numop, /* SGT */
   ni_numop, /* SGE */
   ni_hashdr,
-  ni_unimplemented, /* PREX */
-  ni_unimplemented, /* MREX */
+  ni_prex, /* PREX */
+  ni_mrex, /* MREX */
   ni_halt,
   ni_branch, /* BR */
   ni_branch, /* BNZ */
@@ -1333,6 +1404,8 @@ void netvm_init(struct netvm *vm, uint32_t *stack, uint32_t ssz,
   vm->outport = &null_emitter;
   vm->inst = NULL;
   vm->ninst = 0;
+  vm->rexes = NULL;
+  vm->nrexes = 0;
   vm->pc = 0;
   vm->sp = 0;
   vm->bp = 0;
@@ -1407,6 +1480,20 @@ void netvm_setoutport(struct netvm *vm, struct emitter *outport)
 {
   abort_unless(outport);
   vm->outport = outport;
+}
+
+
+void netvm_setrex(struct netvm *vm, struct rex_pat *rexes, uint32_t nrexes)
+{
+  uint32_t i;
+  abort_unless(vm);
+  abort_unless(rexes == NULL || nrexes > 0);
+  for ( i = 0; i < nrexes; ++i ) {
+    abort_unless(rexes);
+    ;
+  }
+  vm->rexes = rexes;
+  vm->nrexes = nrexes;
 }
 
 
@@ -1543,8 +1630,9 @@ const char *error_strings[] = {
   "memory address error",
   "packet address error",
   "write attempt to read-only segment",
-  "bad packet number",
-  "bad queue number ",
+  "bad packet index",
+  "bad queue index",
+  "bad regular expression index",
   "attempt to access non-existant packet",
   "attempt to access non-existant header",
   "attempt to access non-existant header field",
@@ -1557,6 +1645,7 @@ const char *error_strings[] = {
   "error inserting into packet",
   "error cutting data from packet",
   "error adjusting header field",
+  "regex match error",
   "out of memory",
   "integer overflow"
 };

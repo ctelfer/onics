@@ -80,8 +80,9 @@ enum {
   NETVM_OC_SGT,         /* [v1,v2|I] v1 greater than v2 (signed) */
   NETVM_OC_SGE,         /* [v1,v2|I] v1 greater than or equal to v2 (signed) */
   NETVM_OC_HASHDR,      /* [hdesc|I] true if has header (field in HD ignored) */
-  NETVM_OC_PREX,        /* [pa,len,rxidx]: regex on packet data */
+  NETVM_OC_PREX,        /* [pa,len,rxidx,pktnum|I]: regex on packet data */
   NETVM_OC_MREX,        /* [addr,len,rxidx]: regex on memory data */
+                        /* for *REX, width == # of submatches to push */
   NETVM_OC_HALT,        /* halt program */
   NETVM_OC_BR,          /* [v|I] set PC to v (must be > PC in matchonly mode */
   NETVM_OC_BNZ,         /* [c,v|I] set PC to v if c is non-zero */
@@ -136,24 +137,15 @@ enum {
    *
    * If we do this, should it be synchronous or asynchronous?  See below.
    *
-   * PRECV - read in next packet?  Not sure I want this in the VM, but...
-   * PSEND - send out a packet?  Not sure I want this in the VM either...
-   *
-   * If we have these two operations (PSEND/PRECV) then we should probably
-   * do it in the same style as NETVM_OC_PR*.  I.e. have input and output
-   * interfaces that can be set or not.
-   *
-   * TOREG - queue an instruction address on a timer list with one argument
+   * REGTO - queue an instruction address on a timer list with one argument
    *         and issue a CALL when the timer expires.  2 types of timers:
    *         real-time and instruction tick?  Pushes a handle which one can
    *         use to cancel the event.
-   * TOSTOP - cancel a registered timer event
+   * STOPTO - cancel a registered timer event
    *
    * CURTIME - get the current time (GMT?  Relative?)
    *
    * Instruction store modification? 
-   *
-   * Note unimplemented instructions in validate?
    */
 };
 
@@ -252,7 +244,15 @@ struct netvm_inst {
 #ifndef NETVM_MAXPKTS
 #define NETVM_MAXPKTS   16
 #endif /* NETVM_MAXPKTS */
+
+#ifndef NETVM_MAXQS
 #define NETVM_MAXQS     16
+#endif /* NETVM_MAXQS */
+
+#ifndef NETVM_MAXREXMATCH
+#define NETVM_MAXREXMATCH 10
+#endif /* NETVM_MAXREXMATCH  */
+
 struct netvm {
   struct netvm_inst *   inst;
   uint32_t              ninst;
@@ -268,6 +268,9 @@ struct netvm {
   uint32_t              rosegoff;
 
   struct list           pktqs[NETVM_MAXQS];
+
+  struct rex_pat *      rexes;
+  uint32_t              nrexes;
 
   struct emitter *      outport;
 
@@ -289,8 +292,9 @@ enum {
   NETVM_ERR_PKTADDR,
   NETVM_ERR_MRDONLY,
   NETVM_ERR_PKTNUM,
+  NETVM_ERR_QNUM,
+  NETVM_ERR_REXNUM,
   NETVM_ERR_NOPKT,
-  NETVM_ERR_NOQUEUE,
   NETVM_ERR_NOHDR,
   NETVM_ERR_NOHDRFLD,
   NETVM_ERR_HDESC,
@@ -303,6 +307,7 @@ enum {
   NETVM_ERR_PKTCUT,
   NETVM_ERR_HDRADJ,
   NETVM_ERR_NOMEM,
+  NETVM_ERR_REX,
   NETVM_ERR_IOVFL,
   NETVM_ERR_MAX = NETVM_ERR_IOVFL,
 };
@@ -321,6 +326,9 @@ int netvm_setrooff(struct netvm *vm, uint32_t rooff);
 
 /* set the emitter for the VM */
 void netvm_setoutport(struct netvm *vm, struct emitter *outport);
+
+/* set the regular expression array */
+void netvm_setrex(struct netvm *vm, struct rex_pat *rexes, uint32_t nrexes);
 
 /* validate a netvm is properly set up and that all branches are correct */
 /* called by set_netvm_code implicitly:  returns 0 on success, -1 on error */
