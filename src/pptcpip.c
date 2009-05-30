@@ -983,7 +983,8 @@ static int parse_ipv6_hopopt(struct ipv6_parse *ip6hdr, struct ipv6h *ip6,
       return -1;
     }
     if ( *p == 0xC2 ) { /* jumbogram option */
-      if ( (p[1] != 4) || (ip6->len != 0) || (ip6hdr->jlenoff > 0) ) {
+      if ( (p[1] != 4) || (ip6->len != 0) || (ip6hdr->jlenoff > 0) ||
+           (((p - (byte_t *)ip6) & 3) != 2) ) {
         ip6hdr->hdr.error |= PPERR_OPTERR;
         return -1;
       }
@@ -1011,11 +1012,10 @@ static int parse_ipv6_opt(struct ipv6_parse *ip6hdr, struct ipv6h *ip6,
       ip6hdr->hdr.error |= PPERR_OPTLEN;
       return -1;
     }
-    if ( nexth == IPPROT_AH ) { /* AH is idiotic and useless */
+    if ( nexth == IPPROT_AH ) /* AH is idiotic and useless */
       olen = (p[1] << 2) + 8;
-    } else {
+    else
       olen = (p[1] << 3) + 8;
-    }
     if ( (xlen + olen < xlen) || (xlen + olen > len) ) {
       ip6hdr->hdr.error |= PPERR_OPTLEN;
       return -1;
@@ -1126,9 +1126,9 @@ static struct hdr_parse *ipv6_create(byte_t *start, size_t off, size_t len,
   if ( hdr ) {
     struct ipv6_parse *ip6hdr = (struct ipv6_parse *)hdr;
     struct ipv6h *ip6 = hdr_header(hdr, struct ipv6h);
-    ip6hdr->nexth = 0; /* TODO: fill in if we are WRAP or SET */
+    ip6hdr->nexth = 0;
     ip6hdr->jlenoff = 0;
-    memset(ip6, 0, 40);
+    memset(ip6, 0, hdr_hlen(hdr));
     *(byte_t*)ip6 = 0x60;
     ip6->len = hton16(hdr_totlen(hdr));
   }
