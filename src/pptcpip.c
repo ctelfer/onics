@@ -962,7 +962,8 @@ static int isv6ext(uint8_t proto)
   return (proto == IPPROT_V6_HOPOPT) ||
          (proto == IPPROT_V6_ROUTE_HDR) || 
          (proto == IPPROT_V6_FRAG_HDR) || 
-         (proto == IPPROT_V6_DSTOPS);
+         (proto == IPPROT_V6_DSTOPS) || 
+         (proto == IPPROT_AH);
 }
 
 
@@ -982,7 +983,7 @@ static int parse_ipv6_hopopt(struct ipv6_parse *ip6hdr, struct ipv6h *ip6,
       return -1;
     }
     if ( *p == 0xC2 ) { /* jumbogram option */
-      if ( (p[1] != 4) || (ip6->len != 0) ) {
+      if ( (p[1] != 4) || (ip6->len != 0) || (ip6hdr->jlenoff > 0) ) {
         ip6hdr->hdr.error |= PPERR_OPTERR;
         return -1;
       }
@@ -1002,19 +1003,19 @@ static int parse_ipv6_opt(struct ipv6_parse *ip6hdr, struct ipv6h *ip6,
   uint olen;
   byte_t *p;
 
-  if ( !isv6ext(ip6->nxthdr) ) {
-    ip6hdr->hdr.poff = ip6hdr->hdr.hoff + 40;
-    ip6hdr->nexth = ip6->nxthdr;
-    return 0;
-  }
+  nexth = ip6->nxthdr;
   p = (byte_t *)ip6 + 40;
-  do {
+
+  while ( isv6ext(nexth) ) {
     if ( (xlen + 8 < xlen) || (xlen + 8 > len) ) {
       ip6hdr->hdr.error |= PPERR_OPTLEN;
       return -1;
     }
-    nexth = p[0];
-    olen = (p[1] << 3) + 8;
+    if ( nexth == IPPROT_AH ) { /* AH is idiotic and useless */
+      olen = (p[1] << 2) + 8;
+    } else {
+      olen = (p[1] << 3) + 8;
+    }
     if ( (xlen + olen < xlen) || (xlen + olen > len) ) {
       ip6hdr->hdr.error |= PPERR_OPTLEN;
       return -1;
@@ -1029,9 +1030,13 @@ static int parse_ipv6_opt(struct ipv6_parse *ip6hdr, struct ipv6h *ip6,
       }
     }
 
+    nexth = p[0];
     xlen += olen;
     p += olen;
-  } while (isv6ext(nexth));
+  }
+
+  ip6hdr->hdr.poff = ip6hdr->hdr.hoff + 40 + xlen;
+  ip6hdr->nexth = nexth;
 
   return 0;
 }
