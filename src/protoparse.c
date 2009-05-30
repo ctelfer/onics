@@ -128,7 +128,7 @@ struct hdr_parse *hdr_parse_packet(unsigned ppidx, byte_t *pkt, size_t off,
   int errval;
 
   /* assume the rest of the sanity checks are in hdr_create_parse */
-  if ( (pktlen > buflen) || (pktlen > buflen - off) ) {
+  if ( (pktlen > buflen) || (pktlen > buflen - off) || !pkt ) {
     errno = EINVAL;
     return NULL;
   }
@@ -194,6 +194,10 @@ int hdr_push(unsigned ppidx, struct hdr_parse *phdr, int mode)
     plen = 0;
   } else if ( (mode == PPCF_WRAP) || (mode == PPCF_SET) ) {
     if ( hdr_islast(phdr) ) {
+      errno = EINVAL;
+      return -1;
+    }
+    if ( (mode == PPCF_WRAP) && (phdr->type != PPT_NONE) ) {
       errno = EINVAL;
       return -1;
     }

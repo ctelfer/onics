@@ -21,7 +21,8 @@
 #define PPERR_LENGTH            0x0004
 #define PPERR_CKSUM             0x0008
 #define PPERR_OPTLEN            0x0010
-#define PPERR_INVALID           0x0020 /* invalid combination of options */
+#define PPERR_OPTERR            0x0020
+#define PPERR_INVALID           0x0040 /* invalid combination of options */
 
 #define PPERR_HLENMASK          (PPERR_TOOSMALL|PPERR_HLEN)
 
@@ -91,7 +92,7 @@ struct hdr_parse {
 #define hdr_tlen(hdr) ((hdr)->eoff - (hdr)->toff)
 #define hdr_totlen(hdr) ((hdr)->eoff - (hdr)->hoff)
 #define hdr_header(hdr, type) ((type *)((hdr)->data + (hdr)->hoff))
-#define hdr_payload(hdr) ((void *)((hdr)->data + (hdr)->poff))
+#define hdr_payload(hdr) ((byte_t *)((hdr)->data + (hdr)->poff))
 #define hdr_trailer(hdr, type) ((type *)((hdr)->data + (hdr)->toff))
 #define hdr_parent(hdr) container((hdr)->node.prev, struct hdr_parse, node)
 #define hdr_child(hdr) container((hdr)->node.next, struct hdr_parse, node)

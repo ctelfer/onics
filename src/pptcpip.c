@@ -19,6 +19,13 @@ extern struct hparse_ops udp_hparse_ops;
 extern struct hparse_ops tcp_hparse_ops;
 
 
+struct ipv6_parse {
+  struct hdr_parse      hdr;
+  uint8_t               nexth;
+  size_t                jlenoff;
+};
+
+
 /* NB:  right now we are using emalloc() fpr header allocation, but we */
 /* may not do that in the future.  When that happens, we need to change */
 /* newhdr, crthdr, and freehdr */
@@ -141,8 +148,7 @@ static struct hdr_parse *simple_copy(struct hdr_parse *ohdr, byte_t *buffer)
 /* -- ops for the "NONE" protocol type -- */
 static int none_follows(struct hdr_parse *phdr) 
 {
-  return (phdr->type == PPT_NONE) && (phdr->data != NULL) && 
-         (hdr_plen(phdr) > 0);
+  return (phdr->type == PPT_NONE) && (hdr_plen(phdr) > 0);
 }
 
 
@@ -172,7 +178,7 @@ static struct hdr_parse *none_create(byte_t *start, size_t off, size_t len,
 /* -- ops for Ethernet type -- */
 static int eth_follows(struct hdr_parse *phdr) 
 {
-  return (phdr->type == PPT_NONE) && (phdr->data != NULL);
+  return (phdr->type == PPT_NONE);
 }
 
 
@@ -241,8 +247,8 @@ static void eth_update(struct hdr_parse *hdr)
 /* -- ops for ARP type -- */
 static int arp_follows(struct hdr_parse *phdr) 
 {
-  uint16_t etype;
-  if ( (phdr->type != PPT_ETHERNET) || (phdr->data == NULL) )
+  ushort etype;
+  if ( phdr->type != PPT_ETHERNET )
     return 0;
   unpack(&hdr_header(phdr, struct eth2h)->ethtype, 2, "h", &etype);
   return etype == ETHTYPE_ARP;
@@ -341,9 +347,7 @@ static struct hdr_parse *arp_create(byte_t *start, size_t off, size_t len,
 /* -- ops for IPV4 type -- */
 static int ipv4_follows(struct hdr_parse *phdr)
 {
-  uint16_t etype;
-  if ( phdr->data == NULL )
-    return 0;
+  ushort etype;
   if ( phdr->type == PPT_ETHERNET ) {
     unpack(&hdr_header(phdr, struct eth2h)->ethtype, 2, "h", &etype);
     return (etype == ETHTYPE_IP) && (hdr_plen(phdr) > 0);
@@ -366,16 +370,10 @@ static struct hdr_parse *ipv4_parse(struct hdr_parse *phdr)
   struct hdr_parse *hdr;
   struct ipv4h *ip;
   int hlen, tlen;
-  uint16_t iplen, sum;
+  ushort iplen;
+  uint16_t sum;
 
   abort_unless(ipv4_follows(phdr));
-  switch(phdr->type) {
-  case PPT_ETHERNET:
-  case PPT_ICMP:
-    break;
-  default:
-    return NULL;
-  }
   /* TODO: change size when we add provisions for option parsing */
   hdr = newhdr(sizeof(*hdr), PPT_IPV4, phdr, &ipv4_hparse_ops);
   if ( !hdr )
@@ -452,7 +450,7 @@ static struct hdr_parse *ipv4_create(byte_t *start, size_t off, size_t len,
     ip = hdr_header(hdr, struct ipv4h);
     memset(ip, 0, hdr_hlen(hdr));
     ip->vhl = 0x40 | (hlen >> 2);
-    ip->len = ntoh16(hdr_totlen(hdr));
+    ip->len = hton16(hdr_totlen(hdr));
     /* TODO: fill options with noops if header > 20? */
   }
   return hdr;
@@ -487,7 +485,7 @@ static int ipv4_fixlen(struct hdr_parse *hdr)
 {
   struct ipv4h *ip;
   size_t hlen;
-  uint16_t tlen;
+  ushort tlen;
   abort_unless(hdr && hdr->data);
   ip = hdr_header(hdr, struct ipv4h);
   hlen = hdr_hlen(hdr);
@@ -562,14 +560,12 @@ static uint16_t tcpudp_cksum(struct hdr_parse *hdr, uint8_t proto)
 /* -- parse options for UDP protocol -- */
 static int udp_follows(struct hdr_parse *phdr) 
 {
-  if ( phdr->data == NULL )
-    return 0;
   if ( phdr->type == PPT_IPV4 ) {
     struct ipv4h *ip = hdr_header(phdr, struct ipv4h);
     return ip->proto == IPPROT_UDP;
   } else if ( phdr->type == PPT_IPV6 ) {
-    /* TODO: implement IPV6 next header finding */
-    return 0;
+    struct ipv6_parse *ip6hdr = (struct ipv6_parse *)phdr;
+    return ip6hdr->nexth == IPPROT_UDP;
   } else {
     return 0;
   }
@@ -638,7 +634,7 @@ static struct hdr_parse *udp_create(byte_t *start, size_t off, size_t len,
   if ( hdr ) {
     udp = hdr_header(hdr, struct udph);
     memset(udp, 0, sizeof(*udp));
-    pack(&udp->len, 2, "h", (uint16_t)hdr_totlen(hdr));
+    pack(&udp->len, 2, "h", (ushort)hdr_totlen(hdr));
   }
   return hdr;
 }
@@ -663,7 +659,7 @@ static int udp_fixlen(struct hdr_parse *hdr)
     return -1;
   if ( hdr_plen(hdr) > 65527 )
     return -1;
-  pack(&hdr_header(hdr, struct udph)->len, 2, "h", (uint16_t)hdr_totlen(hdr));
+  pack(&hdr_header(hdr, struct udph)->len, 2, "h", (ushort)hdr_totlen(hdr));
   return 0;
 }
 
@@ -684,8 +680,7 @@ static int udp_fixcksum(struct hdr_parse *hdr)
 /* -- TCP functions -- */
 static int tcp_follows(struct hdr_parse *phdr)
 {
-  if ( ((phdr->type != PPT_IPV4) && (phdr->type != PPT_IPV6)) || 
-       (phdr->data == NULL) )
+  if ( (phdr->type != PPT_IPV4) && (phdr->type != PPT_IPV6) )
     return 0;
 
   switch(phdr->type) {
@@ -694,7 +689,8 @@ static int tcp_follows(struct hdr_parse *phdr)
     return ip->proto == IPPROT_TCP;
   } break;
   case PPT_IPV6: {
-    return 0; /* TODO */
+    struct ipv6_parse *ip6hdr = (struct ipv6_parse *)phdr;
+    return ip6hdr->nexth == IPPROT_TCP;
   } break;
   }
   return 0;
@@ -848,8 +844,7 @@ static void tcp_free(struct hdr_parse *hdr)
 /* -- ICMP Protocol functions -- */
 static int icmp_follows(struct hdr_parse *phdr) 
 {
-  return (phdr->data != NULL) &&
-         (phdr->type == PPT_IPV4) &&
+  return (phdr->type == PPT_IPV4) &&
          (hdr_header(phdr, struct ipv4h)->proto == IPPROT_ICMP);
 }
 
@@ -941,6 +936,253 @@ static int icmp_fixcksum(struct hdr_parse *hdr)
 }
 
 
+/* -- IPv6 functions -- */
+
+static int ipv6_follows(struct hdr_parse *phdr)
+{
+  ushort etype;
+  if ( phdr->type == PPT_ETHERNET ) {
+    unpack(&hdr_header(phdr, struct eth2h)->ethtype, 2, "h", &etype);
+    return (etype == ETHTYPE_IPV6) && (hdr_plen(phdr) > 0);
+  }
+  if ( phdr->type == PPT_ICMP6 ) {
+    struct icmp6h *icmp6 = hdr_header(phdr, struct icmp6h);
+    return (icmp6->type == ICMP6T_DEST_UNREACH) ||
+           (icmp6->type == ICMP6T_PKT_TOO_BIG) ||
+           (icmp6->type == ICMP6T_TIME_EXCEEDED) ||
+           (icmp6->type == ICMP6T_PARAM_PROB);
+  }
+  return 0;
+}
+
+
+static int isv6ext(uint8_t proto)
+{
+  /* we consider IPsec protocols their own protocol */
+  return (proto == IPPROT_V6_HOPOPT) ||
+         (proto == IPPROT_V6_ROUTE_HDR) || 
+         (proto == IPPROT_V6_FRAG_HDR) || 
+         (proto == IPPROT_V6_DSTOPS);
+}
+
+
+/* search for jumbogram options */
+static int parse_ipv6_hopopt(struct ipv6_parse *ip6hdr, struct ipv6h *ip6,
+                             byte_t *p, size_t olen)
+{
+  byte_t *end = p + olen;
+  p += 2;
+  while ( p < end ) { 
+    if ( *p == 0 ) { /* pad1 option */
+      ++p;
+      continue;
+    } 
+    if ( p + p[1] + 2 > end ) { /* padn + all other options */
+      ip6hdr->hdr.error |= PPERR_OPTLEN;
+      return -1;
+    }
+    if ( *p == 0xC2 ) { /* jumbogram option */
+      if ( (p[1] != 4) || (ip6->len != 0) ) {
+        ip6hdr->hdr.error |= PPERR_OPTERR;
+        return -1;
+      }
+      ip6hdr->jlenoff = p - (byte_t *)ip6;
+    }
+    p += p[1] + 2;
+  }
+  return 0;
+}
+
+
+static int parse_ipv6_opt(struct ipv6_parse *ip6hdr, struct ipv6h *ip6, 
+                          size_t len)
+{
+  size_t xlen = 0;
+  uint8_t nexth;
+  uint olen;
+  byte_t *p;
+
+  if ( !isv6ext(ip6->nxthdr) ) {
+    ip6hdr->hdr.poff = ip6hdr->hdr.hoff + 40;
+    ip6hdr->nexth = ip6->nxthdr;
+    return 0;
+  }
+  p = (byte_t *)ip6 + 40;
+  do {
+    if ( (xlen + 8 < xlen) || (xlen + 8 > len) ) {
+      ip6hdr->hdr.error |= PPERR_OPTLEN;
+      return -1;
+    }
+    nexth = p[0];
+    olen = (p[1] << 3) + 8;
+    if ( (xlen + olen < xlen) || (xlen + olen > len) ) {
+      ip6hdr->hdr.error |= PPERR_OPTLEN;
+      return -1;
+    }
+    /* hop-by-hop options can only come first */
+    if ( nexth == IPPROT_V6_HOPOPT ) {
+      if ( p != (byte_t *)ip6 + 40 ) {
+        ip6hdr->hdr.error |= PPERR_OPTERR;
+      } else {
+        if ( parse_ipv6_hopopt(ip6hdr, ip6, p, olen) < 0 )
+          return -1;
+      }
+    }
+
+    xlen += olen;
+    p += olen;
+  } while (isv6ext(nexth));
+
+  return 0;
+}
+
+
+static struct hdr_parse *ipv6_parse(struct hdr_parse *phdr)
+{
+  struct hdr_parse *hdr;
+  struct ipv6_parse *ip6hdr;
+  struct ipv6h *ip6;
+  ushort paylen;
+  size_t tlen;
+
+  abort_unless(ipv6_follows(phdr));
+  hdr = newhdr(sizeof(struct ipv6_parse), PPT_IPV6, phdr, &ipv6_hparse_ops);
+  ip6hdr = (struct ipv6_parse *)hdr;
+  if ( !hdr )
+    return NULL;
+  ip6hdr->nexth = 0;
+  ip6hdr->jlenoff = 0;
+  ip6 = hdr_header(hdr, struct ipv6h);
+
+  if ( IPV6H_PVERSION(ip6) != 6 ) {
+    hdr->error |= PPERR_INVALID;
+    goto done;
+  }
+
+  tlen = hdr_totlen(hdr);
+  if ( tlen < 40 ) {
+    hdr->error |= PPERR_TOOSMALL;
+    hdr->poff = hdr->toff = hdr->eoff = hdr->hoff;
+    goto done;
+  }
+
+  unpack(&ip6->len, 2, "h", &paylen);
+  if ( tlen < (uint32_t)paylen + 40 ) {
+    hdr->error |= PPERR_LENGTH;
+  } 
+
+  /* sets hlen */
+  if ( parse_ipv6_opt(ip6hdr, ip6, tlen - 40) < 0 )
+    goto done;
+
+  if ( (paylen == 0) && (ip6hdr->jlenoff > 0) ) {
+    unsigned long jlen;
+    unpack(hdr_payload(hdr) + ip6hdr->jlenoff, 4, "w", &jlen);
+    if ( (jlen != hdr_totlen(hdr) - 40) || (jlen < 65536) )
+      hdr->error |= PPERR_LENGTH;
+  } else if ( tlen > (uint32_t)paylen + 40 ) {
+    hdr->toff = hdr->hoff + 40 + paylen;
+  }
+
+done:
+  return hdr;
+}
+
+
+static struct hdr_parse *ipv6_create(byte_t *start, size_t off, size_t len,
+                                     size_t poff, size_t plen, int mode)
+{
+  abort_unless(poff >= off && plen <= len && poff + plen >= poff && off <= len 
+               && start);
+  struct hdr_parse *hdr;
+  size_t hlen;
+  if ( mode == PPCF_FILL ) {
+    /* TODO support jumbo frames ? */
+    if ( (len - off < 40) || (len - off > 65575) )
+      return NULL;
+    hlen = 40;
+    poff = off + hlen;
+    plen = len - 40;
+  } else if ( mode == PPCF_WRAP ) { 
+    if ( poff - off < 40 )
+      return NULL;
+    if ( len - off > 65575 )
+      len = off + 65575;
+    hlen = 40;
+    off = poff - 40;
+  } else { 
+    abort_unless(mode == PPCF_SET);
+    hlen = poff - off;
+    if ( (hlen != 40) || (len - off > 65575) || (poff + plen < len) )
+      return NULL;
+  }
+  hdr = crthdr(sizeof(struct ipv6_parse), PPT_IPV6, start, off, hlen, plen, 0, 
+               &ipv6_hparse_ops);
+  if ( hdr ) {
+    struct ipv6_parse *ip6hdr = (struct ipv6_parse *)hdr;
+    struct ipv6h *ip6 = hdr_header(hdr, struct ipv6h);
+    ip6hdr->nexth = 0; /* TODO: fill in if we are WRAP or SET */
+    ip6hdr->jlenoff = 0;
+    memset(ip6, 0, 40);
+    *(byte_t*)ip6 = 0x60;
+    ip6->len = hton16(hdr_totlen(hdr));
+  }
+  return hdr;
+}
+
+
+static void ipv6_update(struct hdr_parse *hdr)
+{
+  if ( hdr_totlen(hdr) < 40 ) {
+    hdr->error = PPERR_TOOSMALL;
+    return;
+  }
+  if ( hdr_hlen(hdr) < 40 ) {
+    hdr->error = PPERR_HLEN;
+    return;
+  }
+  /* TODO: parse options */
+}
+
+
+static size_t ipv6_getfield(struct hdr_parse *hdr, unsigned fid, 
+                            unsigned num, size_t *len)
+{
+  if ( len != NULL )
+    *len = 0;
+  /* TODO: options here */
+  return 0;
+}
+
+
+static int ipv6_fixlen(struct hdr_parse *hdr)
+{
+  struct ipv6h *ip6;
+  ushort plen;
+  abort_unless(hdr && hdr->data);
+  ip6 = hdr_header(hdr, struct ipv6h);
+  if ( hdr_plen(hdr) > 65535 )
+    return -1;
+  plen = hdr_plen(hdr);
+  pack(&ip6->len, 2, "h", plen);
+  return 0;
+}
+
+
+static struct hdr_parse *ipv6_copy(struct hdr_parse *ohdr, byte_t *buffer)
+{
+  /* TODO; initialize option parsing */
+  return simple_copy(ohdr, buffer);
+}
+
+
+static void ipv6_free(struct hdr_parse *hdr)
+{
+  /* TODO: fix when option parsing is complete */
+  freehdr(hdr);
+}
+
+
 /* -- op structures for default initialization -- */
 struct pparse_ops none_pparse_ops = {
   none_follows, 
@@ -995,17 +1237,17 @@ struct hparse_ops ipv4_hparse_ops = {
   ipv4_free
 };
 struct pparse_ops ipv6_pparse_ops = { 
-  default_follows,
-  default_parse,
-  default_create
+  ipv6_follows,
+  ipv6_parse,
+  ipv6_create
 };
 struct hparse_ops ipv6_hparse_ops = {
-  default_update,
-  default_getfield,
-  default_fixlen,
+  ipv6_update,
+  ipv6_getfield,
+  ipv6_fixlen,
   default_fixcksum,
-  default_copy,
-  default_free
+  ipv6_copy,
+  ipv6_free
 };
 struct pparse_ops icmp_pparse_ops = { 
   icmp_follows,
