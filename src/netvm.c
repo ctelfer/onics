@@ -55,9 +55,6 @@ static int dbgabrt()
     __vm->stack[__vm->sp++] = (__v);                                    \
   } while (0)
 
-#define CKWIDTH(__vm, __w)  \
-  FATAL((__vm), NETVM_ERR_WIDTH, !__w || (__w & (__w - 1)) || (__w > 4))
-
 
 typedef void (*netvm_op)(struct netvm *vm);
 
@@ -159,7 +156,6 @@ static void ni_ldmem(struct netvm *vm)
   register int width = inst->width;
   register uint32_t addr;
   FATAL(vm, NETVM_ERR_MEMADDR, !vm->mem || !vm->memsz);
-  CKWIDTH(vm, width);   /* TODO: check these during validation */
   if ( IMMED(inst) ) {
     addr = inst->val;
   } else {
@@ -180,6 +176,7 @@ static void ni_ldmem(struct netvm *vm)
   case 2: val = *(uint16_t *)(vm->mem + addr); break;
   case 4: val = *(uint32_t *)(vm->mem + addr); break;
   default:
+    abort_unless(0); /* should be checked at validation time happen */
     VMERR(vm, NETVM_ERR_WIDTH);
   }
   S_PUSH(vm, val);
@@ -192,7 +189,6 @@ static void ni_stmem(struct netvm *vm)
   uint32_t val;
   register int width = inst->width;
   register uint32_t addr;
-  CKWIDTH(vm, width);
   if ( IMMED(inst) ) {
     addr = inst->val;
   } else {
@@ -205,6 +201,7 @@ static void ni_stmem(struct netvm *vm)
   case 2: *(uint16_t *)(vm->mem + addr) = val; break;
   case 4: *(uint32_t *)(vm->mem + addr) = val; break;
   default:
+    abort_unless(0);  /* should be checked at validation time */
     VMERR(vm, NETVM_ERR_WIDTH);
   }
 }
@@ -244,7 +241,7 @@ static void get_hdr_info(struct netvm *vm, struct netvm_inst *inst,
   if ( vm->error )
     return;
   width = inst->width;
-  CKWIDTH(vm, width);
+  FATAL(vm, NETVM_ERR_IOVFL, (hd->offset + width < hd->offset));
 
   if ( hd->htype == NETVM_HDLAYER ) {
     FATAL(vm, NETVM_ERR_HDRIDX, hd->idx > MPKT_LAYER_MAX);
@@ -252,7 +249,6 @@ static void get_hdr_info(struct netvm *vm, struct netvm_inst *inst,
     FATAL(vm, NETVM_ERR_NOPKT, !(pkt=vm->packets[hd->pktnum]));
     hdr = pkt->layer[hd->idx];
   } else {
-    FATAL(vm, NETVM_ERR_IOVFL, (hd->offset + width < hd->offset));
     FATAL(vm, NETVM_ERR_HDRFLD, !NETVM_ISHDROFF(hd->field));
     hdr = find_header(vm, hd);
   }
@@ -319,6 +315,7 @@ static void ni_ldpkt(struct netvm *vm)
       val |= -(val & 0x80000000);
     break;
   default:
+    abort_unless(0);  /* should be checked at validation time */
     VMERR(vm, NETVM_ERR_WIDTH);
   }
   S_PUSH(vm, val);
@@ -548,30 +545,27 @@ static void ni_numop(struct netvm *vm)
   case NETVM_OC_TOBOOL: out = v1 != 0; break;
   case NETVM_OC_POPL: /* fall through */
   case NETVM_OC_NLZ: 
-    CKWIDTH(vm, inst->width);
     if ( inst->width < sizeof(uint32_t) )
       v1 &= (1 << (inst->width * 8)) - 1;
-    if ( inst->opcode == NETVM_OC_POPL )
+    if ( inst->opcode == NETVM_OC_POPL ) {
       out = pop_32(v1);
-    else
-      out = nlz_32(v1);
+    } else {
+      out = nlz_32(v1) - 32 + inst->width * 8;
+    }
     break;
   case NETVM_OC_TONET: 
-    CKWIDTH(vm, inst->width);
     switch (inst->width) {
     case 2: out = hton16(v1); break;
     case 4: out = hton32(v1); break;
     }
     break;
   case NETVM_OC_TOHOST: 
-    CKWIDTH(vm, inst->width);
     switch (inst->width) {
     case 2: out = hton16(v1); break;
     case 4: out = hton32(v1); break;
     }
     break;
   case NETVM_OC_SIGNX: 
-    CKWIDTH(vm, inst->width);
     case 1: out = v1 | -(v1 & 0x80); break;
     case 2: out = v1 | -(v1 & 0x8000); break;
     break;
@@ -796,8 +790,7 @@ static void ni_prnum(struct netvm *vm)
   uint32_t val;
 
   abort_unless(vm->outport);    /* should be guaranteed by netvm_init() */
-  CKWIDTH(vm, nwidth); /* TODO: check during validation */
-  FATAL(vm, NETVM_ERR_WIDTH, swidth > 64 || swidth < 0); 
+  abort_unless(swidth <= 64 && swidth >= 0);
 
   switch (inst->opcode) {
   case NETVM_OC_PRBIN: 
@@ -883,7 +876,6 @@ static void ni_pripv6(struct netvm *vm)
   S_POP(vm, v2);
   S_POP(vm, v3);
   S_POP(vm, v4);
-  /* TODO: use the compression */
   emit_format(vm->outport, 
       "%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x",
       b1[0], b1[1], b1[2], b1[3], b2[0], b2[1], b2[2], b2[3],
@@ -1421,32 +1413,53 @@ int netvm_validate(struct netvm *vm)
   struct netvm_inst *inst;
   uint32_t i, maxi, newpc;
 
-  /* TODO: specific error types here? */
-
   if ( !vm || !vm->stack || (vm->rosegoff > vm->memsz) || !vm->inst ||
        (vm->ninst < 0) || (vm->ninst > MAXINST) )
-    return -1;
+    return NETVM_ERR_UNINIT;
   maxi = vm->matchonly ? NETVM_OC_MAX_MATCH : NETVM_OC_MAX;
   for ( i = 0; i < vm->ninst; i++ ) {
     inst = &vm->inst[i];
     if ( inst->opcode > maxi )
-      return -1;
+      return NETVM_ERR_BADOP;
     if ( (inst->opcode == NETVM_OC_BR) || (inst->opcode == NETVM_OC_BNZ) ||
-         (inst->opcode == NETVM_OC_BZ) ) {
+         (inst->opcode == NETVM_OC_BZ) || (inst->opcode == NETVM_OC_JUMP) ) {
       if ( IMMED(inst) ) {
-        newpc = (uint32_t)inst->val + 1 + i;
+        if ( inst->opcode == NETVM_OC_JUMP )
+          newpc = inst->val + 1;
+        else
+          newpc = inst->val + 1 + i;
         if ( newpc > vm->ninst )
-          return -1;
+          return NETVM_ERR_BRADDR;
         if ( vm->matchonly && (newpc <= i) )
-          return -1;
+          return NETVM_ERR_BRMONLY;
       } else {
         if ( vm->matchonly )
-          return -1;
+          return NETVM_ERR_BRMONLY;
       }
+    } else if ( (inst->opcode == NETVM_OC_LDMEM) ||
+                (inst->opcode == NETVM_OC_STMEM) ||
+                (inst->opcode == NETVM_OC_LDPKT) ||
+                (inst->opcode == NETVM_OC_STPKT) ||
+                (inst->opcode == NETVM_OC_POPL) ||
+                (inst->opcode == NETVM_OC_NLZ) ||
+                (inst->opcode == NETVM_OC_TONET) ||
+                (inst->opcode == NETVM_OC_TOHOST) ||
+                (inst->opcode == NETVM_OC_SIGNX) ||
+                (inst->opcode == NETVM_OC_PRBIN) ||
+                (inst->opcode == NETVM_OC_PROCT) ||
+                (inst->opcode == NETVM_OC_PRDEC) ||
+                (inst->opcode == NETVM_OC_PRHEX)
+              ) {
+      if ( (inst->width != 1) && (inst->width != 2) && (inst->width != 4) )
+        return NETVM_ERR_BADWIDTH;
+      if ( (inst->opcode >= NETVM_OC_PRBIN) && 
+           (inst->opcode <= NETVM_OC_PRHEX) && 
+           (inst->val > 64) )
+        return NETVM_ERR_BADWIDTH;
     } else if ( (inst->opcode == NETVM_OC_SETLAYER) || 
                 (inst->opcode == NETVM_OC_CLRLAYER) ) {
       if ( inst->width >= MPKT_LAYER_MAX )
-        return -1;
+        return NETVM_ERR_BADLAYER;
     }
   }
   return 0;
@@ -1620,7 +1633,17 @@ int netvm_run(struct netvm *vm, int maxcycles, uint32_t *rv)
 }
 
 
-const char *error_strings[] = { 
+static const char *val_error_strings[] = { 
+  "ok",
+  "Invalid opcode",
+  "Invalid jump address",
+  "Invalid branch/jump in matchonly mode",
+  "Invalid layer index",
+  "Invalid width field",
+};
+
+
+static const char *rt_error_strings[] = { 
   "ok",
   "unimplemented instruction",
   "stack overflow",
@@ -1653,8 +1676,11 @@ const char *error_strings[] = {
 
 const char *netvm_estr(int error)
 {
-  if ( error < 0 || error > NETVM_ERR_MAX )
+  if ( (error < NETVM_ERR_MIN) || (error > NETVM_ERR_MAX) ) {
     return "Unknown";
-  else
-    return error_strings[error];
+  } else if ( error < 0 ) {
+    return val_error_strings[-error];
+  } else {
+    return rt_error_strings[error];
+  }
 }

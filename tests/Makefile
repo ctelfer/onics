@@ -17,19 +17,19 @@ TARGETS= ${BINDIR}/testpp \
 all: ${TARGETS}
 
 ${BINDIR}/testpp: ../src/protoparse.o ../src/pptcpip.o ../src/util.o \
-	../src/pktbuf.o
+	../src/pktbuf.o testpp.c
 	${CC} -o ../bin/testpp testpp.c ../src/pktbuf.o ../src/protoparse.o \
 		../src/pptcpip.o ../src/util.o \
 		${DEFS} ${OPTS} ${INCS} ${LIBS}
 
 ${BINDIR}/testvm: ../src/protoparse.o ../src/pptcpip.o ../src/util.o \
 	../src/pktbuf.o ../src/netvm.o ../src/metapkt.o ../src/netvm.h \
-	../src/protoparse.h ../src/pktbuf.h ../src/metapkt.h
+	../src/protoparse.h ../src/pktbuf.h ../src/metapkt.h testvm.c
 	${CC} -o ../bin/testvm testvm.c ../src/pktbuf.o ../src/protoparse.o \
 		../src/pptcpip.o ../src/util.o ../src/netvm.o ../src/metapkt.o \
 		${DEFS} ${OPTS} ${INCS} ${LIBS}
 
-${BINDIR}/testns: testns.c ../src/namespace.o ../src/util.o
+${BINDIR}/testns: testns.c ../src/namespace.o ../src/util.o testns.c
 	${CC} -o ../bin/testns testns.c ../src/namespace.o ../src/util.o \
 		${DEFS} ${OPTS} ${INCS} ${LIBS}
 

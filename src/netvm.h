@@ -283,6 +283,16 @@ struct netvm {
 
 
 enum {
+  /* Validation error */
+  NETVM_ERR_UNINIT = -1,
+  NETVM_ERR_BADOP = -2,
+  NETVM_ERR_BRADDR = -3,
+  NETVM_ERR_BRMONLY = -4,
+  NETVM_ERR_BADLAYER = -5,
+  NETVM_ERR_BADWIDTH = -6,
+  NETVM_ERR_MIN = NETVM_ERR_BADWIDTH,
+
+  /* runtime errors */
   NETVM_ERR_UNIMPL = 1,
   NETVM_ERR_STKOVFL,
   NETVM_ERR_STKUNDF,

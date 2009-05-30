@@ -475,6 +475,7 @@ int main(int argc, char *argv[])
   struct netvm vm;
   struct netvm_program *prog;
   struct file_emitter fe;
+  int rv;
 
   parse_options(argc, argv);
   install_default_proto_parsers();
@@ -487,8 +488,8 @@ int main(int argc, char *argv[])
 
   if ( !prog->filter )
     vm.matchonly = 1;
-  if ( netvm_setcode(&vm, prog->code, prog->codelen) < 0)
-    err("Error validating program %d\n", prognum);
+  if ( (rv = netvm_setcode(&vm, prog->code, prog->codelen)) < 0)
+    err("Error validating program %d: %s\n", prognum, netvm_estr(rv));
 
   if ( prog->nopkts ) {
     run_without_packets(&vm, prog->mi, prog->nmi);
