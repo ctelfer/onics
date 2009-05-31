@@ -8,6 +8,7 @@
 #include <string.h>
 #include <stdlib.h>
 
+
 extern struct hparse_ops none_hparse_ops;
 extern struct hparse_ops eth_hparse_ops;
 extern struct hparse_ops arp_hparse_ops;
@@ -129,6 +130,11 @@ static struct hdr_parse *default_copy(struct hdr_parse *ohdr, byte_t *buffer)
 
 static void default_free(struct hdr_parse *hdr)
 {
+  /* presently unused */
+  (void)default_create;
+  (void)default_parse;
+  (void)default_follows;
+  (void)default_copy;
   freehdr(hdr);
 }
 
@@ -529,7 +535,7 @@ static void ipv4_free(struct hdr_parse *hdr)
 }
 
 
-static uint16_t tcpudp_cksum(struct hdr_parse *hdr, uint8_t proto)
+static uint16_t pseudo_cksum(struct hdr_parse *hdr, uint8_t proto)
 {
   struct hdr_parse *phdr = hdr_parent(hdr);
   uint16_t sum = 0;
@@ -543,14 +549,14 @@ static uint16_t tcpudp_cksum(struct hdr_parse *hdr, uint8_t proto)
     ph.totlen = ntoh16(hdr_totlen(hdr));
     sum = ones_sum(&ph, 12, 0);
   } else {
-    abort_unless(phdr->type == PPT_IPV6);
     struct pseudo6h ph;
-    struct ipv6h *ip6 = hdr_header(hdr, struct ipv6h);
+    struct ipv6h *ip6 = hdr_header(phdr, struct ipv6h);
+    abort_unless(phdr->type == PPT_IPV6);
     memset(&ph, 0, sizeof(ph));
     ph.saddr = ip6->saddr;
     ph.daddr = ip6->daddr;
     ph.proto = proto;
-    ph.totlen = ntoh16(hdr_totlen(hdr));
+    ph.totlen = ntoh32(hdr_totlen(hdr));
     sum = ones_sum(&ph, 40, 0);
   }
   return ~ones_sum(hdr_header(hdr, void), hdr_totlen(hdr), sum);
@@ -598,7 +604,7 @@ static struct hdr_parse *udp_parse(struct hdr_parse *phdr)
   } else {
     hdr->poff = hdr->hoff + 8;
     udp = hdr_header(hdr, struct udph);
-    if ( (udp->cksum != 0) && (tcpudp_cksum(hdr, IPPROT_UDP) != 0) )
+    if ( (udp->cksum != 0) && (pseudo_cksum(hdr, IPPROT_UDP) != 0) )
       hdr->error |= PPERR_CKSUM;
   }
   return hdr;
@@ -672,7 +678,7 @@ static int udp_fixcksum(struct hdr_parse *hdr)
         (hdr_parent(hdr)->type != PPT_IPV6)) )
     return -1;
   udp->cksum = 0;
-  udp->cksum = tcpudp_cksum(hdr, IPPROT_UDP);
+  udp->cksum = pseudo_cksum(hdr, IPPROT_UDP);
   return 0;
 }
 
@@ -731,7 +737,7 @@ static struct hdr_parse *tcp_parse(struct hdr_parse *phdr)
     hdr->error |= PPERR_CKSUM;
   } else {
     hdr->poff = hdr->hoff + hlen;
-    if ( tcpudp_cksum(hdr, IPPROT_TCP) != 0 )
+    if ( pseudo_cksum(hdr, IPPROT_TCP) != 0 )
       hdr->error |= PPERR_CKSUM;
     if ( hlen > 20 ) { 
       /* TODO: parse TCP options */
@@ -822,7 +828,7 @@ static int tcp_fixcksum(struct hdr_parse *hdr)
        (hdr_parent(hdr)->type != PPT_IPV6) )
     return -1;
   tcp->cksum = 0;
-  tcp->cksum = tcpudp_cksum(hdr, IPPROT_TCP);
+  tcp->cksum = pseudo_cksum(hdr, IPPROT_TCP);
   return 0;
 }
 
@@ -855,16 +861,10 @@ static struct hdr_parse *icmp_parse(struct hdr_parse *phdr)
   struct icmph *icmp;
 
   abort_unless(icmp_follows(phdr));
-  switch(phdr->type) {
-  case PPT_IPV4:
-    break;
-  default:
-    return NULL;
-  }
   hdr = newhdr(sizeof(*hdr), PPT_ICMP, phdr, &icmp_hparse_ops);
   if ( !hdr )
     return NULL;
-  if ( hdr_hlen(hdr) < 8 ) {
+  if ( hdr_totlen(hdr) < 8 ) {
     hdr->error |= PPERR_TOOSMALL;
     hdr->poff = hdr->toff = hdr->eoff = hdr->hoff;
   } else if ( (phdr->error & PPERR_LENGTH) ) {
@@ -1188,6 +1188,93 @@ static void ipv6_free(struct hdr_parse *hdr)
 }
 
 
+/* -- ICMPv6 Functions -- */
+static int icmp6_follows(struct hdr_parse *phdr) 
+{
+  return (phdr->type == PPT_IPV6) &&
+         (((struct ipv6_parse *)phdr)->nexth == IPPROT_ICMPV6);
+}
+
+
+static struct hdr_parse *icmp6_parse(struct hdr_parse *phdr)
+{
+  struct hdr_parse *hdr;
+
+  hdr = newhdr(sizeof(*hdr), PPT_ICMP6, phdr, &icmpv6_hparse_ops);
+  if ( !hdr )
+    return NULL;
+  if ( hdr_totlen(hdr) < 8 ) {
+    hdr->error |= PPERR_TOOSMALL;
+    hdr->poff = hdr->toff = hdr->eoff = hdr->hoff;
+  } else if ( (phdr->error & PPERR_LENGTH) ) {
+    hdr->poff = hdr->hoff + 8;
+    hdr->error |= PPERR_LENGTH;
+    hdr->error |= PPERR_CKSUM;
+  } else {
+    abort_unless(phdr->type == PPT_IPV6);
+    hdr->poff = hdr->hoff + 8;
+    if ( pseudo_cksum(hdr, IPPROT_ICMPV6) != 0 )
+      hdr->error |= PPERR_CKSUM;
+  }
+  return hdr;
+}
+
+
+static struct hdr_parse *icmp6_create(byte_t *start, size_t off, size_t len,
+                                      size_t poff, size_t plen, int mode)
+{
+  struct hdr_parse *hdr;
+  struct icmp6h *icmp6;
+  abort_unless(poff >= off && plen <= len && poff + plen >= poff && off <= len 
+               && start);
+  if ( mode == PPCF_FILL ) {
+    if ( len - off < 8 )
+      return NULL;
+    plen = len - off - 8;
+  } else if ( mode == PPCF_WRAP ) { 
+    if ( poff - off < 8 )
+      return NULL;
+    off = poff - 8;
+  } else { 
+    abort_unless(mode == PPCF_SET);
+    if ( (poff - off != 8) )
+      return NULL;
+  }
+  hdr = crthdr(sizeof(struct hdr_parse), PPT_ICMP6, start, off, 8, plen, 0,
+               &icmpv6_hparse_ops);
+  if ( hdr ) {
+    icmp6 = hdr_header(hdr, struct icmp6h);
+    memset(icmp6, 0, sizeof(*icmp6));
+  }
+  return hdr;
+}
+
+
+static void icmp6_update(struct hdr_parse *hdr)
+{
+  if ( hdr_totlen(hdr) < 8 ) {
+    hdr->error = PPERR_TOOSMALL;
+    return;
+  }
+  if ( hdr_hlen(hdr) < 8 ) {
+    hdr->error = PPERR_HLEN;
+    return;
+  }
+  /* TODO: check by type? */
+}
+
+
+static int icmp6_fixcksum(struct hdr_parse *hdr)
+{
+  struct icmp6h *icmp6 = hdr_header(hdr, struct icmp6h);
+  if ( (hdr_hlen(hdr) != 8) || (hdr_parent(hdr)->type != PPT_IPV6) )
+    return -1;
+  icmp6->cksum = 0;
+  icmp6->cksum = pseudo_cksum(hdr, IPPROT_ICMPV6);
+  return 0;
+}
+
+
 /* -- op structures for default initialization -- */
 struct pparse_ops none_pparse_ops = {
   none_follows, 
@@ -1268,16 +1355,16 @@ struct hparse_ops icmp_hparse_ops = {
   default_free
 };
 struct pparse_ops icmpv6_pparse_ops = { 
-  default_follows,
-  default_parse,
-  default_create
+  icmp6_follows,
+  icmp6_parse,
+  icmp6_create
 };
 struct hparse_ops icmpv6_hparse_ops = {
-  default_update,
+  icmp6_update,
   default_getfield,
   default_fixlen,
-  default_fixcksum,
-  default_copy,
+  icmp6_fixcksum,
+  simple_copy,
   default_free
 };
 struct pparse_ops udp_pparse_ops = {
