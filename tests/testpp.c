@@ -3,6 +3,18 @@
 #include "protoparse.h"
 #include "tcpip_hdrs.h"
 
+const char *pnames[] = { 
+  "Packet",
+  "Ethernet",
+  "ARP", 
+  "IP",
+  "IPv6",
+  "ICMP",
+  "ICMPv6",
+  "UDP",
+  "TCP"
+};
+
 int main(int argc, char *argv[])
 {
   struct pktbuf *p;
@@ -26,7 +38,7 @@ int main(int argc, char *argv[])
     }
 
     for ( nhdr = 1, t = hdr_child(hdr); t != hdr; t = hdr_child(t), ++nhdr ) {
-      printf("%4u:\tHeader %u -- Type %u\n", npkt, nhdr, t->type);
+      printf("%4u:\tHeader %u -- %s\n", npkt, nhdr, pnames[t->type]);
       if ( t->error == 0 ) {
         printf("\t\tNo errors\n");
       } else {
