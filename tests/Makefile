@@ -11,8 +11,9 @@ LIBOBJS= ../src/metapkt.o ../src/namespace.o ../src/ncl.o ../src/netvm.o \
 	 ../src/tokenizer.o ../src/util.o
 
 TARGETS= ${BINDIR}/testpp \
-	${BINDIR}/testvm  \
-	${BINDIR}/testns
+	${BINDIR}/testvm \
+	${BINDIR}/testns \
+	${BINDIR}/testnmllex 
 
 all: ${TARGETS}
 
@@ -33,7 +34,14 @@ ${BINDIR}/testns: testns.c ../src/namespace.o ../src/util.o testns.c
 	${CC} -o ../bin/testns testns.c ../src/namespace.o ../src/util.o \
 		${DEFS} ${OPTS} ${INCS} ${LIBS}
 
-${LIBOBJS}: 
+${BINDIR}/testnmllex: testnmllex.c ../src/lex.nml.o
+	${CC} -o ../bin/testnmllex testnmllex.c ../src/lex.nml.o \
+		${DEFS} ${OPTS} ${INCS} ${LIBS}
+
+../src/lex.nml.o: ../src/nml.l
+	(cd ../src ; make lex.nml.o)
+
+${LIBOBJS}:
 	(cd ../src ; make)
 
 

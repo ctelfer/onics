@@ -10,7 +10,7 @@ LIBS=-L${CATLIB_ROOT}/lib -lcat_dbg -lpcap
 DEFS=
 BINDIR=../bin
 LIBOBJS= metapkt.o namespace.o ncl.o netvm.o netvm_rt.o pktbuf.o pptcpip.o \
-	protoparse.o tokenizer.o util.o
+	protoparse.o tokenizer.o util.o lex.nml.o
 
 TARGETS=${BINDIR}/pcapin \
 	${BINDIR}/pcapout \
@@ -45,6 +45,8 @@ ${BINDIR}/ped: ped.o protoparse.o pptcpip.o util.o pktbuf.o netvm.o netvm_rt.o \
 .c.o: $<
 	${CC} -Wall -c $< -o $@ ${DEFS} ${INCS} ${OPTS}
 
+lex.nml.c: nml.l
+	flex nml.l
 
 clean:
 	rm -f ${TARGETS}

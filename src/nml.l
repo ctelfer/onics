@@ -20,6 +20,7 @@ static int parse_ipv6_addr(yyscan_t scanner, const char *text);
 %option prefix="nml"
 %option noyywrap
 %option yylineno
+%option nounput
 
 xd		[0-9a-fA-F]
 xb		{xd}{xd}
@@ -119,9 +120,12 @@ dnum		0|[1-9][0-9]*
 void parse_eth_addr(yyscan_t scanner, const char *text)
 {
 	union nmllex_u lu;
-	sscanf(text, "%x:%x:%x:%x:%x:%x", 
-	       &lu.ethaddr[0], &lu.ethaddr[1], &lu.ethaddr[2],
-	       &lu.ethaddr[3], &lu.ethaddr[4], &lu.ethaddr[5]);
+	unsigned n[6];
+	int i;
+	sscanf(text, "%x:%x:%x:%x:%x:%x", &n[0], &n[1], &n[2], &n[3], &n[4], 
+               &n[5]);
+	for ( i = 0; i < 6; ++i )
+		lu.ethaddr[i] = n[i];
 	nmlset_extra(lu, scanner);
 }
 
@@ -138,11 +142,10 @@ void parse_ipv4_addr(yyscan_t scanner, const char *text)
 {
 	union nmllex_u lu;
 	unsigned n[4];
+	int i;
 	sscanf(text, "%u.%u.%u.%u", &n[0], &n[1], &n[2], &n[3]);
-	lu.v4addr[0] = n[0];
-	lu.v4addr[1] = n[1];
-	lu.v4addr[2] = n[2];
-	lu.v4addr[3] = n[3];
+	for ( i = 0; i < 4; ++i )
+		lu.v4addr[i] = n[i];
 	nmlset_extra(lu, scanner);
 }
 
@@ -258,25 +261,20 @@ const char *strs[] = {
 };
 
 
-int main(int argc, char *argv[])
+int testnmllex()
 {
 	int x;
 	yyscan_t scanner;
-
 	if ( nmllex_init(&scanner) )
 		errsys("nmllex_init:");
 	nmlset_in(stdin, scanner);
 	while ( (x = nmllex(scanner)) > 0 )
 		printf("%-15s'%s'\n", strs[x], nmlget_text(scanner));
-
 	if ( x < 0 ) {
 		printf("unknown char on line: %d\n", nmlget_lineno(scanner));
 	} else {
 		printf("End of file\n");
 	}
 	nmllex_destroy(scanner);
-
 	return 0;
 }
-
-
