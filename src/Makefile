@@ -14,7 +14,8 @@ LIBOBJS= metapkt.o namespace.o ncl.o netvm.o netvm_rt.o pktbuf.o pptcpip.o \
 
 TARGETS=${BINDIR}/pcapin \
 	${BINDIR}/pcapout \
-	${BINDIR}/ped
+	${BINDIR}/ped \
+	${BINDIR}/pmux
 
 all: ${LIBOBJS} ${TARGETS}
 
@@ -40,6 +41,10 @@ ${BINDIR}/ped: ped.o protoparse.o pptcpip.o util.o pktbuf.o netvm.o netvm_rt.o \
 	          metapkt.o netvm.h protoparse.h pktbuf.h metapkt.h netvm_rt.h
 	${CC} -o ../bin/ped ped.o pktbuf.o protoparse.o pptcpip.o util.o \
 		netvm.o metapkt.o netvm_rt.o \
+		${DEFS} ${OPTS} ${INCS} ${LIBS}
+
+${BINDIR}/pmux: pmux.o pktbuf.o
+	${CC} -o ../bin/pmux pmux.o pktbuf.o  \
 		${DEFS} ${OPTS} ${INCS} ${LIBS}
 
 .c.o: $<
