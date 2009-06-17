@@ -13,7 +13,7 @@ LIBOBJS= ../src/metapkt.o ../src/namespace.o ../src/ncl.o ../src/netvm.o \
 TARGETS= ${BINDIR}/testpp \
 	${BINDIR}/testvm \
 	${BINDIR}/testns \
-	${BINDIR}/testnmllex 
+	${BINDIR}/testpmllex 
 
 all: ${TARGETS}
 
@@ -34,12 +34,12 @@ ${BINDIR}/testns: testns.c ../src/namespace.o ../src/util.o testns.c
 	${CC} -o ../bin/testns testns.c ../src/namespace.o ../src/util.o \
 		${DEFS} ${OPTS} ${INCS} ${LIBS}
 
-${BINDIR}/testnmllex: testnmllex.c ../src/lex.nml.o
-	${CC} -o ../bin/testnmllex testnmllex.c ../src/lex.nml.o \
+${BINDIR}/testpmllex: testpmllex.c ../src/lex.pml.o
+	${CC} -o ../bin/testpmllex testpmllex.c ../src/lex.pml.o \
 		${DEFS} ${OPTS} ${INCS} ${LIBS}
 
-../src/lex.nml.o: ../src/nml.l
-	(cd ../src ; make lex.nml.o)
+../src/lex.pml.o: ../src/pml.l
+	(cd ../src ; make lex.pml.o)
 
 ${LIBOBJS}:
 	(cd ../src ; make)

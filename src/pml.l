@@ -1,15 +1,15 @@
 %{
-#include "nmltok.h"
+#include "pmltok.h"
 #include <cat/err.h>
 
-union nmllex_u {
+union pmllex_u {
 	byte_t v6addr[16];
 	byte_t ethaddr[6];
 	unsigned long num;
 	byte_t v4addr[4];
 };
 
-#define YY_EXTRA_TYPE	union nmllex_u
+#define YY_EXTRA_TYPE	union pmllex_u
 static void parse_eth_addr(yyscan_t scanner, const char *text);
 static void parse_num(yyscan_t scanner, const char *text);
 static void parse_ipv4_addr(yyscan_t scanner, const char *text);
@@ -17,7 +17,7 @@ static int parse_ipv6_addr(yyscan_t scanner, const char *text);
 %}
 
 %option reentrant
-%option prefix="nml"
+%option prefix="pml"
 %option noyywrap
 %option yylineno
 %option nounput
@@ -119,41 +119,41 @@ dnum		0|[1-9][0-9]*
 
 void parse_eth_addr(yyscan_t scanner, const char *text)
 {
-	union nmllex_u lu;
+	union pmllex_u lu;
 	unsigned n[6];
 	int i;
 	sscanf(text, "%x:%x:%x:%x:%x:%x", &n[0], &n[1], &n[2], &n[3], &n[4], 
                &n[5]);
 	for ( i = 0; i < 6; ++i )
 		lu.ethaddr[i] = n[i];
-	nmlset_extra(lu, scanner);
+	pmlset_extra(lu, scanner);
 }
 
 
 void parse_num(yyscan_t scanner, const char *text)
 {
-	union nmllex_u lu;
+	union pmllex_u lu;
 	lu.num = strtoul(text, NULL, 0);
-	nmlset_extra(lu, scanner);
+	pmlset_extra(lu, scanner);
 }
 
 
 void parse_ipv4_addr(yyscan_t scanner, const char *text)
 {
-	union nmllex_u lu;
+	union pmllex_u lu;
 	unsigned n[4];
 	int i;
 	sscanf(text, "%u.%u.%u.%u", &n[0], &n[1], &n[2], &n[3]);
 	for ( i = 0; i < 4; ++i )
 		lu.v4addr[i] = n[i];
-	nmlset_extra(lu, scanner);
+	pmlset_extra(lu, scanner);
 }
 
 
 int parse_ipv6_addr(yyscan_t scanner, const char *text)
 {
 	const char *p = text, *nxt;
-	union nmllex_u lu;
+	union pmllex_u lu;
 	byte_t prefix[16];
 	byte_t suffix[16];
 	char xdigits[5];
@@ -198,7 +198,7 @@ int parse_ipv6_addr(yyscan_t scanner, const char *text)
 	n = 16 - slen * 2;
 	memcpy(&lu.v6addr[n], suffix, slen * 2);
 
-	nmlset_extra(lu, scanner);
+	pmlset_extra(lu, scanner);
 	return NMLTOK_IPV6ADDR;
 }
 
@@ -261,20 +261,20 @@ const char *strs[] = {
 };
 
 
-int testnmllex()
+int testpmllex()
 {
 	int x;
 	yyscan_t scanner;
-	if ( nmllex_init(&scanner) )
-		errsys("nmllex_init:");
-	nmlset_in(stdin, scanner);
-	while ( (x = nmllex(scanner)) > 0 )
-		printf("%-15s'%s'\n", strs[x], nmlget_text(scanner));
+	if ( pmllex_init(&scanner) )
+		errsys("pmllex_init:");
+	pmlset_in(stdin, scanner);
+	while ( (x = pmllex(scanner)) > 0 )
+		printf("%-15s'%s'\n", strs[x], pmlget_text(scanner));
 	if ( x < 0 ) {
-		printf("unknown char on line: %d\n", nmlget_lineno(scanner));
+		printf("unknown char on line: %d\n", pmlget_lineno(scanner));
 	} else {
 		printf("End of file\n");
 	}
-	nmllex_destroy(scanner);
+	pmllex_destroy(scanner);
 	return 0;
 }
