@@ -216,53 +216,31 @@ pcapin/pcapout
   - Can also capture/send live using libpcap
 
 
-classify -- Classify Packets
-  - Affix classification tags to packets
-  - Use NCL and maybe other matching languages for rules
-  - This could probably be done with ped, but it's lighter weight
-  - In other words, building classify will probably be a step to developing ped
-
-
-ped -- Packet Editor
-  - sed equivalent for packets
-  - enables simple operations on packet streams such as drop,
-    pass, (simple) subsitution operations and print
-  - Lemon parser generator to generate AST
-  - Simple compiler to compile AST to NetVM match/action programs
-  - May support alternate matching languages like tcpdump (see below)
-  - Building ped will probably be a step to developing pmangle
-
-
-pmangle -- Closer to AWK for packets
+pml -- Packet Manipulation Language
+  - Closer to AWK for packets
   - Lemon parser generator to generate AST
   - Will compile to NetVM match/action runtime
   - BEGIN and END actions
   - Will have full flow control constructs as well
   - Maybe associative arrays
-  - Probably encompasses everything Ped can do but will probably come out
-    in a later version of the tools
-  - Pattern matching syntax will probably be identical to Ped
+  - Pattern matching syntax will be custom but ... 
+  - Add different pattern languages down the road (tcmpdump, cisco ACLs, etc..)
   - Will have variables and subroutines, etc...
-  - This may become unnecessary if long term plans pan out and I build Ruby 
-    or Python bindings for a good deal of the other functionality.  
 
 
 pktdump
-  - tcpdump-alike written on top of ped or pmangle or some such
+  - tcpdump-alike written on top of pml or some such
   - just simple dumping capabilities
 
 
-pdemux
-  - A utility to demultiplex a traffic stream between 2+ output streams
-  - Demux is based on classification tags stored in packets
+pktmux/pktdemux
+  - pktdemux demultiplexes a traffic stream among 2+ output streams
+  - pktmux multiplexes multiple incoming traffic streams
+  - pktmux set classificaiton tags to denote incoming "interface"
+  - both are based on classification tags stored in packets
 
 
-pmux
-  - A utility to multiplex multiple incoming traffic streams
-  - Will probably set classificaiton tags to denote incoming "interface"
-
-
-timedrelease
+pktrel
   - Will read in a packet stream an send the packets out spaced according to 
     deltas in the timestamps between packets
   - Useful for replaying a stream with the correct inter-packet time deltas
