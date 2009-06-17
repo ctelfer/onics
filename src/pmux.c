@@ -5,12 +5,12 @@
 #include <cat/err.h>
 #include <cat/optparse.h>
 #include <cat/uevent.h>
-#include <cat/io.h>
 #include <cat/stduse.h>
 
-#define MAX_FDS      1021
+#define MAX_FDS      256
 
 int g_nfd = 0;
+ulong g_npkts = 0;
 
 struct clopt g_optarr[] = {
   CLOPT_INIT(CLOPT_NOARG,  'h', "--help", "print help")
@@ -80,9 +80,11 @@ int readpkt(void *arg, struct callback *cb)
     ue_io_del(cb);
     return 0;
   }
+  ++g_npkts;
+  p->pkb_class &= 0xFF;
+  p->pkb_class |= ioe->fd - 3;
   if ( pkb_fd_write(1, p) < 0 )
-    errsys("Error writing packet %u\n");
-  p->pkb_class = ioe->fd - 3;
+    errsys("Error writing packet %lu\n", g_npkts);
   pkb_free(p);
 
   return 0;
