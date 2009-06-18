@@ -202,7 +202,7 @@ PreParsed Packet
 
 Tcpdump Matcher
   - a compiler to compile tcpdump expressions to NetVM matchonly code
-  - used to allow Ped or Pmangle matching to use alternate expression syntax
+  - used to allow pml matching to use alternate expression syntax
   - may be a similar tool for wireshark variant as well
 
 
@@ -223,7 +223,7 @@ pml -- Packet Manipulation Language
   - BEGIN and END actions
   - Will have full flow control constructs as well
   - Maybe associative arrays
-  - Pattern matching syntax will be custom but ... 
+  - Pattern matching syntax will initially be NCL but ... 
   - Add different pattern languages down the road (tcmpdump, cisco ACLs, etc..)
   - Will have variables and subroutines, etc...
 
@@ -315,7 +315,7 @@ NetVM Kernel Retarget
   - Idea is to create a NetVM version that runs inside a kernel (linux or BSD)
   - Would include runtime
   - Would probably add additional program verification steps
-  - Idea is to create a way to push Ped or Pmangle programs into the kernel
+  - Idea is to create a way to push pml programs into the kernel
     packet streams 
   - Could alternately be used for more flexible system to route packets to the
     host or some such
@@ -323,7 +323,7 @@ NetVM Kernel Retarget
 
 Kernel Filter Stages
   - The idea would be to create a packet pipelining system within kernel space
-  - would need Ped/Pmangle, plus pktmux/pktdemux 
+  - would need pml plus pktmux/pktdemux 
   - would need to add conversion from Packet Buffer to raw device packet 
     and back  (equivalent of pcapin/pcapout for skbuffs or mbufs)
   - goal would be to allow flexible processing/diversion in kernel space
