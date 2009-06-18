@@ -16,7 +16,8 @@ TARGETS=${BINDIR}/pcapin \
 	${BINDIR}/pcapout \
 	${BINDIR}/ped \
 	${BINDIR}/pktdemux \
-	${BINDIR}/pktmux
+	${BINDIR}/pktmux \
+	${BINDIR}/pktrel
 
 all: ${LIBOBJS} ${TARGETS}
 
@@ -50,6 +51,10 @@ ${BINDIR}/pktmux: pktmux.o pktbuf.o
 
 ${BINDIR}/pktdemux: pktdemux.o pktbuf.o
 	${CC} -o ../bin/pktdemux pktdemux.o pktbuf.o  \
+		${DEFS} ${OPTS} ${INCS} ${LIBS}
+
+${BINDIR}/pktrel: pktrel.o pktbuf.o
+	${CC} -o ../bin/pktrel pktrel.o pktbuf.o  \
 		${DEFS} ${OPTS} ${INCS} ${LIBS}
 
 .c.o: $<
