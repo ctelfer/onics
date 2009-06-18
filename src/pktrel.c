@@ -10,11 +10,13 @@
 #include <cat/time.h>
 
 ulong g_npkts = 0;
-double g_start_delay = 0;
+double g_start_delay = 0.0;
+double g_interval = 0.0;
 
 struct clopt g_optarr[] = {
   CLOPT_INIT(CLOPT_NOARG,  'h', "--help", "print help"),
-  CLOPT_INIT(CLOPT_DOUBLE,  'd', "--delay", "delay start by <x> seconds")
+  CLOPT_INIT(CLOPT_DOUBLE,  'd', "--delay", "delay start by <x> seconds"),
+  CLOPT_INIT(CLOPT_DOUBLE,  'i', "--interval", "delay <x> seconds ")
 };
 struct clopt_parser g_oparser =
   CLOPTPARSER_INIT(g_optarr, array_length(g_optarr));
@@ -40,6 +42,9 @@ void parse_options()
     switch(opt->ch) {
     case 'd':
       g_start_delay = opt->val.dbl_val;
+      break;
+    case 'i':
+      g_interval = opt->val.dbl_val;
       break;
     case 'h':
       usage(NULL);
@@ -91,7 +96,9 @@ int main(int argc, char *argv[])
     if ( ++g_npkts == 1 )
       cur = next;
 
-    if ( tm_cmp(&next, &cur) > 0 ) {
+    if ( g_interval > 0.0 ) { 
+      sleepfor(tm_dset(&diff, g_interval));
+    } else if ( tm_cmp(&next, &cur) > 0 ) {
       diff = next;
       sleepfor(tm_sub(&diff, &cur));
       cur = next;
@@ -99,6 +106,7 @@ int main(int argc, char *argv[])
 
     if ( pkb_fd_write(1, p) < 0 )
       errsys("Error writing packet %lu", g_npkts);
+    pkt_free(p);
   }
   if ( rv < 0 )
     errsys("Error reading packet %lu", g_npkts+1);
