@@ -106,7 +106,7 @@ int main(int argc, char *argv[])
 
     if ( pkb_fd_write(1, p) < 0 )
       errsys("Error writing packet %lu", g_npkts);
-    pkt_free(p);
+    pkb_free(p);
   }
   if ( rv < 0 )
     errsys("Error reading packet %lu", g_npkts+1);
