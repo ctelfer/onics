@@ -1,0 +1,169 @@
+/*
+?- tcp.sport == tcp.ports.http -?
+
+?- ip.saddr == 127.0.0.0/24 -?
+
+?- eth && ip6 && pkt.len > ip6.len + 40 + 14 -?
+
+?- pop(tcp.flags) == 2 -?
+
+?- nlz(ip6.flowid) == 4 -?
+
+?- eth.saddr =/ c0:2a:f9:00:00:00/ff:ff:ff:f0:00:00 -?
+?- eth.saddr !/ c0:2a:f9:00:00:00/ff:ff:ff:f0:00:00 -?  
+
+?- not (pkt.data =~ "hello +world!") -?
+?- not (pkt.data !~ "hello +world!") -?
+
+?- tcp.dport == tcp.ports.reserved -?
+
+?- uint(tcp[2:2]) == 1628 -?
+
+?- tcp[2:10] == \xABCDEF0123DEADBEEF01/FEEDA110FFFFFFFFAB -?
+
+?- ip:1[3:1] == "a" -?
+
+
+?- eth.saddr == 5 -? # error
+*/
+
+
+/* 
+  Actions:
+
+  Drop
+  Set field <- big one
+  Insert space?
+  Cut space?
+  Print
+  Duplicate
+  Push header
+  Fix lengths
+  Fix checksum
+  Fix dlt
+  Fun call 
+  Set variable
+  Enqueue packet
+
+  if () { 
+  }
+
+  while () { 
+  }
+
+
+  Declarations:
+  function name ( arg1, arg2 ... ) {
+    <local variable declarations here>
+
+    <action list>
+    
+    return(v1, v2, ...);
+  }
+
+  var name;
+  var name[width];
+*/
+
+prog ::= list.
+
+list ::= list decl.
+list ::= list rule.
+list ::= .
+
+rule ::= pktpat action.
+rule ::= pktpat actionseq.
+
+actionseq ::= LBRACE actionlist RBRACE.
+actionlist ::= action SEMICOLON;
+actionlist ::= actionlist action SEMICOLON;
+
+pktpat ::= PPBEGIN expr PPEND.
+
+expr ::= orexpr.
+
+orexpr ::= orexpr OR andexpr.
+orexpr ::= andexpr.
+
+andexpr ::= andexpr AND cmpexpr.
+andexpr ::= cmpexpr.
+
+cmpexpr ::= bytestr REX STRING.
+cmpexpr ::= bytestr NOTREX STRING.
+cmpexpr ::= borexpr cmpop borexpr.
+cmpexpr ::= borexpr maskop bytestr DIV bytestr.
+cmpexpr ::= borexpr maskop IPADDR DIV number.
+cmpexpr ::= borexpr maskop IPV6ADDR DIV number.
+cmpexpr ::= borexpr maskop ETHADDR DIV ETHADDR.
+cmpexpr ::= borexpr.
+
+maskop ::= MASKEQ.
+maskop ::= MASKNE.
+
+cmpop ::= EQ.
+cmpop ::= NEQ.
+cmpop ::= LT.
+cmpop ::= GT.
+cmpop ::= LEQ.
+cmpop ::= GEQ.
+
+borexpr ::= borexpr BOR bxorexpr.
+borexpr ::= bxorexpr.
+
+bxorexpr ::= bxorexpr BXOR bandexpr.
+bxorexpr ::= bandexpr.
+
+bandexpr ::= bandexpr BAND mulexpr.
+bandexpr ::= addexpr.
+
+addexpr ::= addexpr PLUS uexpr.
+addexpr ::= mulexpr.
+
+mulexpr ::= mulexpr MUL addexpr.
+mulexpr ::= mulexpr DIV addexpr.
+mulexpr ::= shiftexpr.
+
+shiftexpr ::= shiftexpr shiftop uexpr.
+shiftexpr ::= uexpr.
+
+shiftop ::= SHL.
+shiftop ::= SHR.
+shiftop ::= SHRA.
+
+uexpr ::= NOT valexpr.
+uexpr ::= INV valexpr.
+uexpr ::= valexpr.
+
+valexpr ::= LPAREN expr RPAREN.
+valexpr ::= intrinsic LPAREN expr RPAREN.
+valexpr ::= funcall.
+valexpr ::= field.
+
+intrinsic ::= POP.
+intrinsic ::= NLZ.
+intrinsic ::= typecast.
+
+typecast ::= UINT8.
+typecast ::= INT8.
+typecast ::= UINT16.
+typecast ::= INT16.
+typecast ::= UINT32.
+typecast ::= INT32.
+
+funcall ::= ID LPAREN paramlist RPAREN.
+
+paramlist ::= paramlist COMMA expr.
+paramlist ::= expr.
+
+field ::= var.
+field ::= BYTESTR.
+field ::= IPADDR.
+field ::= IPV6ADDR.
+field ::= NUMBER.
+field ::= STRING.
+
+var ::= locator.
+var ::= locator LBRACKET borexpr COLON borexpr RBRACKET.
+
+locator ::= locator DOT ID.
+locator ::= ID.

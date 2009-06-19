@@ -76,12 +76,10 @@ dnum		0|[1-9][0-9]*
 ">"		{ return NMLTOK_GT; }
 "<="		{ return NMLTOK_LEQ; }
 ">="		{ return NMLTOK_GEQ; }
-"/="		{ return NMLTOK_MEQ; }
-"*<"		{ return NMLTOK_SLT; }
-"*>"		{ return NMLTOK_SGT; }
-"*<="		{ return NMLTOK_SLEQ; }
-"*>="		{ return NMLTOK_SGEQ; }
-"~="		{ return NMLTOK_REX; }
+"=/"		{ return NMLTOK_MASKEQ; }
+"!/"		{ return NMLTOK_MASKNE; }
+"=~"		{ return NMLTOK_REX; }
+"!~"		{ return NMLTOK_NOTREX; }
 
 "+"		{ return NMLTOK_PLUS; }
 "-"		{ return NMLTOK_MINUS; }
@@ -93,7 +91,7 @@ dnum		0|[1-9][0-9]*
 "~"		{ return NMLTOK_BINV; }
 "<<"		{ return NMLTOK_SHL; }
 ">>"		{ return NMLTOK_SHR; }
-">>*"		{ return NMLTOK_SHRA; }
+">>a"		{ return NMLTOK_SHRA; }
 "."		{ return NMLTOK_DOT; }
 ":"		{ return NMLTOK_COLON; }
 "="		{ return NMLTOK_ASSIGN; }
