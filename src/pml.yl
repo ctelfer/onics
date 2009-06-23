@@ -65,9 +65,13 @@
   var name[width];
 */
 
+%name PML
+%token_prefix PMLTOK_
+
 prog ::= list.
 
-list ::= list decl.
+/* TODO */
+/* list ::= list decl. */
 list ::= list rule.
 list ::= .
 
@@ -75,8 +79,10 @@ rule ::= pktpat action.
 rule ::= pktpat actionseq.
 
 actionseq ::= LBRACE actionlist RBRACE.
-actionlist ::= action SEMICOLON;
-actionlist ::= actionlist action SEMICOLON;
+actionlist ::= action SEMICOLON.
+actionlist ::= actionlist action SEMICOLON.
+
+action ::= DELETE.
 
 pktpat ::= PPBEGIN expr PPEND.
 
@@ -88,12 +94,12 @@ orexpr ::= andexpr.
 andexpr ::= andexpr AND cmpexpr.
 andexpr ::= cmpexpr.
 
-cmpexpr ::= bytestr REX STRING.
-cmpexpr ::= bytestr NOTREX STRING.
+cmpexpr ::= BYTESTR REX STRING.
+cmpexpr ::= BYTESTR NOTREX STRING.
 cmpexpr ::= borexpr cmpop borexpr.
-cmpexpr ::= borexpr maskop bytestr DIV bytestr.
-cmpexpr ::= borexpr maskop IPADDR DIV number.
-cmpexpr ::= borexpr maskop IPV6ADDR DIV number.
+cmpexpr ::= borexpr maskop BYTESTR DIV BYTESTR.
+cmpexpr ::= borexpr maskop IPADDR DIV NUMBER.
+cmpexpr ::= borexpr maskop IPV6ADDR DIV NUMBER.
 cmpexpr ::= borexpr maskop ETHADDR DIV ETHADDR.
 cmpexpr ::= borexpr.
 
@@ -113,14 +119,15 @@ borexpr ::= bxorexpr.
 bxorexpr ::= bxorexpr BXOR bandexpr.
 bxorexpr ::= bandexpr.
 
-bandexpr ::= bandexpr BAND mulexpr.
+bandexpr ::= bandexpr BAND addexpr.
 bandexpr ::= addexpr.
 
-addexpr ::= addexpr PLUS uexpr.
+addexpr ::= addexpr PLUS mulexpr.
+addexpr ::= addexpr MINUS mulexpr.
 addexpr ::= mulexpr.
 
-mulexpr ::= mulexpr MUL addexpr.
-mulexpr ::= mulexpr DIV addexpr.
+mulexpr ::= mulexpr MUL shiftexpr.
+mulexpr ::= mulexpr DIV shiftexpr.
 mulexpr ::= shiftexpr.
 
 shiftexpr ::= shiftexpr shiftop uexpr.
