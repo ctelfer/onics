@@ -53,11 +53,20 @@ ${BINDIR}/pktrel: pktrel.o pktbuf.o
 .c.o: $<
 	${CC} -Wall -c $< -o $@ ${DEFS} ${INCS} ${OPTS}
 
-lex.pml.c: pml.l
+lex.pml.c: pml.l pml.h
 	flex pml.l
+
+pml.c: pml.yl ../lemon/lemon
+	../lemon/lemon pml.yl
+
+pml.h: pml.yl ../lemon/lemon
+	../lemon/lemon pml.yl
+
+../lemon/lemon: ../lemon/lemon.c
+	(cd ../lemon ; make)
 
 clean:
 	rm -f ${TARGETS}
 	rm -f *.o
-	rm -f lex.pml.c
+	rm -f lex.pml.c pml.c pml.h
 

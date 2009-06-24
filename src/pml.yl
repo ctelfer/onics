@@ -83,6 +83,11 @@ actionlist ::= action SEMICOLON.
 actionlist ::= actionlist action SEMICOLON.
 
 action ::= DELETE.
+action ::= WHILE actionseq.
+action ::= IF LPAREN expr RPAREN actionseq.
+action ::= IF LPAREN expr RPAREN actionseq ELSE actionseq.
+action ::= ID ASSIGN expr.
+
 
 pktpat ::= PPBEGIN expr PPEND.
 
@@ -98,8 +103,8 @@ cmpexpr ::= BYTESTR REX STRING.
 cmpexpr ::= BYTESTR NOTREX STRING.
 cmpexpr ::= borexpr cmpop borexpr.
 cmpexpr ::= borexpr maskop BYTESTR DIV BYTESTR.
-cmpexpr ::= borexpr maskop IPADDR DIV NUMBER.
-cmpexpr ::= borexpr maskop IPV6ADDR DIV NUMBER.
+cmpexpr ::= borexpr maskop IPV4ADDR DIV NUM.
+cmpexpr ::= borexpr maskop IPV6ADDR DIV NUM.
 cmpexpr ::= borexpr maskop ETHADDR DIV ETHADDR.
 cmpexpr ::= borexpr.
 
@@ -126,8 +131,9 @@ addexpr ::= addexpr PLUS mulexpr.
 addexpr ::= addexpr MINUS mulexpr.
 addexpr ::= mulexpr.
 
-mulexpr ::= mulexpr MUL shiftexpr.
+mulexpr ::= mulexpr TIMES shiftexpr.
 mulexpr ::= mulexpr DIV shiftexpr.
+mulexpr ::= mulexpr MOD shiftexpr.
 mulexpr ::= shiftexpr.
 
 shiftexpr ::= shiftexpr shiftop uexpr.
@@ -138,7 +144,8 @@ shiftop ::= SHR.
 shiftop ::= SHRA.
 
 uexpr ::= NOT valexpr.
-uexpr ::= INV valexpr.
+uexpr ::= BINV valexpr.
+uexpr ::= MINUS valexpr.
 uexpr ::= valexpr.
 
 valexpr ::= LPAREN expr RPAREN.
@@ -166,7 +173,7 @@ field ::= var.
 field ::= BYTESTR.
 field ::= IPADDR.
 field ::= IPV6ADDR.
-field ::= NUMBER.
+field ::= NUM.
 field ::= STRING.
 
 var ::= locator.

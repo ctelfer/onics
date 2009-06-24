@@ -1,5 +1,5 @@
 %{
-#include "pmltok.h"
+#include "pml.h"
 #include <cat/err.h>
 
 union pmllex_u {
@@ -36,25 +36,25 @@ dnum		0|[1-9][0-9]*
 
 #.*\n
 
-\"{sch}*\"		{ return NMLTOK_STRING; }
+\"{sch}*\"		{ return PMLTOK_STRING; }
 
 {xnum}	|
 {onum}	|
 {dnum}  {
 	parse_num(yyscanner, yytext);
-	return NMLTOK_NUM; 
+	return PMLTOK_NUM; 
 }
 
-\\x{xb}+		{ return NMLTOK_BYTESTR; }
+\\x{xb}+		{ return PMLTOK_BYTESTR; }
 
 {ipb}\.{ipb}\.{ipb}\.{ipb} { 
 	parse_ipv4_addr(yyscanner, yytext);
-	return NMLTOK_IPV4ADDR; 
+	return PMLTOK_IPV4ADDR; 
 }
 
 {xb}:{xb}:{xb}:{xb}:{xb}:{xb}	{ 
 	parse_eth_addr(yyscanner, yytext);
-	return NMLTOK_ETHADDR; 
+	return PMLTOK_ETHADDR; 
 }
 
 ::({xq}(:{xq})*)?		|
@@ -62,51 +62,52 @@ dnum		0|[1-9][0-9]*
 	return parse_ipv6_addr(yyscanner, yytext); 
 }
 
-"not"		{ return NMLTOK_NOT; }
-"and"		{ return NMLTOK_AND; }
-"or"		{ return NMLTOK_OR; }
-"nlz"		{ return NMLTOK_NLZ; }
-"pop"		{ return NMLTOK_POP; }
-"while"		{ return NMLTOK_WHILE; }
-"if"		{ return NMLTOK_IF; }
+"not"		{ return PMLTOK_NOT; }
+"and"		{ return PMLTOK_AND; }
+"or"		{ return PMLTOK_OR; }
+"nlz"		{ return PMLTOK_NLZ; }
+"pop"		{ return PMLTOK_POP; }
+"while"		{ return PMLTOK_WHILE; }
+"if"		{ return PMLTOK_IF; }
+"else"		{ return PMLTOK_ELSE; }
 
-"=="		{ return NMLTOK_EQ; }
-"!="		{ return NMLTOK_NEQ; }
-"<"		{ return NMLTOK_LT; }
-">"		{ return NMLTOK_GT; }
-"<="		{ return NMLTOK_LEQ; }
-">="		{ return NMLTOK_GEQ; }
-"=/"		{ return NMLTOK_MASKEQ; }
-"!/"		{ return NMLTOK_MASKNE; }
-"=~"		{ return NMLTOK_REX; }
-"!~"		{ return NMLTOK_NOTREX; }
+"=="		{ return PMLTOK_EQ; }
+"!="		{ return PMLTOK_NEQ; }
+"<"		{ return PMLTOK_LT; }
+">"		{ return PMLTOK_GT; }
+"<="		{ return PMLTOK_LEQ; }
+">="		{ return PMLTOK_GEQ; }
+"=/"		{ return PMLTOK_MASKEQ; }
+"!/"		{ return PMLTOK_MASKNE; }
+"=~"		{ return PMLTOK_REX; }
+"!~"		{ return PMLTOK_NOTREX; }
 
-"+"		{ return NMLTOK_PLUS; }
-"-"		{ return NMLTOK_MINUS; }
-"*"		{ return NMLTOK_TIMES; }
-"/"		{ return NMLTOK_DIV; }
-"%"		{ return NMLTOK_MOD; }
-"&"		{ return NMLTOK_BAND; }
-"|"		{ return NMLTOK_BOR; }
-"~"		{ return NMLTOK_BINV; }
-"<<"		{ return NMLTOK_SHL; }
-">>"		{ return NMLTOK_SHR; }
-">>a"		{ return NMLTOK_SHRA; }
-"."		{ return NMLTOK_DOT; }
-":"		{ return NMLTOK_COLON; }
-"="		{ return NMLTOK_ASSIGN; }
+"+"		{ return PMLTOK_PLUS; }
+"-"		{ return PMLTOK_MINUS; }
+"*"		{ return PMLTOK_TIMES; }
+"/"		{ return PMLTOK_DIV; }
+"%"		{ return PMLTOK_MOD; }
+"&"		{ return PMLTOK_BAND; }
+"|"		{ return PMLTOK_BOR; }
+"~"		{ return PMLTOK_BINV; }
+"<<"		{ return PMLTOK_SHL; }
+">>"		{ return PMLTOK_SHR; }
+">>a"		{ return PMLTOK_SHRA; }
+"."		{ return PMLTOK_DOT; }
+":"		{ return PMLTOK_COLON; }
+"="		{ return PMLTOK_ASSIGN; }
 
-"{"		{ return NMLTOK_LBRACE; }
-"}"		{ return NMLTOK_RBRACE; }
-"("		{ return NMLTOK_LPAREN; }
-")"		{ return NMLTOK_RPAREN; }
-"["		{ return NMLTOK_LBRACKET; }
-"]"		{ return NMLTOK_RBRACKET; }
-"?-"		{ return NMLTOK_PPBEGIN; }
-"-?"		{ return NMLTOK_PPEND; }
-","		{ return NMLTOK_COMMA; }
+"{"		{ return PMLTOK_LBRACE; }
+"}"		{ return PMLTOK_RBRACE; }
+"("		{ return PMLTOK_LPAREN; }
+")"		{ return PMLTOK_RPAREN; }
+"["		{ return PMLTOK_LBRACKET; }
+"]"		{ return PMLTOK_RBRACKET; }
+"?-"		{ return PMLTOK_PPBEGIN; }
+"-?"		{ return PMLTOK_PPEND; }
+","		{ return PMLTOK_COMMA; }
 
-[a-zA-Z_][a-zA-Z0-9_]*	{ return NMLTOK_ID; }
+[a-zA-Z_][a-zA-Z0-9_]*	{ return PMLTOK_ID; }
 
 {ws}		/* skip ws */
 
@@ -197,7 +198,7 @@ int parse_ipv6_addr(yyscan_t scanner, const char *text)
 	memcpy(&lu.v6addr[n], suffix, slen * 2);
 
 	pmlset_extra(lu, scanner);
-	return NMLTOK_IPV6ADDR;
+	return PMLTOK_IPV6ADDR;
 }
 
 
