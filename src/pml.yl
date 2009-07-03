@@ -70,24 +70,36 @@
 
 prog ::= list.
 
-/* TODO */
-/* list ::= list decl. */
+list ::= list decl.
 list ::= list rule.
 list ::= .
 
-rule ::= pktpat action.
-rule ::= pktpat actionseq.
+rule ::= pktpat stmt.
+rule ::= pktpat stmtlist.
 
-actionseq ::= LBRACE actionlist RBRACE.
-actionlist ::= action SEMICOLON.
-actionlist ::= actionlist action SEMICOLON.
+stmtlist ::= LBRACE stmts RBRACE.
+stmts ::= stmt SEMICOLON.
+stmts ::= stmts stmt SEMICOLON.
 
-action ::= DELETE.
-action ::= WHILE actionseq.
-action ::= IF LPAREN expr RPAREN actionseq.
-action ::= IF LPAREN expr RPAREN actionseq ELSE actionseq.
-action ::= ID ASSIGN expr.
+stmt ::= DELETE.
+stmt ::= WHILE stmtlist.
+stmt ::= IF LPAREN expr RPAREN stmtlist.
+stmt ::= IF LPAREN expr RPAREN stmtlist ELSE stmtlist.
+stmt ::= ID ASSIGN expr.
 
+decl ::= funcdecl.
+decl ::= vardecl.
+
+funcdecl ::= DEF ID LPAREN idlist RPAREN LBRACE vardecls stmts RBRACE.
+idlist ::= .
+idlist ::= someids.
+someids ::= ID.
+someids ::= someids COMMA ID.
+
+vardecl ::= type ID SEMICOLON.
+vardecl ::= type ID LBRACKET NUM RBRACKET.
+vardecls ::= .
+vardecls ::= vardecls vardecl.
 
 pktpat ::= PPBEGIN expr PPEND.
 
@@ -155,16 +167,17 @@ valexpr ::= field.
 
 intrinsic ::= POP.
 intrinsic ::= NLZ.
-intrinsic ::= typecast.
+intrinsic ::= type.
 
-typecast ::= UINT8.
-typecast ::= INT8.
-typecast ::= UINT16.
-typecast ::= INT16.
-typecast ::= UINT32.
-typecast ::= INT32.
+type ::= UINT8.
+type ::= INT8.
+type ::= UINT16.
+type ::= INT16.
+type ::= UINT32.
+type ::= INT32.
 
 funcall ::= ID LPAREN paramlist RPAREN.
+funcall ::= ID LPAREN RPAREN.
 
 paramlist ::= paramlist COMMA expr.
 paramlist ::= expr.
