@@ -70,6 +70,7 @@ dnum		0|[1-9][0-9]*
 "while"		{ return PMLTOK_WHILE; }
 "if"		{ return PMLTOK_IF; }
 "else"		{ return PMLTOK_ELSE; }
+"return"	{ return PMLTOK_RETURN; }
 
 "=="		{ return PMLTOK_EQ; }
 "!="		{ return PMLTOK_NEQ; }
