@@ -34,7 +34,7 @@ enum {
   NETVM_OC_NOP,         /* no operation */
   NETVM_OC_POP,         /* discards top of stack */
   NETVM_OC_PUSH,        /* [|V] pushes immediate value onto stack */
-  NETVM_OC_DUP,         /* [|BV] dupcliates "val" from the top of stack */
+  NETVM_OC_DUP,         /* [|BV] dups slot "val" from the top of stack */
   NETVM_OC_SWAP,        /* [|BWV] swap stack positions "val" and "width" */
                         /* 0-based counting from the top of the stack */
   NETVM_OC_LDMEM,       /* [addr|WISR] load from memory */
@@ -83,7 +83,7 @@ enum {
   NETVM_OC_PREX,        /* [pa,len,rxidx,pktnum|I]: regex on packet data */
   NETVM_OC_MREX,        /* [addr,len,rxidx]: regex on memory data */
                         /* for *REX, width == # of submatches to push */
-  NETVM_OC_HALT,        /* halt program */
+  NETVM_OC_HALT,        /* [|V] halt program, store 'val' in error code */
   NETVM_OC_BR,          /* [v|I] set PC to v (must be > PC in matchonly mode */
   NETVM_OC_BNZ,         /* [c,v|I] set PC to v if c is non-zero */
   NETVM_OC_BZ,          /* [c,v|I] set PC to v if c is zero */

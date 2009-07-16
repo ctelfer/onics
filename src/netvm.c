@@ -692,7 +692,9 @@ static void ni_mrex(struct netvm *vm)
 
 static void ni_halt(struct netvm *vm)
 {
+  struct netvm_inst *inst = &vm->inst[vm->pc];
   vm->running = 0;
+  vm->error = inst->val;
 }
 
 
