@@ -32,18 +32,18 @@
   Actions:
 
   Drop
-  Set field <- big one
-  Insert space?
-  Cut space?
-  Print
+  Insert space
+  Cut space
   Duplicate
   Push header
   Fix lengths
   Fix checksum
   Fix dlt
-  Fun call 
-  Set variable
   Enqueue packet
+  Set field/variable
+  Fun call 
+  Print
+  Return
 
   if () { 
   }
@@ -81,11 +81,27 @@ stmtlist ::= LBRACE stmts RBRACE.
 stmts ::= stmt SEMICOLON.
 stmts ::= stmts stmt SEMICOLON.
 
-stmt ::= DELETE.
+stmt ::= pktact.
+stmt ::= var ASSIGN expr.
 stmt ::= WHILE stmtlist.
 stmt ::= IF LPAREN expr RPAREN stmtlist.
 stmt ::= IF LPAREN expr RPAREN stmtlist ELSE stmtlist.
-stmt ::= ID ASSIGN expr.
+stmt ::= RETURN expr.
+stmt ::= PRINT STRING.
+stmt ::= PRINT STRING COMMA paramlist.
+
+pktact ::= DROP.
+pktact ::= DROP ID.
+pktact ::= INSERT pktoff expr.
+pktact ::= CUT pktoff expr.
+pktact ::= DUP NUM.
+pktact ::= DUP ID NUM.
+pktact ::= FIXLEN.
+pktact ::= FIXLEN locator.
+pktact ::= FIXCSUM locator.
+pktact ::= FIXDLT locator.
+pktact ::= ENQUEUE ID.
+
 
 decl ::= funcdecl.
 decl ::= vardecl.
@@ -194,3 +210,6 @@ var ::= locator LBRACKET borexpr COLON borexpr RBRACKET.
 
 locator ::= locator DOT ID.
 locator ::= ID.
+
+pktoff ::= locator.
+pktoff ::= locator LBRACKET borexpr RBRACKET.
