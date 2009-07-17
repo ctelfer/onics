@@ -71,6 +71,15 @@ dnum		0|[1-9][0-9]*
 "if"		{ return PMLTOK_IF; }
 "else"		{ return PMLTOK_ELSE; }
 "return"	{ return PMLTOK_RETURN; }
+"drop"		{ return PMLTOK_DROP; }
+"insert"	{ return PMLTOK_INSERT; }
+"cut"		{ return PMLTOK_CUT; }
+"dup"		{ return PMLTOK_DUP; }
+"fixlen"	{ return PMLTOK_FIXLEN; }
+"fixcsum"	{ return PMLTOK_FIXCSUM; }
+"fixdlt"	{ return PMLTOK_FIXDLT; }
+"enqueue"	{ return PMLTOK_ENQUEUE; }
+"print"		{ return PMLTOK_PRINT; }
 
 "=="		{ return PMLTOK_EQ; }
 "!="		{ return PMLTOK_NEQ; }

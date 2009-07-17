@@ -14,6 +14,15 @@ enum {
   PMLTT_MASKVAL = 3,
   PMLTT_BINOP   = 4,
   PMLTT_UNOP    = 5,
+  PMLTT_EXPRLIST = 6,
+  PMLTT_FUNCALL = 7,
+  PMLTT_STMTLIST = 8,
+  PMLTT_IF      = 9,
+  PMLTT_WHILE   = 10,
+  PMLTT_PKTACT  = 11,
+  PMLTT_SETACT  = 12,
+  PMLTT_FUNCTION = 13,
+  PMLTT_PRINT = 14,
 };
 
 
@@ -74,7 +83,7 @@ struct pml_exprlist {
 };
 
 
-struct pml_function {
+struct pml_funcall {
   int                   pmlfc_type;
   struct pml_func *     pmlfc_func;
   struct pml_exprlist * pmlfc_params;
@@ -102,8 +111,40 @@ struct pml_while {
 };
 
 
+enum {
+  PMLPA_DROP = 1,
+  PMLPA_INSERT = 2,
+  PMLPA_CUT = 3,
+  PMLPA_DUP = 4,
+  PMLPA_HDRPUSH = 5,
+  PMLPA_FIXLEN = 6,
+  PMLPA_FIXCSUM = 7,
+  PMLPA_DLT = 8,
+  PMLPA_ENQUEUE = 9,
+};
+
+
+struct pml_pkt_action {
+  int                   pmlpa_type;
+  int                   pmlpa_action;
+  union pml_expr *      pmlpa_pkt;
+  char *                pmlpa_name;
+  union pml_expr *      pmlpa_off;
+  union pml_expr *      pmlpa_amount;   /* for insert or cut */
+};
+
+
+struct pml_set_action {
+  int                   pmlsa_type;
+  int                   pmlsa_conv;             /* byte order conversion */
+  char *                pmlsa_vname;
+  union pml_expr *      pmlsa_off;
+  union pml_expr *      pmlsa_len;
+  union pml_expr *      pmlsa_newval;
+};
+
+
 struct pml_variable {
-  int                   pmlvar_type;
   char *                pmlvar_name;
   int                   pmlvar_width;
   int                   pmlvar_num;
@@ -112,7 +153,6 @@ struct pml_variable {
 
 
 struct pml_ns {
-  int                   pmlns_type;
   struct pml_ns *       pmlns_parent;
   struct htab *         pmlns_vars;
   struct htab *         pmlns_funcs;
@@ -125,6 +165,29 @@ struct pml_function {
   struct list *         pmlf_pnames;
   struct pml_ns         pmlf_ns;
   struct pml_stmtlist * pmlf_body;
+};
+
+
+struct pml_print {
+  int                   pmlp_type;
+  char *                pmlp_fmt;
+  struct pml_exprlist * pmlp_params;
+};
+
+
+union pml_tree {
+  struct pml_value      value;
+  struct pml_binop      binop;
+  struct pml_unop       unop;
+  struct pml_exprlist   exprlist;
+  struct pml_funcall    funcall;
+  struct pml_stmtlist   stmtlist;
+  struct pml_if         ifstmt;
+  struct pml_while      whilestmt;
+  struct pml_pkt_action pktact;
+  struct pml_set_action setact;
+  struct pml_function   function;
+  struct pml_print      print;
 };
 
 
