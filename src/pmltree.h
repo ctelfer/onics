@@ -40,6 +40,7 @@ struct pml_scalar {
 
 struct pml_value {
   int                   pmlv_type;
+  struct list		pmlv_ln;
   union {
     struct pml_scalar   u_scalar;
     struct raw          u_bytestr;
@@ -58,6 +59,7 @@ struct pml_value {
 struct pml_binop {
   int                   pmlb_type;
   int                   pmlb_op;
+  struct list		pmlb_ln;
   union pml_expr *      pmlb_left;
   union pml_expr *      pmlb_right;
 };
@@ -66,20 +68,15 @@ struct pml_binop {
 struct pml_unop {
   int                   pmlu_type;
   int                   pmlu_op;
+  struct list		pmlu_ln;
   union pml_expr *      pmlb_expr;
 };
 
 
-union pml_expr {
-  struct pml_value      pmln_value;
-  struct pml_binop      pmln_binop;
-  struct pml_unop       pmln_unop;
-};
-
 
 struct pml_exprlist {
   int                   pmlel_type;
-  struct list *         pmlel_exprs;
+  struct list           pmlel_exprs;
 };
 
 
@@ -92,7 +89,7 @@ struct pml_funcall {
 
 struct pml_stmtlist {
   int                   pmlsl_type;
-  struct list *         pmlsl_stmts;
+  struct list           pmlsl_stmts;
 };
 
 
@@ -162,7 +159,7 @@ struct pml_ns {
 struct pml_function {
   int                   pmlf_type;
   char *                pmlf_name;
-  struct list *         pmlf_pnames;
+  struct list           pmlf_pnames;
   struct pml_ns         pmlf_ns;
   struct pml_stmtlist * pmlf_body;
 };
@@ -190,6 +187,9 @@ union pml_tree {
   struct pml_print      print;
 };
 
+
+union pml_tree *pmlt_alloc(int pmltt);
+void pmlt_free(union pml_tree *tree);
 
 
 #endif /* __pmtree_h */
