@@ -17,7 +17,8 @@
  * V -> Uses the "val" field of the instruction regardless (i.e. without
  *      concern for the NETVM_IF_IMMED flag)
  * R -> Load offset from read-only segment offset
- * B -> Offsets are from base pointer upwardes, not stack pointer downwards
+ * B -> Offsets are from base pointer upwards, not stack pointer downwards
+ * -B -> Offsets are from base pointer downwards
  *
  * Field types:
  * v, v1, v2 - a generic numeric value
@@ -34,7 +35,7 @@ enum {
   NETVM_OC_NOP,         /* no operation */
   NETVM_OC_POP,         /* discards top of stack */
   NETVM_OC_PUSH,        /* [|V] pushes immediate value onto stack */
-  NETVM_OC_DUP,         /* [|BV] dups slot "val" from the top of stack */
+  NETVM_OC_DUP,         /* [|-BBV] dups slot "val" from the top of stack */
   NETVM_OC_SWAP,        /* [|BWV] swap stack positions "val" and "width" */
                         /* 0-based counting from the top of the stack */
   NETVM_OC_LDMEM,       /* [addr|WISR] load from memory */
@@ -159,6 +160,7 @@ enum {
   NETVM_IF_MOVEUP =    0x40, /* only used HDRINS and HDRCUT */
   NETVM_IF_RDONLY =    0x80, /* load from read-only segment */
   NETVM_IF_BPOFF =     0x01, /* DUP or SWAP offsets are from base pointer */
+  NETVM_IF_NEGBPOFF =  0x02, /* DUP offsets are negative from base pointer */
 };
 
 enum {

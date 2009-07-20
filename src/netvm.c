@@ -122,11 +122,16 @@ static void ni_dup(struct netvm *vm)
 {
   struct netvm_inst *inst = &vm->inst[vm->pc];
   uint32_t val;
-  FATAL(vm, NETVM_ERR_STKUNDF, !S_HAS(vm, inst->val+1));
-  if ( inst->flags & NETVM_IF_BPOFF ) {
-    val = vm->stack[vm->bp + 1 + inst->val];
-  } else {
-    val = S_GET(vm, inst->val);
+  if ( inst->flags & NETVM_IF_NEGBPOFF ) {
+    FATAL(vm, NETVM_ERR_STKUNDF, vm->bp <= inst->val);
+    val = vm->stack[vm->bp - inst->val - 1];
+  } else { 
+    FATAL(vm, NETVM_ERR_STKUNDF, !S_HAS(vm, inst->val+1));
+    if ( inst->flags & NETVM_IF_BPOFF ) {
+      val = vm->stack[vm->bp + 1 + inst->val];
+    } else {
+      val = S_GET(vm, inst->val);
+    }
   }
   S_PUSH(vm, val);
 }
