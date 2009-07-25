@@ -5,6 +5,9 @@
 #include "pmltree.h"
 #include <stdlib.h>
 
+#define l_to_expr(p) container(p, struct pml_expr, pmle_ln)
+#define l_to_stmt(p) container(p, struct pml_stmt, pmls_ln)
+
 union pml_tree *pmlt_alloc(int pmltt)
 {
   switch(pmltt) {
@@ -48,7 +51,7 @@ union pml_tree *pmlt_alloc(int pmltt)
       return NULL;
     p->pmlu_type = pmltt;
     p->pmlu_op = 0;
-    p->pmlb_expr = NULL;
+    p->pmlu_expr = NULL;
     return (union pml_tree *)p;
   } break;
 
@@ -61,22 +64,22 @@ union pml_tree *pmlt_alloc(int pmltt)
     return (union pml_tree *)p;
   }  break;
 
-  case PMLTT_FUNCALL: {
-    struct pml_funcall *p;
-    if ( (p = calloc(1, sizeof(*p))) == NULL )
-      return NULL;
-    p->pmlfc_type = pmltt;
-    p->pmlfc_func = NULL;
-    p->pmlfc_params = NULL;
-    return (union pml_tree *)p;
-  } break;
-
   case PMLTT_STMTLIST: {
     struct pml_stmtlist *p;
     if ( (p = calloc(1, sizeof(*p))) == NULL )
       return NULL;
     p->pmlsl_type = pmltt;
     l_init(&p->pmlsl_stmts);
+    return (union pml_tree *)p;
+  } break;
+
+  case PMLTT_FUNCALL: {
+    struct pml_funcall *p;
+    if ( (p = calloc(1, sizeof(*p))) == NULL )
+      return NULL;
+    p->pmlfc_type = pmltt;
+    p->pmlfc_func = NULL;
+    p->pmlfc_args = NULL;
     return (union pml_tree *)p;
   } break;
 
@@ -146,7 +149,7 @@ union pml_tree *pmlt_alloc(int pmltt)
       return NULL;
     p->pmlp_type = pmltt;
     p->pmlp_fmt = NULL;
-    p->pmlp_params = NULL;
+    p->pmlp_args = NULL;
     return (union pml_tree *)p;
   } break;
 
@@ -158,4 +161,96 @@ union pml_tree *pmlt_alloc(int pmltt)
 
 void pmlt_free(union pml_tree *tree)
 {
+  if ( tree == NULL )
+    return;
+
+  switch(tree->expr.pmle_type) {
+  case PMLTT_SCALAR:
+    break;
+
+  case PMLTT_BYTESTR: {
+    struct pml_value *p = &tree->value;
+    free(p->pmlv_byteval.data);
+  } break;
+
+  case PMLTT_MASKVAL: {
+    struct pml_value *p = &tree->value;
+    free(p->pmlv_mval.data);
+    free(p->pmlv_mmask.data);
+  } break;
+
+  case PMLTT_BINOP: {
+    struct pml_binop *p = &tree->binop;
+    pmlt_free((union pml_tree *)p->pmlb_left);
+    pmlt_free((union pml_tree *)p->pmlb_right);
+  } break;
+
+  case PMLTT_UNOP: {
+    struct pml_unop *p = &tree->unop;
+    pmlt_free((union pml_tree *)p->pmlu_expr);
+  } break;
+
+  case PMLTT_EXPRLIST: {
+    struct pml_exprlist *p = &tree->exprlist;
+    struct list *l;
+    while ( (l = l_deq(&p->pmlel_exprs)) != NULL )
+      pmlt_free((union pml_tree *)l_to_expr(l));
+  } break;
+
+  case PMLTT_FUNCALL: {
+    struct pml_funcall *p = &tree->funcall;
+    pmlt_free((union pml_tree *)p->pmlfc_args);
+  } break;
+
+  case PMLTT_IF: {
+    struct pml_if *p = &tree->ifstmt;
+    pmlt_free((union pml_tree *)p->pmlif_test);
+    pmlt_free((union pml_tree *)p->pmlif_tbody);
+    pmlt_free((union pml_tree *)p->pmlif_fbody);
+  } break;
+
+  case PMLTT_WHILE: {
+    struct pml_while *p = &tree->whilestmt;
+    pmlt_free((union pml_tree *)p->pmlw_test);
+    pmlt_free((union pml_tree *)p->pmlw_body);
+  } break;
+
+  case PMLTT_PKTACT: {
+    struct pml_pkt_action *p = &tree->pktact;
+    free(p->pmlpa_name);
+    pmlt_free((union pml_tree *)p->pmlpa_pkt);
+    pmlt_free((union pml_tree *)p->pmlpa_off);
+    pmlt_free((union pml_tree *)p->pmlpa_amount);
+  } break;
+
+  case PMLTT_SETACT: {
+    struct pml_set_action *p = &tree->setact;
+    free(p->pmlsa_vname);
+    pmlt_free((union pml_tree *)p->pmlsa_off);
+    pmlt_free((union pml_tree *)p->pmlsa_len);
+    pmlt_free((union pml_tree *)p->pmlsa_newval);
+  } break;
+
+  case PMLTT_PRINT: {
+    struct pml_print *p = &tree->print;
+    free(p->pmlp_fmt);
+    pmlt_free((union pml_tree *)p->pmlp_args);
+  } break;
+
+  case PMLTT_STMTLIST: {
+    struct pml_stmtlist *p = &tree->stmtlist;
+    struct list *l;
+    while ( (l = l_deq(&p->pmlsl_stmts)) != NULL )
+      pmlt_free((union pml_tree *)l_to_stmt(l));
+  } break;
+
+
+  case PMLTT_FUNCTION: {
+  } break;
+
+  default:
+    abort_unless(0);
+  }
+
+  free(tree);
 }

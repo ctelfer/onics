@@ -16,13 +16,19 @@ enum {
   PMLTT_UNOP    = 5,
   PMLTT_EXPRLIST = 6,
   PMLTT_FUNCALL = 7,
-  PMLTT_STMTLIST = 8,
-  PMLTT_IF      = 9,
-  PMLTT_WHILE   = 10,
-  PMLTT_PKTACT  = 11,
-  PMLTT_SETACT  = 12,
-  PMLTT_FUNCTION = 13,
-  PMLTT_PRINT = 14,
+  PMLTT_IF      = 8,
+  PMLTT_WHILE   = 9,
+  PMLTT_PKTACT  = 10,
+  PMLTT_SETACT  = 11,
+  PMLTT_PRINT   = 12,
+  PMLTT_STMTLIST = 13,
+  PMLTT_FUNCTION = 14,
+};
+
+
+struct pml_expr {
+  int                   pmle_type;
+  struct list           pmle_ln;
 };
 
 
@@ -58,20 +64,27 @@ struct pml_value {
 
 struct pml_binop {
   int                   pmlb_type;
-  int                   pmlb_op;
   struct list		pmlb_ln;
-  union pml_expr *      pmlb_left;
-  union pml_expr *      pmlb_right;
+  int                   pmlb_op;
+  union pml_expr_u *    pmlb_left;
+  union pml_expr_u *    pmlb_right;
 };
 
 
 struct pml_unop {
   int                   pmlu_type;
-  int                   pmlu_op;
   struct list		pmlu_ln;
-  union pml_expr *      pmlb_expr;
+  int                   pmlu_op;
+  union pml_expr_u *    pmlu_expr;
 };
 
+
+union pml_expr_u {
+  struct pml_expr       expr;
+  struct pml_value      value;
+  struct pml_binop      binop;
+  struct pml_unop       unop;
+};
 
 
 struct pml_exprlist {
@@ -80,22 +93,24 @@ struct pml_exprlist {
 };
 
 
-struct pml_funcall {
-  int                   pmlfc_type;
-  struct pml_func *     pmlfc_func;
-  struct pml_exprlist * pmlfc_params;
+struct pml_stmt {
+  int                   pmls_type;
+  struct list           pmls_ln;
 };
 
 
-struct pml_stmtlist {
-  int                   pmlsl_type;
-  struct list           pmlsl_stmts;
+struct pml_funcall {
+  int                   pmlfc_type;
+  struct list           pmlfc_ln;
+  struct pml_func *     pmlfc_func;
+  struct pml_exprlist * pmlfc_args;
 };
 
 
 struct pml_if {
   int                   pmlif_type;
-  union pml_expr *      pmlif_test;
+  struct list           pmlif_ln;
+  union pml_expr_u *    pmlif_test;
   struct pml_stmtlist * pmlif_tbody;
   struct pml_stmtlist * pmlif_fbody;
 };
@@ -103,7 +118,8 @@ struct pml_if {
 
 struct pml_while {
   int                   pmlw_type;
-  union pml_expr *      pmlw_test;
+  struct list           pmlw_ln;
+  union pml_expr_u *    pmlw_test;
   struct pml_stmtlist * pmlw_body;
 };
 
@@ -123,21 +139,37 @@ enum {
 
 struct pml_pkt_action {
   int                   pmlpa_type;
+  struct list           pmlpa_ln;
   int                   pmlpa_action;
-  union pml_expr *      pmlpa_pkt;
+  union pml_expr_u *    pmlpa_pkt;
   char *                pmlpa_name;
-  union pml_expr *      pmlpa_off;
-  union pml_expr *      pmlpa_amount;   /* for insert or cut */
+  union pml_expr_u *    pmlpa_off;
+  union pml_expr_u *    pmlpa_amount;   /* for insert or cut */
 };
 
 
 struct pml_set_action {
   int                   pmlsa_type;
+  struct list           pmlsa_ln;
   int                   pmlsa_conv;             /* byte order conversion */
   char *                pmlsa_vname;
-  union pml_expr *      pmlsa_off;
-  union pml_expr *      pmlsa_len;
-  union pml_expr *      pmlsa_newval;
+  union pml_expr_u *    pmlsa_off;
+  union pml_expr_u *    pmlsa_len;
+  union pml_expr_u *    pmlsa_newval;
+};
+
+
+struct pml_print {
+  int                   pmlp_type;
+  struct list           pmlp_ln;
+  char *                pmlp_fmt;
+  struct pml_exprlist * pmlp_args;
+};
+
+
+struct pml_stmtlist {
+  int                   pmlsl_type;
+  struct list           pmlsl_stmts;
 };
 
 
@@ -165,26 +197,22 @@ struct pml_function {
 };
 
 
-struct pml_print {
-  int                   pmlp_type;
-  char *                pmlp_fmt;
-  struct pml_exprlist * pmlp_params;
-};
-
-
 union pml_tree {
+  struct pml_expr       expr;
   struct pml_value      value;
   struct pml_binop      binop;
   struct pml_unop       unop;
+  union pml_expr_u      expr_u;
   struct pml_exprlist   exprlist;
+  struct pml_stmt       stmt;
   struct pml_funcall    funcall;
-  struct pml_stmtlist   stmtlist;
   struct pml_if         ifstmt;
   struct pml_while      whilestmt;
   struct pml_pkt_action pktact;
   struct pml_set_action setact;
-  struct pml_function   function;
   struct pml_print      print;
+  struct pml_stmtlist   stmtlist;
+  struct pml_function   function;
 };
 
 
