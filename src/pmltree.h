@@ -9,20 +9,30 @@
 #include <cat/stduse.h>
 
 enum {
-  PMLTT_SCALAR  = 1,
-  PMLTT_BYTESTR = 2,
-  PMLTT_MASKVAL = 3,
-  PMLTT_BINOP   = 4,
-  PMLTT_UNOP    = 5,
-  PMLTT_EXPRLIST = 6,
-  PMLTT_FUNCALL = 7,
-  PMLTT_IF      = 8,
-  PMLTT_WHILE   = 9,
-  PMLTT_PKTACT  = 10,
-  PMLTT_SETACT  = 11,
-  PMLTT_PRINT   = 12,
-  PMLTT_STMTLIST = 13,
-  PMLTT_FUNCTION = 14,
+  PMLTT_SCALAR,
+  PMLTT_BYTESTR,
+  PMLTT_MASKVAL,
+  PMLTT_VARREF,
+  PMLTT_BINOP,
+  PMLTT_UNOP,
+  PMLTT_EXPRLIST,
+  PMLTT_FUNCALL,
+  PMLTT_IF,
+  PMLTT_WHILE,
+  PMLTT_PKTACT,
+  PMLTT_SETACT,
+  PMLTT_PRINT,
+  PMLTT_STMTLIST,
+  PMLTT_FUNCTION,
+  PMLTT_RULE,
+};
+
+
+struct pml_prog {
+  struct list           pmlp_decls;
+  struct htab           pmlp_gvars;
+  struct htab           pmlp_funcs;
+  struct pml_function * pmlp_inside;
 };
 
 
@@ -51,6 +61,7 @@ struct pml_value {
     struct pml_scalar   u_scalar;
     struct raw          u_bytestr;
     struct pml_maskval  u_maskval;
+    struct pml_variable *u_varref;
   } pmlv_u;
 };
 
@@ -61,6 +72,7 @@ struct pml_value {
 #define pmlv_maskval    pmlv_u.u_maskval
 #define pmlv_mval       pmlv_u.u_maskval.pmlm_val
 #define pmlv_mmask      pmlv_u.u_maskval.pmlm_mask
+#define pmlv_varref	pmlv_u.u_varref
 
 struct pml_binop {
   int                   pmlb_type;
@@ -181,19 +193,22 @@ struct pml_variable {
 };
 
 
-struct pml_ns {
-  struct pml_ns *       pmlns_parent;
-  struct htab *         pmlns_vars;
-  struct htab *         pmlns_funcs;
+struct pml_function {
+  int                   pmlf_type;
+  struct list		pmlf_ln;
+  char *                pmlf_name;
+  char **               pmlf_pnames;
+  uint                  pmlf_nparams;
+  struct htab           pmlf_vars;
+  struct pml_stmtlist * pmlf_body;
 };
 
 
-struct pml_function {
-  int                   pmlf_type;
-  char *                pmlf_name;
-  struct list           pmlf_pnames;
-  struct pml_ns         pmlf_ns;
-  struct pml_stmtlist * pmlf_body;
+struct pml_rule {
+  int                   pmlr_type;
+  struct list		pmlr_ln;
+  union pml_expr_u *    pmlr_pattern;
+  struct pml_stmtlist * pmlr_stmts;
 };
 
 
@@ -213,6 +228,7 @@ union pml_tree {
   struct pml_print      print;
   struct pml_stmtlist   stmtlist;
   struct pml_function   function;
+  struct pml_rule       rule;
 };
 
 
