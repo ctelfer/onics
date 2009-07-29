@@ -3,10 +3,78 @@
  * See attached licence.
  */
 #include "pmltree.h"
+#include <cat/aux.h>
 #include <stdlib.h>
+#include <string.h>
 
 #define l_to_expr(p) container(p, struct pml_expr, pmle_ln)
 #define l_to_stmt(p) container(p, struct pml_stmt, pmls_ln)
+#define SYMTABSIZE    256
+
+
+static struct hash_sys vartab_sys = {
+  cmp_str, ht_shash, NULL
+};
+
+
+static int vtab_init(struct htab *ht)
+{
+  struct list *bins;
+  if ( (bins = malloc(SYMTABSIZE * sizeof(struct list))) == NULL )
+    return -1;
+  ht_init(ht, bins, SYMTABSIZE, &vartab_sys);
+  return 0;
+}
+
+
+static struct pml_variable *vtab_lkup(struct htab *ht, const char *s, int *create)
+{
+  uint h;
+  struct hnode *hn;
+  struct pml_variable *p = NULL;
+  abort_unless(ht && s);
+
+  if ( (hn = ht_lkup(ht, s, &h)) != NULL ) {
+    if ( create != NULL )
+      *create = 0;
+  } else if ( create != NULL ) {
+    p = calloc(1, sizeof(*p));
+    if ( p == NULL ) {
+      *create = 0;
+      return NULL;
+    }
+    hn = &p->pmlvar_hn;
+    if ( (p->pmlvar_name = strdup(s)) == NULL ) {
+      free(p);
+      *create = 0;
+      return NULL;
+    }
+    ht_ninit(hn, p->pmlvar_name, p, h);
+    ht_ins(ht, hn);
+  }
+
+  return p;
+}
+
+
+static void freevar(void *var, void *ctx)
+{
+  struct pml_variable *p = var;
+  ht_rem(&p->pmlvar_hn);
+  free(p->pmlvar_name);
+  free(p);
+}
+
+
+void vtab_destroy(struct htab *ht)
+{
+  if ( ht->tab == NULL )
+    return;
+  ht_apply(ht, freevar, NULL);
+  free(ht->tab);
+  ht->tab = NULL;
+}
+
 
 union pml_tree *pmlt_alloc(int pmltt)
 {
@@ -19,19 +87,21 @@ union pml_tree *pmlt_alloc(int pmltt)
     if ( (p = calloc(1, sizeof(*p))) == NULL )
       return NULL;
     p->pmlv_type = pmltt;
+    l_init(&p->pmlv_ln);
     if ( pmltt == PMLTT_SCALAR ) {
       p->pmlv_sval = 0;
       p->pmlv_swidth = 4;
     } else if ( pmltt == PMLTT_BYTESTR ) {
       p->pmlv_byteval.data = NULL;
       p->pmlv_byteval.len = 0;
-    } else {
+    } else if ( pmltt == PMLTT_MASKVAL ) {
       p->pmlv_mval.data = NULL;
       p->pmlv_mval.len = 0;
       p->pmlv_mmask.data = NULL;
       p->pmlv_mmask.len = 0;
+    } else {
+      p->pmlv_varref = NULL;
     }
-    l_init(&p->pmlv_ln);
     return (union pml_tree *)p;
   } break;
 
@@ -143,13 +213,13 @@ union pml_tree *pmlt_alloc(int pmltt)
 
   case PMLTT_FUNCTION: {
     struct pml_function *p;
-    if ( (p = calloc(1, sizeof(*p))) == NULL )
+    if ( ((p = calloc(1, sizeof(*p))) == NULL) ||
+         (init_vartab(&p->pmlf_vars) < 0) )
       return NULL;
     p->pmlf_type = pmltt;
     p->pmlf_name = NULL;
     p->pmlf_nparams = 0;
     p->pmlf_pnames = NULL;
-    /* TODO: pmlf_vars */
     return (union pml_tree *)p;
   } break;
 
@@ -255,7 +325,6 @@ void pmlt_free(union pml_tree *tree)
       pmlt_free((union pml_tree *)l_to_stmt(l));
   } break;
 
-
   case PMLTT_FUNCTION: {
     struct pml_function *p = &tree->function;
     uint i;
@@ -264,6 +333,7 @@ void pmlt_free(union pml_tree *tree)
         free(p->pmlf_pnames[i]);
       free(p->pmlf_pnames);
     }
+    vtab_destroy(&p->pmlf_vars);
   } break;
 
   case PMLTT_RULE: {

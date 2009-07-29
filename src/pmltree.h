@@ -6,7 +6,6 @@
 #define __pmltree_h
 #include <cat/list.h>
 #include <cat/hash.h>
-#include <cat/stduse.h>
 
 enum {
   PMLTT_SCALAR,
@@ -186,6 +185,7 @@ struct pml_stmtlist {
 
 
 struct pml_variable {
+  struct hnode          pmlvar_hn;
   char *                pmlvar_name;
   int                   pmlvar_width;
   int                   pmlvar_num;
