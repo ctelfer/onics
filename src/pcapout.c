@@ -88,13 +88,13 @@ int main(int argc, char *argv[])
   }
 
   if ( g_outiface == NULL ) {
-    if ( (g_pcap = pcap_open_dead(pcap_dlt, SIZE_MAX)) == NULL )
+    if ( (g_pcap = pcap_open_dead(pcap_dlt, INT_MAX)) == NULL )
       errsys("Error opening pcap: ");
     if ( (g_dumper = pcap_dump_fopen(g_pcap, stdout)) == NULL )
       errsys("Error opening dumper to standard output: ");
   } else { 
     char errbuf[PCAP_ERRBUF_SIZE];
-    g_pcap = pcap_open_live(g_outiface, SIZE_MAX, 0, 0, errbuf);
+    g_pcap = pcap_open_live(g_outiface, INT_MAX, 0, 0, errbuf);
     if ( g_pcap == NULL )
       err("pcap_open_live: %s\n", errbuf);
     if ( pcap_datalink(g_pcap) != pcap_dlt )
