@@ -37,7 +37,7 @@ int nprg_add_code(struct netvm_program *prog, struct netvm_inst *inst,
     return -1;
   if ( prog->ninst + ninst > prog->isiz ) { 
     void *p = prog->inst;
-    mem_agrow(&estdmem, &p, sizeof(*inst), &prog->isiz, prog->ninst + ninst);
+    mem_agrow(&estdmm, &p, sizeof(*inst), &prog->isiz, prog->ninst + ninst);
     prog->inst = p;
   }
   abort_unless(prog->inst && prog->isiz >= prog->ninst + ninst);
