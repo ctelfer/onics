@@ -12,7 +12,7 @@
 #define SYMTABSIZE    256
 
 
-static struct hash_sys vartab_sys = {
+static struct hashsys vartab_sys = {
   cmp_str, ht_shash, NULL
 };
 
@@ -214,7 +214,7 @@ union pml_tree *pmlt_alloc(int pmltt)
   case PMLTT_FUNCTION: {
     struct pml_function *p;
     if ( ((p = calloc(1, sizeof(*p))) == NULL) ||
-         (init_vartab(&p->pmlf_vars) < 0) )
+         (vtab_init(&p->pmlf_vars) < 0) )
       return NULL;
     p->pmlf_type = pmltt;
     p->pmlf_name = NULL;
