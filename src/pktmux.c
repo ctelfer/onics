@@ -107,7 +107,7 @@ int main(int argc, char *argv[])
   }
 
   ue_run(&mux);
-  ue_fini(&mux, &estdmem);
+  ue_fini(&mux, &estdmm);
 
   return 0;
 }
