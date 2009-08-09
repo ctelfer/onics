@@ -69,7 +69,10 @@
 
 %name PML
 %token_prefix PMLTOK_
-%include { #include "pmltree.h" }
+%include { 
+#include "pmltree.h" 
+#include "pmllex.h"
+}
 %extra_argument { struct pml_prog *program }
 
 /* ----- Mappings between non-terminals and C types ----- */
@@ -151,6 +154,9 @@
 
 %type field { union pml_field_u * } 
 %destructor field { pmlt_free($$); }
+
+%token_type { struct raw * }
+%token_destructor { if ($$ != NULL) free($$->data); }
 
 /* ----- Grammar ----- */
 
@@ -300,3 +306,4 @@ locator ::= ID.
 
 pktoff ::= locator.
 pktoff ::= locator LBRACKET borexpr RBRACKET.
+

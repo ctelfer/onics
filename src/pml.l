@@ -1,19 +1,15 @@
 %{
+#include "pmllex.h"
 #include "pml.h"
 #include <cat/err.h>
 
-union pmllex_u {
-	byte_t v6addr[16];
-	byte_t ethaddr[6];
-	unsigned long num;
-	byte_t v4addr[4];
-};
-
 #define YY_EXTRA_TYPE	union pmllex_u
+#define YY_NO_INPUT
 static void parse_eth_addr(yyscan_t scanner, const char *text);
 static void parse_num(yyscan_t scanner, const char *text);
 static void parse_ipv4_addr(yyscan_t scanner, const char *text);
 static int parse_ipv6_addr(yyscan_t scanner, const char *text);
+static int copy_string(yyscan_t scanner, const char *text, int tok);
 %}
 
 %option reentrant
@@ -36,7 +32,7 @@ dnum		0|[1-9][0-9]*
 
 #.*\n
 
-\"{sch}*\"		{ return PMLTOK_STRING; }
+\"{sch}*\"		{return copy_string(yyscanner, yytext, PMLTOK_STRING);}
 
 {xnum}	|
 {onum}	|
@@ -45,7 +41,7 @@ dnum		0|[1-9][0-9]*
 	return PMLTOK_NUM; 
 }
 
-\\x{xb}+		{ return PMLTOK_BYTESTR; }
+\\x{xb}+		{return copy_string(yyscanner, yytext, PMLTOK_BYTESTR);}
 
 {ipb}\.{ipb}\.{ipb}\.{ipb} { 
 	parse_ipv4_addr(yyscanner, yytext);
@@ -209,6 +205,22 @@ int parse_ipv6_addr(yyscan_t scanner, const char *text)
 
 	pmlset_extra(lu, scanner);
 	return PMLTOK_IPV6ADDR;
+}
+
+
+static int copy_string(yyscan_t scanner, const char *text, int tok)
+{
+	size_t len;
+	union pmllex_u lu;
+
+	len = strlen(text) + 1;
+	if ( (lu.raw.data = malloc(len)) == NULL )
+		return -1;
+	memcpy(lu.raw.data, text, len);
+	lu.raw.len = len;
+	pmlset_extra(lu, scanner);
+
+	return tok;
 }
 
 

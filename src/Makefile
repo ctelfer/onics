@@ -43,10 +43,10 @@ ${BINDIR}/pktrel: pktrel.o pktbuf.o
 .c.o: $<
 	${CC} -Wall -c $< -o $@ ${DEFS} ${INCS} ${OPTS}
 
-lex.pml.c: pml.l pml.h
+lex.pml.c: pml.l pml.h pmllex.h
 	flex pml.l
 
-pml.c: pml.yl ../lemon/lemon
+pml.c: pml.yl ../lemon/lemon pmllex.h
 	../lemon/lemon pml.yl
 
 pml.h: pml.yl ../lemon/lemon
