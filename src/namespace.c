@@ -69,7 +69,7 @@ struct ns_element *ns_id_lookup(struct ns_namespace *ns, int *ida, int nids,
     if ( elem->nstype != NSTYPE_NS )
       return NULL;
     ns = (struct ns_namespace *)elem;
-    if ( !(elem = rb_get(ns->idtab, (void *)*ida)) )
+    if ( !(elem = rb_get(ns->idtab, int2ptr(*ida))) )
       return NULL;
     --nids;
     ++ida;
@@ -106,7 +106,7 @@ int ns_deregister(struct ns_namespace *ns)
     return -1;
   rb_clr(rootns.nametab, ns->name);
   if ( ns->id >= 0 )
-    rb_clr(rootns.idtab, (void *)ns->id);
+    rb_clr(rootns.idtab, int2ptr(ns->id));
   return 0;
 }
 
@@ -117,11 +117,11 @@ int ns_insert(struct ns_namespace *ns, struct ns_element *elem)
                TYPEOK(elem->nstype));
   if ( rb_get(ns->nametab, elem->name) )
     return -1;
-  if ( (elem->id >= 0) && rb_get(ns->idtab, (void *)elem->id) )
+  if ( (elem->id >= 0) && rb_get(ns->idtab, int2ptr(elem->id)) )
     return -1;
   rb_put(ns->nametab, elem->name, elem);
   if ( elem->id >= 0 )
-    rb_put(ns->idtab, (void *)elem->id, elem);
+    rb_put(ns->idtab, int2ptr(elem->id), elem);
   elem->parent = ns;
   return 0;
 }
@@ -135,8 +135,8 @@ void ns_remove(struct ns_element *elem)
   abort_unless(rb_get(ns->nametab, elem->name) == elem);
   rb_clr(ns->nametab, elem->name);
   if ( elem->id >= 0 ) {
-    abort_unless(rb_get(ns->idtab, (void *)elem->id) == elem);
-    rb_clr(ns->idtab, (void *)elem->id);
+    abort_unless(rb_get(ns->idtab, int2ptr(elem->id)) == elem);
+    rb_clr(ns->idtab, int2ptr(elem->id));
   }
 }
 

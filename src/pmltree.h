@@ -7,26 +7,6 @@
 #include <cat/list.h>
 #include <cat/hash.h>
 
-enum {
-  PMLTT_SCALAR,
-  PMLTT_BYTESTR,
-  PMLTT_MASKVAL,
-  PMLTT_VARREF,
-  PMLTT_BINOP,
-  PMLTT_UNOP,
-  PMLTT_EXPRLIST,
-  PMLTT_FUNCALL,
-  PMLTT_IF,
-  PMLTT_WHILE,
-  PMLTT_PKTACT,
-  PMLTT_SETACT,
-  PMLTT_PRINT,
-  PMLTT_STMTLIST,
-  PMLTT_FUNCTION,
-  PMLTT_RULE,
-};
-
-
 struct pml_prog {
   struct list           pmlp_decls;
   struct htab           pmlp_gvars;
@@ -35,9 +15,29 @@ struct pml_prog {
 };
 
 
-struct pml_expr {
-  int                   pmle_type;
-  struct list           pmle_ln;
+enum {
+  PMLTT_SCALAR,
+  PMLTT_BYTESTR,
+  PMLTT_MASKVAL,
+  PMLTT_VARREF,
+  PMLTT_BINOP,
+  PMLTT_UNOP,
+  PMLTT_FUNCALL,
+  PMLTT_IF,
+  PMLTT_WHILE,
+  PMLTT_LOCATOR,
+  PMLTT_PKTACT,
+  PMLTT_SETACT,
+  PMLTT_PRINT,
+  PMLTT_LIST,
+  PMLTT_FUNCTION,
+  PMLTT_RULE,
+};
+
+
+struct pml_node {
+  int                   pmln_type;
+  struct list           pmln_ln;
 };
 
 
@@ -91,16 +91,10 @@ struct pml_unop {
 
 
 union pml_expr_u {
-  struct pml_expr       expr;
+  struct pml_node	node;
   struct pml_value      value;
   struct pml_binop      binop;
   struct pml_unop       unop;
-};
-
-
-struct pml_exprlist {
-  int                   pmlel_type;
-  struct list           pmlel_exprs;
 };
 
 
@@ -114,7 +108,7 @@ struct pml_funcall {
   int                   pmlfc_type;
   struct list           pmlfc_ln;
   struct pml_func *     pmlfc_func;
-  struct pml_exprlist * pmlfc_args;
+  struct pml_list *     pmlfc_args; /* expressions */
 };
 
 
@@ -122,8 +116,8 @@ struct pml_if {
   int                   pmlif_type;
   struct list           pmlif_ln;
   union pml_expr_u *    pmlif_test;
-  struct pml_stmtlist * pmlif_tbody;
-  struct pml_stmtlist * pmlif_fbody;
+  struct pml_list *     pmlif_tbody;
+  struct pml_list *     pmlif_fbody;
 };
 
 
@@ -131,7 +125,7 @@ struct pml_while {
   int                   pmlw_type;
   struct list           pmlw_ln;
   union pml_expr_u *    pmlw_test;
-  struct pml_stmtlist * pmlw_body;
+  struct pml_list *     pmlw_body;
 };
 
 
@@ -145,6 +139,15 @@ enum {
   PMLPA_FIXCSUM = 7,
   PMLPA_DLT = 8,
   PMLPA_ENQUEUE = 9,
+};
+
+
+struct pml_locator {
+  int                   pmlloc_type;
+  struct list           pmlloc_ln;        /* unused */
+  char *                pmlloc_name;
+  ulong			pmlloc_off;
+  ulong			pmlloc_len;
 };
 
 
@@ -174,13 +177,13 @@ struct pml_print {
   int                   pmlp_type;
   struct list           pmlp_ln;
   char *                pmlp_fmt;
-  struct pml_exprlist * pmlp_args;
+  struct pml_list * 	pmlp_args; /* expressions */
 };
 
 
-struct pml_stmtlist {
-  int                   pmlsl_type;
-  struct list           pmlsl_stmts;
+struct pml_list {
+  int                   pmll_type;
+  struct list           pmll_list;
 };
 
 
@@ -193,6 +196,15 @@ struct pml_variable {
 };
 
 
+union pml_field_u {
+  struct pml_value      value;
+  struct pml_locator    variable;
+};
+
+
+/* These are the decls in the program */
+
+
 struct pml_function {
   int                   pmlf_type;
   struct list		pmlf_ln;
@@ -200,7 +212,7 @@ struct pml_function {
   char **               pmlf_pnames;
   uint                  pmlf_nparams;
   struct htab           pmlf_vars;
-  struct pml_stmtlist * pmlf_body;
+  struct pml_list *     pmlf_body;
 };
 
 
@@ -208,17 +220,16 @@ struct pml_rule {
   int                   pmlr_type;
   struct list		pmlr_ln;
   union pml_expr_u *    pmlr_pattern;
-  struct pml_stmtlist * pmlr_stmts;
+  struct pml_list *     pmlr_stmts;
 };
 
 
 union pml_tree {
-  struct pml_expr       expr;
+  struct pml_node	node;
   struct pml_value      value;
   struct pml_binop      binop;
   struct pml_unop       unop;
-  union pml_expr_u      expr_u;
-  struct pml_exprlist   exprlist;
+  union  pml_expr_u     expr_u;
   struct pml_stmt       stmt;
   struct pml_funcall    funcall;
   struct pml_if         ifstmt;
@@ -226,9 +237,10 @@ union pml_tree {
   struct pml_pkt_action pktact;
   struct pml_set_action setact;
   struct pml_print      print;
-  struct pml_stmtlist   stmtlist;
+  struct pml_list       list;
   struct pml_function   function;
   struct pml_rule       rule;
+  struct pml_locator	locator;
 };
 
 

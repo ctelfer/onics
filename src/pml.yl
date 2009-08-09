@@ -65,14 +65,101 @@
   var name[width];
 */
 
+/* ----- Basic Lemon Declarations ----- */
+
 %name PML
 %token_prefix PMLTOK_
+%include { #include "pmltree.h" }
+%extra_argument { struct pml_prog *program }
 
-prog ::= list.
+/* ----- Mappings between non-terminals and C types ----- */
 
-list ::= list decl.
-list ::= list rule.
-list ::= .
+%type rule { struct pml_tree * }
+%destructor rule { pmlt_free($$); }
+
+%type pktpat { struct pml_expr_u * }
+%destructor pktpat { pmlt_free($$); }
+
+%type expr { union pml_expr_u * }
+%destructor expr { pmlt_free($$); }
+
+%type stmt { struct pml_stmt * }
+%destructor stmt { pmlt_free($$); }
+
+%type stmtlist { struct pml_list * }
+%destructor stmtlist { pmlt_free($$); }
+
+%type pktact { struct pml_pkt_action * }
+%destructor pktact { pmlt_free($$); }
+
+%type var { struct variable * }
+/* no destructor: cleaned up on program cleanup or function destructor */
+
+%type exprlist { struct pml_list * }
+%destructor exprlist { pmlt_free($$); }
+
+%type pktoff { struct pml_locator * }
+%destructor pktoff { pmlt_free($$); }
+
+%type locator { struct pml_locator * }
+%destructor locator { pmlt_free($$); }
+
+%type idlist { struct pml_list * }
+%destructor idlist { pmlt_free($$); }
+
+%type type { int }
+
+%type orexpr { struct pml_binop * } 
+%destructor orexpr { pmlt_free($$); }
+
+%type andexpr { struct pml_binop * } 
+%destructor andexpr { pmlt_free($$); }
+
+%type cmpexpr { struct pml_binop * } 
+%destructor cmpexpr { pmlt_free($$); }
+
+%type maskop { int }
+%type cmpop  { int }
+
+%type borexpr { struct pml_binop * } 
+%destructor borexpr { pmlt_free($$); }
+
+%type bxorexpr { struct pml_binop * } 
+%destructor bxorexpr { pmlt_free($$); }
+
+%type bandexpr { struct pml_binop * } 
+%destructor bandexpr { pmlt_free($$); }
+
+%type addexpr { struct pml_binop * } 
+%destructor addexpr { pmlt_free($$); }
+
+%type mulexpr { struct pml_binop * } 
+%destructor mulexpr { pmlt_free($$); }
+
+%type shiftexpr { struct pml_binop * } 
+%destructor shiftexpr { pmlt_free($$); }
+
+%type shiftop { int }
+
+%type uexpr { struct pml_unop * } 
+%destructor uexpr { pmlt_free($$); }
+
+%type valexpr { struct pml_value * } 
+%destructor valexpr { pmlt_free($$); }
+
+%type intrinsic { int }
+
+%type field { union pml_field_u * } 
+%destructor field { pmlt_free($$); }
+
+/* ----- Grammar ----- */
+
+prog ::= decllist.
+
+decllist ::= decllist decl.
+decllist ::= decllist rule.
+decllist ::= .
+
 
 rule ::= pktpat stmt.
 rule ::= pktpat stmtlist.
@@ -88,7 +175,7 @@ stmt ::= IF LPAREN expr RPAREN stmtlist.
 stmt ::= IF LPAREN expr RPAREN stmtlist ELSE stmtlist.
 stmt ::= RETURN expr.
 stmt ::= PRINT STRING.
-stmt ::= PRINT STRING COMMA paramlist.
+stmt ::= PRINT STRING COMMA exprlist.
 
 pktact ::= DROP.
 pktact ::= DROP ID.
@@ -192,11 +279,11 @@ type ::= INT16.
 type ::= UINT32.
 type ::= INT32.
 
-funcall ::= ID LPAREN paramlist RPAREN.
+funcall ::= ID LPAREN exprlist RPAREN.
 funcall ::= ID LPAREN RPAREN.
 
-paramlist ::= paramlist COMMA expr.
-paramlist ::= expr.
+exprlist ::= exprlist COMMA expr.
+exprlist ::= expr.
 
 field ::= var.
 field ::= BYTESTR.

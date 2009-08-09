@@ -7,8 +7,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define l_to_expr(p) container(p, struct pml_expr, pmle_ln)
-#define l_to_stmt(p) container(p, struct pml_stmt, pmls_ln)
+#define l_to_node(p) container(p, struct pml_node, pmln_ln)
 #define SYMTABSIZE    256
 
 
@@ -34,7 +33,7 @@ static struct pml_variable *vtab_lkup(struct htab *ht, const char *s, int *creat
   struct pml_variable *p = NULL;
   abort_unless(ht && s);
 
-  if ( (hn = ht_lkup(ht, s, &h)) != NULL ) {
+  if ( (hn = ht_lkup(ht, (void *)s, &h)) != NULL ) {
     if ( create != NULL )
       *create = 0;
   } else if ( create != NULL ) {
@@ -126,15 +125,6 @@ union pml_tree *pmlt_alloc(int pmltt)
     return (union pml_tree *)p;
   } break;
 
-  case PMLTT_EXPRLIST: {
-    struct pml_exprlist *p;
-    if ( (p = calloc(1, sizeof(*p))) == NULL )
-      return NULL;
-    p->pmlel_type = pmltt;
-    l_init(&p->pmlel_exprs);
-    return (union pml_tree *)p;
-  }  break;
-
   case PMLTT_FUNCALL: {
     struct pml_funcall *p;
     if ( (p = calloc(1, sizeof(*p))) == NULL )
@@ -163,6 +153,17 @@ union pml_tree *pmlt_alloc(int pmltt)
     p->pmlw_type = pmltt;
     p->pmlw_test = NULL;
     p->pmlw_body = NULL;
+    return (union pml_tree *)p;
+  } break;
+
+  case PMLTT_LOCATOR: {
+    struct pml_locator *p;
+    if ( (p = calloc(1, sizeof(*p))) == NULL )
+      return NULL;
+    p->pmlloc_type = pmltt;
+    p->pmlloc_name = NULL;
+    p->pmlloc_off = 0;
+    p->pmlloc_len = 0;
     return (union pml_tree *)p;
   } break;
 
@@ -202,12 +203,12 @@ union pml_tree *pmlt_alloc(int pmltt)
     return (union pml_tree *)p;
   } break;
 
-  case PMLTT_STMTLIST: {
-    struct pml_stmtlist *p;
+  case PMLTT_LIST: {
+    struct pml_list *p;
     if ( (p = calloc(1, sizeof(*p))) == NULL )
       return NULL;
-    p->pmlsl_type = pmltt;
-    l_init(&p->pmlsl_stmts);
+    p->pmll_type = pmltt;
+    l_init(&p->pmll_list);
     return (union pml_tree *)p;
   } break;
 
@@ -244,7 +245,7 @@ void pmlt_free(union pml_tree *tree)
   if ( tree == NULL )
     return;
 
-  switch(tree->expr.pmle_type) {
+  switch(tree->node.pmln_type) {
   case PMLTT_SCALAR:
   case PMLTT_VARREF:
     break;
@@ -271,13 +272,6 @@ void pmlt_free(union pml_tree *tree)
     pmlt_free((union pml_tree *)p->pmlu_expr);
   } break;
 
-  case PMLTT_EXPRLIST: {
-    struct pml_exprlist *p = &tree->exprlist;
-    struct list *l;
-    while ( (l = l_deq(&p->pmlel_exprs)) != NULL )
-      pmlt_free((union pml_tree *)l_to_expr(l));
-  } break;
-
   case PMLTT_FUNCALL: {
     struct pml_funcall *p = &tree->funcall;
     pmlt_free((union pml_tree *)p->pmlfc_args);
@@ -294,6 +288,11 @@ void pmlt_free(union pml_tree *tree)
     struct pml_while *p = &tree->whilestmt;
     pmlt_free((union pml_tree *)p->pmlw_test);
     pmlt_free((union pml_tree *)p->pmlw_body);
+  } break;
+
+  case PMLTT_LOCATOR: {
+    struct pml_locator*p = &tree->locator;
+    free(p->pmlloc_name);
   } break;
 
   case PMLTT_PKTACT: {
@@ -318,11 +317,11 @@ void pmlt_free(union pml_tree *tree)
     pmlt_free((union pml_tree *)p->pmlp_args);
   } break;
 
-  case PMLTT_STMTLIST: {
-    struct pml_stmtlist *p = &tree->stmtlist;
+  case PMLTT_LIST: {
+    struct pml_list *p = &tree->list;
     struct list *l;
-    while ( (l = l_deq(&p->pmlsl_stmts)) != NULL )
-      pmlt_free((union pml_tree *)l_to_stmt(l));
+    while ( (l = l_deq(&p->pmll_list)) != NULL )
+      pmlt_free((union pml_tree *)l_to_node(l));
   } break;
 
   case PMLTT_FUNCTION: {
