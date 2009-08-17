@@ -13,51 +13,9 @@
  * memmove/memcpy to load and store data values.  This can wait for later.
  */
 
-/* purely to set a breakpoint during debugging */
-static int dbgabrt()
-{
-  return 1;
-}
+#include "netvm_op_macros.h"
 
 #define MAXINST         0x7ffffffe
-#define IMMED(inst) ((inst)->flags & NETVM_IF_IMMED)
-#define ISSIGNED(inst) ((inst)->flags & NETVM_IF_SIGNED)
-
-#define VMERR(__vm, __e) do { __vm->error = __e; dbgabrt(); return; } while (0)
-
-#define FATAL(__vm, __e, __cond) \
-  if (__cond) { __vm->error = __e; dbgabrt(); return; }
-
-#define S_EMPTY(__vm)           (__vm->sp == __vm->bp)
-#define S_HAS(__vm, __n)        (__vm->sp - __vm->bp >= __n)
-#define S_FULL(__vm)            (__vm->sp >= __vm->stksz)
-#define S_AVAIL(__vm)           (__vm->stksz - __vm->sp)
-
-#define S_TOP(__vm, __v)                                                \
-  do {                                                                  \
-    FATAL((__vm), NETVM_ERR_STKUNDF, S_EMPTY(__vm));                    \
-    __v = __vm->stack[__vm->sp-1];                                      \
-  } while (0)
-
-/* __n is a 0-based index from the top of the stack */
-#define S_GET(__vm, __n)        (__vm->stack[__vm->sp - __n - 1])
-#define S_SET(__vm, __n, __val) (__vm->stack[__vm->sp - __n - 1] = __val)
-
-#define S_POP(__vm, __v)                                                \
-  do {                                                                  \
-    FATAL((__vm), NETVM_ERR_STKUNDF, S_EMPTY(__vm));                    \
-    __v = __vm->stack[--__vm->sp];                                      \
-  } while (0)
-
-#define S_PUSH(__vm, __v)                                               \
-  do {                                                                  \
-    FATAL((__vm), NETVM_ERR_STKOVFL, S_FULL(__vm));                      \
-    __vm->stack[__vm->sp++] = (__v);                                    \
-  } while (0)
-
-
-typedef void (*netvm_op)(struct netvm *vm);
-
 
 /* 
  * find header based on packet number, header type, and index.  So (3,8,1) 
@@ -91,9 +49,6 @@ static struct hdr_parse *find_header(struct netvm *vm,
 
 static void ni_unimplemented(struct netvm *vm)
 {
-  struct netvm_inst *inst = &vm->inst[vm->pc];
-  if ( vm->outport )
-    emit_format(vm->outport, "Instruction %d not implemented\n", inst->opcode);
   vm->error = NETVM_ERR_UNIMPL;
 }
 
@@ -626,72 +581,40 @@ static void ni_hashdr(struct netvm *vm)
 }
 
 
-static void rexmatch(struct netvm *vm, struct rex_pat *pat, struct raw *loc)
+static void ni_getcpt(struct netvm *vm)
 {
   struct netvm_inst *inst = &vm->inst[vm->pc];
-  struct rex_match_loc m[NETVM_MAXREXMATCH];
-  int rv, i;
-  FATAL(vm, NETVM_ERR_WIDTH, (inst->width > NETVM_MAXREXMATCH));
-  rv = rex_match(pat, loc, m, inst->width);
-  FATAL(vm, NETVM_ERR_REX, (rv == REX_ERROR));
-  if ( rv == REX_MATCH ) {
-    for ( i = inst->width - 1; i >= 0; --i ) {
-      S_PUSH(vm, m[i].valid);
-      if ( !m[i].valid ) {
-        S_PUSH(vm, (uint32_t)-1);
-        S_PUSH(vm, (uint32_t)-1);
-      } else {
-        S_PUSH(vm, (uint32_t)m[i].start);
-        S_PUSH(vm, (uint32_t)m[i].len);
-      }
-    }
-  }
-  S_PUSH(vm, rv == REX_MATCH);
-}
-
-
-static void ni_prex(struct netvm *vm)
-{
-  struct netvm_inst *inst = &vm->inst[vm->pc];
-  uint32_t pktnum, poff, len, ridx;
-  struct metapkt *pkt;
-  struct hdr_parse *hdr;
-  struct raw r;
+  uint32_t cpi;
   if ( IMMED(inst) ) {
-    pktnum = inst->val;
+    cpi = inst->width;
   } else {
-    S_POP(vm, pktnum);
+    S_POP(vm, cpi);
   }
-  FATAL(vm, NETVM_ERR_PKTNUM, (pktnum >= NETVM_MAXPKTS));
-  FATAL(vm, NETVM_ERR_NOPKT, !(pkt=vm->packets[pktnum]));
-  S_POP(vm, ridx);
-  FATAL(vm, NETVM_ERR_REXNUM, (ridx >= vm->nrexes));
-  S_POP(vm, len);
-  S_POP(vm, poff);
-  FATAL(vm, NETVM_ERR_IOVFL, (len + poff < len));
-  hdr = pkt->headers;
-  FATAL(vm, NETVM_ERR_PKTADDR, 
-        (poff < hdr->poff) || (poff + len > hdr_totlen(hdr)));
-  r.data = hdr->data + poff;
-  r.len = len;
-  rexmatch(vm, vm->rexes + ridx, &r);
+  FATAL(vm, NETVM_ERR_BADCOPROC, cpi >= NETVM_MAXCOPROC);
+  if ( vm->coprocs[cpi] == NULL ) {
+    S_PUSH(vm, NETVM_CPT_NONE);
+  } else {
+    S_PUSH(vm, vm->coprocs[cpi]->type);
+  }
 }
 
 
-static void ni_mrex(struct netvm *vm)
+static void ni_cpop(struct netvm *vm)
 {
-  uint32_t addr, len, ridx;
-  struct raw r;
-  S_POP(vm, ridx);
-  FATAL(vm, NETVM_ERR_REXNUM, (ridx >= vm->nrexes));
-  S_POP(vm, len);
-  S_POP(vm, addr);
-  FATAL(vm, NETVM_ERR_IOVFL, (addr + len < len));
-  FATAL(vm, NETVM_ERR_NOMEM, vm->mem == NULL);
-  FATAL(vm, NETVM_ERR_MEMADDR, (addr + len > vm->memsz));
-  r.data = vm->mem + addr;
-  r.len = len;
-  rexmatch(vm, vm->rexes + ridx, &r);
+  struct netvm_inst *inst = &vm->inst[vm->pc];
+  uint32_t cpi;
+  uint8_t op;
+  struct netvm_coproc *coproc;
+  if ( IMMED(inst) ) {
+    cpi = inst->width;
+  } else {
+    S_POP(vm, cpi);
+  }
+  op = (inst->flags >> 8) & 0xFF;
+  FATAL(vm, NETVM_ERR_BADCOPROC, 
+        (cpi >= NETVM_MAXCOPROC) || ((coproc = vm->coprocs[cpi]) == NULL));
+  FATAL(vm, NETVM_ERR_BADCPOP, op >= coproc->numops);
+  (*coproc->ops[op])(vm, coproc, cpi);
 }
 
 
@@ -785,130 +708,6 @@ static void ni_return(struct netvm *vm)
   vm->sp -= (vm->sp - narg) - sslot;
   vm->bp = bp;
   vm->pc = addr;
-}
-
-
-static void ni_prnum(struct netvm *vm)
-{
-  struct netvm_inst *inst = &vm->inst[vm->pc];
-  char fmtbuf[12];
-  register int nwidth = inst->width;
-  register int swidth = inst->val;
-  uint32_t val;
-
-  abort_unless(vm->outport);    /* should be guaranteed by netvm_init() */
-  abort_unless(swidth <= 64 && swidth >= 0);
-
-  switch (inst->opcode) {
-  case NETVM_OC_PRBIN: 
-    if ( swidth )
-      sprintf(fmtbuf, "%%0%d"FMT32"b", swidth);
-    else
-      sprintf(fmtbuf, "%%"FMT32"b");
-    break;
-  case NETVM_OC_PROCT:
-    if ( swidth )
-      sprintf(fmtbuf, "%%0%d"FMT32"o", swidth);
-    else
-      sprintf(fmtbuf, "%%"FMT32"o");
-    break;
-  case NETVM_OC_PRDEC:
-    if ( swidth ) {
-      if ( ISSIGNED(inst) )
-        sprintf(fmtbuf, "%%0%d"FMT32"d", swidth);
-      else
-        sprintf(fmtbuf, "%%0%d"FMT32"u", swidth);
-    } else { 
-      if ( ISSIGNED(inst) )
-        sprintf(fmtbuf, "%%"FMT32"d");
-      else
-        sprintf(fmtbuf, "%%"FMT32"u");
-    }
-    break;
-  case NETVM_OC_PRHEX:
-    if ( swidth )
-      sprintf(fmtbuf, "%%0%d"FMT32"x", swidth);
-    else
-      sprintf(fmtbuf, "%%"FMT32"x");
-    break;
-  default:
-    abort_unless(0);
-  }
-
-  S_POP(vm, val);
-  /* mask out all irrelevant bits */
-  if ( nwidth < 4 )
-    val &= ~((1 << (nwidth * 8)) - 1);
-  /* sign extend the result if we are printing a signed decimal */
-  if ( ISSIGNED(inst) && (inst->opcode == NETVM_OC_PRDEC) )
-    val |= -(val & (1 << (nwidth * 8 - 1)));
-  emit_format(vm->outport, fmtbuf, val);
-}
-
-
-static void ni_prip(struct netvm *vm)
-{
-  uint32_t val;
-  byte_t *bp = (byte_t *)&val;
-  abort_unless(vm->outport);
-  S_POP(vm, val);
-  /* Assumes network byte order */
-  emit_format(vm->outport, "%u.%u.%u.%u", bp[0], bp[1], bp[2], bp[3]);
-}
-
-
-static void ni_preth(struct netvm *vm)
-{
-  uint32_t val1, val2;
-  byte_t *bp1 = (byte_t *)&val1;
-  byte_t *bp2 = (byte_t *)&val2;
-  abort_unless(vm->outport);
-  S_POP(vm, val1);
-  S_POP(vm, val2);
-  /* Assumes network byte order */
-  emit_format(vm->outport, "%02x:%02x:%02x:%02x:%02x:%02x", 
-              bp1[0], bp1[1], bp1[2], bp1[3], bp2[0], bp2[1]);
-}
-
-
-static void ni_pripv6(struct netvm *vm)
-{
-  uint32_t v1, v2, v3, v4;
-  byte_t *b1 = (byte_t *)&v1;
-  byte_t *b2 = (byte_t *)&v2;
-  byte_t *b3 = (byte_t *)&v3;
-  byte_t *b4 = (byte_t *)&v4;
-  abort_unless(vm->outport);
-  S_POP(vm, v1);
-  S_POP(vm, v2);
-  S_POP(vm, v3);
-  S_POP(vm, v4);
-  emit_format(vm->outport, 
-      "%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x",
-      b1[0], b1[1], b1[2], b1[3], b2[0], b2[1], b2[2], b2[3],
-      b3[0], b3[1], b3[2], b3[3], b4[0], b4[1], b4[2], b4[3]);
-      
-     
-}
-
-
-/* strings are stored with a 1-byte length prefix: no null terminators */
-static void ni_prstr(struct netvm *vm)
-{
-  struct netvm_inst *inst = &vm->inst[vm->pc];
-  uint32_t addr, len;
-  abort_unless(vm->outport);
-  if ( IMMED(inst) ) {
-    addr = inst->val;
-    len = inst->width;
-  } else {
-    S_POP(vm, len);
-    S_POP(vm, addr);
-  }
-  FATAL(vm, NETVM_ERR_IOVFL, addr + len < addr);
-  FATAL(vm, NETVM_ERR_MEMADDR, !vm->mem || !vm->memsz || addr >= vm->memsz ||
-        addr + len > vm->memsz);
-  emit_raw(vm->outport, vm->mem + addr, len);
 }
 
 
@@ -1253,49 +1052,6 @@ static void ni_hdradj(struct netvm *vm)
 }
 
 
-static void ni_qempty(struct netvm *vm)
-{
-  struct netvm_inst *inst = &vm->inst[vm->pc];
-  uint32_t qnum;
-  if ( IMMED(inst) ) {
-    qnum = inst->val;
-  } else { 
-    S_POP(vm, qnum);
-  }
-  FATAL(vm, NETVM_ERR_QNUM, qnum >= NETVM_MAXQS);
-  S_PUSH(vm, l_isempty(&vm->pktqs[qnum]));
-}
-
-
-static void ni_qop(struct netvm *vm)
-{
-  struct netvm_inst *inst = &vm->inst[vm->pc];
-  uint32_t pktnum, qnum;
-  struct metapkt *pkt;
-  struct list *l;
-  if ( IMMED(inst) ) {
-    pktnum = inst->val;
-  } else { 
-    S_POP(vm, pktnum);
-  }
-  S_POP(vm, qnum);
-  FATAL(vm, NETVM_ERR_PKTNUM, pktnum >= NETVM_MAXPKTS);
-  FATAL(vm, NETVM_ERR_QNUM, qnum >= NETVM_MAXQS);
-
-  if ( inst->opcode == NETVM_OC_ENQ ) {
-    FATAL(vm, NETVM_ERR_NOPKT, !(pkt=vm->packets[pktnum]));
-    l_enq(&vm->pktqs[qnum], &pkt->entry);
-    vm->packets[pktnum] = NULL;
-  } else {
-    if ( (l = l_deq(&vm->pktqs[qnum])) ) {
-      metapkt_free(vm->packets[pktnum], 1);
-      vm->packets[pktnum] = container(l, struct metapkt, entry);
-    }
-  }
-}
-
-
-
 netvm_op g_netvm_ops[NETVM_OC_MAX+1] = {
   ni_nop,
   ni_pop,
@@ -1345,8 +1101,8 @@ netvm_op g_netvm_ops[NETVM_OC_MAX+1] = {
   ni_numop, /* SGT */
   ni_numop, /* SGE */
   ni_hashdr,
-  ni_prex, /* PREX */
-  ni_mrex, /* MREX */
+  ni_getcpt,
+  ni_cpop,
   ni_halt,
   ni_branch, /* BR */
   ni_branch, /* BNZ */
@@ -1356,14 +1112,6 @@ netvm_op g_netvm_ops[NETVM_OC_MAX+1] = {
   ni_jump,
   ni_call,
   ni_return,
-  ni_prnum, /* PRBIN */
-  ni_prnum, /* PROCT */
-  ni_prnum, /* PRDEC */
-  ni_prnum, /* PRHEX */
-  ni_prip,
-  ni_preth,
-  ni_pripv6,
-  ni_prstr,
   ni_stpkt,
   ni_stpmeta, /* STCLASS */
   ni_stpmeta, /* STTSSEC */
@@ -1384,9 +1132,6 @@ netvm_op g_netvm_ops[NETVM_OC_MAX+1] = {
   ni_hdrins,
   ni_hdrcut,
   ni_hdradj,
-  ni_qempty,
-  ni_qop, /* ENQ */
-  ni_qop, /* DEQ */
 };
 
 
@@ -1400,18 +1145,15 @@ void netvm_init(struct netvm *vm, uint32_t *stack, uint32_t ssz,
   vm->mem = mem;
   vm->memsz = memsz;
   vm->rosegoff = memsz;
-  vm->outport = &null_emitter;
   vm->inst = NULL;
   vm->ninst = 0;
-  vm->rexes = NULL;
-  vm->nrexes = 0;
   vm->pc = 0;
   vm->sp = 0;
   vm->bp = 0;
   vm->matchonly = 0;
   memset(vm->packets, 0, sizeof(vm->packets));
-  for ( i = 0; i < NETVM_MAXQS; ++i )
-    l_init(&vm->pktqs[i]);
+  for ( i = 0; i < NETVM_MAXCOPROC; ++i )
+    vm->coprocs[i] = NULL;
 }
 
 
@@ -1451,22 +1193,26 @@ int netvm_validate(struct netvm *vm)
                 (inst->opcode == NETVM_OC_NLZ) ||
                 (inst->opcode == NETVM_OC_TONET) ||
                 (inst->opcode == NETVM_OC_TOHOST) ||
-                (inst->opcode == NETVM_OC_SIGNX) ||
-                (inst->opcode == NETVM_OC_PRBIN) ||
-                (inst->opcode == NETVM_OC_PROCT) ||
-                (inst->opcode == NETVM_OC_PRDEC) ||
-                (inst->opcode == NETVM_OC_PRHEX)
+                (inst->opcode == NETVM_OC_SIGNX)
               ) {
       if ( (inst->width != 1) && (inst->width != 2) && (inst->width != 4) )
-        return NETVM_ERR_BADWIDTH;
-      if ( (inst->opcode >= NETVM_OC_PRBIN) && 
-           (inst->opcode <= NETVM_OC_PRHEX) && 
-           (inst->val > 64) )
         return NETVM_ERR_BADWIDTH;
     } else if ( (inst->opcode == NETVM_OC_SETLAYER) || 
                 (inst->opcode == NETVM_OC_CLRLAYER) ) {
       if ( inst->width >= MPKT_LAYER_MAX )
         return NETVM_ERR_BADLAYER;
+    } else if ( inst->opcode == NETVM_OC_CPOP ) {
+      if ( IMMED(inst) ) {
+        int rv;
+        struct netvm_coproc *cp;
+        if ( (inst->width >= NETVM_MAXCOPROC) || 
+             ((cp = vm->coprocs[inst->width]) == NULL) )
+          return NETVM_ERR_BADCP;
+        if ( (cp->validate != NULL) && ((rv = (*cp->validate)(inst, vm)) < 0) )
+          return rv;
+      } else if ( vm->matchonly ) { 
+        return NETVM_ERR_BADCP;
+      }
     }
   }
   return 0;
@@ -1484,7 +1230,6 @@ int netvm_setrooff(struct netvm *vm, uint32_t rooff)
 }
 
 
-
 /* set up netvm code */
 int netvm_setcode(struct netvm *vm, struct netvm_inst *inst, uint32_t ni)
 {
@@ -1495,25 +1240,18 @@ int netvm_setcode(struct netvm *vm, struct netvm_inst *inst, uint32_t ni)
 }
 
 
-/* set the outport for the VM */
-void netvm_setoutport(struct netvm *vm, struct emitter *outport)
+int netvm_set_coproc(struct netvm *vm, int cpi, struct netvm_coproc *coproc)
 {
-  abort_unless(outport);
-  vm->outport = outport;
-}
+  int rv;
 
+  abort_unless(vm && cpi < NETVM_MAXCOPROC);
 
-void netvm_setrex(struct netvm *vm, struct rex_pat *rexes, uint32_t nrexes)
-{
-  uint32_t i;
-  abort_unless(vm);
-  abort_unless(rexes == NULL || nrexes > 0);
-  for ( i = 0; i < nrexes; ++i ) {
-    abort_unless(rexes);
-    ;
-  }
-  vm->rexes = rexes;
-  vm->nrexes = nrexes;
+  if ( (coproc != NULL) && (coproc->regi != NULL) )
+    if ( (rv = (*coproc->regi)(coproc, vm, cpi)) < 0 )
+      return rv;
+
+  vm->coprocs[cpi] = coproc;
+  return 0;
 }
 
 
@@ -1569,10 +1307,18 @@ void netvm_clrpkts(struct netvm *vm)
     metapkt_free(vm->packets[i], 1);
     vm->packets[i] = NULL;
   }
-  for ( i = 0; i < NETVM_MAXQS; ++i ) {
-    struct list *l;
-    while ( (l = l_deq(&vm->pktqs[i])) )
-      metapkt_free(container(l, struct metapkt, entry), 1);
+}
+
+
+void netvm_reset_coprocs(struct netvm *vm)
+{
+  int i;
+  struct netvm_coproc *cp; 
+
+  for ( i = 0; i < NETVM_MAXCOPROC; ++i ) {
+    cp = vm->coprocs[i];
+    if ( cp != NULL && cp->reset != NULL )
+      (*cp->reset)(cp);
   }
 }
 
@@ -1588,12 +1334,13 @@ void netvm_restart(struct netvm *vm)
 }
 
 
-/* clear memory, set pc <= 0, discard packets */
+/* clear memory, set pc <= 0, discard packets, reset coprocessors */
 void netvm_reset(struct netvm *vm)
 {
   /* assume sanity checks in the called functions */
   netvm_clrmem(vm);
   netvm_clrpkts(vm);
+  netvm_reset_coprocs(vm);
   netvm_restart(vm);
 }
 
@@ -1647,6 +1394,7 @@ static const char *val_error_strings[] = {
   "Invalid branch/jump in matchonly mode",
   "Invalid layer index",
   "Invalid width field",
+  "Coprocessor instruction invalid"
 };
 
 
@@ -1661,8 +1409,6 @@ static const char *rt_error_strings[] = {
   "packet address error",
   "write attempt to read-only segment",
   "bad packet index",
-  "bad queue index",
-  "bad regular expression index",
   "attempt to access non-existant packet",
   "attempt to access non-existant header",
   "attempt to access non-existant header field",
@@ -1675,9 +1421,10 @@ static const char *rt_error_strings[] = {
   "error inserting into packet",
   "error cutting data from packet",
   "error adjusting header field",
-  "regex match error",
   "out of memory",
-  "integer overflow"
+  "integer overflow",
+  "bad co-processor index",
+  "co-processor operation error"
 };
 
 
@@ -1691,3 +1438,5 @@ const char *netvm_estr(int error)
     return rt_error_strings[error];
   }
 }
+
+

@@ -2,8 +2,10 @@
 #define __netvm_h
 #include "tcpip_hdrs.h"
 #include "metapkt.h"
-#include <cat/emit.h>
-#include <cat/match.h>
+
+struct netvm; /* forward declaration */
+typedef void (*netvm_op)(struct netvm *vm);
+
 
 /* 
  * W -> uses width field to determine now many bytes to manipulate
@@ -81,9 +83,13 @@ enum {
   NETVM_OC_SGT,         /* [v1,v2|I] v1 greater than v2 (signed) */
   NETVM_OC_SGE,         /* [v1,v2|I] v1 greater than or equal to v2 (signed) */
   NETVM_OC_HASHDR,      /* [hdesc|I] true if has header (field in HD ignored) */
-  NETVM_OC_PREX,        /* [pa,len,rxidx,pktnum|I]: regex on packet data */
-  NETVM_OC_MREX,        /* [addr,len,rxidx]: regex on memory data */
-                        /* for *REX, width == # of submatches to push */
+  NETVM_OC_GETCPT,      /* [coproc|I] push the 'type' of co-processor 'coproc' */
+                        /*            push NETVM_CPT_NONE if it doesn't exist */
+  NETVM_OC_CPOP,        /* [coproc parameters,coproc|I] call a coprocessor op. */
+                        /*   if IMMED, the coprocessor # is taken from 'width' */
+                        /*   The coprocessor op # is in 'flags' >> 8 */
+                        /*   Note that a coprocessor op may be marked matchonly. */
+                        /*   IMMED must be set in matchonly mode. */
   NETVM_OC_HALT,        /* [|V] halt program, store 'val' in error code */
   NETVM_OC_BR,          /* [v|I] set PC to v (must be > PC in matchonly mode */
   NETVM_OC_BNZ,         /* [c,v|I] set PC to v if c is non-zero */
@@ -97,14 +103,6 @@ enum {
                         /*      narg deep in the stack, pushing the rest up */
   NETVM_OC_RETURN,      /* [v,(rets..,)nret|I]: branch to the addr nret deep */
                         /*      in the stack.  shift the remaining items down */
-  NETVM_OC_PRBIN,       /* [v|V] print v in binary: val == min string width */
-  NETVM_OC_PROCT,       /* [v|V] print v in octal: val == min string width */
-  NETVM_OC_PRDEC,       /* [v|VS] print v in decimal: val == min str width */
-  NETVM_OC_PRHEX,       /* [v|V] print v in hex: val == min string width */
-  NETVM_OC_PRIP,        /* [v] print IP address (network byte order) */
-  NETVM_OC_PRETH,       /* [v] print ethernet address (network byte order) */
-  NETVM_OC_PRIPV6,      /* [vhi,vlo] print IPv6 address (network byte order) */
-  NETVM_OC_PRSTR,       /* [addr,len|I] print len bytes from addr in mem */
   NETVM_OC_STPKT,       /* [v,hdesc|IWH] store into packet memory */
   NETVM_OC_STCLASS,     /* [v,pktnum|I] store into packet class */
   NETVM_OC_STTSSEC,     /* [v,pktnum|I] store into timestamp */
@@ -125,18 +123,11 @@ enum {
   NETVM_OC_PKTINS,      /* [len,hdesc|I] insert len bytes at hd.offset */
   NETVM_OC_PKTCUT,      /* [len,hdesc|I] cut len bytes at hd.offset */
   NETVM_OC_HDRADJ,      /* [amt,hdesc|I] adjust offset field by amt (signed) */
-  NETVM_OC_QEMPTY,      /* [qnumI] return whether a queue is empty */
-  NETVM_OC_ENQ,         /* [qnum,pktnum|I] enqueue onto queue qnum */
-  NETVM_OC_DEQ,         /* [qnum,pktnum|I] dequeue from queue qnum */
 
-  NETVM_OC_MAX = NETVM_OC_DEQ
+  NETVM_OC_MAX = NETVM_OC_HDRADJ
 
   /* 
    * Still to consider:
-   *
-   * RESOLVE - resolve names to addresses or visa versa (mem to mem)
-   *
-   * If we do this, should it be synchronous or asynchronous?  See below.
    *
    * REGTO - queue an instruction address on a timer list with one argument
    *         and issue a CALL when the timer expires.  2 types of timers:
@@ -155,10 +146,13 @@ enum {
   NETVM_IF_SIGNED =    0x02, /* number, value or all operands are signed */
   NETVM_IF_TONET =     0x04, /* for store operations */
   NETVM_IF_TOHOST =    0x08, /* for load operation s*/
+
+  NETVM_IF_CPIMMED =   0x10, /* last op is immediate in coprocessor */ 
   NETVM_IF_IPHLEN =    0x10, /* on 1 byte packet load instructions */
   NETVM_IF_TCPHLEN =   0x20, /* on 1 byte packet load instructions */
   NETVM_IF_MOVEUP =    0x40, /* only used HDRINS and HDRCUT */
   NETVM_IF_RDONLY =    0x80, /* load from read-only segment */
+
   NETVM_IF_BPOFF =     0x01, /* DUP or SWAP offsets are from base pointer */
   NETVM_IF_NEGBPOFF =  0x02, /* DUP offsets are negative from base pointer */
 };
@@ -239,6 +233,14 @@ struct netvm_inst {
   uint32_t              val;    /* Varies with instruction */
 };
 
+/* 
+   For coprocessor instructions: 
+    - width = co-processor ID
+    - flags >> 8 = co-processor function ID
+    - flags & NETVM_IF_CPIMMED means IMMED for coprocessor fields (val)
+ */
+#define NETVM_CPOP(cpop) (((uint16_t)cpop) << 8)
+
 #define NETVM_JA(v)     ((uint32_t)(v)-1)
 #define NETVM_BRF(v)    ((uint32_t)(v)-1)
 #define NETVM_BRB(v)    ((uint32_t)0-(v)-1)
@@ -247,13 +249,25 @@ struct netvm_inst {
 #define NETVM_MAXPKTS   16
 #endif /* NETVM_MAXPKTS */
 
-#ifndef NETVM_MAXQS
-#define NETVM_MAXQS     16
-#endif /* NETVM_MAXQS */
 
-#ifndef NETVM_MAXREXMATCH
-#define NETVM_MAXREXMATCH 10
-#endif /* NETVM_MAXREXMATCH  */
+struct netvm_coproc;
+typedef void (*netvm_cpop)(struct netvm *vm, struct netvm_coproc *coproc, int cpi);
+
+struct netvm_coproc {
+  uint32_t              type;
+  uint                  numops;
+  netvm_cpop *          ops;
+  int                   (*regi)(struct netvm_coproc *coproc, struct netvm *vm,
+		                int cpi);
+  void                  (*reset)(struct netvm_coproc *coproc);
+  int                   (*validate)(struct netvm_inst *inst, struct netvm *vm);
+};
+
+#ifndef NETVM_MAXCOPROC
+#define NETVM_MAXCOPROC 8
+#endif /* NETVM_MAXCOPROC */
+
+#define NETVM_CPT_NONE  ((uint32_t)0)
 
 struct netvm {
   struct netvm_inst *   inst;
@@ -269,14 +283,9 @@ struct netvm {
   uint32_t              memsz;
   uint32_t              rosegoff;
 
-  struct list           pktqs[NETVM_MAXQS];
-
-  struct rex_pat *      rexes;
-  uint32_t              nrexes;
-
-  struct emitter *      outport;
-
   struct metapkt *      packets[NETVM_MAXPKTS];
+
+  struct netvm_coproc * coprocs[NETVM_MAXCOPROC];
 
   int                   matchonly;
   int                   running;
@@ -292,7 +301,8 @@ enum {
   NETVM_ERR_BRMONLY = -4,
   NETVM_ERR_BADLAYER = -5,
   NETVM_ERR_BADWIDTH = -6,
-  NETVM_ERR_MIN = NETVM_ERR_BADWIDTH,
+  NETVM_ERR_BADCP = -7,
+  NETVM_ERR_MIN = NETVM_ERR_BADCP,
 
   /* runtime errors */
   NETVM_ERR_UNIMPL = 1,
@@ -304,8 +314,6 @@ enum {
   NETVM_ERR_PKTADDR,
   NETVM_ERR_MRDONLY,
   NETVM_ERR_PKTNUM,
-  NETVM_ERR_QNUM,
-  NETVM_ERR_REXNUM,
   NETVM_ERR_NOPKT,
   NETVM_ERR_NOHDR,
   NETVM_ERR_NOHDRFLD,
@@ -319,9 +327,10 @@ enum {
   NETVM_ERR_PKTCUT,
   NETVM_ERR_HDRADJ,
   NETVM_ERR_NOMEM,
-  NETVM_ERR_REX,
   NETVM_ERR_IOVFL,
-  NETVM_ERR_MAX = NETVM_ERR_IOVFL,
+  NETVM_ERR_BADCOPROC,
+  NETVM_ERR_BADCPOP,
+  NETVM_ERR_MAX = NETVM_ERR_BADCPOP,
 };
 
 
@@ -336,11 +345,8 @@ int netvm_setcode(struct netvm *vm, struct netvm_inst *inst, uint32_t ni);
 /* set the offset of the read-only segment for the VM */
 int netvm_setrooff(struct netvm *vm, uint32_t rooff);
 
-/* set the emitter for the VM */
-void netvm_setoutport(struct netvm *vm, struct emitter *outport);
-
-/* set the regular expression array */
-void netvm_setrex(struct netvm *vm, struct rex_pat *rexes, uint32_t nrexes);
+/* set a coprocessor: return the cpi or -1 if initialization error */
+int netvm_set_coproc(struct netvm *vm, int cpi, struct netvm_coproc *coproc);
 
 /* validate a netvm is properly set up and that all branches are correct */
 /* called by set_netvm_code implicitly:  returns 0 on success, -1 on error */
@@ -351,6 +357,9 @@ void netvm_clrmem(struct netvm *vm);
 
 /* free all packets */
 void netvm_clrpkts(struct netvm *vm);
+
+/* reset co-processors */
+void netvm_reset_coprocs(struct netvm *vm);
 
 /* pc <- 0, sp <- 0 */
 void netvm_restart(struct netvm *vm);
@@ -378,5 +387,6 @@ int netvm_run(struct netvm *vm, int maxcycles, uint32_t *rv);
 
 /* returns the error string corresponding to the netvm error */
 const char *netvm_estr(int error);
+
 
 #endif /* __netvm_h */

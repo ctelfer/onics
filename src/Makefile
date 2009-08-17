@@ -10,7 +10,7 @@ LIBS=-L${CATLIB_ROOT}/lib -lcat_dbg -lpcap
 DEFS=
 BINDIR=../bin
 LIBOBJS= metapkt.o namespace.o netvm.o netvm_rt.o pktbuf.o pptcpip.o \
-	protoparse.o util.o lex.pml.o pmltree.o
+	 protoparse.o util.o lex.pml.o pmltree.o netvm_std_coproc.o
 
 TARGETS=${BINDIR}/pcapin \
 	${BINDIR}/pcapout \

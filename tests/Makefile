@@ -8,7 +8,7 @@ DEFS=
 BINDIR=../bin
 LIBOBJS= ../src/metapkt.o ../src/namespace.o ../src/ncl.o ../src/netvm.o \
 	 ../src/netvm_rt.o ../src/pktbuf.o ../src/pptcpip.o ../src/protoparse.o\
-	 ../src/tokenizer.o ../src/util.o
+	 ../src/tokenizer.o ../src/util.o ../src/netvm_std_coproc.o
 
 TARGETS= ${BINDIR}/testpp \
 	${BINDIR}/testvm \
@@ -25,9 +25,11 @@ ${BINDIR}/testpp: ../src/protoparse.o ../src/pptcpip.o ../src/util.o \
 
 ${BINDIR}/testvm: ../src/protoparse.o ../src/pptcpip.o ../src/util.o \
 	../src/pktbuf.o ../src/netvm.o ../src/metapkt.o ../src/netvm.h \
-	../src/protoparse.h ../src/pktbuf.h ../src/metapkt.h testvm.c
+	../src/protoparse.h ../src/pktbuf.h ../src/metapkt.h \
+	../src/netvm_std_coproc.o testvm.c
 	${CC} -o ../bin/testvm testvm.c ../src/pktbuf.o ../src/protoparse.o \
 		../src/pptcpip.o ../src/util.o ../src/netvm.o ../src/metapkt.o \
+		../src/netvm_std_coproc.o \
 		${DEFS} ${OPTS} ${INCS} ${LIBS}
 
 ${BINDIR}/testns: testns.c ../src/namespace.o ../src/util.o testns.c
