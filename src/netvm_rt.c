@@ -319,8 +319,10 @@ int nprg_load(struct netvm *vm, struct netvm_program *prog)
   if ( netvm_setcode(vm, prog->inst, prog->ninst) < 0 )
     return -1;
   netvm_set_matchonly(vm, prog->matchonly);
-  for ( l = l_head(prog->varlist); l != l_end(prog->varlist); l = l->next )
+  for ( l = l_head(prog->varlist); l != l_end(prog->varlist); l = l->next ) {
+    var = clist_data(l, struct netvm_var *);
     loadvar(vm->mem, var);
+  }
   netvm_setrooff(vm, vm->memsz - amm_get_fill(&prog->romm));
   return 0;
 }

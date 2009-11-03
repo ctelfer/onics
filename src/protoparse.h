@@ -42,7 +42,7 @@ struct pparse_ops {
 struct proto_parser {
   unsigned int	        type;
   unsigned int	        valid;
-  struct list *	        children;
+  struct list  	        children;
   struct pparse_ops *   ops;
 };
 
@@ -99,27 +99,78 @@ struct hdr_parse {
 #define hdr_islast(hdr) (hdr_child(hdr)->type == PPT_NONE)
 #define hdr_isfirst(hdr) ((hdr)->type == PPT_NONE)
 
+/* install a protocol parser to handle a particular protocol type */
 int register_proto_parser(unsigned type, struct pparse_ops *ops);
+
+/* make 'cldtype' protocol a child of 'partype' (e.g. TCP and IP) */
+/* this will cause the protocol parser to call 'cldtype's 'follows' */
+/* function when it see's a 'partype' header in order to see if the */
+/* child follows the parent */
 int add_proto_parser_parent(unsigned cldtype, unsigned partype);
+
+/* deregister a protocol type */
 void deregister_proto_parser(unsigned type);
+
+/* install a default TCP/IP suite of protocol parsers */
+/* This is shorthand for calling register_proto_parser() and */
+/* add_proto_parser_parent() for the default protocol parsers. */
 void install_default_proto_parsers();
+
+
+
+/* Tests whether the 'cldtype' protocol can follow the 'partype' protocol */
+/* according to parent/child relationships in the protocol parser. */
 int hdr_can_follow(unsigned partype, unsigned cldtype);
 
-/* header creation, parse and deletion */
+/* Creates a 'default' header parse at buf + off given pktlen bytes to use */
 struct hdr_parse *hdr_create_parse(byte_t *buf, size_t off, size_t pktlen, 
                                    size_t buflen);
+
+/* Create a new header in a parsed packet.  The "mode" determines how this */
+/* header is created.  if mode == PPCF_FILL, then 'hdr' must be the */
+/* innermost header and the new header will fill inside the curent one. If */
+/* the mode is PPCF_WRAP, then 'hdr' must be the outer 'NONE' header and */
+/* the new header will wrap all the other protocol headers.  Finally, if */
+/* mode is PPCF_SET, then the 'hdr' must be a header with free space between */
+/* it and its child (based on the offsets above).  The new header will take */
+/* up exactly the space between parent and child. */
 int hdr_push(unsigned ppidx, struct hdr_parse *hdr, int mode);
+
+
+/* Given a buffer and start offset and a first protocol parser to start with */
+/* parse all headers as automatically as possible */
 struct hdr_parse *hdr_parse_packet(unsigned firstpp, byte_t *pbuf, size_t off, 
                                    size_t pktlen, size_t buflen);
+
+/* Free a header parse, or, if freechildren is non-zero, also free all child */
+/* headers of the current header parse */
 void hdr_free(struct hdr_parse *hdr, int freechildren);
+
+
+/* copy a header parse (but not the packet buffer itself) */
 struct hdr_parse *hdr_copy(struct hdr_parse *hdr, byte_t *buffer);
 
+/* Associate a header parse with a new packet buffer (which must be sized */
+/* correctly based on the header parse. */
 void hdr_set_packet_buffer(struct hdr_parse *hdr, byte_t *buffer);
+
+/* re-parse and update the fields in 'hdr'.  (but not its children */
 /* returns error field as a matter of convenience */
 unsigned int hdr_update(struct hdr_parse *hdr);
+
+/* Get a variable position field in a header.  'fid' denotes the type */
+/* of field.  'idx' denotes the index of the field starting from 0 */
+/* the 'len' parameter returns the length of the field, while the  */
+/* function returns the offset of the field starting from the */
+/* beginning of 'hdr' */
 size_t hdr_get_field(struct hdr_parse *hdr, unsigned fid, unsigned idx, 
                      size_t *len);
+
+/* fix up checksums in the 'hdr' protocol header */
 int hdr_fix_cksum(struct hdr_parse *hdr);
+
+/* fix up length fields in the 'hdr' protocol header based on 'hdr' */
+/* protocol metadata */
 int hdr_fix_len(struct hdr_parse *hdr);
 
 /* insert and delete data from the parse (and packet) */

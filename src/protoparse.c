@@ -3,10 +3,19 @@
 #include <errno.h>
 #include <cat/stduse.h>
 #include <string.h>
+#include <stdlib.h>
 
 
 struct proto_parser proto_parsers[PPT_MAX+1];
 struct pparse_ops proto_parser_ops[PPT_MAX+1];
+
+
+struct childnode {
+	struct list 	entry;
+	uint		cldtype;
+};
+
+#define l2cldn(le)  container((le), struct childnode, entry)
 
 
 int register_proto_parser(unsigned type, struct pparse_ops *ppo)
@@ -23,7 +32,7 @@ int register_proto_parser(unsigned type, struct pparse_ops *ppo)
     return -1;
   }
   pp->type = type;
-  pp->children = clist_newlist();
+  l_init(&pp->children);
   proto_parser_ops[type] = *ppo;
   pp->ops = &proto_parser_ops[type];
   pp->valid = 1;
@@ -31,9 +40,12 @@ int register_proto_parser(unsigned type, struct pparse_ops *ppo)
 }
 
 
+/* NB:  In the future I may change the allocation model for this part of */
+/* the library to a static allocation of childnodes, etc.... */
 int add_proto_parser_parent(unsigned cldtype, unsigned partype)
 {
   struct proto_parser *par, *cld;
+  struct childnode *cnode;
   if ( (cldtype > PPT_MAX) || (partype > PPT_MAX) ) {
     errno = EINVAL;
     return -1;
@@ -44,7 +56,10 @@ int add_proto_parser_parent(unsigned cldtype, unsigned partype)
     errno = EINVAL;
     return -1;
   }
-  clist_enq(par->children, unsigned, cldtype);
+  if ( (cnode = malloc(sizeof(*cnode))) == NULL )
+    return -1;
+  cnode->cldtype = cldtype;
+  l_enq(&par->children, &cnode->entry);
   return 0;
 }
 
@@ -53,8 +68,8 @@ void deregister_proto_parser(unsigned type)
 {
   struct proto_parser *pp;
   if ( (type <= PPT_MAX) && (pp = &proto_parsers[type])->valid ) {
-    clist_freelist(pp->children);
-    pp->children = NULL;
+    while ( !l_isempty(&pp->children) )
+      free(l2cldn(l_deq(&pp->children)));
     pp->valid = 0;
     pp->ops = NULL;
   }
@@ -94,8 +109,8 @@ int hdr_can_follow(unsigned partype, unsigned cldtype)
     return 0;
   if ( (cldtype > PPT_MAX) || !(cpp = &proto_parsers[cldtype])->valid )
     return 0;
-  l_for_each(l, ppp->children)
-    if ( clist_data(l, unsigned) == cldtype )
+  l_for_each(l, &ppp->children)
+    if ( l2cldn(l)->cldtype == cldtype )
       return 1;
   return 0;
 }
@@ -112,7 +127,7 @@ struct hdr_parse *hdr_create_parse(byte_t *buf, size_t off, size_t pktlen,
     return NULL;
   }
   abort_unless(pp->ops && pp->ops->create);
-  if ( !(hdr = (*pp->ops->create)(buf, 0, buflen, off, pktlen,PPCF_FILL)) )
+  if ( !(hdr = (*pp->ops->create)(buf, 0, buflen, off, pktlen, PPCF_FILL)) )
     return NULL;
   return hdr;
 }
@@ -142,8 +157,8 @@ struct hdr_parse *hdr_parse_packet(unsigned ppidx, byte_t *pkt, size_t off,
   last = first;
   while ( pp && (hdr_plen(last) > 0) ) {
     nextpp = NULL;
-    l_for_each(child, pp->children) {
-      cldid = clist_data(child, unsigned);
+    l_for_each(child, &pp->children) {
+      cldid = l2cldn(child)->cldtype;
       if ( (cldid > PPT_MAX) || !(nextpp = &proto_parsers[cldid])->valid ) {
         errval = EINVAL;
         goto err;

@@ -476,10 +476,11 @@ static void ni_maskeq(struct netvm *vm)
   dst = (byte_t *)vm->mem + daddr;
   mask = (byte_t *)vm->mem + maddr;
   while ( len > 0 ) {
-    if ( (*src++ & *mask) != (*dst++ & *mask++) ) {
+    if ( (*src++ & *mask) != (*dst++ & *mask) ) {
       S_PUSH(vm, 0);
       return;
     }
+    ++mask;
     --len;
   }
   S_PUSH(vm, 1);
