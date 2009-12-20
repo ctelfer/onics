@@ -215,7 +215,7 @@ struct netvm_inst vm_prog_bulkmove[] = {
   /* 1*/{ NETVM_OC_NEQ, 0, NETVM_IF_IMMED, PPT_TCP},
   /* 2*/{ NETVM_OC_BNZ, 0, NETVM_IF_IMMED, NETVM_BRF(10) },
   /* 3*/{ NETVM_OC_LDHDRF, 0, NETVM_IF_IMMED, 
-          NETVM_HDESC(PPT_TCP, 0, NETVM_HDR_LEN, 0) },
+          NETVM_HDESC(PPT_TCP, 0, NETVM_HDR_PLEN, 0) },
   /* 4*/{ NETVM_OC_LT, 0, NETVM_IF_IMMED, 16 },
   /* 5*/{ NETVM_OC_BNZ, 0, NETVM_IF_IMMED, NETVM_BRF(7) },
   /* 6*/{ NETVM_OC_LDMEM, 4, NETVM_IF_IMMED, DUP1ST_PNUM },
