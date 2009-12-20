@@ -4,7 +4,6 @@
 #include <fcntl.h>
 #include <cat/err.h>
 #include <cat/optparse.h>
-#include <cat/stduse.h>
 #include <cat/bitset.h>
 
 #define MAX_FDS      256

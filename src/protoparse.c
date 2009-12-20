@@ -1,7 +1,6 @@
 #include "protoparse.h"
 #include "pptcpip.h"
 #include <errno.h>
-#include <cat/stduse.h>
 #include <string.h>
 #include <stdlib.h>
 
