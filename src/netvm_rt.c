@@ -19,10 +19,10 @@ void nprg_init(struct netvm_program *prog, int matchonly)
   prog->inst = NULL;
   prog->ninst = 0;
   prog->isiz = 0;
-  prog->labels = ht_new(64, CAT_DT_STR);
-  prog->ipatches = clist_newlist();
-  prog->vars = ht_new(64, CAT_DT_STR);
-  prog->varlist = clist_newlist();;
+  prog->labels = ht_new(&estdmm, 64, CAT_KT_STR, 0, 0);
+  prog->ipatches = clist_new_list(&estdmm, sizeof(struct netvm_ipatch));
+  prog->vars = ht_new(&estdmm, 64, CAT_KT_STR, 0, 0);
+  prog->varlist = clist_new_list(&estdmm, sizeof(struct netvm_var *));
   amm_init(&prog->rwmm, (byte_t*)0, MMMAXSIZE, 8, 0);
   amm_init(&prog->romm, (byte_t*)0, MMMAXSIZE, 8, 0);
 }
@@ -37,7 +37,7 @@ int nprg_add_code(struct netvm_program *prog, struct netvm_inst *inst,
     return -1;
   if ( prog->ninst + ninst > prog->isiz ) { 
     void *p = prog->inst;
-    mem_agrow(&estdmm, &p, sizeof(*inst), &prog->isiz, prog->ninst + ninst);
+    mm_agrow(&estdmm, &p, sizeof(*inst), &prog->isiz, prog->ninst + ninst);
     prog->inst = p;
   }
   abort_unless(prog->inst && prog->isiz >= prog->ninst + ninst);
@@ -57,7 +57,7 @@ int nprg_add_label(struct netvm_program *prog, const char *name, uint32_t iaddr)
     return -1;
   if ( iaddr >= prog->ninst )
     return -1;
-  if ( ht_get(prog->labels, (void *)name) )
+  if ( ht_get_dptr(prog->labels, name) )
     return -1;
   nl = emalloc(sizeof(*nl));
   nl->name = estrdup(name);
@@ -82,7 +82,7 @@ int nprg_add_ipatch(struct netvm_program *prog, uint32_t iaddr, uint32_t delta,
   iptch.delta = delta;
   iptch.symname = estrdup(symname);
   iptch.type = type;
-  clist_enq(prog->ipatches, struct netvm_ipatch, iptch);
+  clist_enqueue(prog->ipatches, &iptch);
   return 0;
 }
 
@@ -94,7 +94,7 @@ struct netvm_var *nprg_add_var(struct netvm_program *prog, const char *name,
   struct netvm_var *var;
   byte_t *p;
   abort_unless(prog && prog->vars && name);
-  if ( ht_get(prog->vars, (void*)name) )
+  if ( ht_get_dptr(prog->vars, (void*)name) )
     return NULL;
 
   if ( isrdonly ) {
@@ -112,20 +112,22 @@ struct netvm_var *nprg_add_var(struct netvm_program *prog, const char *name,
   var->isrdonly = isrdonly;
   var->datalen = 0;
   var->init_type_u.data = NULL;
-  ht_put(prog->vars, (void *)var->name, var);
-  clist_enq(prog->varlist, struct netvm_var *, var);
+  ht_put(prog->vars, var->name, var);
+  clist_enqueue(prog->varlist, &var);
   return var;
 }
 
 
-static void freevar(void *varp, void *realfree)
+static void freevar(void *clnp, void *realfree)
 {
-  struct netvm_var *var = varp;
-  if ( var->inittype == NETVM_ITYPE_DATA )
+  struct clist_node *cln = clnp;
+  struct netvm_var *var = cln_data(cln, struct netvm_var *);
+  if ( var->inittype == NETVM_ITYPE_DATA ) {
     free(var->init_type_u.data);
-  else if ( (var->inittype == NETVM_ITYPE_LABEL) || 
-            (var->inittype == NETVM_ITYPE_VADDR) )
+  } else if ( (var->inittype == NETVM_ITYPE_LABEL) || 
+              (var->inittype == NETVM_ITYPE_VADDR) ) {
     free(var->init_type_u.symname);
+  }
   if ( realfree != NULL ) {
     free(var->name);
     free(var);
@@ -188,9 +190,10 @@ static void label_free_aux(void *labelp, void *unused)
 }
 
 
-static void ipatch_free_aux(void *iptchp, void *unused)
+static void ipatch_free_aux(void *clnp, void *unused)
 {
-  struct netvm_ipatch *iptch = iptchp;
+  struct clist_node *cln = clnp;
+  struct netvm_ipatch *iptch = cln_dptr(cln);
   (void)unused;
   free(iptch->symname);
 }
@@ -204,8 +207,8 @@ static void linkfree(struct netvm_program *prog)
     prog->labels = NULL;
   }
   if ( prog->ipatches ) {
-    l_apply(prog->ipatches, ipatch_free_aux, NULL);
-    clist_freelist(prog->ipatches);
+    clist_apply(prog->ipatches, ipatch_free_aux, NULL);
+    clist_free_list(prog->ipatches);
     prog->ipatches = NULL;
   }
   if ( prog->vars ) {
@@ -218,7 +221,7 @@ static void linkfree(struct netvm_program *prog)
 /* resolve all instruction patches in the system */
 int nprg_link(struct netvm_program *prog)
 {
-  struct list *l;
+  struct clist_node *cln;
   struct netvm_inst *inst;
   struct netvm_ipatch *iptch;
   struct netvm_label *label;
@@ -227,18 +230,18 @@ int nprg_link(struct netvm_program *prog)
   abort_unless(prog);
 
   /* patch all instructions */
-  for ( l = l_head(prog->ipatches); l != l_end(prog->ipatches); l = l->next ) {
-    iptch = clist_dptr(l, struct netvm_ipatch);
+  clist_for_each(cln, prog->ipatches) {
+    iptch = cln_dptr(cln);
     abort_unless(iptch->iaddr < prog->ninst);
     inst = prog->inst + iptch->iaddr;
     if ( iptch->type == NETVM_IPTYPE_LABEL ) {
-      label = ht_get(prog->labels, iptch->symname);
+      label = ht_get_dptr(prog->labels, iptch->symname);
       if ( label == NULL )
         return -1;
       inst->val = label->addr;
     } else {
       abort_unless(iptch->type == NETVM_IPTYPE_VAR);
-      var = ht_get(prog->vars, iptch->symname);
+      var = ht_get_dptr(prog->vars, iptch->symname);
       if ( var == NULL )
         return -1;
       inst->val = var->addr;
@@ -246,10 +249,10 @@ int nprg_link(struct netvm_program *prog)
   }
 
   /* patch all variables */
-  for ( l = l_head(prog->varlist); l != l_end(prog->varlist); l = l->next ) {
-    var = clist_data(l, struct netvm_var *);
+  clist_for_each(cln, prog->varlist) {
+    var = cln_data(cln, struct netvm_var *);
     if ( var->inittype == NETVM_ITYPE_LABEL ) {
-      label = ht_get(prog->labels, var->init_type_u.symname);
+      label = ht_get_dptr(prog->labels, var->init_type_u.symname);
       if ( label == NULL )
         return -1;
       free(var->init_type_u.symname);
@@ -258,7 +261,7 @@ int nprg_link(struct netvm_program *prog)
       var->datalen = 8;
       var->init_type_u.fill = val;
     } else if ( var->inittype == NETVM_ITYPE_VADDR ) {
-      var2 = ht_get(prog->vars, var->init_type_u.symname);
+      var2 = ht_get_dptr(prog->vars, var->init_type_u.symname);
       if ( var2 == NULL )
         return -1;
       free(var->init_type_u.symname);
@@ -269,8 +272,9 @@ int nprg_link(struct netvm_program *prog)
     }
   }
 
-  for ( l = l_head(prog->varlist); l != l_end(prog->varlist); l = l->next )
-    ht_clr(prog->vars, var->name);
+  clist_for_each(cln, prog->varlist) {
+    ht_clr(prog->vars, cln_data(cln, struct netvm_var *)->name);
+  }
   linkfree(prog);
   prog->linked = 1;
 
@@ -308,8 +312,7 @@ static void loadvar(byte_t *mem, struct netvm_var *var)
 int nprg_load(struct netvm *vm, struct netvm_program *prog)
 {
   size_t memreq;
-  struct list *l;
-  struct netvm_var *var;
+  struct clist_node *cln;
   abort_unless(vm && prog);
   if ( !prog->linked )
     return -1;
@@ -319,9 +322,8 @@ int nprg_load(struct netvm *vm, struct netvm_program *prog)
   if ( netvm_setcode(vm, prog->inst, prog->ninst) < 0 )
     return -1;
   netvm_set_matchonly(vm, prog->matchonly);
-  for ( l = l_head(prog->varlist); l != l_end(prog->varlist); l = l->next ) {
-    var = clist_data(l, struct netvm_var *);
-    loadvar(vm->mem, var);
+  clist_for_each(cln, prog->varlist) {
+    loadvar(vm->mem, cln_data(cln, struct netvm_var *));
   }
   netvm_setrooff(vm, vm->memsz - amm_get_fill(&prog->romm));
   return 0;
@@ -335,9 +337,9 @@ void nprg_release(struct netvm_program *prog)
   abort_unless(prog);
   linkfree(prog);
   if ( prog->varlist ) {
-    l_apply(prog->varlist, freevar, &dummy);
-    clist_freelist(prog->varlist);
-    prog->ipatches = NULL;
+    clist_apply(prog->varlist, freevar, &dummy);
+    clist_free_list(prog->varlist);
+    prog->varlist = NULL;
   }
   free(prog->inst);
   prog->inst = NULL;
@@ -359,7 +361,7 @@ void nvmmrt_init(struct netvm_mrt *mrt, struct netvm *vm, netvm_pktin_f inf,
   mrt->outctx = outctx;
   mrt->begin = NULL;
   mrt->end = NULL;
-  mrt->pktprogs = clist_newlist();
+  mrt->pktprogs = clist_new_list(&estdmm, sizeof(struct netvm_matchedprog));
 }
 
 
@@ -387,7 +389,7 @@ int nvmmrt_add_pktprog(struct netvm_mrt *mrt, struct netvm_program *match,
   match->matchonly = 1; /* override anything in the match program */
   mp.match = match;
   mp.action = action;
-  clist_enq(mrt->pktprogs, struct netvm_matchedprog, mp);
+  clist_enqueue(mrt->pktprogs, &mp);
   return 0;
 }
 
@@ -398,7 +400,7 @@ int nvmmrt_execute(struct netvm_mrt *mrt)
   struct netvm_matchedprog *mprog;
   int i, rv, send;
   uint32_t rc;
-  struct list *l;
+  struct clist_node *cln;
 
   abort_unless(mrt);
   if ( mrt->begin && (nprg_load(mrt->vm, mrt->begin) < 0) )
@@ -408,8 +410,8 @@ int nvmmrt_execute(struct netvm_mrt *mrt)
     netvm_loadpkt(mrt->vm, pkb, 0);
 
     send = 1;
-    for ( l = l_head(mrt->pktprogs); l != l_end(mrt->pktprogs); l = l->next ) {
-      mprog = clist_data(l, struct netvm_matchedprog *);
+    clist_for_each(cln, mrt->pktprogs) {
+      mprog = cln_dptr(cln);
       if ( nprg_load(mrt->vm, mprog->match) < 0 )
         return -1;
       if ( (rv = netvm_run(mrt->vm, -1, &rc)) < 0 )
@@ -454,19 +456,19 @@ int nvmmrt_execute(struct netvm_mrt *mrt)
 
 void nvmmrt_release(struct netvm_mrt *mrt, void (*progfree)(void *))
 {
-  struct list *l;
+  struct clist_node *cln;
   struct netvm_matchedprog *mprog;
   abort_unless(mrt);
   if ( progfree ) {
     (*progfree)(mrt->begin);
     (*progfree)(mrt->end);
-    for ( l = l_head(mrt->pktprogs); l != l_end(mrt->pktprogs); l = l->next ) {
-      mprog = clist_data(l, struct netvm_matchedprog *);
+    clist_for_each(cln, mrt->pktprogs) {
+      mprog = cln_dptr(cln);
       (*progfree)(mprog->match);
       (*progfree)(mprog->action);
     }
   }
-  clist_freelist(mrt->pktprogs);
+  clist_free_list(mrt->pktprogs);
   mrt->vm= NULL;
 }
 

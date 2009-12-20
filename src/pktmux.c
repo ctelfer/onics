@@ -77,7 +77,7 @@ int readpkt(void *arg, struct callback *cb)
   if ( (rv = pkb_fd_read(ioe->fd, &p)) <= 0 ) {
     if ( rv < 0 )
       logsys(1, "Error reading from fd %d\n", ioe->fd);
-    ue_io_del(cb);
+    ue_io_del(ioe);
     return 0;
   }
   ++g_npkts;
@@ -100,14 +100,14 @@ int main(int argc, char *argv[])
   parse_options();
   fclose(stdin);
 
-  ue_init(&mux);
+  ue_init(&mux, &estdmm);
   for ( i = 3; i < 3 + g_nfd; ++i ) {
     testfd(i);
     ue_io_new(&mux, UE_RD, i, readpkt, NULL);
   }
 
   ue_run(&mux);
-  ue_fini(&mux, &estdmm);
+  ue_fini(&mux);
 
   return 0;
 }

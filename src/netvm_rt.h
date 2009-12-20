@@ -2,9 +2,7 @@
 #define __netvm_rt_h
 
 #include "netvm.h"
-#include <cat/list.h>
-#include <cat/hash.h>
-#include <cat/mem.h>
+#include <cat/stduse.h>
 
 
 #define NETVM_IPTYPE_LABEL      1
@@ -55,9 +53,9 @@ struct netvm_program {
   struct arraymm        rwmm;           /* fake allocator to assign vars */
   struct arraymm        romm;           /* fake allocator to assign RO vars */
   struct htab *         labels;
-  struct list *         ipatches;
+  struct clist *        ipatches;
   struct htab *         vars;
-  struct list *         varlist;        /* used for initialization after link */
+  struct clist *        varlist;        /* used for initialization after link */
 };
 
 
@@ -112,7 +110,7 @@ struct netvm_mrt {
   void *                        outctx;
   struct netvm_program *        begin;
   struct netvm_program *        end;
-  struct list *                 pktprogs;
+  struct clist *                pktprogs;
 };
 
 void nvmmrt_init(struct netvm_mrt *mrt, struct netvm *vm, netvm_pktin_f inf, 

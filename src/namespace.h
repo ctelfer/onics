@@ -2,7 +2,7 @@
 #define __namespace_h
 #include <cat/cat.h>
 #include <cat/rbtree.h>
-#include <cat/list.h>
+#include <cat/stduse.h>
 
 #define NSTYPE_ANY              -1
 #define NSTYPE_NS               1
@@ -105,7 +105,7 @@ struct ns_ranges {
   const char *          name;
   struct ns_namespace * parent;
   size_t                len;
-  struct list *         ranges;
+  struct clist *        ranges;
 };
 
 

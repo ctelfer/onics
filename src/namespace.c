@@ -34,7 +34,7 @@ struct ns_element *ns_name_lookup(struct ns_namespace *ns, const char *name,
     if ( (e = strchr(p, '.')) )
       *e++ = '\0';
     ns = (struct ns_namespace *)elem;
-    if ( !(elem = rb_get(ns->nametab, p)) )
+    if ( !(elem = rb_get_dptr(ns->nametab, p)) )
       break;
     p = e;
   } while ( p != NULL );
@@ -69,7 +69,7 @@ struct ns_element *ns_id_lookup(struct ns_namespace *ns, int *ida, int nids,
     if ( elem->nstype != NSTYPE_NS )
       return NULL;
     ns = (struct ns_namespace *)elem;
-    if ( !(elem = rb_get(ns->idtab, int2ptr(*ida))) )
+    if ( !(elem = rb_get_dptr(ns->idtab, int2ptr(*ida))) )
       return NULL;
     --nids;
     ++ida;
@@ -89,8 +89,8 @@ struct ns_element *ns_id_lookup(struct ns_namespace *ns, int *ida, int nids,
 int ns_register(struct ns_namespace *ns)
 {
   if ( !rootns.nametab ) {
-    rootns.nametab = rb_new(CAT_DT_STR);
-    rootns.idtab = rb_new(CAT_DT_NUM);
+    rootns.nametab = rb_new(&estdmm, CAT_KT_STR, 0, 0);
+    rootns.idtab = rb_new(&estdmm, CAT_KT_NUM, 0, 0);
   }
   return ns_insert(&rootns, (struct ns_element *)ns);
 }
@@ -106,7 +106,7 @@ int ns_deregister(struct ns_namespace *ns)
     return -1;
   rb_clr(rootns.nametab, ns->name);
   if ( ns->id >= 0 )
-    rb_clr(rootns.idtab, int2ptr(ns->id));
+    rb_clr(rootns.idtab, &ns->id);
   return 0;
 }
 
@@ -115,13 +115,13 @@ int ns_insert(struct ns_namespace *ns, struct ns_element *elem)
 {
   abort_unless(ns && ns->nametab && ns->idtab && elem && elem->name &&
                TYPEOK(elem->nstype));
-  if ( rb_get(ns->nametab, elem->name) )
+  if ( rb_get_dptr(ns->nametab, elem->name) )
     return -1;
-  if ( (elem->id >= 0) && rb_get(ns->idtab, int2ptr(elem->id)) )
+  if ( (elem->id >= 0) && rb_get_dptr(ns->idtab, &elem->id) )
     return -1;
   rb_put(ns->nametab, elem->name, elem);
   if ( elem->id >= 0 )
-    rb_put(ns->idtab, int2ptr(elem->id), elem);
+    rb_put(ns->idtab, &elem->id, elem);
   elem->parent = ns;
   return 0;
 }
@@ -132,11 +132,11 @@ void ns_remove(struct ns_element *elem)
   struct ns_namespace *ns;
   abort_unless(elem && elem->parent);
   ns = elem->parent;
-  abort_unless(rb_get(ns->nametab, elem->name) == elem);
+  abort_unless(rb_get_dptr(ns->nametab, elem->name) == elem);
   rb_clr(ns->nametab, elem->name);
   if ( elem->id >= 0 ) {
-    abort_unless(rb_get(ns->idtab, int2ptr(elem->id)) == elem);
-    rb_clr(ns->idtab, int2ptr(elem->id));
+    abort_unless(rb_get_dptr(ns->idtab, &elem->id) == elem);
+    rb_clr(ns->idtab, &elem->id);
   }
 }
 
@@ -152,9 +152,9 @@ int ns_cmp_scalar(struct ns_element *elem, unsigned long val)
     return scalar->value == val;
   } else {
     struct ns_ranges *ranges = (struct ns_ranges *)elem;
-    struct list *l;
-    l_for_each(l, ranges->ranges) {
-      struct ns_srange *sr = clist_dptr(l, struct ns_srange);
+    struct clist_node *cln;
+    clist_for_each(cln, ranges->ranges) {
+      struct ns_srange *sr = cln_dptr(cln);
       if ( val >= sr->low && val <= sr->high )
         return 1;
     }
@@ -191,11 +191,11 @@ int ns_cmp_raw(struct ns_element *elem, void *p, size_t len)
     return 1;
   } else if ( elem->nstype == NSTYPE_RRANGE ) {
     struct ns_ranges *ranges = (struct ns_ranges *)elem;
-    struct list *l;
+    struct clist_node *cln;
     if ( len != ranges->len )
       return 0;
-    l_for_each(l, ranges->ranges) {
-      struct ns_rrange *rr = clist_dptr(l, struct ns_rrange);
+    clist_for_each(cln, ranges->ranges) {
+      struct ns_rrange *rr = cln_dptr(cln);
       if ( memcmp(rr->low->data, p, len) <= 0 && 
            memcmp(rr->high->data, p, len) >= 0 )
         return 1;
@@ -215,8 +215,8 @@ struct ns_namespace *ns_new_namespace(const char *name, int id)
   ns->nstype = NSTYPE_NS;
   ns->name = estrdup(name);
   ns->id = 1;
-  ns->nametab = rb_new(CAT_DT_STR);
-  ns->idtab = rb_new(CAT_DT_NUM);
+  ns->nametab = rb_new(&estdmm, CAT_KT_STR, 0, 0);
+  ns->idtab = rb_new(&estdmm, CAT_KT_NUM, 0, 0);
   ns->parent = NULL;
   return ns;
 }
@@ -330,10 +330,10 @@ struct ns_ranges *ns_new_srange(const char *name, unsigned long low,
   ranges->name = estrdup(name);
   ranges->len = 0;
   ranges->parent = NULL;
-  ranges->ranges = clist_newlist();
+  ranges->ranges = clist_new_list(&estdmm, sizeof(struct ns_srange));
   sr.low = low;
   sr.high = high;
-  clist_enq(ranges->ranges, struct ns_srange, sr);
+  clist_enqueue(ranges->ranges, &sr);
   return ranges;
 }
 
@@ -346,7 +346,7 @@ void ns_add_srange(struct ns_ranges *ranges, unsigned long low,
                ranges->nstype == NSTYPE_SRANGE);
   sr.low = low;
   sr.high = high;
-  clist_enq(ranges->ranges, struct ns_srange, sr);
+  clist_enqueue(ranges->ranges, &sr);
 }
 
 
@@ -370,10 +370,10 @@ struct ns_ranges *ns_new_rrange(const char *name, struct raw *low,
   ranges->name = estrdup(name);
   ranges->len  = low->len;
   ranges->parent = NULL;
-  ranges->ranges = clist_newlist();
+  ranges->ranges = clist_new_list(&estdmm, sizeof(struct ns_rrange));
   rr.low = erawdup(low);
   rr.high = erawdup(high);
-  clist_enq(ranges->ranges, struct ns_rrange, rr);
+  clist_enqueue(ranges->ranges, &rr);
   return ranges;
 }
 
@@ -392,7 +392,7 @@ void ns_add_rrange(struct ns_ranges *ranges, struct raw *low, struct raw *high)
   }
   rr.low = erawdup(low);
   rr.high = erawdup(high);
-  clist_enq(ranges->ranges, struct ns_rrange, rr);
+  clist_enqueue(ranges->ranges, &rr);
 }
 
 
@@ -429,17 +429,16 @@ void ns_free(struct ns_element *elem)
   } break;
   case NSTYPE_SRANGE: {
     struct ns_ranges *ranges = (struct ns_ranges *)elem;
-    clist_freelist(ranges->ranges);
+    clist_free_list(ranges->ranges);
   } break;
   case NSTYPE_RRANGE: {
     struct ns_ranges *ranges = (struct ns_ranges *)elem;
-    while ( !clist_isempty(ranges->ranges) ) {
-      struct ns_rrange rr = clist_qnext(ranges->ranges, struct ns_rrange);
-      clist_deq(ranges->ranges);
+    struct ns_rrange rr;
+    while ( clist_dequeue(ranges->ranges, &rr) ) {
       free(rr.low);
       free(rr.high);
     }
-    clist_freelist(ranges->ranges);
+    clist_free_list(ranges->ranges);
   } break;
   }
   free(elem);
