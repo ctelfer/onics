@@ -5,14 +5,15 @@
 #include <cat/list.h>
 
 #define PPT_NONE                0
-#define PPT_ETHERNET		1
-#define PPT_ARP			2
-#define PPT_IPV4		3
-#define PPT_IPV6		4
-#define PPT_ICMP		5
-#define PPT_ICMP6		6
-#define PPT_UDP			7
-#define PPT_TCP			8
+#define PPT_REGION		1	/* raw data region */
+#define PPT_ETHERNET		2
+#define PPT_ARP			3
+#define PPT_IPV4		4
+#define PPT_IPV6		5
+#define PPT_ICMP		6
+#define PPT_ICMP6		7
+#define PPT_UDP			8
+#define PPT_TCP			9
 #define PPT_MAX			127
 #define PPT_INVALID             (PPT_MAX + 1)
 
@@ -30,12 +31,12 @@
 #define PPCF_WRAP               2       /* push outer (wrap tightly) */
 #define PPCF_SET                3       /* push in middle (exact fit) */
 
-struct hdr_parse;
+struct prparse;
 
-struct pparse_ops {
-  int			(*follows)(struct hdr_parse *phdr);
-  struct hdr_parse *	(*parse)(struct hdr_parse *phdr);
-  struct hdr_parse *	(*create)(byte_t *start, size_t hoff, size_t buflen,
+struct proto_parser_ops {
+  int			(*follows)(struct prparse *pprp);
+  struct prparse *	(*parse)(struct prparse *pprp);
+  struct prparse *	(*create)(byte_t *start, size_t hoff, size_t buflen,
                                   size_t poff, size_t plen, int mode);
 };
 
@@ -43,17 +44,17 @@ struct proto_parser {
   unsigned int	        type;
   unsigned int	        valid;
   struct list  	        children;
-  struct pparse_ops *   ops;
+  struct proto_parser_ops *   ops;
 };
 
-struct hparse_ops {
-  void          (*update)(struct hdr_parse *hdr);
-  size_t        (*getfield)(struct hdr_parse *hdr, unsigned fid, 
+struct prparse_ops {
+  void          (*update)(struct prparse *prp);
+  size_t        (*getfield)(struct prparse *prp, unsigned fid, 
                             unsigned num, size_t *len);
-  int           (*fixlen)(struct hdr_parse *hdr);
-  int           (*fixcksum)(struct hdr_parse *hdr);
-  struct hdr_parse * (*copy)(struct hdr_parse *, byte_t *buffer);
-  void		(*free)(struct hdr_parse *hdr);
+  int           (*fixlen)(struct prparse *prp);
+  int           (*fixcksum)(struct prparse *prp);
+  struct prparse * (*copy)(struct prparse *, byte_t *buffer);
+  void		(*free)(struct prparse *prp);
 };
 
 
@@ -75,7 +76,7 @@ struct hparse_ops {
                              packet contained here
  */
 
-struct hdr_parse {
+struct prparse {
   size_t                size; 
   unsigned int          type;
   struct list           node;
@@ -85,22 +86,22 @@ struct hdr_parse {
   size_t                poff;
   size_t                toff;
   size_t                eoff;
-  struct hparse_ops *   ops;
+  struct prparse_ops *  ops;
 };
-#define hdr_hlen(hdr) ((hdr)->poff - (hdr)->hoff)
-#define hdr_plen(hdr) ((hdr)->toff - (hdr)->poff)
-#define hdr_tlen(hdr) ((hdr)->eoff - (hdr)->toff)
-#define hdr_totlen(hdr) ((hdr)->eoff - (hdr)->hoff)
-#define hdr_header(hdr, type) ((type *)((hdr)->data + (hdr)->hoff))
-#define hdr_payload(hdr) ((byte_t *)((hdr)->data + (hdr)->poff))
-#define hdr_trailer(hdr, type) ((type *)((hdr)->data + (hdr)->toff))
-#define hdr_parent(hdr) container((hdr)->node.prev, struct hdr_parse, node)
-#define hdr_child(hdr) container((hdr)->node.next, struct hdr_parse, node)
-#define hdr_islast(hdr) (hdr_child(hdr)->type == PPT_NONE)
-#define hdr_isfirst(hdr) ((hdr)->type == PPT_NONE)
+#define prp_hlen(prp) ((prp)->poff - (prp)->hoff)
+#define prp_plen(prp) ((prp)->toff - (prp)->poff)
+#define prp_tlen(prp) ((prp)->eoff - (prp)->toff)
+#define prp_totlen(prp) ((prp)->eoff - (prp)->hoff)
+#define prp_header(prp, type) ((type *)((prp)->data + (prp)->hoff))
+#define prp_payload(prp) ((byte_t *)((prp)->data + (prp)->poff))
+#define prp_trailer(prp, type) ((type *)((prp)->data + (prp)->toff))
+#define prp_parent(prp) container((prp)->node.prev, struct prparse, node)
+#define prp_child(prp) container((prp)->node.next, struct prparse, node)
+#define prp_islast(prp) (prp_child(prp)->type == PPT_NONE)
+#define prp_isfirst(prp) ((prp)->type == PPT_NONE)
 
 /* install a protocol parser to handle a particular protocol type */
-int register_proto_parser(unsigned type, struct pparse_ops *ops);
+int register_proto_parser(unsigned type, struct proto_parser_ops *ops);
 
 /* make 'cldtype' protocol a child of 'partype' (e.g. TCP and IP) */
 /* this will cause the protocol parser to call 'cldtype's 'follows' */
@@ -120,73 +121,73 @@ void install_default_proto_parsers();
 
 /* Tests whether the 'cldtype' protocol can follow the 'partype' protocol */
 /* according to parent/child relationships in the protocol parser. */
-int hdr_can_follow(unsigned partype, unsigned cldtype);
+int prp_can_follow(unsigned partype, unsigned cldtype);
 
 /* Creates a 'default' header parse at buf + off given pktlen bytes to use */
-struct hdr_parse *hdr_create_parse(byte_t *buf, size_t off, size_t pktlen, 
+struct prparse *prp_create_parse(byte_t *buf, size_t off, size_t pktlen, 
                                    size_t buflen);
 
 /* Create a new header in a parsed packet.  The "mode" determines how this */
-/* header is created.  if mode == PPCF_FILL, then 'hdr' must be the */
+/* header is created.  if mode == PPCF_FILL, then 'prp' must be the */
 /* innermost header and the new header will fill inside the curent one. If */
-/* the mode is PPCF_WRAP, then 'hdr' must be the outer 'NONE' header and */
+/* the mode is PPCF_WRAP, then 'prp' must be the outer 'NONE' header and */
 /* the new header will wrap all the other protocol headers.  Finally, if */
-/* mode is PPCF_SET, then the 'hdr' must be a header with free space between */
+/* mode is PPCF_SET, then the 'prp' must be a header with free space between */
 /* it and its child (based on the offsets above).  The new header will take */
 /* up exactly the space between parent and child. */
-int hdr_push(unsigned ppidx, struct hdr_parse *hdr, int mode);
+int prp_push(unsigned ppidx, struct prparse *prp, int mode);
 
 
 /* Given a buffer and start offset and a first protocol parser to start with */
 /* parse all headers as automatically as possible */
-struct hdr_parse *hdr_parse_packet(unsigned firstpp, byte_t *pbuf, size_t off, 
-                                   size_t pktlen, size_t buflen);
+struct prparse *prp_parse_packet(unsigned firstpp, byte_t *pbuf, size_t off, 
+                                 size_t pktlen, size_t buflen);
 
 /* Free a header parse, or, if freechildren is non-zero, also free all child */
 /* headers of the current header parse */
-void hdr_free(struct hdr_parse *hdr, int freechildren);
+void prp_free(struct prparse *prp, int freechildren);
 
 
 /* copy a header parse (but not the packet buffer itself) */
-struct hdr_parse *hdr_copy(struct hdr_parse *hdr, byte_t *buffer);
+struct prparse *prp_copy(struct prparse *prp, byte_t *buffer);
 
 /* Associate a header parse with a new packet buffer (which must be sized */
 /* correctly based on the header parse. */
-void hdr_set_packet_buffer(struct hdr_parse *hdr, byte_t *buffer);
+void prp_set_packet_buffer(struct prparse *prp, byte_t *buffer);
 
-/* re-parse and update the fields in 'hdr'.  (but not its children */
+/* re-parse and update the fields in 'prp'.  (but not its children */
 /* returns error field as a matter of convenience */
-unsigned int hdr_update(struct hdr_parse *hdr);
+unsigned int prp_update(struct prparse *prp);
 
 /* Get a variable position field in a header.  'fid' denotes the type */
 /* of field.  'idx' denotes the index of the field starting from 0 */
 /* the 'len' parameter returns the length of the field, while the  */
 /* function returns the offset of the field starting from the */
-/* beginning of 'hdr' */
-size_t hdr_get_field(struct hdr_parse *hdr, unsigned fid, unsigned idx, 
+/* beginning of 'prp' */
+size_t prp_get_field(struct prparse *prp, unsigned fid, unsigned idx, 
                      size_t *len);
 
-/* fix up checksums in the 'hdr' protocol header */
-int hdr_fix_cksum(struct hdr_parse *hdr);
+/* fix up checksums in the 'prp' protocol header */
+int prp_fix_cksum(struct prparse *prp);
 
-/* fix up length fields in the 'hdr' protocol header based on 'hdr' */
+/* fix up length fields in the 'prp' protocol header based on 'prp' */
 /* protocol metadata */
-int hdr_fix_len(struct hdr_parse *hdr);
+int prp_fix_len(struct prparse *prp);
 
 /* insert and delete data from the parse (and packet) */
 /* NOTE: when inserting on the boundary between a payload and header or */
-/* a payload and trailer, hdr_splice() always favors inserting into the */
-/* payload section.  You can use hdr_adj_* to correct this later as needed. */
-int hdr_insert(struct hdr_parse *hdr, size_t off, size_t len, int moveup);
-int hdr_cut(struct hdr_parse *hdr, size_t off, size_t len, int moveup);
+/* a payload and trailer, prp_splice() always favors inserting into the */
+/* payload section.  You can use prp_adj_* to correct this later as needed. */
+int prp_insert(struct prparse *prp, size_t off, size_t len, int moveup);
+int prp_cut(struct prparse *prp, size_t off, size_t len, int moveup);
 
 /* expand or contract header/trailer within the encapsulating space */
 /* Note that the point adjustments can't overrun their adjacent boundaries */
-/* EXCEPT for the case of hdr_adj_plen() which can overrun the trailer but */
+/* EXCEPT for the case of prp_adj_plen() which can overrun the trailer but */
 /* not the encapsulationg protocol's payload boundary (of course) */
-int hdr_adj_hstart(struct hdr_parse *hdr, ptrdiff_t amt); /* adjust A */
-int hdr_adj_hlen(struct hdr_parse *hdr, ptrdiff_t amt); /* adjust B */
-int hdr_adj_plen(struct hdr_parse *hdr, ptrdiff_t amt); /* adjust C */
-int hdr_adj_tlen(struct hdr_parse *hdr, ptrdiff_t amt); /* adjust D */
+int prp_adj_hstart(struct prparse *prp, ptrdiff_t amt); /* adjust A */
+int prp_adj_hlen(struct prparse *prp, ptrdiff_t amt); /* adjust B */
+int prp_adj_plen(struct prparse *prp, ptrdiff_t amt); /* adjust C */
+int prp_adj_tlen(struct prparse *prp, ptrdiff_t amt); /* adjust D */
 
 #endif /* __protoparse_h */

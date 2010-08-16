@@ -1,15 +1,15 @@
 #ifndef __pptcpip_h
 #define __pptcpip_h
 
-extern struct pparse_ops none_pparse_ops;
-extern struct pparse_ops eth_pparse_ops;
-extern struct pparse_ops arp_pparse_ops;
-extern struct pparse_ops ipv4_pparse_ops;
-extern struct pparse_ops ipv6_pparse_ops;
-extern struct pparse_ops icmp_pparse_ops;
-extern struct pparse_ops icmpv6_pparse_ops;
-extern struct pparse_ops udp_pparse_ops;
-extern struct pparse_ops tcp_pparse_ops;
+extern struct proto_parser_ops none_proto_parser_ops;
+extern struct proto_parser_ops eth_proto_parser_ops;
+extern struct proto_parser_ops arp_proto_parser_ops;
+extern struct proto_parser_ops ipv4_proto_parser_ops;
+extern struct proto_parser_ops ipv6_proto_parser_ops;
+extern struct proto_parser_ops icmp_proto_parser_ops;
+extern struct proto_parser_ops icmpv6_proto_parser_ops;
+extern struct proto_parser_ops udp_proto_parser_ops;
+extern struct proto_parser_ops tcp_proto_parser_ops;
 
 #define ARPFLD_ETHARP   0
 

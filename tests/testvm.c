@@ -33,25 +33,25 @@ struct meminit {
 
 
 struct netvm_inst vm_prog_istcp[] = { 
-  { NETVM_OC_HASHDR, 0, NETVM_IF_IMMED, NETVM_HDESC(PPT_TCP,0,0,0) },
+  { NETVM_OC_HASPRP, 0, NETVM_IF_IMMED, NETVM_PDESC(PPT_TCP,0,0,0) },
   { NETVM_OC_HALT, 0, 0, 0 },
 };
 
 
 struct netvm_inst vm_prog_tcperr[] = { 
-  /*0*/{ NETVM_OC_HASHDR, 0, NETVM_IF_IMMED, NETVM_HDESC(PPT_TCP,0,0,0) },
+  /*0*/{ NETVM_OC_HASPRP, 0, NETVM_IF_IMMED, NETVM_PDESC(PPT_TCP,0,0,0) },
   /*1*/{ NETVM_OC_DUP, 0, 0, 0 },
   /*2*/{ NETVM_OC_NOT, 0, 0, 0 },
   /*3*/{ NETVM_OC_BNZ, 0, NETVM_IF_IMMED, /* END */ 2 },
-  /*4*/{ NETVM_OC_LDHDRF, 0, NETVM_IF_IMMED, 
-         NETVM_HDESC(PPT_TCP,0,NETVM_HDR_ERR,0) },
+  /*4*/{ NETVM_OC_LDPRPF, 0, NETVM_IF_IMMED, 
+         NETVM_PDESC(PPT_TCP,0,NETVM_PRP_ERR,0) },
   /*5*/{ NETVM_OC_TOBOOL, 0, 0, 0 },
 };
 
 
 struct netvm_inst vm_prog_isudp[] = { 
-  { NETVM_OC_LDHDRF, 0, NETVM_IF_IMMED, 
-    NETVM_HDESC(NETVM_HDLAYER, MPKT_LAYER_XPORT, NETVM_HDR_TYPE, 0) },
+  { NETVM_OC_LDPRPF, 0, NETVM_IF_IMMED, 
+    NETVM_PDESC(NETVM_PRP_LAYER, MPKT_LAYER_XPORT, NETVM_PRP_TYPE, 0) },
   { NETVM_OC_EQ, 0, NETVM_IF_IMMED, PPT_UDP },
 };
 
@@ -60,17 +60,17 @@ struct netvm_inst vm_prog_fixcksum[] = {
 };
 
 struct netvm_inst vm_prog_toggledf[] = { 
-  /*0*/{ NETVM_OC_LDHDRF, 0, NETVM_IF_IMMED, 
-         NETVM_HDESC(NETVM_HDLAYER, MPKT_LAYER_NET, NETVM_HDR_TYPE, 0) },
+  /*0*/{ NETVM_OC_LDPRPF, 0, NETVM_IF_IMMED, 
+         NETVM_PDESC(NETVM_PRP_LAYER, MPKT_LAYER_NET, NETVM_PRP_TYPE, 0) },
   /*1*/{ NETVM_OC_NEQ, 0, NETVM_IF_IMMED, PPT_IPV4 },
   /*2*/{ NETVM_OC_BNZ, 0, NETVM_IF_IMMED, 4 /* END of prog */ },
   /*3*/{ NETVM_OC_LDPKT, 2, NETVM_IF_IMMED | NETVM_IF_TOHOST, 
          /* 2 bytes starting 8 from IP hdr */
-         NETVM_HDESC(PPT_IPV4, 0, NETVM_HDR_HOFF, 6) },
+         NETVM_PDESC(PPT_IPV4, 0, NETVM_PRP_HOFF, 6) },
   /* toggle the DF bit */
   /*4*/{ NETVM_OC_XOR, 0, NETVM_IF_IMMED, IPH_DFMASK },
   /*5*/{ NETVM_OC_STPKT, 2, NETVM_IF_IMMED | NETVM_IF_TONET, 
-         NETVM_HDESC(PPT_IPV4, 0, NETVM_HDR_HOFF, 6) },
+         NETVM_PDESC(PPT_IPV4, 0, NETVM_PRP_HOFF, 6) },
   /*6*/{ NETVM_OC_FIXCKSUM, 0, NETVM_IF_IMMED, 0 }
 };
 
@@ -210,12 +210,12 @@ struct meminit bmi[] = {
 
 struct netvm_inst vm_prog_bulkmove[] = { 
   /* only consider the 1st TCP packet with at least 16 bytes of payload */
-  /* 0*/{ NETVM_OC_LDHDRF, 0, NETVM_IF_IMMED, 
-          NETVM_HDESC(NETVM_HDLAYER, MPKT_LAYER_XPORT, NETVM_HDR_TYPE, 0) },
+  /* 0*/{ NETVM_OC_LDPRPF, 0, NETVM_IF_IMMED, 
+          NETVM_PDESC(NETVM_PRP_LAYER, MPKT_LAYER_XPORT, NETVM_PRP_TYPE, 0) },
   /* 1*/{ NETVM_OC_NEQ, 0, NETVM_IF_IMMED, PPT_TCP},
   /* 2*/{ NETVM_OC_BNZ, 0, NETVM_IF_IMMED, NETVM_BRF(10) },
-  /* 3*/{ NETVM_OC_LDHDRF, 0, NETVM_IF_IMMED, 
-          NETVM_HDESC(PPT_TCP, 0, NETVM_HDR_PLEN, 0) },
+  /* 3*/{ NETVM_OC_LDPRPF, 0, NETVM_IF_IMMED, 
+          NETVM_PDESC(PPT_TCP, 0, NETVM_PRP_PLEN, 0) },
   /* 4*/{ NETVM_OC_LT, 0, NETVM_IF_IMMED, 16 },
   /* 5*/{ NETVM_OC_BNZ, 0, NETVM_IF_IMMED, NETVM_BRF(7) },
   /* 6*/{ NETVM_OC_LDMEM, 4, NETVM_IF_IMMED, DUP1ST_PNUM },
@@ -228,8 +228,8 @@ struct netvm_inst vm_prog_bulkmove[] = {
   /*13*/{ NETVM_OC_HALT, 0, 0, 0 },
 
   /* First print the first 16 bytes of the payload */
-  /*14*/{ NETVM_OC_LDHDRF, 0, NETVM_IF_IMMED,
-          NETVM_HDESC(PPT_TCP, 0, NETVM_HDR_POFF, 0) },
+  /*14*/{ NETVM_OC_LDPRPF, 0, NETVM_IF_IMMED,
+          NETVM_PDESC(PPT_TCP, 0, NETVM_PRP_POFF, 0) },
   /*15*/{ NETVM_OC_PUSH, 0, 0, 0 },
   /*16*/{ NETVM_OC_PUSH, 0, 0, 16 },
   /*17*/{ NETVM_OC_BULKP2M, 0, NETVM_IF_IMMED, 0 },
@@ -255,8 +255,8 @@ struct netvm_inst vm_prog_bulkmove[] = {
           BMS2_SIZE },
 
   /* Next put "hello world" into the beginning of the packet */
-  /*28*/{ NETVM_OC_LDHDRF, 0, NETVM_IF_IMMED,
-          NETVM_HDESC(PPT_TCP, 0, NETVM_HDR_POFF, 0) },
+  /*28*/{ NETVM_OC_LDPRPF, 0, NETVM_IF_IMMED,
+          NETVM_PDESC(PPT_TCP, 0, NETVM_PRP_POFF, 0) },
   /*29*/{ NETVM_OC_PUSH, 0, 0, BMS1_OFFSET },
   /*30*/{ NETVM_OC_PUSH, 0, 0, BMS1_SIZE },
   /*31*/{ NETVM_OC_BULKM2P, 0, NETVM_IF_IMMED, 0 }
@@ -304,8 +304,8 @@ struct netvm_inst vm_prog_hexdump[] = {
   /*08*/{ NETVM_OC_CPOP, NETVM_CPI_OUTPORT, 
           NETVM_IF_IMMED|NETVM_IF_CPIMMED|NETVM_CPOP(NETVM_CPOC_PRSTR), 
           HDS2_SIZE },
-  /*09*/{ NETVM_OC_LDHDRF, 0, NETVM_IF_IMMED, 
-          NETVM_HDESC(PPT_NONE, 0, NETVM_HDR_PLEN, 0) },
+  /*09*/{ NETVM_OC_LDPRPF, 0, NETVM_IF_IMMED, 
+          NETVM_PDESC(PPT_NONE, 0, NETVM_PRP_PLEN, 0) },
   /*10*/{ NETVM_OC_CPOP, NETVM_CPI_OUTPORT, 
           NETVM_IF_IMMED|NETVM_IF_CPIMMED|NETVM_CPOP(NETVM_CPOC_PRDEC), 
           NETVM_OPNUMV(0, 4) },
@@ -317,8 +317,8 @@ struct netvm_inst vm_prog_hexdump[] = {
   /*14*/{ NETVM_OC_STMEM, 4, NETVM_IF_IMMED, HD_IDX }, 
   /*15*/{ NETVM_OC_LDMEM, 4, NETVM_IF_IMMED, HD_IDX }, 
   /*16*/{ NETVM_OC_DUP, 0, 0, 0 },
-  /*17*/{ NETVM_OC_LDHDRF, 0, NETVM_IF_IMMED, 
-          NETVM_HDESC(PPT_NONE, 0, NETVM_HDR_PLEN, 0) },
+  /*17*/{ NETVM_OC_LDPRPF, 0, NETVM_IF_IMMED, 
+          NETVM_PDESC(PPT_NONE, 0, NETVM_PRP_PLEN, 0) },
   /*18*/{ NETVM_OC_GE, 0, 0, 0 },
   /*19*/{ NETVM_OC_BNZ, 0, NETVM_IF_IMMED, NETVM_BRF(13) },
   /*20*/{ NETVM_OC_DUP, 0, 0, 0 },
@@ -329,7 +329,7 @@ struct netvm_inst vm_prog_hexdump[] = {
           NETVM_IF_IMMED|NETVM_IF_CPIMMED|NETVM_CPOP(NETVM_CPOC_PRSTR), 
           HDS5_SIZE },
   /*25*/{ NETVM_OC_PUSH, 0, 0, 
-          NETVM_FULL_HDESC(0, PPT_NONE, 0, NETVM_HDR_POFF) },
+          NETVM_FULL_PDESC(0, PPT_NONE, 0, NETVM_PRP_POFF) },
   /*26*/{ NETVM_OC_LDPKT, 1, 0, 0 },
   /*27*/{ NETVM_OC_CPOP, NETVM_CPI_OUTPORT, 
           NETVM_IF_IMMED|NETVM_IF_CPIMMED|NETVM_CPOP(NETVM_CPOC_PRHEX), 
@@ -360,8 +360,8 @@ struct meminit meqsi[] = {
 
 
 struct netvm_inst vm_prog_maskeq[] = { 
-  /*00*/{ NETVM_OC_LDHDRF, 0, NETVM_IF_IMMED, 
-          NETVM_HDESC(NETVM_HDLAYER, MPKT_LAYER_NET, NETVM_HDR_HOFF, 0) },
+  /*00*/{ NETVM_OC_LDPRPF, 0, NETVM_IF_IMMED, 
+          NETVM_PDESC(NETVM_PRP_LAYER, MPKT_LAYER_NET, NETVM_PRP_HOFF, 0) },
   /*01*/{ NETVM_OC_PUSH, 0, 0, 0 },
   /*02*/{ NETVM_OC_PUSH, 0, 0, MEQ_VAL_SIZE },
   /*03*/{ NETVM_OC_BULKP2M, 0, NETVM_IF_IMMED, 0 },

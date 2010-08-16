@@ -24,8 +24,8 @@ enum {
 struct metapkt {
   struct list           entry;
   struct pktbuf *       pkb;
-  struct hdr_parse *    headers;
-  struct hdr_parse *    layer[MPKT_LAYER_MAX+1];
+  struct prparse *      headers;
+  struct prparse *      layer[MPKT_LAYER_MAX+1];
 };
 
 
@@ -34,7 +34,7 @@ struct metapkt *pktbuf_to_metapkt(struct pktbuf *pb);
 struct metapkt *metapkt_copy(struct metapkt *pkt);
 void metapkt_free(struct metapkt *pkt, int freebuf);
 /* layer == -1 for auto */
-void metapkt_set_layer(struct metapkt *pkt, struct hdr_parse *h, int layer);
+void metapkt_set_layer(struct metapkt *pkt, struct prparse *h, int layer);
 void metapkt_clr_layer(struct metapkt *pkt, int layer);
 int metapkt_pushhdr(struct metapkt *pkt, int htype);
 int metapkt_wraphdr(struct metapkt *pkt, int htype);

@@ -18,9 +18,9 @@ const char *pnames[] = {
 int main(int argc, char *argv[])
 {
   struct pktbuf *p;
-  struct hdr_parse *hdr, *t;
+  struct prparse *prp, *t;
   unsigned npkt = 0;
-  unsigned nhdr = 0;
+  unsigned nprp = 0;
 
   install_default_proto_parsers();
 
@@ -30,15 +30,15 @@ int main(int argc, char *argv[])
       printf("Unknown data type for packet %u\n", npkt);
       continue;
     }
-    hdr = hdr_parse_packet(PPT_ETHERNET, p->pkb_buffer, p->pkb_offset, 
+    prp = prp_parse_packet(PPT_ETHERNET, p->pkb_buffer, p->pkb_offset, 
                            p->pkb_len, p->pkb_buflen);
-    if ( hdr == NULL ) {
+    if ( prp == NULL ) {
       printf("Could not parse ethernet packet %u\n", npkt);
       continue;
     }
 
-    for ( nhdr = 1, t = hdr_child(hdr); t != hdr; t = hdr_child(t), ++nhdr ) {
-      printf("%4u:\tHeader %u -- %s\n", npkt, nhdr, pnames[t->type]);
+    for ( nprp = 1, t = prp_child(prp); t != prp; t = prp_child(t), ++nprp ) {
+      printf("%4u:\tHeader %u -- %s\n", npkt, nprp, pnames[t->type]);
       if ( t->error == 0 ) {
         printf("\t\tNo errors\n");
       } else {
@@ -63,10 +63,10 @@ int main(int argc, char *argv[])
       }
 
       printf("\t\tOffset: %8u\tLength: %8u\n", (unsigned)t->hoff,
-             (unsigned)hdr_totlen(t));
-      printf("\t\tHeader length: %8u\n", (unsigned)hdr_hlen(t));
-      printf("\t\tPayload length:%8u\n", (unsigned)hdr_plen(t));
-      printf("\t\tTrailer length:%8u\n", (unsigned)hdr_tlen(t));
+             (unsigned)prp_totlen(t));
+      printf("\t\tHeader length: %8u\n", (unsigned)prp_hlen(t));
+      printf("\t\tPayload length:%8u\n", (unsigned)prp_plen(t));
+      printf("\t\tTrailer length:%8u\n", (unsigned)prp_tlen(t));
     } 
     printf("\n");
     pkb_free(p);

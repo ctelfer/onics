@@ -64,7 +64,7 @@ struct metapkt *metapkt_new(size_t plen, int ppt)
     free(pkt);
     return NULL;
   }
-  pkt->headers = hdr_create_parse(pkt->pkb->pkb_buffer, pkt->pkb->pkb_offset,
+  pkt->headers = prp_create_parse(pkt->pkb->pkb_buffer, pkt->pkb->pkb_offset,
                                   pkt->pkb->pkb_buflen - pkt->pkb->pkb_offset,
                                   pkt->pkb->pkb_buflen);
   if ( !pkt->headers ) {
@@ -79,7 +79,7 @@ struct metapkt *metapkt_new(size_t plen, int ppt)
 struct metapkt *pktbuf_to_metapkt(struct pktbuf *pkb)
 {
   struct metapkt *pkt;
-  struct hdr_parse *hdr;
+  struct prparse *prp;
   unsigned ppt;
 
   abort_unless(pkb);
@@ -88,40 +88,40 @@ struct metapkt *pktbuf_to_metapkt(struct pktbuf *pkb)
     return NULL;
   pkt->pkb = pkb;
   if ( ppt != PPT_INVALID )
-    pkt->headers = hdr_parse_packet(ppt, pkb->pkb_buffer, pkb->pkb_offset, 
+    pkt->headers = prp_parse_packet(ppt, pkb->pkb_buffer, pkb->pkb_offset, 
                                     pkb->pkb_len, pkb->pkb_buflen);
   else
-    pkt->headers = hdr_create_parse(pkt->pkb->pkb_buffer, pkt->pkb->pkb_offset,
+    pkt->headers = prp_create_parse(pkt->pkb->pkb_buffer, pkt->pkb->pkb_offset,
                                     pkb->pkb_len, pkt->pkb->pkb_buflen);
   if ( !pkt->headers ) {
     freepmeta(pkt);
     return NULL;
   }
-  for ( hdr=hdr_child(pkt->headers); hdr->type != PPT_NONE; hdr=hdr_child(hdr) )
-    metapkt_set_layer(pkt, hdr, -1);
+  for ( prp=prp_child(pkt->headers); prp->type != PPT_NONE; prp=prp_child(prp) )
+    metapkt_set_layer(pkt, prp, -1);
   return pkt;
 }
 
 
-static int get_hdr_index(struct metapkt *pkt, struct hdr_parse *hdr)
+static int get_prp_index(struct metapkt *pkt, struct prparse *prp)
 {
   int i = 0;
-  struct hdr_parse *t;
-  for ( t = hdr_child(pkt->headers); t->type != PPT_NONE; t= hdr_child(t) ) {
+  struct prparse *t;
+  for ( t = prp_child(pkt->headers); t->type != PPT_NONE; t= prp_child(t) ) {
     ++i;
-    if ( t == hdr )
+    if ( t == prp )
       break;
   }
-  abort_unless(t == hdr && i > 0);
+  abort_unless(t == prp && i > 0);
   return i;
 }
 
 
-static struct hdr_parse *get_hdr_byindex(struct metapkt *pkt, int i)
+static struct prparse *get_prp_byindex(struct metapkt *pkt, int i)
 {
-  struct hdr_parse *t;
+  struct prparse *t;
   abort_unless(i > 0);
-  for ( t = hdr_child(pkt->headers); --i > 0; t = hdr_child(t) ) {
+  for ( t = prp_child(pkt->headers); --i > 0; t = prp_child(t) ) {
     abort_unless(t->type != PPT_NONE);
   }
   return t;
@@ -139,14 +139,14 @@ struct metapkt *metapkt_copy(struct metapkt *pkt)
     freepmeta(pnew);
     return NULL;
   }
-  if ( !(pnew->headers = hdr_copy(pkt->headers, pnew->pkb->pkb_buffer)) ) {
+  if ( !(pnew->headers = prp_copy(pkt->headers, pnew->pkb->pkb_buffer)) ) {
     pkb_free(pnew->pkb);
     freepmeta(pnew);
     return NULL;
   }
   for ( l = MPKT_LAYER_LINK; l <= MPKT_LAYER_MAX; ++l )
     if ( pkt->layer[l] )
-      pnew->layer[l] = get_hdr_byindex(pnew, get_hdr_index(pkt, pkt->layer[l]));
+      pnew->layer[l] = get_prp_byindex(pnew, get_prp_index(pkt, pkt->layer[l]));
   return pnew;
 }
 
@@ -156,7 +156,7 @@ void metapkt_free(struct metapkt *pkt, int freebuf)
   if ( pkt ) {
     l_rem(&pkt->entry);
     if ( pkt->headers ) {
-      hdr_free(pkt->headers, 1);
+      prp_free(pkt->headers, 1);
       pkt->headers = NULL;
     }
     if ( pkt->pkb && freebuf )
@@ -201,7 +201,7 @@ static int isxport(int ppt)
 }
 
 
-void metapkt_set_layer(struct metapkt *pkt, struct hdr_parse *h, int layer)
+void metapkt_set_layer(struct metapkt *pkt, struct prparse *h, int layer)
 {
   abort_unless(pkt && h && (layer <= MPKT_LAYER_MAX));
   /* XXX : should we sanity check that h in in pkt? */
@@ -229,32 +229,32 @@ void metapkt_clr_layer(struct metapkt *pkt, int layer)
 }
 
 
-int metapkt_pushhdr(struct metapkt *pkt, int htype)
+int metapkt_pushprp(struct metapkt *pkt, int htype)
 {
-  if ( hdr_push(htype, hdr_parent(pkt->headers), PPCF_FILL) < 0 )
+  if ( prp_push(htype, prp_parent(pkt->headers), PPCF_FILL) < 0 )
     return -1;
-  metapkt_set_layer(pkt, hdr_parent(pkt->headers), -1);
+  metapkt_set_layer(pkt, prp_parent(pkt->headers), -1);
   return 0;
 }
 
 
-int metapkt_wraphdr(struct metapkt *pkt, int htype)
+int metapkt_wrapprp(struct metapkt *pkt, int htype)
 {
-  if ( hdr_push(htype, pkt->headers, PPCF_WRAP) < 0 )
+  if ( prp_push(htype, pkt->headers, PPCF_WRAP) < 0 )
     return -1;
-  metapkt_set_layer(pkt, hdr_child(pkt->headers), -1);
+  metapkt_set_layer(pkt, prp_child(pkt->headers), -1);
   return 0;
 }
 
 
-void metapkt_pophdr(struct metapkt *pkt, int fromfront)
+void metapkt_popprp(struct metapkt *pkt, int fromfront)
 {
-  struct hdr_parse *topop;
+  struct prparse *topop;
   int i;
   if ( fromfront )
-    topop = hdr_child(pkt->headers);
+    topop = prp_child(pkt->headers);
   else
-    topop = hdr_parent(pkt->headers);
+    topop = prp_parent(pkt->headers);
   if ( topop->type != PPT_NONE ) {
     for ( i = 0; i <= MPKT_LAYER_MAX; ++i ) {
       if ( pkt->layer[i] == topop ) {
@@ -262,7 +262,7 @@ void metapkt_pophdr(struct metapkt *pkt, int fromfront)
         break;
       }
     }
-    hdr_free(topop, 0);
+    prp_free(topop, 0);
   }
 }
 

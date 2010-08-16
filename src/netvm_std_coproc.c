@@ -389,7 +389,7 @@ static void nci_rexp(struct netvm *vm, struct netvm_coproc *ncp, int cpi)
   int32_t nm;
   uint32_t pktnum, poff, len, ridx;
   struct metapkt *pkt;
-  struct hdr_parse *hdr;
+  struct prparse *prp;
   struct raw r;
 
   if ( CPIMMED(inst) ) {
@@ -408,10 +408,10 @@ static void nci_rexp(struct netvm *vm, struct netvm_coproc *ncp, int cpi)
   S_POP(vm, len);
   S_POP(vm, poff);
   FATAL(vm, NETVM_ERR_IOVFL, (len + poff < len));
-  hdr = pkt->headers;
+  prp = pkt->headers;
   FATAL(vm, NETVM_ERR_PKTADDR, 
-        (poff < hdr->poff) || (poff + len > hdr_totlen(hdr)));
-  r.data = hdr->data + poff;
+        (poff < prp->poff) || (poff + len > prp_totlen(prp)));
+  r.data = prp->data + poff;
   r.len = len;
   rexmatch(vm, cp->rexes[ridx], &r, nm);
 }

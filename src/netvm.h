@@ -26,7 +26,7 @@ typedef void (*netvm_op)(struct netvm *vm);
  * v, v1, v2 - a generic numeric value
  * addr - an offset into memory
  * len - a length, usually of some region in memory
- * hdesc - a header descriptor (see below)
+ * pdesc - a header descriptor (see below)
  * pktnum - an index into the packet table
  * pa - a packet address
  * rxaddr - address of regular expression in memory
@@ -42,12 +42,12 @@ enum {
                         /* 0-based counting from the top of the stack */
   NETVM_OC_LDMEM,       /* [addr|WISR] load from memory */
   NETVM_OC_STMEM,       /* [v,addr|WI] store to memory */
-  NETVM_OC_LDPKT,       /* [hdesc|IWSHTP] load bytes from packet */
+  NETVM_OC_LDPKT,       /* [pdesc|IWSHTP] load bytes from packet */
   NETVM_OC_LDPEXST,     /* [pktnum|I] push true if pktnum exists */
   NETVM_OC_LDCLASS,     /* [pktnum|I] load packet class */
   NETVM_OC_LDTSSEC,     /* [pktnum|I] load packet timestamp */
   NETVM_OC_LDTSNSEC,    /* [pktnum|I] load packet timestamp */
-  NETVM_OC_LDHDRF,      /* [hdesc|I] load field from header parse */
+  NETVM_OC_LDPRPF,      /* [pdesc|I] load field from proto parse */
   NETVM_OC_BULKM2M,     /* [saddr,daddr,len|I] move data from saddr to daddr */
   NETVM_OC_BULKP2M,     /* [pa,addr,len,pktnum|I] move bytes from pa to addr */
   NETVM_OC_MEMCMP,      /* [addr1,addr2,len|I] compare bytes in mem */
@@ -82,7 +82,7 @@ enum {
   NETVM_OC_SLE,         /* [v1,v2|I] v1 less than or equal to v2 (signed) */
   NETVM_OC_SGT,         /* [v1,v2|I] v1 greater than v2 (signed) */
   NETVM_OC_SGE,         /* [v1,v2|I] v1 greater than or equal to v2 (signed) */
-  NETVM_OC_HASHDR,      /* [hdesc|I] true if has header (field in HD ignored) */
+  NETVM_OC_HASPRP,      /* [pdesc|I] true if has header (field in HD ignored) */
   NETVM_OC_GETCPT,      /* [coproc|I] push the 'type' of co-processor 'coproc' */
                         /*            push NETVM_CPT_NONE if it doesn't exist */
   NETVM_OC_CPOP,        /* [coproc parameters,coproc|I] call a coprocessor op. */
@@ -103,28 +103,28 @@ enum {
                         /*      narg deep in the stack, pushing the rest up */
   NETVM_OC_RETURN,      /* [v,(rets..,)nret|I]: branch to the addr nret deep */
                         /*      in the stack.  shift the remaining items down */
-  NETVM_OC_STPKT,       /* [v,hdesc|IWH] store into packet memory */
+  NETVM_OC_STPKT,       /* [v,pdesc|IWH] store into packet memory */
   NETVM_OC_STCLASS,     /* [v,pktnum|I] store into packet class */
   NETVM_OC_STTSSEC,     /* [v,pktnum|I] store into timestamp */
   NETVM_OC_STTSNSEC,    /* [v,pktnum|I] store into timestamp */
   NETVM_OC_BULKM2P,     /* [pa,addr,len,pktnum|I] move bytes from pa to addr */
   NETVM_OC_PKTSWAP,     /* [p1,p2|I] swap packets.  If "I", p1 in width */
-  NETVM_OC_PKTNEW,      /* [hdesc|I] create packet: offset==len, htype==dl */
+  NETVM_OC_PKTNEW,      /* [pdesc|I] create packet: offset==len, ptype==dl */
   NETVM_OC_PKTCOPY,     /* [pktnum2,pktnum1|I] copy packet in slot1 to slot2 */
   NETVM_OC_PKTDEL,      /* [pktnum|I] delete packet */
-  NETVM_OC_SETLAYER,    /* [hdesc|I] set header to layer stored in 'width' */
+  NETVM_OC_SETLAYER,    /* [pdesc|I] set header to layer stored in 'width' */
   NETVM_OC_CLRLAYER,    /* [pktnum|I] clear layer stored in 'width' */
-  NETVM_OC_HDRPUSH,     /* [hdesc|I] create header of htype in packet pktnum */
-  NETVM_OC_HDRPOP,      /* [pktnum|I] pop the top header off of packet pktnum */
-  NETVM_OC_HDRUP,       /* [hdesc|I] update the fields in the header */
+  NETVM_OC_PRPPUSH,     /* [pdesc|I] create header of ptype in packet pktnum */
+  NETVM_OC_PRPPOP,      /* [pktnum|I] pop the top header off of packet pktnum */
+  NETVM_OC_PRPUP,       /* [pdesc|I] update the fields in the header */
   NETVM_OC_FIXDLT,      /* [pktnum|I] set dltype based on PPT_ of 2nd header */
   NETVM_OC_FIXLEN,      /* [ptknum|I] fix length fields in the packet */
   NETVM_OC_FIXCKSUM,    /* [ptknum|I] fix checksum fields in the packet */
-  NETVM_OC_PKTINS,      /* [len,hdesc|I] insert len bytes at hd.offset */
-  NETVM_OC_PKTCUT,      /* [len,hdesc|I] cut len bytes at hd.offset */
-  NETVM_OC_HDRADJ,      /* [amt,hdesc|I] adjust offset field by amt (signed) */
+  NETVM_OC_PKTINS,      /* [len,pdesc|I] insert len bytes at hd.offset */
+  NETVM_OC_PKTCUT,      /* [len,pdesc|I] cut len bytes at hd.offset */
+  NETVM_OC_PRPADJ,      /* [amt,pdesc|I] adjust offset field by amt (signed) */
 
-  NETVM_OC_MAX = NETVM_OC_HDRADJ
+  NETVM_OC_MAX = NETVM_OC_PRPADJ
 
   /* 
    * Still to consider:
@@ -150,7 +150,7 @@ enum {
   NETVM_IF_CPIMMED =   0x10, /* last op is immediate in coprocessor */ 
   NETVM_IF_IPHLEN =    0x10, /* on 1 byte packet load instructions */
   NETVM_IF_TCPHLEN =   0x20, /* on 1 byte packet load instructions */
-  NETVM_IF_MOVEUP =    0x40, /* only used HDRINS and HDRCUT */
+  NETVM_IF_MOVEUP =    0x40, /* only used PRPINS and PRPCUT */
   NETVM_IF_RDONLY =    0x80, /* load from read-only segment */
 
   NETVM_IF_BPOFF =     0x01, /* DUP or SWAP offsets are from base pointer */
@@ -158,21 +158,21 @@ enum {
 };
 
 enum {
-  NETVM_HDR_HOFF,
-  NETVM_HDR_POFF,
-  NETVM_HDR_TOFF,
-  NETVM_HDR_EOFF,
-  NETVM_HDR_HLEN,
-  NETVM_HDR_PLEN,
-  NETVM_HDR_TLEN,
-  NETVM_HDR_LEN,
-  NETVM_HDR_ERR,
-  NETVM_HDR_TYPE,
-  NETVM_HDR_PRFLD,
+  NETVM_PRP_HOFF,
+  NETVM_PRP_POFF,
+  NETVM_PRP_TOFF,
+  NETVM_PRP_EOFF,
+  NETVM_PRP_HLEN,
+  NETVM_PRP_PLEN,
+  NETVM_PRP_TLEN,
+  NETVM_PRP_LEN,
+  NETVM_PRP_ERR,
+  NETVM_PRP_TYPE,
+  NETVM_PRP_PRFLD,
 };
 
-#define NETVM_HDRFLDOK(f) ((f) <= NETVM_HDR_PRFLD)
-#define NETVM_ISHDROFF(f) ((f) <= NETVM_HDR_EOFF)
+#define NETVM_PRPFLDOK(f) ((f) <= NETVM_PRP_PRFLD)
+#define NETVM_ISPRPOFF(f) ((f) <= NETVM_PRP_EOFF)
 
 /* 
  * If immed is not set for a load/store instruction then the address to load
@@ -183,45 +183,45 @@ enum {
  * Packed:
  * 	packet number = 0;
  * 	8 bits - ppt
- * 	3 bits - hdr index
+ * 	3 bits - prp index
  * 	4 bits - field
  * 	17 bits - offset 
  * 
  * Full:
  * 	(top of stack)
- * 	pkt number:4  PPT: 8  hdr index:8  field:12
+ * 	pkt number:4  PPT: 8  prp index:8  field:12
  * 	offset:32 or field index:32
  *
- * When no flags are set the hdesc comes on top of the stack and the offset 
- * follows.  When IMMED is set, the hdesc is in packed form encoded in the 
- * instruction.  Otherwise the header descriptor is on the stack in "full" form:
+ * When no flags are set the pdesc comes on top of the stack and the offset 
+ * follows.  When IMMED is set, the pdesc is in packed form encoded in the 
+ * instruction.  Otherwise the parse descriptor is on the stack in "full" form:
  */
 
-#define NETVM_HDESC(ht, idx, fld, off) \
+#define NETVM_PDESC(ht, idx, fld, off) \
   ((((uint32_t)(ht) & 0xFF) << 24)|\
    (((uint32_t)(idx) & 0x7) << 21)|\
    (((uint32_t)(fld) & 0xF) << 17)|\
    ((uint32_t)(off) & 0x1FFFF))
 
-#define NETVM_FULL_HDESC(pn, ht, idx, fld) \
+#define NETVM_FULL_PDESC(pn, ht, idx, fld) \
   ((((uint32_t)(pn) & 0xF) << 28)|\
    (((uint32_t)(ht) & 0xFF) << 20)|\
    (((uint32_t)(idx) & 0xFF) << 12)|\
    ((uint32_t)(fld) & 0xFFF))
 
-#define NETVM_HDLAYER   255   /* find header of type MPKT_LAYER_* */
+#define NETVM_PRP_LAYER   255   /* find header of type MPKT_LAYER_* */
 /* 
- * When htype == NETVM_HDLAYER, the header referred to is one of the layer
+ * When ptype == NETVM_PRP_LAYER, the header referred to is one of the layer
  * pointers stored in metapkt.  This allows quick access to the network, 
  * data link, transport, and tunnel headers.  It also allows them to be accessed
  * by layer. (e.g. transport).  In this case the idx field tells which layer.
  */
 
-struct netvm_hdr_desc {
+struct netvm_prp_desc {
   uint8_t               pktnum;     /* which packet entry */
-  uint8_t               htype;      /* PPT_*;  PPT_NONE == absolute idx */
-  uint16_t              idx;        /* 0 == 1st hdr, 1 == 2nd hdr,... */
-  uint32_t              field;      /* NETVM_HDR_* or hdr field id */
+  uint8_t               ptype;      /* PPT_*;  PPT_NONE == absolute idx */
+  uint16_t              idx;        /* 0 == 1st prp, 1 == 2nd prp,... */
+  uint32_t              field;      /* NETVM_PRP_* or prp field id */
   uint32_t              offset;     /* offset into packet for LD/STPKT */
                                     /* or proto field index for PRFLD */
 };
@@ -315,17 +315,17 @@ enum {
   NETVM_ERR_MRDONLY,
   NETVM_ERR_PKTNUM,
   NETVM_ERR_NOPKT,
-  NETVM_ERR_NOHDR,
-  NETVM_ERR_NOHDRFLD,
-  NETVM_ERR_HDESC,
-  NETVM_ERR_HDRIDX,
-  NETVM_ERR_HDRFLD,
+  NETVM_ERR_NOPRP,
+  NETVM_ERR_NOPRPFLD,
+  NETVM_ERR_PDESC, /* TODO: make sure this gets used */
+  NETVM_ERR_PRPIDX,
+  NETVM_ERR_PRPFLD,
   NETVM_ERR_LAYER,
   NETVM_ERR_FIXLEN,
   NETVM_ERR_CKSUM,
   NETVM_ERR_PKTINS,
   NETVM_ERR_PKTCUT,
-  NETVM_ERR_HDRADJ,
+  NETVM_ERR_PRPADJ,
   NETVM_ERR_NOMEM,
   NETVM_ERR_IOVFL,
   NETVM_ERR_BADCOPROC,
