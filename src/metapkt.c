@@ -64,9 +64,7 @@ struct metapkt *metapkt_new(size_t plen, int ppt)
     free(pkt);
     return NULL;
   }
-  pkt->headers = prp_create_parse(pkt->pkb->pkb_buffer, pkt->pkb->pkb_offset,
-                                  pkt->pkb->pkb_buflen - pkt->pkb->pkb_offset,
-                                  pkt->pkb->pkb_buflen);
+  pkt->headers = prp_create_parse(pkt->pkb->pkb_buffer, 0, pkt->pkb->pkb_buflen);
   if ( !pkt->headers ) {
     pkb_free(pkt->pkb);
     freepmeta(pkt);
@@ -87,17 +85,21 @@ struct metapkt *pktbuf_to_metapkt(struct pktbuf *pkb)
   if ( !(pkt = newpmeta()) )
     return NULL;
   pkt->pkb = pkb;
-  if ( ppt != PPT_INVALID )
+  if ( ppt != PPT_INVALID ) {
     pkt->headers = prp_parse_packet(ppt, pkb->pkb_buffer, pkb->pkb_offset, 
-                                    pkb->pkb_len, pkb->pkb_buflen);
-  else
-    pkt->headers = prp_create_parse(pkt->pkb->pkb_buffer, pkt->pkb->pkb_offset,
-                                    pkb->pkb_len, pkt->pkb->pkb_buflen);
+		                    pkb->pkb_len);
+    /* add head and tail slack space to the main header */
+    prp_adj_start(pkt->headers, -(ptrdiff_t)pkb->pkb_offset);
+    abort_unless(pkb->pkb_buflen > (pkb->pkb_len + pkb->pkb_offset));
+    prp_adj_end(pkt->headers, pkb->pkb_buflen - (pkb->pkb_len + pkb->pkb_offset));
+  } else {
+    pkt->headers = prp_create_parse(pkb->pkb_buffer, 0, pkb->pkb_buflen);
+  }
   if ( !pkt->headers ) {
     freepmeta(pkt);
     return NULL;
   }
-  for ( prp=prp_child(pkt->headers); prp->type != PPT_NONE; prp=prp_child(prp) )
+  for ( prp=prp_next(pkt->headers); prp->type != PPT_NONE; prp=prp_next(prp) )
     metapkt_set_layer(pkt, prp, -1);
   return pkt;
 }
@@ -107,7 +109,7 @@ static int get_prp_index(struct metapkt *pkt, struct prparse *prp)
 {
   int i = 0;
   struct prparse *t;
-  for ( t = prp_child(pkt->headers); t->type != PPT_NONE; t= prp_child(t) ) {
+  for ( t = prp_next(pkt->headers); t->type != PPT_NONE; t= prp_next(t) ) {
     ++i;
     if ( t == prp )
       break;
@@ -121,7 +123,7 @@ static struct prparse *get_prp_byindex(struct metapkt *pkt, int i)
 {
   struct prparse *t;
   abort_unless(i > 0);
-  for ( t = prp_child(pkt->headers); --i > 0; t = prp_child(t) ) {
+  for ( t = prp_next(pkt->headers); --i > 0; t = prp_next(t) ) {
     abort_unless(t->type != PPT_NONE);
   }
   return t;
@@ -231,9 +233,9 @@ void metapkt_clr_layer(struct metapkt *pkt, int layer)
 
 int metapkt_pushprp(struct metapkt *pkt, int htype)
 {
-  if ( prp_push(htype, prp_parent(pkt->headers), PPCF_FILL) < 0 )
+  if ( prp_push(htype, prp_prev(pkt->headers), PPCF_FILL) < 0 )
     return -1;
-  metapkt_set_layer(pkt, prp_parent(pkt->headers), -1);
+  metapkt_set_layer(pkt, prp_prev(pkt->headers), -1);
   return 0;
 }
 
@@ -242,7 +244,7 @@ int metapkt_wrapprp(struct metapkt *pkt, int htype)
 {
   if ( prp_push(htype, pkt->headers, PPCF_WRAP) < 0 )
     return -1;
-  metapkt_set_layer(pkt, prp_child(pkt->headers), -1);
+  metapkt_set_layer(pkt, prp_next(pkt->headers), -1);
   return 0;
 }
 
@@ -252,9 +254,9 @@ void metapkt_popprp(struct metapkt *pkt, int fromfront)
   struct prparse *topop;
   int i;
   if ( fromfront )
-    topop = prp_child(pkt->headers);
+    topop = prp_next(pkt->headers);
   else
-    topop = prp_parent(pkt->headers);
+    topop = prp_prev(pkt->headers);
   if ( topop->type != PPT_NONE ) {
     for ( i = 0; i <= MPKT_LAYER_MAX; ++i ) {
       if ( pkt->layer[i] == topop ) {

@@ -36,9 +36,9 @@ void metapkt_free(struct metapkt *pkt, int freebuf);
 /* layer == -1 for auto */
 void metapkt_set_layer(struct metapkt *pkt, struct prparse *h, int layer);
 void metapkt_clr_layer(struct metapkt *pkt, int layer);
-int metapkt_pushhdr(struct metapkt *pkt, int htype);
-int metapkt_wraphdr(struct metapkt *pkt, int htype);
-void metapkt_pophdr(struct metapkt *pkt, int fromfront);
+int metapkt_pushprp(struct metapkt *pkt, int htype);
+int metapkt_wrapprp(struct metapkt *pkt, int htype);
+void metapkt_popprp(struct metapkt *pkt, int fromfront);
 void metapkt_fixdlt(struct metapkt *pkt);
 
 

@@ -31,13 +31,14 @@ int main(int argc, char *argv[])
       continue;
     }
     prp = prp_parse_packet(PPT_ETHERNET, p->pkb_buffer, p->pkb_offset, 
-                           p->pkb_len, p->pkb_buflen);
+		           p->pkb_len);
     if ( prp == NULL ) {
       printf("Could not parse ethernet packet %u\n", npkt);
       continue;
     }
 
-    for ( nprp = 1, t = prp_child(prp); t != prp; t = prp_child(t), ++nprp ) {
+    for ( nprp = 1, t = prp_next(prp); !prp_list_end(t); 
+          t = prp_next(t), ++nprp ) {
       printf("%4u:\tHeader %u -- %s\n", npkt, nprp, pnames[t->type]);
       if ( t->error == 0 ) {
         printf("\t\tNo errors\n");

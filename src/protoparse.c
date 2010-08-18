@@ -79,7 +79,6 @@ void install_default_proto_parsers()
 {
   register_proto_parser(PPT_NONE, &none_proto_parser_ops);
   register_proto_parser(PPT_ETHERNET, &eth_proto_parser_ops);
-  add_proto_parser_parent(PPT_ETHERNET, PPT_NONE);
   register_proto_parser(PPT_ARP, &arp_proto_parser_ops);
   add_proto_parser_parent(PPT_ARP, PPT_ETHERNET);
   register_proto_parser(PPT_IPV4, &ipv4_proto_parser_ops);
@@ -115,69 +114,80 @@ int prp_can_follow(unsigned partype, unsigned cldtype)
 }
 
 
-struct prparse *prp_create_parse(byte_t *buf, size_t off, size_t pktlen,
-                                   size_t buflen)
+struct prparse *prp_next_in_region(struct prparse *from, struct prparse *reg)
 {
-  struct proto_parser *pp;
   struct prparse *prp;
-  if ( (off > buflen) || !(pp = &proto_parsers[PPT_NONE])->valid || !buf ||
-       (pktlen > buflen) ) {
+  abort_unless(from && reg);
+  for ( prp = prp_next(from) ; 
+        !prp_list_end(prp) && (prp->hoff <= reg->eoff) ; 
+        prp = prp_next(prp) ) {
+    if ( prp->region == reg )
+      return prp;
+  }
+  return NULL;
+}
+
+
+int prp_region_empty(struct prparse *reg)
+{
+  abort_unless(reg);
+  return (prp_next_in_region(reg, reg) == NULL);
+}
+
+
+struct prparse *prp_create_parse(byte_t *buf, size_t off, size_t len)
+{
+  struct proto_parser *pp = &proto_parsers[PPT_NONE];
+  struct prparse *prp;
+  if ( !pp->valid || !buf ) {
     errno = EINVAL;
     return NULL;
   }
   abort_unless(pp->ops && pp->ops->create);
-  if ( !(prp = (*pp->ops->create)(buf, 0, buflen, off, pktlen, PPCF_FILL)) )
-    return NULL;
+  prp = (*pp->ops->create)(buf, off, len, 0, len, PPCF_FILL);
+  prp->region = NULL;
   return prp;
 }
 
 
-struct prparse *prp_parse_packet(unsigned ppidx, byte_t *pkt, size_t off, 
-                                 size_t pktlen, size_t buflen)
+struct prparse *prp_parse_packet(unsigned ppidx, byte_t *pkt, size_t off,
+                                 size_t len)
 {
   struct prparse *first, *last, *nprp;
-  struct proto_parser *pp, *nextpp;
+  struct proto_parser *pp, *lastpp;
   struct list *child;
   unsigned cldid;
   int errval;
 
-  /* assume the rest of the sanity checks are in prp_create_parse */
-  if ( (pktlen > buflen) || (pktlen > buflen - off) || !pkt ) {
+  if ( (ppidx > PPT_MAX) || !(pp = &proto_parsers[ppidx])->valid ) {
     errno = EINVAL;
     return NULL;
   }
-  if ( !(first = prp_create_parse(pkt, off, pktlen, buflen)) )
+
+  if ( !(first = prp_create_parse(pkt, off, len)) )
     return NULL;
-  if ( ppidx == PPT_NONE )
-    return first;
-  first->toff = off + pktlen;
-  pp = &proto_parsers[PPT_NONE];
 
   last = first;
-  while ( pp && (prp_plen(last) > 0) ) {
-    nextpp = NULL;
-    l_for_each(child, &pp->children) {
+  do { 
+    if ( !(nprp = (*pp->ops->parse)(last)) ) {
+      errval = errno;
+      goto err;
+    }
+    /* don't continue parsing if the lengths are screwed up */
+    if ( (nprp->error & PPERR_HLENMASK) || !prp_plen(nprp) ) 
+      break;
+    last = nprp;
+    lastpp = pp;
+    l_for_each(child, &lastpp->children) {
       cldid = l2cldn(child)->cldtype;
-      if ( (cldid > PPT_MAX) || !(nextpp = &proto_parsers[cldid])->valid ) {
-        errval = EINVAL;
-        goto err;
-      }
-      if ( (*nextpp->ops->follows)(last) )
+      abort_unless(cldid <= PPT_MAX); 
+      pp = &proto_parsers[cldid];
+      abort_unless(pp->valid);
+      if ( (*pp->ops->follows)(last) )
         break;
-      nextpp = NULL;
+      pp = NULL;
     }
-    pp = nextpp;
-    if ( nextpp ) {
-      if ( !(nprp = (*nextpp->ops->parse)(last)) ) {
-        errval = errno;
-        goto err;
-      }
-      /* don't continue parsing if the lengths are screwed up */
-      if ( (nprp->error & PPERR_HLENMASK) ) 
-        break;
-      last = nprp;
-    }
-  }
+  } while ( pp );
 
   return first;
 
@@ -191,41 +201,51 @@ err:
 int prp_push(unsigned ppidx, struct prparse *pprp, int mode)
 {
   struct proto_parser *pp;
-  size_t hoff, buflen, poff, plen;
+  size_t off, len, plen, hlen;
+  struct prparse *prp, *next;
+
   if ( (ppidx > PPT_MAX) || !(pp = &proto_parsers[ppidx])->valid || !pprp ) {
     errno = EINVAL;
     return -1;
   }
 
-  hoff = pprp->poff;
-  buflen = pprp->poff = prp_plen(pprp);
-  if ( mode == PPCF_FILL ) { 
-    if ( !prp_islast(pprp) ) {
-      errno = EINVAL;
-      return -1;
-    }
-    poff = 0;
+  off = pprp->poff;
+  len = prp_plen(pprp);
+  if ( mode == PPCF_FILL ) {
+    hlen = 0;
     plen = 0;
-  } else if ( (mode == PPCF_WRAP) || (mode == PPCF_SET) ) {
-    if ( prp_islast(pprp) ) {
+  } else if ( mode == PPCF_WRAP ) {
+    if ( prp_region_empty(pprp) ) {
       errno = EINVAL;
       return -1;
     }
-    if ( (mode == PPCF_WRAP) && (pprp->type != PPT_NONE) ) {
+    hlen = prp_next(pprp)->hoff - off; 
+    off = prp_next(pprp)->hoff;
+    plen = prp_totlen(prp_next(pprp));
+  } else if ( mode == PPCF_WRAPFILL ) {
+    next = prp_next(pprp);
+    /* make sure the list is non-empty and both prev and next are in the */
+    /* same region.  Also, the previous parse must enclose the next parse */
+    if ( (next == pprp) || (next->region != pprp) ) {
       errno = EINVAL;
       return -1;
     }
-    poff = prp_child(pprp)->hoff;
-    plen = prp_totlen(prp_child(pprp));
+    hlen = next->hoff - off; 
+    plen = prp_totlen(next);
   } else {
     errno = EINVAL;
     return -1;
   }
 
-  if ( (*pp->ops->create)(pprp->data, hoff, buflen, poff, plen, mode) == NULL )
+  prp = (*pp->ops->create)(pprp->data, off, len, hlen, plen, mode);
+  if ( prp == NULL )
     return -1;
-  else
-    return 0;
+  prp->region = pprp;
+  if ( mode == PPCF_WRAP || mode == PPCF_WRAPFILL )
+    next->region = prp;
+
+  l_ins(&pprp->node, &prp->node);
+  return 0;
 }
 
 
@@ -235,8 +255,8 @@ void prp_free(struct prparse *prp, int freeall)
   if ( !prp )
     return;
   if ( freeall ) {
-    while ( !prp_islast(prp) ) {
-      next = prp_child(prp);
+    while ( !l_isempty(&prp->node) ) {
+      next = prp_next(prp);
       l_rem(&next->node);
       abort_unless(next->ops && next->ops->free);
       (*next->ops->free)(next);
@@ -267,7 +287,7 @@ struct prparse *prp_copy(struct prparse *oprp, byte_t *buffer)
       l_ins(&last->node, &prp->node);
     }
     last = prp;
-    t = prp_child(t);
+    t = prp_next(t);
   } while ( t != oprp );
 
   return first;
@@ -282,7 +302,7 @@ void prp_set_packet_buffer(struct prparse *prp, byte_t *buffer)
 {
   while ( prp ) {
     prp->data = buffer;
-    prp = prp_child(prp);
+    prp = prp_next(prp);
   }
 }
 
@@ -343,7 +363,7 @@ static void insert_adjust(struct prparse *prp, size_t off, size_t len,
     else if ( (off >= prp->eoff) && !moveup )
       prp->eoff -= len;
 
-    prp = prp_child(prp);
+    prp = prp_next(prp);
   }
 }
 
@@ -439,7 +459,7 @@ static int cut_adjust(struct prparse *prp, size_t off, size_t len, int moveup)
     }
   }
 
-  if ( cut_adjust(prp_child(prp), off, len, moveup) < 0 ) {
+  if ( cut_adjust(prp_next(prp), off, len, moveup) < 0 ) {
     prp->hoff = ohoff;
     prp->poff = opoff;
     prp->toff = otoff;
@@ -489,81 +509,212 @@ int prp_cut(struct prparse *prp, size_t off, size_t len, int moveup)
 }
 
 
-int prp_adj_hstart(struct prparse *prp, ptrdiff_t amt)
+int prp_adj_start(struct prparse *prp, ptrdiff_t amt)
 {
-  if ( !prp || prp_isfirst(prp) )
+  struct prparse *region;
+  struct prparse *trav;
+  size_t nhoff;
+  if ( !prp ) {
+    errno = EINVAL;
     return -1;
-  if ( amt < 0 ) { 
-    abort_unless(-amt > 0); /* edge case for minimum neg value in 2s comp */
-    if (-amt > prp->hoff - prp_parent(prp)->eoff )
-      return -1;
-  } else if ( amt > 0 ) {
-    if ( amt > prp_hlen(prp) )
-      return -1;
   }
-  prp->hoff += amt;
+  if ( amt < 0 ) {
+    amt = -amt;
+    if ( (amt < 0) || (amt > prp->hoff) ) {
+      errno = EINVAL;
+      return -1;
+    }
+    region = prp->region;
+    if ( region == NULL ) {
+      /* root region */
+      prp->hoff -= amt;
+    } else {
+      /* verify that start offset can't go below region start offset */
+      if ( prp->hoff - amt < region->hoff ) {
+        errno = EINVAL;
+        return -1;
+      }
+      prp->hoff -= amt;
+      /* maintain order in list by starting offset */
+      trav = prp_prev(prp);
+      if ( trav->hoff > prp->hoff ) { 
+        l_rem(&prp->node);
+        do {
+          trav = prp_prev(trav);
+        } while ( trav->hoff > prp->hoff );
+        l_ins(&trav->node, &prp->node);
+      }
+    }
+  } else { /* amt >= 0 */
+    if ( amt > prp_hlen(prp) ) {
+      errno = EINVAL;
+      return -1;
+    }
+    nhoff = prp->hoff + amt;
+    /* Can't adjust start offset of a non-empty region past the start offset */
+    /* of its contained parses. */
+    trav = prp_next_in_region(prp, prp);
+    if ( (trav != NULL) && (nhoff > trav->hoff) ) {
+      errno = EINVAL;
+      return -1;
+    }
+    trav = prp_next(prp);
+    /* maintain order in list by starting offset */
+    if ( !prp_list_end(trav) && (nhoff > trav->hoff) ) {
+      l_rem(&prp->node);
+      do { 
+        trav = prp_next(trav);
+      } while ( !prp_list_end(trav) && (nhoff > trav->hoff) );
+      l_ins(&prp_prev(trav)->node, &prp->node);
+    }
+
+    prp->hoff = nhoff;
+  }
   return 0;
 }
 
 
-int prp_adj_hlen(struct prparse *prp, ptrdiff_t amt)
+int prp_adj_poff(struct prparse *prp, ptrdiff_t amt)
 {
-  if ( !prp )
+  if ( !prp ) {
+    errno = EINVAL;
     return -1;
-  if ( amt < 0 ) { 
-    abort_unless(-amt > 0); /* edge case for minimum neg value in 2s comp */
-    if ( -amt > prp_hlen(prp)  )
-      return -1;
-  } else if ( amt > 0 ) {
-    if ( !prp_islast(prp) && (amt > prp_child(prp)->hoff - prp->poff) )
-      return -1;
-    if ( amt > prp_plen(prp) )
-      return -1;
   }
-  prp->poff += amt;
+  if ( amt < 0 ) { 
+    amt = -amt;
+    if ( (amt < 0) || (amt > prp_hlen(prp)) ) {
+      errno = EINVAL;
+      return -1;
+    }
+    prp->poff -= amt;
+  } else {
+    if ( amt > prp_plen(prp) ) {
+      errno = EINVAL;
+      return -1;
+    }
+    prp->poff += amt;
+  }
+  return 0;
+}
+
+
+int prp_adj_toff(struct prparse *prp, ptrdiff_t amt)
+{
+  if ( !prp ) {
+    errno = EINVAL;
+    return -1;
+  }
+  if ( amt < 0 ) { 
+    amt = -amt;
+    if ( (amt < 0) || (amt > prp_plen(prp)) ) {
+      errno = EINVAL;
+      return -1;
+    }
+    prp->toff -= amt;
+  } else {
+    if ( amt > prp_tlen(prp) ) {
+      errno = EINVAL;
+      return -1;
+    }
+    prp->toff += amt;
+  }
+  return 0;
+}
+
+
+int prp_adj_end(struct prparse *prp, ptrdiff_t amt)
+{
+  if ( !prp ) {
+    errno = EINVAL;
+    return -1;
+  }
+  if ( amt < 0 ) { 
+    amt = -amt;
+    if ( (amt < 0) || (amt > prp_tlen(prp)) ) {
+      errno = EINVAL;
+      return -1;
+    }
+    prp->eoff -= amt;
+  } else {
+    struct prparse *region = prp->region;
+    if ( region == NULL ) {
+      prp->eoff += amt;
+    } else {
+      /* verify that start offset can't go below region start offset */
+      if ( (amt > region->eoff) || (region->eoff - amt < prp->eoff) ) {
+        errno = EINVAL;
+        return -1;
+      }
+      prp->eoff += amt;
+    }
+  }
   return 0;
 }
 
 
 int prp_adj_plen(struct prparse *prp, ptrdiff_t amt)
 {
-  if ( !prp )
+  if ( !prp ) {
+    errno = EINVAL;
     return -1;
-
-  if ( amt < 0 ) {
-    abort_unless(-amt > 0); /* edge case for minimum neg value in 2s comp */
-    if ( -amt > prp_plen(prp) )
+  }
+  if ( amt < 0 ) { 
+    amt = -amt;
+    if ( (amt < 0) || (amt > prp_plen(prp)) ) {
+      errno = EINVAL;
       return -1;
+    }
+    prp->toff -= amt;
+    prp->eoff -= amt;
   } else {
-    if ( prp_isfirst(prp) ) {
-      if ( amt > prp_tlen(prp) )
-        return -1;
+    struct prparse *region = prp->region;
+    if ( region == NULL ) {
+      prp->toff += amt;
+      prp->eoff += amt;
     } else {
-      if ( amt > prp_parent(prp)->toff - prp->toff )
+      /* verify that start offset can't go below region start offset */
+      if ( (amt > region->eoff) || (region->eoff - amt < prp->eoff) ) {
+        errno = EINVAL;
         return -1;
+      }
+      prp->toff += amt;
+      prp->eoff += amt;
     }
   }
-  prp->toff += amt;
-  if ( prp->toff > prp->eoff )
-    prp->eoff = prp->toff;
   return 0;
 }
 
 
-int prp_adj_tlen(struct prparse *prp, ptrdiff_t amt)
+int prp_fix_region(struct prparse *reg)
 {
-  if ( !prp || prp_isfirst(prp) )
+  struct prparse *prp;
+  size_t ustart, uend;
+
+  /* malformed parse if the region isn't of type PRP_NONE */
+  if ( !reg ) {
+    errno = EINVAL;
     return -1;
-  if ( amt < 0 ) { 
-    abort_unless(-amt > 0); /* edge case for minimum neg value in 2s comp */
-    if ( -amt > prp_tlen(prp) )
-      return -1;
-  } else if ( amt > 0 ) {
-    if ( amt > prp_parent(prp)->toff - prp->eoff )
-      return -1;
   }
-  prp->eoff += amt;
+
+  if ( prp_region_empty(reg) ) { /* zero parses in region */
+    reg->poff = reg->hoff;
+    reg->toff = reg->eoff;
+  } else {
+    /* at least one parse in the region */
+    ustart = reg->eoff;
+    uend = reg->hoff;
+    abort_unless(ustart > uend);
+    for ( prp = prp_next_in_region(reg, reg) ; prp != NULL ; 
+          prp = prp_next_in_region(prp, reg) ) {
+      if ( prp->hoff < ustart )
+        ustart = prp->hoff;
+      if ( prp->eoff > uend )
+        uend = prp->eoff;
+    }
+    abort_unless(ustart <= uend);
+    reg->poff = ustart;
+    reg->toff = uend;
+  }
+
   return 0;
 }
-
-

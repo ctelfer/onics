@@ -30,7 +30,6 @@ struct ipv6_parse {
 /* NB:  right now we are using emalloc() fpr header allocation, but we */
 /* may not do that in the future.  When that happens, we need to change */
 /* newprp, crtprp, and freeprp */
-
 static struct prparse *newprp(size_t sz, unsigned type, 
                               struct prparse *pprp, struct prparse_ops *ops)
 {
@@ -46,6 +45,9 @@ static struct prparse *newprp(size_t sz, unsigned type,
   prp->toff = prp->poff;
   prp->eoff = prp->poff;
   prp->ops = ops;
+  /* all of the default protocol parsers nest layers within layers  */
+  /* this won't be true for all protocol parsers */
+  prp->region = pprp;
   l_ins(&pprp->node, &prp->node);
   return prp;
 }
@@ -154,7 +156,7 @@ static struct prparse *simple_copy(struct prparse *oprp, byte_t *buffer)
 /* -- ops for the "NONE" protocol type -- */
 static int none_follows(struct prparse *pprp) 
 {
-  return (pprp->type == PPT_NONE) && (prp_plen(pprp) > 0);
+  return 0;
 }
 
 
@@ -167,31 +169,27 @@ static struct prparse *none_parse(struct prparse *pprp)
 
 
 static struct prparse *none_create(byte_t *start, size_t off, size_t len,
-                                     size_t poff, size_t plen, int mode)
+                                   size_t hlen, size_t plen, int mode)
 {
   struct prparse *prp;
-  size_t hlen;
-  abort_unless(poff >= off && plen <= len && poff + plen >= poff && off <= len 
-               && start);
   if ( mode != PPCF_FILL )
     return NULL;
-  hlen = poff - off;
-  prp = crtprp(sizeof(struct prparse), PPT_NONE, start + off, 0, hlen,
-               plen, len - plen - hlen, &none_prparse_ops);
+  prp = crtprp(sizeof(struct prparse), PPT_NONE, start, off, 0,
+               len, 0, &none_prparse_ops);
   return prp;
 }
 
 /* -- ops for Ethernet type -- */
 static int eth_follows(struct prparse *pprp) 
 {
-  return (pprp->type == PPT_NONE);
+  return 0;
 }
 
 
 static struct prparse *eth_parse(struct prparse *pprp)
 {
   struct prparse *prp;
-  abort_unless(eth_follows(pprp));
+
   switch(pprp->type) {
   case PPT_NONE:
     break;
@@ -212,29 +210,34 @@ static struct prparse *eth_parse(struct prparse *pprp)
 
 
 static struct prparse *eth_create(byte_t *start, size_t off, size_t len,
-                                    size_t poff, size_t plen, int mode)
+                                  size_t hlen, size_t plen, int mode)
 {
   struct prparse *prp;
-  abort_unless(poff >= off && plen <= len && poff + plen >= poff && off <= len 
-               && start);
+
+  abort_unless(plen <= len && start);
+
   if ( mode == PPCF_FILL ) { 
-    if ( len - off < ETHHLEN )
+    if ( len < ETHHLEN )
       return NULL;
-    plen = len - off - ETHHLEN;
+    plen = len - ETHHLEN;
+    hlen = ETHHLEN;
   } else if ( mode == PPCF_WRAP ) { 
-    if ( poff - off < ETHHLEN )
+    if ( hlen < ETHHLEN )
       return NULL;
-    off = poff - ETHHLEN;
+    hlen = ETHHLEN;
+    off -= ETHHLEN;
+    len = plen + hlen;
   } else { 
-    abort_unless(mode == PPCF_SET);
-    if ( poff - off != ETHHLEN )
+    abort_unless(len - plen >= hlen);
+    abort_unless(mode == PPCF_WRAPFILL);
+    if ( hlen < ETHHLEN )
       return NULL;
   }
-  prp = crtprp(sizeof(struct prparse), PPT_ETHERNET, start, off, ETHHLEN, 
+  prp = crtprp(sizeof(struct prparse), PPT_ETHERNET, start, off, hlen, 
                plen, 0, &eth_prparse_ops);
-  if ( prp ) {
+  if ( prp )
     memset(start + off, 0, ETHHLEN);
-  }
+
   return prp;
 }
 
@@ -328,12 +331,11 @@ static int arp_fixlen(struct prparse *prp)
 
 
 static struct prparse *arp_create(byte_t *start, size_t off, size_t len,
-                                    size_t poff, size_t plen, int mode)
+                                  size_t hlen, size_t plen, int mode)
 {
   struct prparse *prp;
   struct arph *arp;
-  abort_unless(poff >= off && plen <= len && poff + plen >= poff && off <= len 
-               && start);
+  abort_unless(plen <= len && start);
   if ( (mode != PPCF_FILL) || (len < 8) )
     return NULL;
   prp = crtprp(sizeof(struct prparse), PPT_ARP, start, off, 8, len - 8, 0, 
@@ -423,31 +425,29 @@ static struct prparse *ipv4_parse(struct prparse *pprp)
 
 
 static struct prparse *ipv4_create(byte_t *start, size_t off, size_t len,
-                                     size_t poff, size_t plen, int mode)
+                                   size_t hlen, size_t plen, int mode)
 {
   struct prparse *prp;
   struct ipv4h *ip;
-  size_t hlen;
-  abort_unless(poff >= off && plen <= len && poff + plen >= poff && off <= len 
-               && start);
+
+  abort_unless(plen <= len && start);
+
   if ( mode == PPCF_FILL ) {
-    if ( (len - off < 20) || (len - off > 65535) )
+    if ( (len < 20) || (len > 65535) )
       return NULL;
     hlen = 20;
-    poff = off + hlen;
     plen = len - 20;
   } else if ( mode == PPCF_WRAP ) { 
-    if ( poff - off < 20 )
+    if ( hlen < 20 )
       return NULL;
-    if ( len - off > 65535 ) 
-      len = off + 65535;
+    if ( plen > 65515 )
+      plen = 65515;
     hlen = 20;
-    off = poff - 20;
+    off -= 20;
   } else { 
-    abort_unless(mode == PPCF_SET);
-    hlen = poff - off;
-    if ( (hlen < 20) || (hlen > 60) || (len - off > 65535) || 
-         (poff + plen < len) )
+    abort_unless(mode == PPCF_WRAPFILL);
+    if ( (hlen < 20) || (hlen > 60) || ((hlen & 0x3) != 0) || 
+         (len != plen + hlen) || (len > 65535) )
       return NULL;
   }
   prp = crtprp(sizeof(struct prparse), PPT_IPV4, start, off, hlen, plen, 0, 
@@ -537,7 +537,7 @@ static void ipv4_free(struct prparse *prp)
 
 static uint16_t pseudo_cksum(struct prparse *prp, uint8_t proto)
 {
-  struct prparse *pprp = prp_parent(prp);
+  struct prparse *pprp = prp_prev(prp);
   uint16_t sum = 0;
   if ( pprp->type == PPT_IPV4 ) {
     struct pseudoh ph;
@@ -612,30 +612,33 @@ static struct prparse *udp_parse(struct prparse *pprp)
 
 
 static struct prparse *udp_create(byte_t *start, size_t off, size_t len,
-                                    size_t poff, size_t plen, int mode)
+                                    size_t hlen, size_t plen, int mode)
 {
   struct prparse *prp;
   struct udph *udp;
-  abort_unless(poff >= off && plen <= len && poff + plen >= poff && off <= len 
-               && start);
+
+  abort_unless(plen <= len && start);
+
   if ( mode == PPCF_FILL ) {
-    if ( len - off < 8 )
+    if ( len < 8 )
       return NULL;
-    plen = len - off - 8;
+    hlen = 8;
+    plen = len - 8;
     if ( plen > 65527 )
       return NULL;
   } else if ( mode == PPCF_WRAP ) { 
-    if ( poff - off < 8 )
+    if ( hlen < 8 )
       return NULL;
-    off = poff - 8;
+    hlen = 8;
+    off -= 8;
     if ( plen > 65527 )
       plen = 65527;
-  } else { 
-    abort_unless(mode == PPCF_SET);
-    if ( (poff - off != 8) || ( plen > 65527) )
+  } else {
+    abort_unless(mode == PPCF_WRAPFILL);
+    if ( (hlen != 8) || (plen > 65527) || (len != hlen + plen) )
       return NULL;
   }
-  prp = crtprp(sizeof(struct prparse), PPT_UDP, start, off, 8, len - 8, 0,
+  prp = crtprp(sizeof(struct prparse), PPT_UDP, start, off, hlen, plen, 0,
                &udp_prparse_ops);
   if ( prp ) {
     udp = prp_header(prp, struct udph);
@@ -674,8 +677,8 @@ static int udp_fixcksum(struct prparse *prp)
 {
   struct udph *udp = prp_header(prp, struct udph);
   if ( (prp_hlen(prp) != 8) || 
-       ((prp_parent(prp)->type != PPT_IPV4) && 
-        (prp_parent(prp)->type != PPT_IPV6)) )
+       ((prp_prev(prp)->type != PPT_IPV4) && 
+        (prp_prev(prp)->type != PPT_IPV6)) )
     return -1;
   udp->cksum = 0;
   udp->cksum = pseudo_cksum(prp, IPPROT_UDP);
@@ -748,28 +751,28 @@ static struct prparse *tcp_parse(struct prparse *pprp)
 
 
 static struct prparse *tcp_create(byte_t *start, size_t off, size_t len,
-                                    size_t poff, size_t plen, int mode)
+                                    size_t hlen, size_t plen, int mode)
 {
   struct prparse *prp;
   struct tcph *tcp;
-  size_t hlen;
-  abort_unless(poff >= off && plen <= len && poff + plen >= poff && off <= len 
-               && start);
+
+  abort_unless(plen <= len && start);
+
   if ( mode == PPCF_FILL ) {
-    if ( len - off < 20 )
+    if ( len < 20 )
       return NULL;
     hlen = 20;
-    poff = off + hlen;
     plen = len - 20;
   } else if ( mode == PPCF_WRAP ) { 
-    if ( poff - off < 20 )
+    if ( hlen < 20 )
       return NULL;
     hlen = 20;
-    off = poff - 20;
+    off -= 20;
+    len = plen + hlen;
   } else { 
-    abort_unless(mode == PPCF_SET);
-    hlen = poff - off;
-    if ( (hlen < 20) || (hlen > 60) || (poff + plen < len) )
+    abort_unless(mode == PPCF_WRAPFILL);
+    if ( (hlen < 20) || (hlen > 60) || ((hlen & 3) != 0) ||
+         (len != hlen + plen) )
       return NULL;
   }
   prp = crtprp(sizeof(struct prparse), PPT_TCP, start, off, hlen, plen, 0,
@@ -824,8 +827,8 @@ static int tcp_fixlen(struct prparse *prp)
 static int tcp_fixcksum(struct prparse *prp)
 {
   struct tcph *tcp = prp_header(prp, struct tcph);
-  if ( (prp_parent(prp)->type != PPT_IPV4) && 
-       (prp_parent(prp)->type != PPT_IPV6) )
+  if ( (prp_prev(prp)->type != PPT_IPV4) && 
+       (prp_prev(prp)->type != PPT_IPV6) )
     return -1;
   tcp->cksum = 0;
   tcp->cksum = pseudo_cksum(prp, IPPROT_TCP);
@@ -882,26 +885,29 @@ static struct prparse *icmp_parse(struct prparse *pprp)
 
 
 static struct prparse *icmp_create(byte_t *start, size_t off, size_t len,
-                                     size_t poff, size_t plen, int mode)
+                                     size_t hlen, size_t plen, int mode)
 {
   struct prparse *prp;
   struct icmph *icmp;
-  abort_unless(poff >= off && plen <= len && poff + plen >= poff && off <= len 
-               && start);
+
+  abort_unless(plen <= len && start);
+
   if ( mode == PPCF_FILL ) {
-    if ( len - off < 8 )
+    if ( len < 8 )
       return NULL;
-    plen = len - off - 8;
+    hlen = 8;
+    plen = len - 8;
   } else if ( mode == PPCF_WRAP ) { 
-    if ( poff - off < 8 )
+    if ( hlen < 8 )
       return NULL;
-    off = poff - 8;
+    hlen = 8;
+    off -= 8;
   } else { 
-    abort_unless(mode == PPCF_SET);
-    if ( (poff - off != 8) )
+    abort_unless(mode == PPCF_WRAPFILL);
+    if ( (hlen != 8) || (len != hlen + plen) )
       return NULL;
   }
-  prp = crtprp(sizeof(struct prparse), PPT_ICMP, start, off, 8, plen, 0,
+  prp = crtprp(sizeof(struct prparse), PPT_ICMP, start, off, hlen, plen, 0,
                &icmp_prparse_ops);
   if ( prp ) {
     icmp = prp_header(prp, struct icmph);
@@ -928,7 +934,7 @@ static void icmp_update(struct prparse *prp)
 static int icmp_fixcksum(struct prparse *prp)
 {
   struct icmph *icmp = prp_header(prp, struct icmph);
-  if ( (prp_hlen(prp) != 8) || (prp_parent(prp)->type != PPT_IPV4) )
+  if ( (prp_hlen(prp) != 8) || (prp_prev(prp)->type != PPT_IPV4) )
     return -1;
   icmp->cksum = 0;
   icmp->cksum = ~ones_sum(prp, prp_totlen(prp), 0);
@@ -1095,30 +1101,28 @@ done:
 
 
 static struct prparse *ipv6_create(byte_t *start, size_t off, size_t len,
-                                     size_t poff, size_t plen, int mode)
+                                     size_t hlen, size_t plen, int mode)
 {
-  abort_unless(poff >= off && plen <= len && poff + plen >= poff && off <= len 
-               && start);
   struct prparse *prp;
-  size_t hlen;
+
+  abort_unless(plen <= len && start);
+
   if ( mode == PPCF_FILL ) {
     /* TODO support jumbo frames ? */
-    if ( (len - off < 40) || (len - off > 65575) )
+    if ( (len < 40) || (len > 65575) )
       return NULL;
     hlen = 40;
-    poff = off + hlen;
     plen = len - 40;
   } else if ( mode == PPCF_WRAP ) { 
-    if ( poff - off < 40 )
+    if ( hlen < 40 )
       return NULL;
-    if ( len - off > 65575 )
-      len = off + 65575;
+    if ( plen > 65535 )
+      len = 65535;
     hlen = 40;
-    off = poff - 40;
+    off -= 40;
   } else { 
-    abort_unless(mode == PPCF_SET);
-    hlen = poff - off;
-    if ( (hlen != 40) || (len - off > 65575) || (poff + plen < len) )
+    abort_unless(mode == PPCF_WRAPFILL);
+    if ( (hlen != 40) || (plen > 65535) || (hlen + plen != len) )
       return NULL;
   }
   prp = crtprp(sizeof(struct ipv6_parse), PPT_IPV6, start, off, hlen, plen, 0, 
@@ -1221,26 +1225,29 @@ static struct prparse *icmp6_parse(struct prparse *pprp)
 
 
 static struct prparse *icmp6_create(byte_t *start, size_t off, size_t len,
-                                      size_t poff, size_t plen, int mode)
+                                      size_t hlen, size_t plen, int mode)
 {
   struct prparse *prp;
   struct icmp6h *icmp6;
-  abort_unless(poff >= off && plen <= len && poff + plen >= poff && off <= len 
-               && start);
+
+  abort_unless(plen <= len && start);
+
   if ( mode == PPCF_FILL ) {
-    if ( len - off < 8 )
+    if ( len < 8 )
       return NULL;
-    plen = len - off - 8;
+    hlen = 8;
+    plen = len - 8;
   } else if ( mode == PPCF_WRAP ) { 
-    if ( poff - off < 8 )
+    if ( hlen < 8 )
       return NULL;
-    off = poff - 8;
+    hlen = 8;
+    off -= 8;
   } else { 
-    abort_unless(mode == PPCF_SET);
-    if ( (poff - off != 8) )
+    abort_unless(mode == PPCF_WRAPFILL);
+    if ( (hlen != 8) || (len != hlen + plen) )
       return NULL;
   }
-  prp = crtprp(sizeof(struct prparse), PPT_ICMP6, start, off, 8, plen, 0,
+  prp = crtprp(sizeof(struct prparse), PPT_ICMP6, start, off, hlen, plen, 0,
                &icmpv6_prparse_ops);
   if ( prp ) {
     icmp6 = prp_header(prp, struct icmp6h);
@@ -1267,7 +1274,7 @@ static void icmp6_update(struct prparse *prp)
 static int icmp6_fixcksum(struct prparse *prp)
 {
   struct icmp6h *icmp6 = prp_header(prp, struct icmp6h);
-  if ( (prp_hlen(prp) != 8) || (prp_parent(prp)->type != PPT_IPV6) )
+  if ( (prp_hlen(prp) != 8) || (prp_prev(prp)->type != PPT_IPV6) )
     return -1;
   icmp6->cksum = 0;
   icmp6->cksum = pseudo_cksum(prp, IPPROT_ICMPV6);

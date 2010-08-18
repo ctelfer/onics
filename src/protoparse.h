@@ -4,16 +4,21 @@
 #include <cat/cattypes.h>
 #include <cat/list.h>
 
+/*
+   A PPT_NONE type parse just represents a parsed region of a buffer that
+   is its own unit.  (e.g. a packet, a SSL record, etc..)  The header
+   and trailer represents unused slack space in the region.  It gets updated
+   on any header adjustment for enclosed parses.
+*/
 #define PPT_NONE                0
-#define PPT_REGION		1	/* raw data region */
-#define PPT_ETHERNET		2
-#define PPT_ARP			3
-#define PPT_IPV4		4
-#define PPT_IPV6		5
-#define PPT_ICMP		6
-#define PPT_ICMP6		7
-#define PPT_UDP			8
-#define PPT_TCP			9
+#define PPT_ETHERNET		1
+#define PPT_ARP			2
+#define PPT_IPV4		3
+#define PPT_IPV6		4
+#define PPT_ICMP		5
+#define PPT_ICMP6		6
+#define PPT_UDP			7
+#define PPT_TCP			8
 #define PPT_MAX			127
 #define PPT_INVALID             (PPT_MAX + 1)
 
@@ -29,22 +34,40 @@
 
 #define PPCF_FILL               1       /* push inner (fill completely) */
 #define PPCF_WRAP               2       /* push outer (wrap tightly) */
-#define PPCF_SET                3       /* push in middle (exact fit) */
+#define PPCF_WRAPFILL           3       /* push in middle (exact fit) */
+/*
+create semantics -- fill
+  -- off is start of new proto parse
+  -- len is total length to work with
+  -- hlen, plen, ignored
+
+create semantics -- wrap
+  -- off is start of payload of wrapped parse
+  -- len is ignored
+  -- hlen is max header length
+  -- plen is length of wrapped parse
+
+create semantics -- set
+  -- off is start of new proto parse
+  -- len is hlen + plen + tlen (derives tlen)
+  -- hlen is exact header length
+  -- plen is exact payload length (wrapped region length)
+*/
 
 struct prparse;
 
 struct proto_parser_ops {
   int			(*follows)(struct prparse *pprp);
   struct prparse *	(*parse)(struct prparse *pprp);
-  struct prparse *	(*create)(byte_t *start, size_t hoff, size_t buflen,
-                                  size_t poff, size_t plen, int mode);
+  struct prparse *	(*create)(byte_t *buf, size_t off, size_t len,
+                                  size_t hlen, size_t plen, int mode);
 };
 
 struct proto_parser {
   unsigned int	        type;
   unsigned int	        valid;
   struct list  	        children;
-  struct proto_parser_ops *   ops;
+  struct proto_parser_ops * ops;
 };
 
 struct prparse_ops {
@@ -76,9 +99,23 @@ struct prparse_ops {
                              packet contained here
  */
 
+/* 
+   A 'prparse' structure denotes a decode of the region of a protocol as well
+   as decode of its various fields.  All protocol parses at a minimum have a
+   starting offset, a header, payload and trailer fields.  All of these are
+   have a length in bytes, which can be 0.  The protocol parses associated
+   with a particular buffer are ordered by their offsets.  So, if the header
+   or trailer offset of a header parse change, the parse may have to be
+   moved in the list.  Each protocol parse that isn't of type PPT_NONE is 
+   associated with a 'region' that denotes the boundaries of the data buffer
+   or some sub-region within it.  The starting and ending offset of a parse
+   can never wander outside of this region.
+*/
+
 struct prparse {
   size_t                size; 
   unsigned int          type;
+  struct prparse *	region;
   struct list           node;
   byte_t *              data;
   unsigned int          error;
@@ -95,10 +132,10 @@ struct prparse {
 #define prp_header(prp, type) ((type *)((prp)->data + (prp)->hoff))
 #define prp_payload(prp) ((byte_t *)((prp)->data + (prp)->poff))
 #define prp_trailer(prp, type) ((type *)((prp)->data + (prp)->toff))
-#define prp_parent(prp) container((prp)->node.prev, struct prparse, node)
-#define prp_child(prp) container((prp)->node.next, struct prparse, node)
-#define prp_islast(prp) (prp_child(prp)->type == PPT_NONE)
-#define prp_isfirst(prp) ((prp)->type == PPT_NONE)
+#define prp_prev(prp) container((prp)->node.prev, struct prparse, node)
+#define prp_next(prp) container((prp)->node.next, struct prparse, node)
+#define prp_list_head(prp) ((prp)->region == NULL)
+#define prp_list_end(prp) ((prp)->region == NULL)
 
 /* install a protocol parser to handle a particular protocol type */
 int register_proto_parser(unsigned type, struct proto_parser_ops *ops);
@@ -123,25 +160,71 @@ void install_default_proto_parsers();
 /* according to parent/child relationships in the protocol parser. */
 int prp_can_follow(unsigned partype, unsigned cldtype);
 
-/* Creates a 'default' header parse at buf + off given pktlen bytes to use */
-struct prparse *prp_create_parse(byte_t *buf, size_t off, size_t pktlen, 
-                                   size_t buflen);
+/* Find the next parse in the specified region or return NULL if none */
+/* exists in the parse list.  use the region parse as the 'from' for */
+/* to start at the beginning of a region.  NOTE, that on its own, this */
+/* does not find subregions within the region.  One can use a recursive */
+/* or even iterative process with this function to walk all sub regions */
+/* as well.  Recursive is more elegant.  :) */
+/*
+   Recursive example:
+   walk(start, reg) {
+     prp = prp_next_in_region(start, reg);
+     if (prp != NULL) {
+       ** do X with prp **
+       walk(prp, prp);
+       walk(prp, reg);
+     }
+   }
+
+   Iterative example: 
+   curreg = reg;
+   prp = prp_next_in_region(reg, reg);
+   while ( prp != NULL ) {
+     ** do whatever with prp **
+     prp2 = prp_next_in_region(prp, prp);
+     if ( prp2 != NULL ) { 
+       curreg = prp;
+       prp = prp2;
+     } else {
+       do { 
+         prp2 = prp_next_in_region(prp, curreg);
+         if (prp2 == NULL) {
+	   ** done with this region, go up one **
+	   curreg = prp->region;
+	 } else {
+	   prp = prp2;
+	 }
+       } while ( prp == NULL || curreg != reg );
+     }
+   }
+ */
+struct prparse *prp_next_in_region(struct prparse *from, struct prparse *reg);
+
+/* returns 1 if a region contains no parses that refer to it */
+int prp_region_empty(struct prparse *reg);
+
+/* Creates a 'default' header parse at buf + off given len bytes to use. */
+/* The "data portion" (i.e. the space the protocol data is expected to */
+/* take up) is pktlen bytes.  There are hdrm bytes reserved from off for */
+/* growing at the front of the parse.  */
+struct prparse *prp_create_parse(byte_t *buf, size_t off, size_t len);
 
 /* Create a new header in a parsed packet.  The "mode" determines how this */
 /* header is created.  if mode == PPCF_FILL, then 'prp' must be the */
 /* innermost header and the new header will fill inside the curent one. If */
 /* the mode is PPCF_WRAP, then 'prp' must be the outer 'NONE' header and */
 /* the new header will wrap all the other protocol headers.  Finally, if */
-/* mode is PPCF_SET, then the 'prp' must be a header with free space between */
-/* it and its child (based on the offsets above).  The new header will take */
-/* up exactly the space between parent and child. */
+/* mode is PPCF_WRAPFILL, then the 'prp' must be a header with free space */
+/* between it and its child (based on the offsets above).  The new header */
+/* will take up exactly the space between parent and child. */
 int prp_push(unsigned ppidx, struct prparse *prp, int mode);
 
 
 /* Given a buffer and start offset and a first protocol parser to start with */
 /* parse all headers as automatically as possible */
 struct prparse *prp_parse_packet(unsigned firstpp, byte_t *pbuf, size_t off, 
-                                 size_t pktlen, size_t buflen);
+				 size_t len);
 
 /* Free a header parse, or, if freechildren is non-zero, also free all child */
 /* headers of the current header parse */
@@ -182,12 +265,17 @@ int prp_insert(struct prparse *prp, size_t off, size_t len, int moveup);
 int prp_cut(struct prparse *prp, size_t off, size_t len, int moveup);
 
 /* expand or contract header/trailer within the encapsulating space */
-/* Note that the point adjustments can't overrun their adjacent boundaries */
-/* EXCEPT for the case of prp_adj_plen() which can overrun the trailer but */
-/* not the encapsulationg protocol's payload boundary (of course) */
-int prp_adj_hstart(struct prparse *prp, ptrdiff_t amt); /* adjust A */
-int prp_adj_hlen(struct prparse *prp, ptrdiff_t amt); /* adjust B */
-int prp_adj_plen(struct prparse *prp, ptrdiff_t amt); /* adjust C */
-int prp_adj_tlen(struct prparse *prp, ptrdiff_t amt); /* adjust D */
+/* Note that the point adjustments can't overrun their adjacent boundaries. */
+/* prp_adj_plen() moves both the trailer offset and ending offset in unison. */
+/* It basically acts as shorthand for a common case of adding or chopping */
+/* payload to a particular packet. */
+int prp_adj_start(struct prparse *prp, ptrdiff_t amt); /* adjust A */
+int prp_adj_poff(struct prparse *prp, ptrdiff_t amt); /* adjust B */
+int prp_adj_toff(struct prparse *prp, ptrdiff_t amt); /* adjust C */
+int prp_adj_end(struct prparse *prp, ptrdiff_t amt); /* adjust D */
+int prp_adj_plen(struct prparse *prp, ptrdiff_t amt); /* adjust C+D */
+
+/* Adjust the head and tail regions based on contained parses */
+int prp_fix_region(struct prparse *prp);
 
 #endif /* __protoparse_h */

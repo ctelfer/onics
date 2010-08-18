@@ -23,7 +23,7 @@
  * packet.
  */
 static struct prparse *find_header(struct netvm *vm, 
-                                     struct netvm_prp_desc *pd)
+                                   struct netvm_prp_desc *pd)
 {
   struct metapkt *pkt;
   struct prparse *prp;
@@ -41,7 +41,7 @@ static struct prparse *find_header(struct netvm *vm,
         return prp;
       ++n;
     }
-    prp = prp_child(prp);
+    prp = prp_next(prp);
   } while ( prp != pkt->headers );
   return NULL;
 }
@@ -1042,10 +1042,11 @@ static void ni_prpadj(struct netvm *vm)
   S_POP(vm, val);
   amt = (int32_t)val;
   switch(pd0.field) {
-  case NETVM_PRP_HOFF: rv = prp_adj_hstart(prp, amt); break;
-  case NETVM_PRP_HLEN: rv = prp_adj_hlen(prp, amt); break;
+  case NETVM_PRP_HOFF: rv = prp_adj_start(prp, amt); break;
+  case NETVM_PRP_POFF: rv = prp_adj_poff(prp, amt); break;
+  case NETVM_PRP_TOFF: rv = prp_adj_toff(prp, amt); break;
+  case NETVM_PRP_EOFF: rv = prp_adj_end(prp, amt); break;
   case NETVM_PRP_PLEN: rv = prp_adj_plen(prp, amt); break;
-  case NETVM_PRP_TLEN: rv = prp_adj_tlen(prp, amt); break;
   default:
     VMERR(vm, NETVM_ERR_PRPFLD);
   }
