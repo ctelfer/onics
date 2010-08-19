@@ -158,7 +158,7 @@ void metapkt_free(struct metapkt *pkt, int freebuf)
   if ( pkt ) {
     l_rem(&pkt->entry);
     if ( pkt->headers ) {
-      prp_free(pkt->headers, 1);
+      prp_free(pkt->headers);
       pkt->headers = NULL;
     }
     if ( pkt->pkb && freebuf )
@@ -257,14 +257,14 @@ void metapkt_popprp(struct metapkt *pkt, int fromfront)
     topop = prp_next(pkt->headers);
   else
     topop = prp_prev(pkt->headers);
-  if ( topop->type != PPT_NONE ) {
+  if ( !prp_list_head(topop) ) {
     for ( i = 0; i <= MPKT_LAYER_MAX; ++i ) {
       if ( pkt->layer[i] == topop ) {
         pkt->layer[i] = NULL;
         break;
       }
     }
-    prp_free(topop, 0);
+    prp_free(topop);
   }
 }
 

@@ -168,12 +168,12 @@ int prp_can_follow(unsigned partype, unsigned cldtype);
 /* as well.  Recursive is more elegant.  :) */
 /*
    Recursive example:
-   walk(start, reg) {
-     prp = prp_next_in_region(start, reg);
-     if (prp != NULL) {
+   walk(from, reg) {
+     next = prp_next_in_region(from, reg);
+     if (next != NULL) {
        ** do X with prp **
-       walk(prp, prp);
-       walk(prp, reg);
+       walk(next, next);
+       walk(next, reg);
      }
    }
 
@@ -195,7 +195,7 @@ int prp_can_follow(unsigned partype, unsigned cldtype);
 	 } else {
 	   prp = prp2;
 	 }
-       } while ( prp == NULL || curreg != reg );
+       } while ( prp == NULL && curreg != reg->region );
      }
    }
  */
@@ -226,9 +226,17 @@ int prp_push(unsigned ppidx, struct prparse *prp, int mode);
 struct prparse *prp_parse_packet(unsigned firstpp, byte_t *pbuf, size_t off, 
 				 size_t len);
 
+/* Free a parse.  All sub regions of the parse are made part of prp's */
+/* parent region.  If prp is a root region, this is the equivalent of */
+/* prp_free_all() on the entire parse. */
+void prp_free(struct prparse *prp);
+
+/* Free a complete parse tree.  prp->region == NULL */
+void prp_free_all(struct prparse *prp);
+
 /* Free a header parse, or, if freechildren is non-zero, also free all child */
 /* headers of the current header parse */
-void prp_free(struct prparse *prp, int freechildren);
+void prp_free_region(struct prparse *prp);
 
 
 /* copy a header parse (but not the packet buffer itself) */
@@ -275,7 +283,10 @@ int prp_adj_toff(struct prparse *prp, ptrdiff_t amt); /* adjust C */
 int prp_adj_end(struct prparse *prp, ptrdiff_t amt); /* adjust D */
 int prp_adj_plen(struct prparse *prp, ptrdiff_t amt); /* adjust C+D */
 
-/* Adjust the head and tail regions based on contained parses */
-int prp_fix_region(struct prparse *prp);
+/* Adjust a region so that its payload starts on the first unused byte */
+/* at the beginning and it's trailer starts on unused byte at the end. */
+/* A byte is "used" if it falls within some parse within the region or */
+/* a dependent sub region. */
+int prp_adj_unused(struct prparse *prp);
 
 #endif /* __protoparse_h */

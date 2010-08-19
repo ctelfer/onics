@@ -192,7 +192,7 @@ struct prparse *prp_parse_packet(unsigned ppidx, byte_t *pkt, size_t off,
   return first;
 
 err:
-  prp_free(first, 1);
+  prp_free_all(first);
   errno = errval;
   return NULL;
 }
@@ -249,19 +249,90 @@ int prp_push(unsigned ppidx, struct prparse *pprp, int mode)
 }
 
 
-void prp_free(struct prparse *prp, int freeall)
+void prp_free(struct prparse *prp)
 {
   struct prparse *next;
   if ( !prp )
     return;
-  if ( freeall ) {
-    while ( !l_isempty(&prp->node) ) {
-      next = prp_next(prp);
-      l_rem(&next->node);
-      abort_unless(next->ops && next->ops->free);
-      (*next->ops->free)(next);
-    }
+  abort_unless(prp->ops && prp->ops->free);
+  if ( prp->region == NULL ) {
+    prp_free_all(prp);
+    return;
   }
+  for ( next = prp_next_in_region(prp, prp) ; next != NULL ; 
+        next = prp_next_in_region(next, prp) )
+    next->region = prp->region;
+  l_rem(&prp->node);
+  (*prp->ops->free)(prp);
+}
+
+
+void prp_free_all(struct prparse *prp)
+{
+  struct prparse *next;
+  for ( next = prp_prev(prp) ; !prp_list_head(next) ; next = prp_prev(next) ) {
+    abort_unless(next->ops && next->ops->free);
+    l_rem(&next->node);
+    (*next->ops->free)(next);
+  }
+  abort_unless(prp->ops && prp->ops->free);
+  l_rem(&prp->node);
+  (*prp->ops->free)(prp);
+}
+
+
+static int parse_in_region(struct prparse *prp, struct prparse *reg)
+{
+  struct prparse *t = prp->region;
+  while ( t != NULL ) { 
+    if ( t == reg )
+      return 1;
+    t = t->region;
+  }
+  return 0;
+}
+
+
+/* This can be more elegantly coded with a recursive solution.  */
+/* However, the hope is that this library could be used in a stack- */
+/* constrained environment.  So, for now we prefer to do it */
+/* iteratively.  */
+void prp_free_region(struct prparse *prp)
+{
+  struct prparse *trav, *hold;
+
+  if ( prp == NULL )
+    return;
+
+  /* find the last node potentially in the region */
+  if ( prp->region == NULL ) {
+    trav = prp_prev(prp); /* shortcut for root nodes */
+  } else {
+    hold = NULL;
+    trav = prp_next(prp);
+    while ( !prp_list_end(trav) && (trav->hoff <= prp->eoff) ) {
+      hold = trav;
+      trav = prp_next(trav);
+    }
+    if ( hold == NULL )
+      trav = prp;
+    else
+      trav = hold;
+  }
+  
+  /* work backwards from last node potentially in the region */
+  /* This is because working backwards we cannot delete a node */
+  /* that might have a dangling region reference. */
+  while ( trav != prp ) {
+    hold = prp_prev(trav);
+    if ( parse_in_region(trav, prp) ) { 
+      abort_unless(trav->ops && trav->ops->free);
+      l_rem(&trav->node);
+      (*trav->ops->free)(trav);
+    } 
+    trav = hold;
+  }
+
   abort_unless(prp->ops && prp->ops->free);
   l_rem(&prp->node);
   (*prp->ops->free)(prp);
@@ -270,30 +341,45 @@ void prp_free(struct prparse *prp, int freeall)
 
 struct prparse *prp_copy(struct prparse *oprp, byte_t *buffer)
 {
-  struct prparse *first = NULL, *last, *t, *prp;
+  struct prparse *first = NULL, *trav, *last, *nprp, *oreg, *nreg;
 
-  if ( !oprp || !buffer )
+  if ( !oprp || !buffer || oprp->region != NULL ) {
+    errno = EINVAL;
     return NULL;
+  }
 
-  t = oprp;
-  do {
-    abort_unless(t->ops && t->ops->copy);
-    if ( !(prp = (*t->ops->copy)(t, buffer)) )
+  abort_unless(oprp->ops && oprp->ops->copy);
+  if ( !(first = (*oprp->ops->copy)(oprp, buffer)) )
+    goto err;
+
+  for ( last = first, trav = prp_next(oprp) ; !prp_list_end(trav) ; 
+        last = nprp, trav = prp_next(trav) ) {
+    abort_unless(oprp->ops && oprp->ops->copy);
+    if ( !(nprp = (*trav->ops->copy)(trav, buffer)) )
       goto err;
-    if ( !first ) {
-      l_init(&prp->node);
-      first = prp;
-    } else {
-      l_ins(&last->node, &prp->node);
+    l_ins(&trav->node, &nprp->node);
+  }
+
+  /* patch up regions: recall that each parse (except the root parse) */
+  /* MUST have a region that comes before it in the list. */
+  for ( nprp = prp_next(first), trav = prp_next(oprp) ; 
+        !prp_list_end(trav) ; 
+        nprp = prp_next(nprp), trav = prp_next(trav) ) {
+    oreg = prp_prev(trav);
+    nreg = prp_prev(nprp);
+    abort_unless(trav->region != NULL);
+    while ( oreg != trav->region ) { 
+      abort_unless(oreg != NULL);
+      oreg = prp_prev(oreg);
+      nreg = prp_prev(nreg);
     }
-    last = prp;
-    t = prp_next(t);
-  } while ( t != oprp );
+    nprp->region = nreg;
+  }
 
   return first;
 
 err:
-  prp_free(first, 1);
+  prp_free_all(first);
   return NULL;
 }
 
@@ -337,33 +423,26 @@ int prp_fix_len(struct prparse *prp)
 }
 
 
-static void insert_adjust(struct prparse *prp, size_t off, size_t len, 
-		          int moveup)
+static void ubounds(struct prparse *reg, size_t *low, size_t *high)
 {
-  while ( prp != NULL ) {
-    if ( (off <= prp->hoff) && moveup )
-      prp->hoff += len;
-    else if ( (off > prp->hoff) && !moveup )
-      prp->hoff -= len;
+  size_t uend = 0;
+  struct prparse *prp;
+  
+  abort_unless(reg && low && high);
 
-    /* NOTE: if on the border between the header and the payload, we */
-    /* favor expanding the payload, not the header. */
-    if ( (off < prp->poff) && moveup )
-      prp->poff += len;
-    else if ( (off >= prp->poff) && !moveup )
-      prp->poff -= len;
-
-    if ( (off <= prp->toff) && moveup )
-      prp->toff += len;
-    else if ( (off > prp->toff) && !moveup )
-      prp->poff -= len;
-
-    if ( (off <= prp->eoff) && moveup )
-      prp->eoff += len;
-    else if ( (off >= prp->eoff) && !moveup )
-      prp->eoff -= len;
-
-    prp = prp_next(prp);
+  prp = prp_next_in_region(reg, reg);
+  if ( prp == NULL ) {
+    /* zero parses in region */
+    *low = reg->eoff;
+    *high = reg->hoff;
+  } else {
+    /* at least one parse in the region */
+    *low = prp->hoff;
+    for ( ; prp != NULL ; prp = prp_next_in_region(prp, reg) )
+      if ( prp->eoff > uend )
+        uend = prp->eoff;
+    abort_unless(*low <= uend);
+    *high = uend;
   }
 }
 
@@ -372,13 +451,27 @@ int prp_insert(struct prparse *prp, size_t off, size_t len, int moveup)
 {
   byte_t *op, *np;
   size_t mlen;
-  if ( prp == NULL )
-    return -1;
-  if ( (off < prp->hoff) || (off > prp->eoff) )
-    return -1;
-  if ( !moveup && (len > prp->hoff) )
-    return -1;
+  size_t low, high;
 
+  if ( prp == NULL ) {
+    errno = EINVAL;
+    return -1;
+  }
+  /* get the root region */
+  while ( prp->region != NULL ) 
+    prp = prp->region;
+  /* find the lower and upper use boundaries */
+  ubounds(prp, &low, &high);
+  if ( low >= high ) /* only happens on empty region */
+    return 0;
+  if ( (off < low) || (off > high) || 
+       (moveup && (len > (prp->eoff - high))) || 
+       (!moveup && (len > (low - prp->hoff))) ) { 
+    errno = EINVAL;
+    return -1;
+  }
+
+  /* move the data */
   if ( prp->data != NULL ) {
     if ( moveup ) { 
       op = prp->data + off;
@@ -392,79 +485,28 @@ int prp_insert(struct prparse *prp, size_t off, size_t len, int moveup)
     memmove(np, op, mlen);
     memset(op, 0x5F, len);
   }
-  insert_adjust(prp, off, len, moveup);
-  return 0;
-}
 
-
-static int cut_adjust(struct prparse *prp, size_t off, size_t len, int moveup)
-{
-  size_t ohoff, opoff, otoff, oeoff;
-  if ( prp == NULL )
-    return 0;
-
-  ohoff = prp->hoff;
-  opoff = prp->poff;
-  otoff = prp->toff;
-  oeoff = prp->eoff;
-
-  if ( off <= prp->hoff ) {
-    /* comes before this header */
-    if ( !moveup ) {
-      prp->hoff -= len;
-      prp->poff -= len;
-      prp->toff -= len;
-      prp->eoff -= len;
-    }
-  } else if ( off <= prp->poff ) { 
-    if ( len > prp_hlen(prp) )
-      return -1;
-    /* comes in the middle or at the end of the header */
+  /* adjust all the offsets that should change */
+  for ( prp = prp_next(prp) ; !prp_list_end(prp) ; prp = prp_next(prp) ) {
     if ( moveup ) {
-      prp->hoff += len;
+      if ( prp->hoff >= off )
+        prp->hoff += len;
+      if ( prp->poff >= off )
+        prp->poff += len;
+      if ( prp->toff >= off )
+        prp->toff += len;
+      if ( prp->eoff >= off )
+        prp->eoff += len;
     } else {
-      prp->poff -= len;
-      prp->toff -= len;
-      prp->eoff -= len;
+      if ( prp->hoff < off )
+        prp->hoff -= len;
+      if ( prp->poff < off )
+        prp->poff -= len;
+      if ( prp->toff < off )
+        prp->toff -= len;
+      if ( prp->eoff < off )
+        prp->eoff -= len;
     }
-  } else if ( off <= prp->toff ) {
-    /* comes in the middle or at the end of the payload */
-    if ( len > prp_plen(prp) )
-      return -1;
-    if ( moveup ) {
-      prp->hoff += len;
-      prp->poff += len;
-    } else {
-      prp->toff -= len;
-      prp->eoff -= len;
-    }
-  } else if ( off <= prp->eoff ) { 
-      if ( len > prp_tlen(prp) )
-        return -1;
-    /* comes in the middle or at the end of the trailer */
-    if ( !moveup ) {
-      prp->eoff -= len;
-    } else { 
-      prp->hoff += len;
-      prp->poff += len;
-      prp->toff += len;
-    }
-  } else { 
-    /* else it comes after the end of the trailer */
-    if ( moveup ) { 
-      prp->hoff += len;
-      prp->poff += len;
-      prp->toff += len;
-      prp->eoff += len;
-    }
-  }
-
-  if ( cut_adjust(prp_next(prp), off, len, moveup) < 0 ) {
-    prp->hoff = ohoff;
-    prp->poff = opoff;
-    prp->toff = otoff;
-    prp->eoff = oeoff;
-    return -1;
   }
 
   return 0;
@@ -473,36 +515,61 @@ static int cut_adjust(struct prparse *prp, size_t off, size_t len, int moveup)
 
 int prp_cut(struct prparse *prp, size_t off, size_t len, int moveup)
 {
-  size_t pktlen, ohoff;
   byte_t *op, *np;
   size_t mlen;
 
-  if ( (prp == NULL) || (prp->data == NULL) )
+  if ( prp == NULL ) {
+    errno = EINVAL;
     return -1;
-  if ( (off < prp->hoff) || (off > prp->eoff) )
+  }
+  /* get the root region */
+  while ( prp->region != NULL ) 
+    prp = prp->region;
+  if ( (off < prp->hoff) || (off > prp->eoff) || (len < prp->eoff - off) ) {
+    errno = EINVAL;
     return -1;
-  pktlen = prp_totlen(prp);
-  if ( len > pktlen )
-    return - 1;
-  ohoff = prp->hoff;
-  if ( cut_adjust(prp, off, len, moveup) < 0 )
-    return -1;
+  }
 
   if ( prp->data != NULL ) {
     if ( moveup ) {
-      op = prp->data + ohoff;
+      op = prp->data + prp->hoff;
       np = op + len;
-      mlen = off - ohoff;
-    } else { 
+      mlen = off - prp->hoff;
+    } else {
       np = prp->data + off;
       op = np + len;
-      mlen = pktlen - len;
+      mlen = (prp->eoff - off) - len;
     }
     memmove(np, op, mlen);
     if ( moveup )
       memset(op, 0x6e, len);
     else
       memset(np + mlen, 0x6e, len);
+  }
+
+  /* adjust all the offsets that should change */
+  if ( moveup )
+    off += len;
+  for ( prp = prp_next(prp) ; !prp_list_end(prp) ; prp = prp_next(prp) ) {
+    if ( moveup ) {
+      if ( prp->hoff < off )
+        prp->hoff += len;
+      if ( prp->poff < off )
+        prp->poff += len;
+      if ( prp->toff < off )
+        prp->toff += len;
+      if ( prp->eoff < off )
+        prp->eoff += len;
+    } else {
+      if ( prp->hoff >= off )
+        prp->hoff -= len;
+      if ( prp->poff >= off )
+        prp->poff -= len;
+      if ( prp->toff >= off )
+        prp->toff -= len;
+      if ( prp->eoff >= off )
+        prp->eoff -= len;
+    }
   }
 
   return 0;
@@ -685,9 +752,8 @@ int prp_adj_plen(struct prparse *prp, ptrdiff_t amt)
 }
 
 
-int prp_fix_region(struct prparse *reg)
+int prp_adj_unused(struct prparse *reg)
 {
-  struct prparse *prp;
   size_t ustart, uend;
 
   /* malformed parse if the region isn't of type PRP_NONE */
@@ -696,22 +762,11 @@ int prp_fix_region(struct prparse *reg)
     return -1;
   }
 
-  if ( prp_region_empty(reg) ) { /* zero parses in region */
+  ubounds(reg, &ustart, &uend);
+  if ( ustart > uend ) { 
     reg->poff = reg->hoff;
     reg->toff = reg->eoff;
   } else {
-    /* at least one parse in the region */
-    ustart = reg->eoff;
-    uend = reg->hoff;
-    abort_unless(ustart > uend);
-    for ( prp = prp_next_in_region(reg, reg) ; prp != NULL ; 
-          prp = prp_next_in_region(prp, reg) ) {
-      if ( prp->hoff < ustart )
-        ustart = prp->hoff;
-      if ( prp->eoff > uend )
-        uend = prp->eoff;
-    }
-    abort_unless(ustart <= uend);
     reg->poff = ustart;
     reg->toff = uend;
   }

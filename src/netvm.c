@@ -1280,8 +1280,14 @@ struct pktbuf *netvm_clrpkt(struct netvm *vm, int slot, int keeppkb)
   struct metapkt *pkt;
   struct pktbuf *pkb = NULL;
   if ( (slot >= 0) && (slot < NETVM_MAXPKTS) && (pkt = vm->packets[slot]) ) {
-    if ( keeppkb )
+    if ( keeppkb ) {
+      /* adjust header and trailer slack space and copy back to packet */
+      /* buffer metadata before returning.  */
+      prp_adj_unused(pkt->headers);
       pkb = pkt->pkb;
+      pkb->pkb_len = prp_plen(pkt->headers);
+      pkb->pkb_offset = prp_hlen(pkt->headers);
+    }
     metapkt_free(pkt, !keeppkb);
     vm->packets[slot] = NULL;
   }
