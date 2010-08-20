@@ -178,6 +178,7 @@ struct prparse *prp_parse_packet(unsigned ppidx, byte_t *pkt, size_t off,
       break;
     last = nprp;
     lastpp = pp;
+    pp = NULL;
     l_for_each(child, &lastpp->children) {
       cldid = l2cldn(child)->cldtype;
       abort_unless(cldid <= PPT_MAX); 
@@ -185,7 +186,8 @@ struct prparse *prp_parse_packet(unsigned ppidx, byte_t *pkt, size_t off,
       abort_unless(pp->valid);
       if ( (*pp->ops->follows)(last) )
         break;
-      pp = NULL;
+      else
+        pp = NULL;
     }
   } while ( pp );
 
@@ -269,9 +271,10 @@ void prp_free(struct prparse *prp)
 
 void prp_free_all(struct prparse *prp)
 {
-  struct prparse *next;
-  for ( next = prp_prev(prp) ; !prp_list_head(next) ; next = prp_prev(next) ) {
+  struct prparse *next, *prev;
+  for ( next = prp_prev(prp) ; !prp_list_head(next) ; next = prev ) {
     abort_unless(next->ops && next->ops->free);
+    prev = prp_prev(next);
     l_rem(&next->node);
     (*next->ops->free)(next);
   }
@@ -357,7 +360,7 @@ struct prparse *prp_copy(struct prparse *oprp, byte_t *buffer)
     abort_unless(oprp->ops && oprp->ops->copy);
     if ( !(nprp = (*trav->ops->copy)(trav, buffer)) )
       goto err;
-    l_ins(&trav->node, &nprp->node);
+    l_ins(&last->node, &nprp->node);
   }
 
   /* patch up regions: recall that each parse (except the root parse) */

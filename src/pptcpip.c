@@ -148,6 +148,8 @@ static struct prparse *simple_copy(struct prparse *oprp, byte_t *buffer)
     return NULL;
   prp = emalloc(oprp->size);
   memcpy(prp, oprp, oprp->size);
+  prp->region = NULL;
+  l_init(&prp->node);
   prp->data = buffer;
   return prp;
 }
@@ -937,7 +939,7 @@ static int icmp_fixcksum(struct prparse *prp)
   if ( (prp_hlen(prp) != 8) || (prp_prev(prp)->type != PPT_IPV4) )
     return -1;
   icmp->cksum = 0;
-  icmp->cksum = ~ones_sum(prp, prp_totlen(prp), 0);
+  icmp->cksum = ~ones_sum(icmp, prp_totlen(prp), 0);
   return 0;
 }
 

@@ -90,7 +90,7 @@ struct metapkt *pktbuf_to_metapkt(struct pktbuf *pkb)
 		                    pkb->pkb_len);
     /* add head and tail slack space to the main header */
     prp_adj_start(pkt->headers, -(ptrdiff_t)pkb->pkb_offset);
-    abort_unless(pkb->pkb_buflen > (pkb->pkb_len + pkb->pkb_offset));
+    abort_unless(pkb->pkb_buflen >= (pkb->pkb_len + pkb->pkb_offset));
     prp_adj_end(pkt->headers, pkb->pkb_buflen - (pkb->pkb_len + pkb->pkb_offset));
   } else {
     pkt->headers = prp_create_parse(pkb->pkb_buffer, 0, pkb->pkb_buflen);
