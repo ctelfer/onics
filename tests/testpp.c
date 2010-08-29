@@ -63,7 +63,7 @@ int main(int argc, char *argv[])
           printf("\t\tInvalid field combination error\n");
       }
 
-      printf("\t\tOffset: %8u\tLength: %8u\n", (unsigned)t->hoff,
+      printf("\t\tOffset: %8u\tLength: %8u\n", (unsigned)prp_soff(t),
              (unsigned)prp_totlen(t));
       printf("\t\tHeader length: %8u\n", (unsigned)prp_hlen(t));
       printf("\t\tPayload length:%8u\n", (unsigned)prp_plen(t));

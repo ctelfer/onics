@@ -59,8 +59,8 @@ struct prparse;
 struct proto_parser_ops {
   int			(*follows)(struct prparse *pprp);
   struct prparse *	(*parse)(struct prparse *pprp);
-  struct prparse *	(*create)(byte_t *buf, size_t off, size_t len,
-                                  size_t hlen, size_t plen, int mode);
+  struct prparse *	(*create)(byte_t *buf, long off, long len,
+                                  long hlen, long plen, int mode);
 };
 
 struct proto_parser {
@@ -72,8 +72,6 @@ struct proto_parser {
 
 struct prparse_ops {
   void          (*update)(struct prparse *prp);
-  size_t        (*getfield)(struct prparse *prp, unsigned fid, 
-                            unsigned num, size_t *len);
   int           (*fixlen)(struct prparse *prp);
   int           (*fixcksum)(struct prparse *prp);
   struct prparse * (*copy)(struct prparse *, byte_t *buffer);
@@ -85,9 +83,9 @@ struct prparse_ops {
  Start of 
  Packet Buffer
    |                    Encapsulating Protocol Parse
-   |      poff                                                    toff
+   |      par.offs[prp.rlow]                                par.offs[prp.rhi]
    | ...----+-------------------------------------------------------+----...
-   |        |     hoff      poff                  toff   toff+tlen  |
+   |        |  prp.start   prp.poff             prp.toff  prp.end   |
    | header |      +---------+---------------------+---------+      | trailer
    |        |      | header  | payload             | trailer |      |
    |        |      +---------+---------------------+---------+      |
@@ -104,34 +102,41 @@ struct prparse_ops {
    as decode of its various fields.  All protocol parses at a minimum have a
    starting offset, a header, payload and trailer fields.  All of these are
    have a length in bytes, which can be 0.  The protocol parses associated
-   with a particular buffer are ordered by their offsets.  So, if the header
-   or trailer offset of a header parse change, the parse may have to be
-   moved in the list.  Each protocol parse that isn't of type PPT_NONE is 
-   associated with a 'region' that denotes the boundaries of the data buffer
-   or some sub-region within it.  The starting and ending offset of a parse
-   can never wander outside of this region.
+   with a particular buffer are ordered by their start offsets.  So, if the 
+   header or trailer offset of a header parse change, the parse may have to be
+   moved in the list. 
 */
 
-struct prparse {
-  size_t                size; 
-  unsigned int          type;
-  struct prparse *	region;
-  struct list           node;
-  byte_t *              data;
-  unsigned int          error;
-  size_t                hoff;
-  size_t                poff;
-  size_t                toff;
-  size_t                eoff;
-  struct prparse_ops *  ops;
+enum {
+  PRP_OI_SOFF,
+  PRP_OI_POFF,
+  PRP_OI_TOFF,
+  PRP_OI_EOFF,
+  PRP_OI_MIN_NUM,
+  PRP_OI_EXTRA = PRP_OI_MIN_NUM,
 };
-#define prp_hlen(prp) ((prp)->poff - (prp)->hoff)
-#define prp_plen(prp) ((prp)->toff - (prp)->poff)
-#define prp_tlen(prp) ((prp)->eoff - (prp)->toff)
-#define prp_totlen(prp) ((prp)->eoff - (prp)->hoff)
-#define prp_header(prp, type) ((type *)((prp)->data + (prp)->hoff))
-#define prp_payload(prp) ((byte_t *)((prp)->data + (prp)->poff))
-#define prp_trailer(prp, type) ((type *)((prp)->data + (prp)->toff))
+
+struct prparse {
+  unsigned int          type;
+  unsigned int          error;
+  struct prparse_ops *  ops;
+  struct list           node;
+  struct prparse *	region;
+  byte_t *              data;
+  uint                  noff;
+  long                  offs[PRP_OI_MIN_NUM];
+};
+#define prp_soff(prp) ((prp)->offs[PRP_OI_SOFF])
+#define prp_poff(prp) ((prp)->offs[PRP_OI_POFF])
+#define prp_toff(prp) ((prp)->offs[PRP_OI_TOFF])
+#define prp_eoff(prp) ((prp)->offs[PRP_OI_EOFF])
+#define prp_hlen(prp) (prp_poff(prp) - prp_soff(prp))
+#define prp_plen(prp) (prp_toff(prp) - prp_poff(prp))
+#define prp_tlen(prp) (prp_eoff(prp) - prp_toff(prp))
+#define prp_totlen(prp) (prp_eoff(prp) - prp_soff(prp))
+#define prp_header(prp, type) ((type *)((prp)->data + prp_soff(prp)))
+#define prp_payload(prp) ((byte_t *)((prp)->data + prp_poff(prp)))
+#define prp_trailer(prp, type) ((type *)((prp)->data + prp_toff(prp)))
 #define prp_prev(prp) container((prp)->node.prev, struct prparse, node)
 #define prp_next(prp) container((prp)->node.next, struct prparse, node)
 #define prp_list_head(prp) ((prp)->region == NULL)
@@ -208,7 +213,7 @@ int prp_region_empty(struct prparse *reg);
 /* The "data portion" (i.e. the space the protocol data is expected to */
 /* take up) is pktlen bytes.  There are hdrm bytes reserved from off for */
 /* growing at the front of the parse.  */
-struct prparse *prp_create_parse(byte_t *buf, size_t off, size_t len);
+struct prparse *prp_create_parse(byte_t *buf, long off, long len);
 
 /* Create a new header in a parsed packet.  The "mode" determines how this */
 /* header is created.  if mode == PPCF_FILL, then 'prp' must be the */
@@ -223,8 +228,8 @@ int prp_push(unsigned ppidx, struct prparse *prp, int mode);
 
 /* Given a buffer and start offset and a first protocol parser to start with */
 /* parse all headers as automatically as possible */
-struct prparse *prp_parse_packet(unsigned firstpp, byte_t *pbuf, size_t off, 
-				 size_t len);
+struct prparse *prp_parse_packet(unsigned firstpp, byte_t *pbuf, long off, 
+				 long len);
 
 /* Free a parse.  All sub regions of the parse are made part of prp's */
 /* parent region.  If prp is a root region, this is the equivalent of */
@@ -243,20 +248,12 @@ void prp_free_region(struct prparse *prp);
 struct prparse *prp_copy(struct prparse *prp, byte_t *buffer);
 
 /* Associate a header parse with a new packet buffer (which must be sized */
-/* correctly based on the header parse. */
+/* correctly based on the header parse). */
 void prp_set_packet_buffer(struct prparse *prp, byte_t *buffer);
 
 /* re-parse and update the fields in 'prp'.  (but not its children */
 /* returns error field as a matter of convenience */
 unsigned int prp_update(struct prparse *prp);
-
-/* Get a variable position field in a header.  'fid' denotes the type */
-/* of field.  'idx' denotes the index of the field starting from 0 */
-/* the 'len' parameter returns the length of the field, while the  */
-/* function returns the offset of the field starting from the */
-/* beginning of 'prp' */
-size_t prp_get_field(struct prparse *prp, unsigned fid, unsigned idx, 
-                     size_t *len);
 
 /* fix up checksums in the 'prp' protocol header */
 int prp_fix_cksum(struct prparse *prp);
@@ -269,19 +266,16 @@ int prp_fix_len(struct prparse *prp);
 /* NOTE: when inserting on the boundary between a payload and header or */
 /* a payload and trailer, prp_splice() always favors inserting into the */
 /* payload section.  You can use prp_adj_* to correct this later as needed. */
-int prp_insert(struct prparse *prp, size_t off, size_t len, int moveup);
-int prp_cut(struct prparse *prp, size_t off, size_t len, int moveup);
+int prp_insert(struct prparse *prp, long off, long len, int moveup);
+int prp_cut(struct prparse *prp, long off, long len, int moveup);
 
 /* expand or contract header/trailer within the encapsulating space */
 /* Note that the point adjustments can't overrun their adjacent boundaries. */
 /* prp_adj_plen() moves both the trailer offset and ending offset in unison. */
 /* It basically acts as shorthand for a common case of adding or chopping */
 /* payload to a particular packet. */
-int prp_adj_start(struct prparse *prp, ptrdiff_t amt); /* adjust A */
-int prp_adj_poff(struct prparse *prp, ptrdiff_t amt); /* adjust B */
-int prp_adj_toff(struct prparse *prp, ptrdiff_t amt); /* adjust C */
-int prp_adj_end(struct prparse *prp, ptrdiff_t amt); /* adjust D */
-int prp_adj_plen(struct prparse *prp, ptrdiff_t amt); /* adjust C+D */
+int prp_adj_off(struct prparse *prp, uint oid, long amt); /* adjust an offset */
+int prp_adj_plen(struct prparse *prp, long amt); /* adjust C+D */
 
 /* Adjust a region so that its payload starts on the first unused byte */
 /* at the beginning and it's trailer starts on unused byte at the end. */

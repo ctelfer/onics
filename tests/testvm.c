@@ -66,11 +66,11 @@ struct netvm_inst vm_prog_toggledf[] = {
   /*2*/{ NETVM_OC_BNZ, 0, NETVM_IF_IMMED, 4 /* END of prog */ },
   /*3*/{ NETVM_OC_LDPKT, 2, NETVM_IF_IMMED | NETVM_IF_TOHOST, 
          /* 2 bytes starting 8 from IP hdr */
-         NETVM_PDESC(PPT_IPV4, 0, NETVM_PRP_HOFF, 6) },
+         NETVM_PDESC(PPT_IPV4, 0, NETVM_PRP_SOFF, 6) },
   /* toggle the DF bit */
   /*4*/{ NETVM_OC_XOR, 0, NETVM_IF_IMMED, IPH_DFMASK },
   /*5*/{ NETVM_OC_STPKT, 2, NETVM_IF_IMMED | NETVM_IF_TONET, 
-         NETVM_PDESC(PPT_IPV4, 0, NETVM_PRP_HOFF, 6) },
+         NETVM_PDESC(PPT_IPV4, 0, NETVM_PRP_SOFF, 6) },
   /*6*/{ NETVM_OC_FIXCKSUM, 0, NETVM_IF_IMMED, 0 }
 };
 
@@ -361,7 +361,7 @@ struct meminit meqsi[] = {
 
 struct netvm_inst vm_prog_maskeq[] = { 
   /*00*/{ NETVM_OC_LDPRPF, 0, NETVM_IF_IMMED, 
-          NETVM_PDESC(NETVM_PRP_LAYER, MPKT_LAYER_NET, NETVM_PRP_HOFF, 0) },
+          NETVM_PDESC(NETVM_PRP_LAYER, MPKT_LAYER_NET, NETVM_PRP_SOFF, 0) },
   /*01*/{ NETVM_OC_PUSH, 0, 0, 0 },
   /*02*/{ NETVM_OC_PUSH, 0, 0, MEQ_VAL_SIZE },
   /*03*/{ NETVM_OC_BULKP2M, 0, NETVM_IF_IMMED, 0 },

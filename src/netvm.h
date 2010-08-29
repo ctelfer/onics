@@ -158,21 +158,21 @@ enum {
 };
 
 enum {
-  NETVM_PRP_HOFF,
-  NETVM_PRP_POFF,
-  NETVM_PRP_TOFF,
-  NETVM_PRP_EOFF,
   NETVM_PRP_HLEN,
   NETVM_PRP_PLEN,
   NETVM_PRP_TLEN,
   NETVM_PRP_LEN,
   NETVM_PRP_ERR,
   NETVM_PRP_TYPE,
-  NETVM_PRP_PRFLD,
+  NETVM_PRP_OFF_BASE,
+
+  NETVM_PRP_SOFF = NETVM_PRP_OFF_BASE,
+  NETVM_PRP_POFF,
+  NETVM_PRP_TOFF,
+  NETVM_PRP_EOFF,
 };
 
-#define NETVM_PRPFLDOK(f) ((f) <= NETVM_PRP_PRFLD)
-#define NETVM_ISPRPOFF(f) ((f) <= NETVM_PRP_EOFF)
+#define NETVM_ISPRPOFF(f) ((f) >= NETVM_PRP_OFF_BASE)
 
 /* 
  * If immed is not set for a load/store instruction then the address to load
@@ -190,7 +190,7 @@ enum {
  * Full:
  * 	(top of stack)
  * 	pkt number:4  PPT: 8  prp index:8  field:12
- * 	offset:32 or field index:32
+ * 	offset:32
  *
  * When no flags are set the pdesc comes on top of the stack and the offset 
  * follows.  When IMMED is set, the pdesc is in packed form encoded in the 

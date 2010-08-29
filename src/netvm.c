@@ -196,6 +196,8 @@ static void get_prp_info(struct netvm *vm, struct netvm_inst *inst,
   int width;
   struct prparse *prp;
   struct metapkt *pkt;
+  uint oidx;
+  uint32_t off;
 
   get_pd(vm, inst, pd);
   if ( vm->error )
@@ -214,24 +216,16 @@ static void get_prp_info(struct netvm *vm, struct netvm_inst *inst,
   }
   FATAL(vm, NETVM_ERR_NOPRP, prp == NULL);
 
-  switch(pd->field) {
-  case NETVM_PRP_HOFF:
-    FATAL(vm, NETVM_ERR_PKTADDR, pd->offset + width > prp_hlen(prp));
-    *addr = prp->hoff + pd->offset;
-    break;
-  case NETVM_PRP_POFF:
-    FATAL(vm, NETVM_ERR_PKTADDR, pd->offset + width > prp_plen(prp));
-    *addr = prp->poff + pd->offset;
-    break;
-  case NETVM_PRP_TOFF:
-    FATAL(vm, NETVM_ERR_PKTADDR, pd->offset + width > prp_tlen(prp));
-    *addr = prp->toff + pd->offset;
-    break;
-  case NETVM_PRP_EOFF:
-  default:
+  oidx = pd->field - NETVM_PRP_OFF_BASE;
+  if ( (pd->field < NETVM_PRP_OFF_BASE) || (pd->field == NETVM_PRP_EOFF) ||
+       (oidx >= prp->noff) )
     VMERR(vm, NETVM_ERR_PRPFLD);
-    break;
-  }
+  FATAL(vm, NETVM_ERR_PKTADDR, prp->offs[oidx] < 0);
+  off = prp->offs[oidx] + pd->offset;
+  FATAL(vm, NETVM_ERR_PKTADDR, off < prp_soff(prp));
+  FATAL(vm, NETVM_ERR_PKTADDR, off + width < off); 
+  FATAL(vm, NETVM_ERR_PKTADDR, off + width > prp_eoff(prp)); 
+  *addr = off;
   *prpp = prp;
 }
 
@@ -316,11 +310,11 @@ static void ni_ldprpf(struct netvm *vm)
   struct netvm_inst *inst = &vm->inst[vm->pc];
   struct netvm_prp_desc pd0;
   struct prparse *prp;
+  uint32_t oidx;
 
   get_pd(vm, inst, &pd0);
   if ( vm->error )
     return;
-  FATAL(vm, NETVM_ERR_PRPFLD, !NETVM_PRPFLDOK(pd0.field));
   if ( pd0.ptype == NETVM_PRP_LAYER ) {
     FATAL(vm, NETVM_ERR_PKTNUM, (pd0.pktnum >= NETVM_MAXPKTS));
     FATAL(vm, NETVM_ERR_NOPKT, !vm->packets[pd0.pktnum]);
@@ -340,27 +334,19 @@ static void ni_ldprpf(struct netvm *vm)
   }
 
   switch (pd0.field) {
-  case NETVM_PRP_HOFF: S_PUSH(vm, prp->hoff); break;
-  case NETVM_PRP_POFF: S_PUSH(vm, prp->poff); break;
-  case NETVM_PRP_TOFF: S_PUSH(vm, prp->toff); break;
-  case NETVM_PRP_EOFF: S_PUSH(vm, prp->eoff); break;
   case NETVM_PRP_HLEN: S_PUSH(vm, prp_hlen(prp)); break;
   case NETVM_PRP_PLEN: S_PUSH(vm, prp_plen(prp)); break;
   case NETVM_PRP_TLEN: S_PUSH(vm, prp_tlen(prp)); break;
   case NETVM_PRP_LEN:  S_PUSH(vm, prp_totlen(prp)); break;
   case NETVM_PRP_ERR:  S_PUSH(vm, prp->error); break;
   case NETVM_PRP_TYPE: S_PUSH(vm, prp->type); break;
-  case NETVM_PRP_PRFLD: {
-    size_t off, len;
-    unsigned fid, idx;
-    fid = pd0.offset & 0xffff;
-    idx = (pd0.offset >> 16) & 0xffff;
-    off = prp_get_field(prp, fid, idx, &len);
-    S_PUSH(vm, (uint32_t)off); 
-    S_PUSH(vm, (uint32_t)len); 
-  } break;
   default:
-    abort_unless(0);
+    abort_unless(pd0.field >= NETVM_PRP_OFF_BASE);
+    oidx = pd0.field - NETVM_PRP_OFF_BASE;
+    if ( oidx >= prp->noff ) {
+      VMERR(vm, NETVM_ERR_PRPFLD);
+    }
+    S_PUSH(vm, (uint32_t)prp->offs[oidx]);
   }
 }
 
@@ -403,7 +389,7 @@ static void ni_blkpmv(struct netvm *vm)
   FATAL(vm, NETVM_ERR_IOVFL, (len + maddr < len) || (len + poff < len));
   prp = pkt->headers;
   FATAL(vm, NETVM_ERR_PKTADDR, 
-        (poff < prp->poff) || (poff + len > prp_totlen(prp)));
+        (poff < prp_poff(prp)) || (poff + len > prp_totlen(prp)));
   FATAL(vm, NETVM_ERR_MEMADDR, !vm->mem || (maddr + len > vm->memsz));
   if ( inst->opcode == NETVM_OC_BULKP2M )
     memcpy(vm->mem + maddr, prp->data + poff, len);
@@ -1032,24 +1018,23 @@ static void ni_prpadj(struct netvm *vm)
   struct netvm_prp_desc pd0;
   struct prparse *prp;
   uint32_t val;
-  ptrdiff_t amt;
+  uint oid;
+  long amt;
   int rv;
+
   get_pd(vm, inst, &pd0);
   if ( vm->error )
     return;
   prp = find_header(vm, &pd0);
   FATAL(vm, NETVM_ERR_NOPRP, prp == NULL);
   S_POP(vm, val);
-  amt = (int32_t)val;
-  switch(pd0.field) {
-  case NETVM_PRP_HOFF: rv = prp_adj_start(prp, amt); break;
-  case NETVM_PRP_POFF: rv = prp_adj_poff(prp, amt); break;
-  case NETVM_PRP_TOFF: rv = prp_adj_toff(prp, amt); break;
-  case NETVM_PRP_EOFF: rv = prp_adj_end(prp, amt); break;
-  case NETVM_PRP_PLEN: rv = prp_adj_plen(prp, amt); break;
-  default:
+  amt = (long)(int32_t)val;
+  if ( (pd0.field < NETVM_PRP_OFF_BASE) || 
+       (prp_list_head(prp) && 
+	 ((pd0.field == NETVM_PRP_SOFF) || (pd0.field == NETVM_PRP_EOFF))) )
     VMERR(vm, NETVM_ERR_PRPFLD);
-  }
+  oid = pd0.field - NETVM_PRP_OFF_BASE;
+  rv = prp_adj_off(prp, oid, amt);
   FATAL(vm, NETVM_ERR_PRPADJ, rv < 0);
 }
 
@@ -1397,6 +1382,7 @@ int netvm_run(struct netvm *vm, int maxcycles, uint32_t *rv)
 
 static const char *val_error_strings[] = { 
   "ok",
+  "VM not properly initialized",
   "Invalid opcode",
   "Invalid jump address",
   "Invalid branch/jump in matchonly mode",

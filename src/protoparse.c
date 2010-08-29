@@ -3,6 +3,7 @@
 #include <errno.h>
 #include <string.h>
 #include <stdlib.h>
+#include <limits.h>
 
 
 struct proto_parser proto_parsers[PPT_MAX+1];
@@ -119,7 +120,7 @@ struct prparse *prp_next_in_region(struct prparse *from, struct prparse *reg)
   struct prparse *prp;
   abort_unless(from && reg);
   for ( prp = prp_next(from) ; 
-        !prp_list_end(prp) && (prp->hoff <= reg->eoff) ; 
+        !prp_list_end(prp) && (prp_soff(prp) <= prp_eoff(reg)) ; 
         prp = prp_next(prp) ) {
     if ( prp->region == reg )
       return prp;
@@ -135,11 +136,11 @@ int prp_region_empty(struct prparse *reg)
 }
 
 
-struct prparse *prp_create_parse(byte_t *buf, size_t off, size_t len)
+struct prparse *prp_create_parse(byte_t *buf, long off, long len)
 {
   struct proto_parser *pp = &proto_parsers[PPT_NONE];
   struct prparse *prp;
-  if ( !pp->valid || !buf ) {
+  if ( !pp->valid || !buf || off < 0 || len < 0 ) {
     errno = EINVAL;
     return NULL;
   }
@@ -150,8 +151,8 @@ struct prparse *prp_create_parse(byte_t *buf, size_t off, size_t len)
 }
 
 
-struct prparse *prp_parse_packet(unsigned ppidx, byte_t *pkt, size_t off,
-                                 size_t len)
+struct prparse *prp_parse_packet(unsigned ppidx, byte_t *pkt, long off,
+                                 long len)
 {
   struct prparse *first, *last, *nprp;
   struct proto_parser *pp, *lastpp;
@@ -159,7 +160,8 @@ struct prparse *prp_parse_packet(unsigned ppidx, byte_t *pkt, size_t off,
   unsigned cldid;
   int errval;
 
-  if ( (ppidx > PPT_MAX) || !(pp = &proto_parsers[ppidx])->valid ) {
+  if ( (ppidx > PPT_MAX) || !(pp = &proto_parsers[ppidx])->valid || 
+       (off < 0) || (len < 0)) {
     errno = EINVAL;
     return NULL;
   }
@@ -203,7 +205,7 @@ err:
 int prp_push(unsigned ppidx, struct prparse *pprp, int mode)
 {
   struct proto_parser *pp;
-  size_t off, len, plen, hlen;
+  long off, len, plen, hlen;
   struct prparse *prp, *next;
 
   if ( (ppidx > PPT_MAX) || !(pp = &proto_parsers[ppidx])->valid || !pprp ) {
@@ -211,18 +213,20 @@ int prp_push(unsigned ppidx, struct prparse *pprp, int mode)
     return -1;
   }
 
-  off = pprp->poff;
+  off = prp_poff(pprp);
   len = prp_plen(pprp);
   if ( mode == PPCF_FILL ) {
     hlen = 0;
     plen = 0;
   } else if ( mode == PPCF_WRAP ) {
+    long t;
     if ( prp_region_empty(pprp) ) {
       errno = EINVAL;
       return -1;
     }
-    hlen = prp_next(pprp)->hoff - off; 
-    off = prp_next(pprp)->hoff;
+    t = prp_soff(prp_next(pprp));
+    hlen = t - off; 
+    off = t;
     plen = prp_totlen(prp_next(pprp));
   } else if ( mode == PPCF_WRAPFILL ) {
     next = prp_next(pprp);
@@ -232,7 +236,7 @@ int prp_push(unsigned ppidx, struct prparse *pprp, int mode)
       errno = EINVAL;
       return -1;
     }
-    hlen = next->hoff - off; 
+    hlen = prp_soff(next) - off; 
     plen = prp_totlen(next);
   } else {
     errno = EINVAL;
@@ -272,6 +276,7 @@ void prp_free(struct prparse *prp)
 void prp_free_all(struct prparse *prp)
 {
   struct prparse *next, *prev;
+  abort_unless(prp_list_head(prp));
   for ( next = prp_prev(prp) ; !prp_list_head(next) ; next = prev ) {
     abort_unless(next->ops && next->ops->free);
     prev = prp_prev(next);
@@ -313,7 +318,7 @@ void prp_free_region(struct prparse *prp)
   } else {
     hold = NULL;
     trav = prp_next(prp);
-    while ( !prp_list_end(trav) && (trav->hoff <= prp->eoff) ) {
+    while ( !prp_list_end(trav) && (prp_soff(trav) <= prp_eoff(prp)) ) {
       hold = trav;
       trav = prp_next(trav);
     }
@@ -404,14 +409,6 @@ unsigned int prp_update(struct prparse *prp)
 }
 
 
-size_t prp_get_field(struct prparse *prp, unsigned fid, unsigned num,
-                     size_t *len)
-{
-  abort_unless(prp && prp->ops && prp->ops->getfield);
-  return (*prp->ops->getfield)(prp, fid, num, len);
-}
-
-
 int prp_fix_cksum(struct prparse *prp)
 {
   abort_unless(prp && prp->ops && prp->ops->fixcksum);
@@ -426,9 +423,9 @@ int prp_fix_len(struct prparse *prp)
 }
 
 
-static void ubounds(struct prparse *reg, size_t *low, size_t *high)
+static void ubounds(struct prparse *reg, long *low, long *high)
 {
-  size_t uend = 0;
+  long uend = 0;
   struct prparse *prp;
   
   abort_unless(reg && low && high);
@@ -436,27 +433,28 @@ static void ubounds(struct prparse *reg, size_t *low, size_t *high)
   prp = prp_next_in_region(reg, reg);
   if ( prp == NULL ) {
     /* zero parses in region */
-    *low = reg->eoff;
-    *high = reg->hoff;
+    *low = prp_eoff(reg);
+    *high = prp_soff(reg);
   } else {
     /* at least one parse in the region */
-    *low = prp->hoff;
+    *low = prp_soff(prp);
     for ( ; prp != NULL ; prp = prp_next_in_region(prp, reg) )
-      if ( prp->eoff > uend )
-        uend = prp->eoff;
+      if ( prp_eoff(prp) > uend )
+        uend = prp_eoff(prp);
     abort_unless(*low <= uend);
     *high = uend;
+    abort_unless(*low >= 0 && *high >= 0);
   }
 }
 
 
-int prp_insert(struct prparse *prp, size_t off, size_t len, int moveup)
+int prp_insert(struct prparse *prp, long off, long len, int moveup)
 {
   byte_t *op, *np;
-  size_t mlen;
-  size_t low, high;
+  long mlen;
+  long low, high;
 
-  if ( prp == NULL ) {
+  if ( prp == NULL || off < 0 || len < 0 ) {
     errno = EINVAL;
     return -1;
   }
@@ -465,11 +463,12 @@ int prp_insert(struct prparse *prp, size_t off, size_t len, int moveup)
     prp = prp->region;
   /* find the lower and upper use boundaries */
   ubounds(prp, &low, &high);
+  abort_unless(low >= 0 && high >= 0);
   if ( low >= high ) /* only happens on empty region */
     return 0;
   if ( (off < low) || (off > high) || 
-       (moveup && (len > (prp->eoff - high))) || 
-       (!moveup && (len > (low - prp->hoff))) ) { 
+       (moveup && (len > (prp_eoff(prp) - high))) || 
+       (!moveup && (len > (low - prp_soff(prp)))) ) { 
     errno = EINVAL;
     return -1;
   }
@@ -481,7 +480,7 @@ int prp_insert(struct prparse *prp, size_t off, size_t len, int moveup)
       np = op + len;
       mlen = prp_totlen(prp) - off;
     } else {
-      op = prp->data + prp->hoff;
+      op = prp->data + prp_soff(prp);
       np = op - len;
       mlen = off;
     }
@@ -492,23 +491,23 @@ int prp_insert(struct prparse *prp, size_t off, size_t len, int moveup)
   /* adjust all the offsets that should change */
   for ( prp = prp_next(prp) ; !prp_list_end(prp) ; prp = prp_next(prp) ) {
     if ( moveup ) {
-      if ( prp->hoff >= off )
-        prp->hoff += len;
-      if ( prp->poff >= off )
-        prp->poff += len;
-      if ( prp->toff >= off )
-        prp->toff += len;
-      if ( prp->eoff >= off )
-        prp->eoff += len;
+      if ( prp_soff(prp) >= off )
+        prp_soff(prp) += len;
+      if ( prp_poff(prp) >= off )
+        prp_poff(prp) += len;
+      if ( prp_toff(prp) >= off )
+        prp_toff(prp) += len;
+      if ( prp_eoff(prp) >= off )
+        prp_eoff(prp) += len;
     } else {
-      if ( prp->hoff < off )
-        prp->hoff -= len;
-      if ( prp->poff < off )
-        prp->poff -= len;
-      if ( prp->toff < off )
-        prp->toff -= len;
-      if ( prp->eoff < off )
-        prp->eoff -= len;
+      if ( prp_soff(prp) < off )
+        prp_soff(prp) -= len;
+      if ( prp_poff(prp) < off )
+        prp_poff(prp) -= len;
+      if ( prp_toff(prp) < off )
+        prp_toff(prp) -= len;
+      if ( prp_eoff(prp) < off )
+        prp_eoff(prp) -= len;
     }
   }
 
@@ -516,32 +515,33 @@ int prp_insert(struct prparse *prp, size_t off, size_t len, int moveup)
 }
 
 
-int prp_cut(struct prparse *prp, size_t off, size_t len, int moveup)
+int prp_cut(struct prparse *prp, long off, long len, int moveup)
 {
   byte_t *op, *np;
-  size_t mlen;
+  long mlen;
 
-  if ( prp == NULL ) {
+  if ( prp == NULL || off < 0 || len < 0 ) {
     errno = EINVAL;
     return -1;
   }
   /* get the root region */
   while ( prp->region != NULL ) 
     prp = prp->region;
-  if ( (off < prp->hoff) || (off > prp->eoff) || (len < prp->eoff - off) ) {
+  if ( (off < prp_soff(prp)) || (off > prp_eoff(prp)) || 
+       (len < prp_eoff(prp) - off) ) {
     errno = EINVAL;
     return -1;
   }
 
   if ( prp->data != NULL ) {
     if ( moveup ) {
-      op = prp->data + prp->hoff;
+      op = prp->data + prp_soff(prp);
       np = op + len;
-      mlen = off - prp->hoff;
+      mlen = off - prp_soff(prp);
     } else {
       np = prp->data + off;
       op = np + len;
-      mlen = (prp->eoff - off) - len;
+      mlen = (prp_eoff(prp) - off) - len;
     }
     memmove(np, op, mlen);
     if ( moveup )
@@ -555,23 +555,23 @@ int prp_cut(struct prparse *prp, size_t off, size_t len, int moveup)
     off += len;
   for ( prp = prp_next(prp) ; !prp_list_end(prp) ; prp = prp_next(prp) ) {
     if ( moveup ) {
-      if ( prp->hoff < off )
-        prp->hoff += len;
-      if ( prp->poff < off )
-        prp->poff += len;
-      if ( prp->toff < off )
-        prp->toff += len;
-      if ( prp->eoff < off )
-        prp->eoff += len;
+      if ( prp_soff(prp) < off )
+        prp_soff(prp) += len;
+      if ( prp_poff(prp) < off )
+        prp_poff(prp) += len;
+      if ( prp_toff(prp) < off )
+        prp_toff(prp) += len;
+      if ( prp_eoff(prp) < off )
+        prp_eoff(prp) += len;
     } else {
-      if ( prp->hoff >= off )
-        prp->hoff -= len;
-      if ( prp->poff >= off )
-        prp->poff -= len;
-      if ( prp->toff >= off )
-        prp->toff -= len;
-      if ( prp->eoff >= off )
-        prp->eoff -= len;
+      if ( prp_soff(prp) >= off )
+        prp_soff(prp) -= len;
+      if ( prp_poff(prp) >= off )
+        prp_poff(prp) -= len;
+      if ( prp_toff(prp) >= off )
+        prp_toff(prp) -= len;
+      if ( prp_eoff(prp) >= off )
+        prp_eoff(prp) -= len;
     }
   }
 
@@ -579,185 +579,107 @@ int prp_cut(struct prparse *prp, size_t off, size_t len, int moveup)
 }
 
 
-int prp_adj_start(struct prparse *prp, ptrdiff_t amt)
+int prp_adj_off(struct prparse *prp, uint oid, long amt)
 {
-  struct prparse *region;
+  struct prparse *reg;
   struct prparse *trav;
-  size_t nhoff;
-  if ( !prp ) {
+  long newoff, blo, bhi;
+  
+
+  if ( !prp || (oid >= prp->noff) || (-amt == amt) ) {
     errno = EINVAL;
     return -1;
   }
-  if ( amt < 0 ) {
-    amt = -amt;
-    if ( (amt < 0) || (amt > prp->hoff) ) {
-      errno = EINVAL;
-      return -1;
-    }
-    region = prp->region;
-    if ( region == NULL ) {
-      /* root region */
-      prp->hoff -= amt;
-    } else {
-      /* verify that start offset can't go below region start offset */
-      if ( prp->hoff - amt < region->hoff ) {
-        errno = EINVAL;
-        return -1;
-      }
-      prp->hoff -= amt;
-      /* maintain order in list by starting offset */
-      trav = prp_prev(prp);
-      if ( trav->hoff > prp->hoff ) { 
+
+  reg = prp->region;
+
+  newoff = prp->offs[oid] + amt;
+
+  switch (oid) {
+  case PRP_OI_SOFF:
+    if ( reg == NULL )
+      blo = 0;
+    else
+      blo = prp_soff(reg);
+    bhi = prp_poff(prp);
+    break;
+  case PRP_OI_POFF:
+    blo = prp_soff(prp);
+    bhi = prp_toff(prp);
+    break;
+  case PRP_OI_TOFF:
+    blo = prp_poff(prp);
+    bhi = prp_eoff(prp);
+    break;
+  case PRP_OI_EOFF:
+    blo = prp_toff(prp);
+    if ( reg == NULL )
+      bhi = LONG_MAX;
+    else
+      bhi = prp_eoff(reg);
+    break;
+  default:
+    blo = prp_soff(prp);
+    bhi = prp_eoff(prp);
+  }
+
+  abort_unless(blo >= 0 && bhi >= 0);
+  if ( (newoff < blo) || (newoff > bhi) )
+    return -2;
+
+  prp->offs[oid] = newoff;
+
+  /* may need to adjust list placement */
+  if ( (oid == PRP_OI_SOFF) && (reg != NULL) ) {
+    trav = prp_prev(prp);
+    if ( prp_soff(prp) < prp_soff(trav) ) {
+      l_rem(&prp->node);
+      do {
+        trav = prp_prev(trav);
+      } while ( prp_soff(prp) < prp_soff(trav) );
+      l_ins(&trav->node, &prp->node);
+    } else { 
+      trav = prp_next(prp);
+      if ( !prp_list_end(trav) && (prp_soff(prp) > prp_soff(trav)) ) {
         l_rem(&prp->node);
         do {
-          trav = prp_prev(trav);
-        } while ( trav->hoff > prp->hoff );
-        l_ins(&trav->node, &prp->node);
+          trav = prp_next(trav);
+        } while ( !prp_list_end(trav) && (prp_soff(prp) > prp_soff(trav)) );
+        l_ins(trav->node.prev, &prp->node);
       }
     }
-  } else { /* amt >= 0 */
-    if ( amt > prp_hlen(prp) ) {
-      errno = EINVAL;
-      return -1;
-    }
-    nhoff = prp->hoff + amt;
-    /* Can't adjust start offset of a non-empty region past the start offset */
-    /* of its contained parses. */
-    trav = prp_next_in_region(prp, prp);
-    if ( (trav != NULL) && (nhoff > trav->hoff) ) {
-      errno = EINVAL;
-      return -1;
-    }
-    trav = prp_next(prp);
-    /* maintain order in list by starting offset */
-    if ( !prp_list_end(trav) && (nhoff > trav->hoff) ) {
-      l_rem(&prp->node);
-      do { 
-        trav = prp_next(trav);
-      } while ( !prp_list_end(trav) && (nhoff > trav->hoff) );
-      l_ins(&prp_prev(trav)->node, &prp->node);
-    }
-
-    prp->hoff = nhoff;
   }
+
   return 0;
 }
 
 
-int prp_adj_poff(struct prparse *prp, ptrdiff_t amt)
+int prp_adj_plen(struct prparse *prp, long amt)
 {
-  if ( !prp ) {
-    errno = EINVAL;
-    return -1;
-  }
-  if ( amt < 0 ) { 
-    amt = -amt;
-    if ( (amt < 0) || (amt > prp_hlen(prp)) ) {
-      errno = EINVAL;
-      return -1;
-    }
-    prp->poff -= amt;
+  int rv;
+
+  /* Note that if we move the trailer offset down successfully there should */
+  /* be no reason we can't move the end offset down as well.  The same works */
+  /* in reverse for moving the end and trailer offsets forward.  */
+  if ( amt < 0 ) {
+    if ( prp_adj_off(prp, PRP_OI_TOFF, amt) < 0 )
+      return -2;
+    rv = prp_adj_off(prp, PRP_OI_EOFF, amt);
+    abort_unless(rv >= 0);
   } else {
-    if ( amt > prp_plen(prp) ) {
-      errno = EINVAL;
-      return -1;
-    }
-    prp->poff += amt;
+    if ( prp_adj_off(prp, PRP_OI_EOFF, amt) < 0 )
+      return -2;
+    rv = prp_adj_off(prp, PRP_OI_TOFF, amt);
+    abort_unless(rv >= 0);
   }
-  return 0;
-}
 
-
-int prp_adj_toff(struct prparse *prp, ptrdiff_t amt)
-{
-  if ( !prp ) {
-    errno = EINVAL;
-    return -1;
-  }
-  if ( amt < 0 ) { 
-    amt = -amt;
-    if ( (amt < 0) || (amt > prp_plen(prp)) ) {
-      errno = EINVAL;
-      return -1;
-    }
-    prp->toff -= amt;
-  } else {
-    if ( amt > prp_tlen(prp) ) {
-      errno = EINVAL;
-      return -1;
-    }
-    prp->toff += amt;
-  }
-  return 0;
-}
-
-
-int prp_adj_end(struct prparse *prp, ptrdiff_t amt)
-{
-  if ( !prp ) {
-    errno = EINVAL;
-    return -1;
-  }
-  if ( amt < 0 ) { 
-    amt = -amt;
-    if ( (amt < 0) || (amt > prp_tlen(prp)) ) {
-      errno = EINVAL;
-      return -1;
-    }
-    prp->eoff -= amt;
-  } else {
-    struct prparse *region = prp->region;
-    if ( region == NULL ) {
-      prp->eoff += amt;
-    } else {
-      /* verify that start offset can't go below region start offset */
-      if ( (amt > region->eoff) || (region->eoff - amt < prp->eoff) ) {
-        errno = EINVAL;
-        return -1;
-      }
-      prp->eoff += amt;
-    }
-  }
-  return 0;
-}
-
-
-int prp_adj_plen(struct prparse *prp, ptrdiff_t amt)
-{
-  if ( !prp ) {
-    errno = EINVAL;
-    return -1;
-  }
-  if ( amt < 0 ) { 
-    amt = -amt;
-    if ( (amt < 0) || (amt > prp_plen(prp)) ) {
-      errno = EINVAL;
-      return -1;
-    }
-    prp->toff -= amt;
-    prp->eoff -= amt;
-  } else {
-    struct prparse *region = prp->region;
-    if ( region == NULL ) {
-      prp->toff += amt;
-      prp->eoff += amt;
-    } else {
-      /* verify that start offset can't go below region start offset */
-      if ( (amt > region->eoff) || (region->eoff - amt < prp->eoff) ) {
-        errno = EINVAL;
-        return -1;
-      }
-      prp->toff += amt;
-      prp->eoff += amt;
-    }
-  }
   return 0;
 }
 
 
 int prp_adj_unused(struct prparse *reg)
 {
-  size_t ustart, uend;
+  long ustart, uend;
 
   /* malformed parse if the region isn't of type PRP_NONE */
   if ( !reg ) {
@@ -767,11 +689,11 @@ int prp_adj_unused(struct prparse *reg)
 
   ubounds(reg, &ustart, &uend);
   if ( ustart > uend ) { 
-    reg->poff = reg->hoff;
-    reg->toff = reg->eoff;
+    prp_poff(reg) = prp_soff(reg);
+    prp_toff(reg) = prp_eoff(reg);
   } else {
-    reg->poff = ustart;
-    reg->toff = uend;
+    prp_poff(reg) = ustart;
+    prp_toff(reg) = uend;
   }
 
   return 0;

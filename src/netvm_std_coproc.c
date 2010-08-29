@@ -410,7 +410,7 @@ static void nci_rexp(struct netvm *vm, struct netvm_coproc *ncp, int cpi)
   FATAL(vm, NETVM_ERR_IOVFL, (len + poff < len));
   prp = pkt->headers;
   FATAL(vm, NETVM_ERR_PKTADDR, 
-        (poff < prp->poff) || (poff + len > prp_totlen(prp)));
+        (poff < prp_soff(prp)) || (poff + len > prp_totlen(prp)));
   r.data = prp->data + poff;
   r.len = len;
   rexmatch(vm, cp->rexes[ridx], &r, nm);
