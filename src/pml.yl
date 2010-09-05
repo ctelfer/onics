@@ -95,7 +95,7 @@
 %type pktact { struct pml_pkt_action * }
 %destructor pktact { pmlt_free($$); }
 
-%type var { struct variable * }
+%type var { struct pml_variable * }
 /* no destructor: cleaned up on program cleanup or function destructor */
 
 %type exprlist { struct pml_list * }
