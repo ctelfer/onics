@@ -5,19 +5,19 @@
 
 /* -- Address Type Structures -- */
 struct ethaddr {
-  uint8_t       bytes[6];
+	uint8_t bytes[6];
 };
 
 struct ipv6addr {
-  uint8_t       bytes[16];
+	uint8_t bytes[16];
 };
 
 
 /* -- Ethernet definitions -- */
-struct eth2h { 
-  struct ethaddr dst;
-  struct ethaddr src;
-  uint16_t      ethtype;
+struct eth2h {
+	struct ethaddr dst;
+	struct ethaddr src;
+	uint16_t ethtype;
 };
 #define ETHTYPE_IP              0x0800
 #define ETHTYPE_IPV6            0x86DD
@@ -27,22 +27,22 @@ struct eth2h {
 
 /* -- ARP definitions -- */
 struct arph {
-  uint16_t      hwfmt;          /* ARPT_* */
-  uint16_t      prfmt;          /* ETHTYPE_IP */
-  uint8_t       hwlen;
-  uint8_t       prlen;          /* 4 */
-  uint16_t      op;             /* ARPOP_* */
+	uint16_t hwfmt;		/* ARPT_* */
+	uint16_t prfmt;		/* ETHTYPE_IP */
+	uint8_t hwlen;
+	uint8_t prlen;		/* 4 */
+	uint16_t op;		/* ARPOP_* */
 };
-#define ARPOP_REQUEST           1 /* RFC 826 */
-#define ARPOP_REPLY             2 /* RFC 826,1868 */
-#define ARPOP_RREQUEST          3 /* RFC 903 */
-#define ARPOP_RREPLY            4 /* RFC 903 */
-#define ARPOP_DARP_REQUEST      5 /* RFC 1931 */
-#define ARPOP_DARP_RREPLY       6 /* RFC 1931 */
-#define ARPOP_DARP_RERROR       7 /* RFC 1931 */
-#define ARPOP_INARP_REQUEST     8 /* RFC 1293 */
-#define ARPOP_INARP_REPLY       9 /* RFC 1293 */
-#define ARPOP_NAK               10 /* RFC 1577 */
+#define ARPOP_REQUEST           1	/* RFC 826 */
+#define ARPOP_REPLY             2	/* RFC 826,1868 */
+#define ARPOP_RREQUEST          3	/* RFC 903 */
+#define ARPOP_RREPLY            4	/* RFC 903 */
+#define ARPOP_DARP_REQUEST      5	/* RFC 1931 */
+#define ARPOP_DARP_RREPLY       6	/* RFC 1931 */
+#define ARPOP_DARP_RERROR       7	/* RFC 1931 */
+#define ARPOP_INARP_REQUEST     8	/* RFC 1293 */
+#define ARPOP_INARP_REPLY       9	/* RFC 1293 */
+#define ARPOP_NAK               10	/* RFC 1577 */
 
 #define ARPT_ETHERNET           1
 #define ARPT_EXETHERNET         2
@@ -82,26 +82,26 @@ struct arph {
 #define ARPT_PUREIP             35
 
 struct eth_arph {
-  struct arph   header; /* { 1, 0x800, 6, 4, (1|2) } */
-  uint8_t       sndhwaddr[6];
-  uint8_t       sndpraddr[4];
-  uint8_t       trghwaddr[6];
-  uint8_t       trgpraddr[4];
+	struct arph header;	/* { 1, 0x800, 6, 4, (1|2) } */
+	uint8_t sndhwaddr[6];
+	uint8_t sndpraddr[4];
+	uint8_t trghwaddr[6];
+	uint8_t trgpraddr[4];
 };
 
 
 /* -- IP (v4) definitions -- */
-struct ipv4h { 
-  uint8_t       vhl;
-  uint8_t       diffsrv;
-  uint16_t      len;
-  uint16_t      id;
-  uint16_t      fragoff;
-  uint8_t       ttl;
-  uint8_t       proto;
-  uint16_t      cksum;
-  uint32_t      saddr;
-  uint32_t      daddr;
+struct ipv4h {
+	uint8_t vhl;
+	uint8_t diffsrv;
+	uint16_t len;
+	uint16_t id;
+	uint16_t fragoff;
+	uint8_t ttl;
+	uint8_t proto;
+	uint16_t cksum;
+	uint32_t saddr;
+	uint32_t daddr;
 };
 #define IPH_VERSION(iph)        ((iph).vhl >> 4)
 #define IPH_HLEN(iph)           (((iph).vhl & 0xf) << 2)
@@ -268,13 +268,13 @@ struct ipv4h {
 #define IPOPTC_RES2             0x3
 
 #define IPOPT_OPTION(ipoptp)    ((*(byte_t*)ipoptp) & 0x1F)
-#define IPOPT_EOP               0       /* end of options */
-#define IPOPT_NOP               1       /* no op */
-#define IPOPT_LSR               3       /* loose source route */
-#define IPOPT_TS                4       /* timestamp */
-#define IPOPT_RR                7       /* record route */
-#define IPOPT_SID               9       /* stream ID */
-#define IPOPT_SSR               10      /* strict source route */
+#define IPOPT_EOP               0	/* end of options */
+#define IPOPT_NOP               1	/* no op */
+#define IPOPT_LSR               3	/* loose source route */
+#define IPOPT_TS                4	/* timestamp */
+#define IPOPT_RR                7	/* record route */
+#define IPOPT_SID               9	/* stream ID */
+#define IPOPT_SSR               10	/* strict source route */
 
 #define IP_CLASSA(addrp)        ((*(byte_t*) & 0x80) == 0x0)
 #define IP_CLASSB(addrp)        ((*(byte_t*) & 0xC0) == 0x80)
@@ -285,15 +285,15 @@ struct ipv4h {
 
 /* -- TCP definitions -- */
 struct tcph {
-  uint16_t      sport;
-  uint16_t      dport;
-  uint32_t      seqn;
-  uint32_t      ackn;
-  uint8_t       doff;
-  uint8_t       flags;
-  uint16_t      win;
-  uint16_t      cksum;
-  uint16_t      urgp;
+	uint16_t sport;
+	uint16_t dport;
+	uint32_t seqn;
+	uint32_t ackn;
+	uint8_t doff;
+	uint8_t flags;
+	uint16_t win;
+	uint16_t cksum;
+	uint16_t urgp;
 };
 #define TCPH_HLEN(tcph)         (((tcph).doff >> 2) & ~3)
 #define TCPH_ECNN(tcph)         ((tcph).doff & 1)
@@ -308,84 +308,84 @@ struct tcph {
 
 
 struct tcpopth {
-  uint8_t       kind;
-  uint8_t       len;
+	uint8_t kind;
+	uint8_t len;
 };
-#define TCPOPT_EOP              0 /* length == 1 */
-#define TCPOPT_NOP              1 /* length == 1 */
-#define TCPOPT_MSS              2 /* length == 4 */
-#define TCPOPT_WSCALE           3 /* length == 3 */
-#define TCPOPT_SACKOK           4 /* length == 2 */
-#define TCPOPT_SACK             5 /* length == variable */
-#define TCPOPT_TSTAMP           8 /* length == 10 */
-#define TCPOPT_ALTCSUM_REQ      14 /* length == 3 */
-#define TCPOPT_ALTCSUM_DATA     15 /* length == variable */
-#define TCPOPT_MD5              19 /* length == 18 */
+#define TCPOPT_EOP              0	/* length == 1 */
+#define TCPOPT_NOP              1	/* length == 1 */
+#define TCPOPT_MSS              2	/* length == 4 */
+#define TCPOPT_WSCALE           3	/* length == 3 */
+#define TCPOPT_SACKOK           4	/* length == 2 */
+#define TCPOPT_SACK             5	/* length == variable */
+#define TCPOPT_TSTAMP           8	/* length == 10 */
+#define TCPOPT_ALTCSUM_REQ      14	/* length == 3 */
+#define TCPOPT_ALTCSUM_DATA     15	/* length == variable */
+#define TCPOPT_MD5              19	/* length == 18 */
 
 
 
 
 /* -- UDP definitions -- */
 struct udph {
-  uint16_t      sport;
-  uint16_t      dport;
-  uint16_t      len;
-  uint16_t      cksum;
+	uint16_t sport;
+	uint16_t dport;
+	uint16_t len;
+	uint16_t cksum;
 };
 
 
 
 /* -- pseudo headers for TCP and UDP -- */
 struct pseudoh {
-  uint32_t      saddr;
-  uint32_t      daddr;
-  uint8_t       zero;
-  uint8_t       proto;
-  uint16_t      totlen; /* length starting with transport header */
+	uint32_t saddr;
+	uint32_t daddr;
+	uint8_t zero;
+	uint8_t proto;
+	uint16_t totlen;	/* length starting with transport header */
 };
 
 
 struct pseudo6h {
-  struct ipv6addr saddr;
-  struct ipv6addr daddr;
-  uint32_t      totlen;
-  uint16_t      zero1;
-  uint8_t       zero2;
-  uint8_t       proto;
+	struct ipv6addr saddr;
+	struct ipv6addr daddr;
+	uint32_t totlen;
+	uint16_t zero1;
+	uint8_t zero2;
+	uint8_t proto;
 };
 
 
 /* -- ICMP definitions -- */
-struct icmph { 
-  uint8_t       type;
-  uint8_t       code;
-  uint16_t      cksum;
-  union {
-    /* ICMPT_ECHO_*, ICMPT_TS_*, ICMPT_INFO_* */
-    struct {
-      uint16_t  id;
-      uint16_t  seq;
-    } echo;
+struct icmph {
+	uint8_t type;
+	uint8_t code;
+	uint16_t cksum;
+	union {
+		/* ICMPT_ECHO_*, ICMPT_TS_*, ICMPT_INFO_* */
+		struct {
+			uint16_t id;
+			uint16_t seq;
+		} echo;
 
-    /* ICMPT_DEST_UNREAD:4 */
-    struct {
-      uint16_t  unused;
-      uint16_t  mtu;
-    } pmtu;
+		/* ICMPT_DEST_UNREAD:4 */
+		struct {
+			uint16_t unused;
+			uint16_t mtu;
+		} pmtu;
 
-    /* ICMPT_PARAM_PROB */
-    struct {
-      uint8_t   ptr;
-      uint8_t   unused1;
-      uint16_t  unused2;
-    } pprob;
-    
-    /* ICMPT_REDIRECT */
-    uint32_t    gateway;
+		/* ICMPT_PARAM_PROB */
+		struct {
+			uint8_t ptr;
+			uint8_t unused1;
+			uint16_t unused2;
+		} pprob;
 
-    /* Many */
-    uint32_t    unused;
-  } u;
+		/* ICMPT_REDIRECT */
+		uint32_t gateway;
+
+		/* Many */
+		uint32_t unused;
+	} u;
 };
 
 /* ICMP type values */
@@ -423,25 +423,25 @@ struct icmph {
 
 /* -- IPv6 definitions -- */
 struct ipv6h {
-  uint32_t      prtcfl;
-  uint16_t      len;
-  uint8_t       nxthdr;
-  uint8_t       hoplim;
-  struct ipv6addr saddr;
-  struct ipv6addr daddr;
+	uint32_t prtcfl;
+	uint16_t len;
+	uint8_t nxthdr;
+	uint8_t hoplim;
+	struct ipv6addr saddr;
+	struct ipv6addr daddr;
 };
 /* Assumes network byte order */
 #define IPV6H_PVERSION(ipv6hp)  (*(byte_t *)(ipv6hp) >> 4)
 #define IPV6H_VERSION(prtcfl)   ((prtcfl) >> 28)
 #define IPV6H_TCLASS(prtcfl)    (((prtcfl) >> 20) & 0xFF)
-#define IPV6H_FLOWID(prtcfl)    ((prtcfl) & 0xFFFFF)  
+#define IPV6H_FLOWID(prtcfl)    ((prtcfl) & 0xFFFFF)
 
 /* -- ICMPv6 definitions -- */
 struct icmp6h {
-  uint8_t       type;
-  uint8_t       code;
-  uint16_t      cksum;
-  uint8_t       data[4];
+	uint8_t type;
+	uint8_t code;
+	uint16_t cksum;
+	uint8_t data[4];
 };
 #define ICMP6T_DEST_UNREACH     1
 #define ICMP6T_PKT_TOO_BIG      2

@@ -4,7 +4,7 @@
 #define HAS_PCAP
 
 #define FMT32   ""
-/* #define FMT32   "l" */ /* use this one for 16-bit machines */
+/* #define FMT32   "l" *//* use this one for 16-bit machines */
 
 #if CAT_USE_INLINE
 #define NETTOOLS_INLINE inline

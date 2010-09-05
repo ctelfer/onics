@@ -4,7 +4,7 @@
 /* purely to set a breakpoint during debugging */
 static int dbgabrt()
 {
-  return 1;
+	return 1;
 }
 
 #define IMMED(inst) ((inst)->flags & NETVM_IF_IMMED)

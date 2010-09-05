@@ -11,11 +11,11 @@
 #include "protoparse.h"
 
 enum {
-  MPKT_LAYER_LINK,      /* e.g. Ethernet */
-  MPKT_LAYER_TUN,	/* e.g. MPLS */
-  MPKT_LAYER_NET,       /* e.g. IPv4, IPv6 */
-  MPKT_LAYER_XPORT,     /* e.g. TCP, UDP, RTP, ICMP */
-  MPKT_LAYER_MAX = MPKT_LAYER_XPORT
+	MPKT_LAYER_LINK,	/* e.g. Ethernet */
+	MPKT_LAYER_TUN,		/* e.g. MPLS */
+	MPKT_LAYER_NET,		/* e.g. IPv4, IPv6 */
+	MPKT_LAYER_XPORT,	/* e.g. TCP, UDP, RTP, ICMP */
+	MPKT_LAYER_MAX = MPKT_LAYER_XPORT
 };
 
 /* we probably want to move this out of here and call it something else */
@@ -23,10 +23,10 @@ enum {
 /* consider adding a list entry to this structure for easy queuing. */
 
 struct metapkt {
-  struct list           entry;
-  struct pktbuf *       pkb;
-  struct prparse *      headers;
-  struct prparse *      layer[MPKT_LAYER_MAX+1];
+	struct list entry;
+	struct pktbuf *pkb;
+	struct prparse *headers;
+	struct prparse *layer[MPKT_LAYER_MAX + 1];
 };
 
 

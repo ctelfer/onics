@@ -51,13 +51,13 @@
 #define PPERR_CKSUM             0x0008
 #define PPERR_OPTLEN            0x0010
 #define PPERR_OPTERR            0x0020
-#define PPERR_INVALID           0x0040 /* invalid combination of options */
+#define PPERR_INVALID           0x0040	/* invalid combination of options */
 
 #define PPERR_HLENMASK          (PPERR_TOOSMALL|PPERR_HLEN)
 
-#define PPCF_FILL               1       /* push inner (fill completely) */
-#define PPCF_WRAP               2       /* push outer (wrap tightly) */
-#define PPCF_WRAPFILL           3       /* push in middle (exact fit) */
+#define PPCF_FILL               1	/* push inner (fill completely) */
+#define PPCF_WRAP               2	/* push outer (wrap tightly) */
+#define PPCF_WRAPFILL           3	/* push in middle (exact fit) */
 /*
 create semantics -- fill
   -- off is start of new proto parse
@@ -80,15 +80,15 @@ create semantics -- set
 struct prparse;
 
 struct proto_parser_ops {
-  struct prparse *	(*parse)(struct prparse *pprp, uint *nextppt);
-  struct prparse *	(*create)(byte_t *buf, long off, long len,
-                                  long hlen, long plen, int mode);
+	struct prparse *(*parse) (struct prparse * pprp, uint * nextppt);
+	struct prparse *(*create) (byte_t * buf, long off, long len,
+				   long hlen, long plen, int mode);
 };
 
 struct proto_parser {
-  unsigned int	        type;
-  unsigned int	        valid;
-  struct proto_parser_ops * ops;
+	unsigned int type;
+	unsigned int valid;
+	struct proto_parser_ops *ops;
 };
 
 /* install a protocol parser to handle a particular protocol type */
@@ -103,11 +103,11 @@ int pp_unregister(uint type);
 
 
 struct prparse_ops {
-  void          (*update)(struct prparse *prp);
-  int           (*fixlen)(struct prparse *prp);
-  int           (*fixcksum)(struct prparse *prp);
-  struct prparse * (*copy)(struct prparse *, byte_t *buffer);
-  void		(*free)(struct prparse *prp);
+	void (*update) (struct prparse * prp);
+	int (*fixlen) (struct prparse * prp);
+	int (*fixcksum) (struct prparse * prp);
+	struct prparse *(*copy) (struct prparse *, byte_t * buffer);
+	void (*free) (struct prparse * prp);
 };
 
 
@@ -150,14 +150,14 @@ struct prparse_ops {
 
 
 struct prparse {
-  uint			type;
-  uint			error;
-  struct prparse_ops *  ops;
-  struct list           node;
-  struct prparse *	region;
-  byte_t *              data;
-  uint                  noff;
-  long                  offs[PRP_OI_MIN_NUM];
+	uint type;
+	uint error;
+	struct prparse_ops *ops;
+	struct list node;
+	struct prparse *region;
+	byte_t *data;
+	uint noff;
+	long offs[PRP_OI_MIN_NUM];
 };
 #define prp_soff(prp) ((prp)->offs[PRP_OI_SOFF])
 #define prp_poff(prp) ((prp)->offs[PRP_OI_POFF])
@@ -223,7 +223,7 @@ int prp_region_empty(struct prparse *reg);
 /* The "data portion" (i.e. the space the protocol data is expected to */
 /* take up) is pktlen bytes.  There are hdrm bytes reserved from off for */
 /* growing at the front of the parse.  */
-struct prparse *prp_create_parse(byte_t *buf, long off, long len);
+struct prparse *prp_create_parse(byte_t * buf, long off, long len);
 
 /* Create a new header in a parsed packet.  The "mode" determines how this */
 /* header is created.  if mode == PPCF_FILL, then 'prp' must be the */
@@ -238,7 +238,7 @@ int prp_push(unsigned ppidx, struct prparse *prp, int mode);
 
 /* Given a buffer and start offset and a first protocol parser to start with */
 /* parse all headers as automatically as possible */
-struct prparse *prp_parse_packet(unsigned firstpp, byte_t *pbuf, long off, 
+struct prparse *prp_parse_packet(unsigned firstpp, byte_t * pbuf, long off,
 				 long len);
 
 /* Free a parse.  All sub regions of the parse are made part of prp's */
@@ -255,11 +255,11 @@ void prp_free_region(struct prparse *prp);
 
 
 /* copy a header parse (but not the packet buffer itself) */
-struct prparse *prp_copy(struct prparse *prp, byte_t *buffer);
+struct prparse *prp_copy(struct prparse *prp, byte_t * buffer);
 
 /* Associate a header parse with a new packet buffer (which must be sized */
 /* correctly based on the header parse). */
-void prp_set_packet_buffer(struct prparse *prp, byte_t *buffer);
+void prp_set_packet_buffer(struct prparse *prp, byte_t * buffer);
 
 /* re-parse and update the fields in 'prp'.  (but not its children */
 /* returns error field as a matter of convenience */
@@ -284,8 +284,8 @@ int prp_cut(struct prparse *prp, long off, long len, int moveup);
 /* prp_adj_plen() moves both the trailer offset and ending offset in unison. */
 /* It basically acts as shorthand for a common case of adding or chopping */
 /* payload to a particular packet. */
-int prp_adj_off(struct prparse *prp, uint oid, long amt); /* adjust an offset */
-int prp_adj_plen(struct prparse *prp, long amt); /* adjust C+D */
+int prp_adj_off(struct prparse *prp, uint oid, long amt);/* adjust an offset */
+int prp_adj_plen(struct prparse *prp, long amt);	/* adjust C+D */
 
 /* Adjust a region so that its payload starts on the first unused byte */
 /* at the beginning and it's trailer starts on unused byte at the end. */
