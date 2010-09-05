@@ -1,19 +1,25 @@
 #include <stdio.h>
 #include "pktbuf.h"
 #include "protoparse.h"
+#include "stdpp.h"
 #include "tcpip_hdrs.h"
 
-const char *pnames[] = { 
-  "Packet",
-  "Ethernet",
-  "ARP", 
-  "IP",
-  "IPv6",
-  "ICMP",
-  "ICMPv6",
-  "UDP",
-  "TCP"
-};
+const char *pnames(uint ppt) 
+{
+  switch(ppt) {
+  case PPT_NONE: return "Packet";
+  case PPT_INVALID: return "Invalid Header";
+  case PPT_ETHERNET: return "Ethernet";
+  case PPT_ARP: return "ARP";
+  case PPT_IPV4: return "IP";
+  case PPT_IPV6: return "IPv6";
+  case PPT_ICMP: return "ICMP";
+  case PPT_ICMP6: return "ICMPv6";
+  case PPT_UDP: return "UDP";
+  case PPT_TCP: return "TCP";
+  default: return "unknown";
+  }
+}
 
 int main(int argc, char *argv[])
 {
@@ -22,7 +28,7 @@ int main(int argc, char *argv[])
   unsigned npkt = 0;
   unsigned nprp = 0;
 
-  install_default_proto_parsers();
+  register_std_proto_parsers();
 
   while ( pkb_file_read(stdin, &p) > 0 ) {
     ++npkt;
@@ -39,7 +45,7 @@ int main(int argc, char *argv[])
 
     for ( nprp = 1, t = prp_next(prp); !prp_list_end(t); 
           t = prp_next(t), ++nprp ) {
-      printf("%4u:\tHeader %u -- %s\n", npkt, nprp, pnames[t->type]);
+      printf("%4u:\tHeader %u -- %s\n", npkt, nprp, pnames(t->type));
       if ( t->error == 0 ) {
         printf("\t\tNo errors\n");
       } else {

@@ -96,7 +96,7 @@ int ns_register(struct ns_namespace *ns)
 }
 
 
-int ns_deregister(struct ns_namespace *ns)
+int ns_unregister(struct ns_namespace *ns)
 {
   struct ns_namespace *ns2;
   if ( ns == NULL )

@@ -1,5 +1,6 @@
 #include "config.h"
 #include "metapkt.h"
+#include "stdpp.h"
 #include <cat/emalloc.h>
 #include <string.h>
 #include <stdlib.h>
@@ -176,6 +177,12 @@ static int islink(int ppt)
 }
 
 
+static int istunnel(int ppt)
+{
+  return 0;
+}
+
+
 static int isnet(int ppt)
 {
   switch(ppt) {
@@ -214,6 +221,9 @@ void metapkt_set_layer(struct metapkt *pkt, struct prparse *h, int layer)
     if ( islink(h->type) ) {
       if ( !pkt->layer[MPKT_LAYER_LINK] )
         pkt->layer[MPKT_LAYER_LINK] = h;
+    } else if ( istunnel(h->type) ) {
+      if ( !pkt->layer[MPKT_LAYER_TUN] )
+        pkt->layer[MPKT_LAYER_TUN] = h;
     } else if ( isnet(h->type) ) {
       if ( !pkt->layer[MPKT_LAYER_NET] )
         pkt->layer[MPKT_LAYER_NET] = h;

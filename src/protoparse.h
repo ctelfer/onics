@@ -4,23 +4,46 @@
 #include <cat/cattypes.h>
 #include <cat/list.h>
 
+#define PPT_PROTO(ppt)		((ppt) & 0xFF)
+#define PPT_FAMILY(ppt)		(((ppt) >> 8) & 0xFF)
+#define PPT_BUILD(pf, proto)	((((pf) & 0xFF) << 8) | ((proto) & 0xFF))
+
+/* Protocol Families */
+#define PPT_PF_INET		0
+#define PPT_PF_NET		1
+#define PPT_PF_IEEE		2
+#define PPT_PF_PP		255
+#define PPT_PER_PF		256
+
 /*
    A PPT_NONE type parse just represents a parsed region of a buffer that
    is its own unit.  (e.g. a packet, a SSL record, etc..)  The header
    and trailer represents unused slack space in the region.  It gets updated
    on any header adjustment for enclosed parses.
+   
+   Parse types for family _PP indices 128-255 are reserved 
+   "meta parse types".  They stand for entire classes of packets.
 */
-#define PPT_NONE                0
-#define PPT_ETHERNET		1
-#define PPT_ARP			2
-#define PPT_IPV4		3
-#define PPT_IPV6		4
-#define PPT_ICMP		5
-#define PPT_ICMP6		6
-#define PPT_UDP			7
-#define PPT_TCP			8
-#define PPT_MAX			127
-#define PPT_INVALID             (PPT_MAX + 1)
+#define PPT_NONE                PPT_BUILD(PPT_PF_PP, 0)
+#define PPT_PF_PP_RESERVED	128
+#define PPT_PCLASS_LINK		PPT_BUILD(PPT_PF_PP, 128)
+#define PPT_PCLASS_TUNNEL	PPT_BUILD(PPT_PF_PP, 129)
+#define PPT_PCLASS_NET		PPT_BUILD(PPT_PF_PP, 130)
+#define PPT_PCLASS_XPORT	PPT_BUILD(PPT_PF_PP, 131)
+#define PPT_USER1		PPT_BUILD(PPT_PF_PP, 192)
+#define PPT_USER2		PPT_BUILD(PPT_PF_PP, 193)
+#define PPT_USER3		PPT_BUILD(PPT_PF_PP, 194)
+#define PPT_USER4		PPT_BUILD(PPT_PF_PP, 195)
+#define PPT_USER5		PPT_BUILD(PPT_PF_PP, 196)
+#define PPT_USER6		PPT_BUILD(PPT_PF_PP, 197)
+#define PPT_USER7		PPT_BUILD(PPT_PF_PP, 198)
+#define PPT_USER8		PPT_BUILD(PPT_PF_PP, 199)
+#define PPT_ANY			PPT_BUILD(PPT_PF_PP, 254)
+#define PPT_INVALID             PPT_BUILD(PPT_PF_PP, 255)
+
+#define PPT_IS_PCLASS(ppt) \
+  (((ppt) & PPT_BUILD(PPT_PF_PP, 252)) == PPT_BUILD(PPT_PF_PP, 128))
+
 
 #define PPERR_TOOSMALL          0x0001
 #define PPERR_HLEN              0x0002
@@ -57,8 +80,7 @@ create semantics -- set
 struct prparse;
 
 struct proto_parser_ops {
-  int			(*follows)(struct prparse *pprp);
-  struct prparse *	(*parse)(struct prparse *pprp);
+  struct prparse *	(*parse)(struct prparse *pprp, uint *nextppt);
   struct prparse *	(*create)(byte_t *buf, long off, long len,
                                   long hlen, long plen, int mode);
 };
@@ -66,9 +88,19 @@ struct proto_parser_ops {
 struct proto_parser {
   unsigned int	        type;
   unsigned int	        valid;
-  struct list  	        children;
   struct proto_parser_ops * ops;
 };
+
+/* install a protocol parser to handle a particular protocol type */
+int pp_register(uint type, struct proto_parser_ops *ops);
+
+/* Get a protocol parser by type */
+const struct proto_parser *pp_lookup(uint type);
+
+/* unregister a protocol type */
+int pp_unregister(uint type);
+
+
 
 struct prparse_ops {
   void          (*update)(struct prparse *prp);
@@ -107,18 +139,19 @@ struct prparse_ops {
    moved in the list. 
 */
 
-enum {
-  PRP_OI_SOFF,
-  PRP_OI_POFF,
-  PRP_OI_TOFF,
-  PRP_OI_EOFF,
-  PRP_OI_MIN_NUM,
-  PRP_OI_EXTRA = PRP_OI_MIN_NUM,
-};
+
+#define PRP_OI_SOFF 0
+#define PRP_OI_POFF 1
+#define PRP_OI_TOFF 2
+#define PRP_OI_EOFF 3
+#define PRP_OI_MIN_NUM 4
+#define PRP_OI_EXTRA PRP_OI_MIN_NUM
+#define PRP_OFF_INVALID ((long)-1)
+
 
 struct prparse {
-  unsigned int          type;
-  unsigned int          error;
+  uint			type;
+  uint			error;
   struct prparse_ops *  ops;
   struct list           node;
   struct prparse *	region;
@@ -141,29 +174,6 @@ struct prparse {
 #define prp_next(prp) container((prp)->node.next, struct prparse, node)
 #define prp_list_head(prp) ((prp)->region == NULL)
 #define prp_list_end(prp) ((prp)->region == NULL)
-
-/* install a protocol parser to handle a particular protocol type */
-int register_proto_parser(unsigned type, struct proto_parser_ops *ops);
-
-/* make 'cldtype' protocol a child of 'partype' (e.g. TCP and IP) */
-/* this will cause the protocol parser to call 'cldtype's 'follows' */
-/* function when it see's a 'partype' header in order to see if the */
-/* child follows the parent */
-int add_proto_parser_parent(unsigned cldtype, unsigned partype);
-
-/* deregister a protocol type */
-void deregister_proto_parser(unsigned type);
-
-/* install a default TCP/IP suite of protocol parsers */
-/* This is shorthand for calling register_proto_parser() and */
-/* add_proto_parser_parent() for the default protocol parsers. */
-void install_default_proto_parsers();
-
-
-
-/* Tests whether the 'cldtype' protocol can follow the 'partype' protocol */
-/* according to parent/child relationships in the protocol parser. */
-int prp_can_follow(unsigned partype, unsigned cldtype);
 
 /* Find the next parse in the specified region or return NULL if none */
 /* exists in the parse list.  use the region parse as the 'from' for */

@@ -11,9 +11,10 @@
 #include "protoparse.h"
 
 enum {
-  MPKT_LAYER_LINK,       /* e.g. Ethernet */
-  MPKT_LAYER_NET,        /* e.g. IPv4, IPv6 */
-  MPKT_LAYER_XPORT,      /* e.g. TCP, UDP, RTP, ICMP */
+  MPKT_LAYER_LINK,      /* e.g. Ethernet */
+  MPKT_LAYER_TUN,	/* e.g. MPLS */
+  MPKT_LAYER_NET,       /* e.g. IPv4, IPv6 */
+  MPKT_LAYER_XPORT,     /* e.g. TCP, UDP, RTP, ICMP */
   MPKT_LAYER_MAX = MPKT_LAYER_XPORT
 };
 

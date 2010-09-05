@@ -1,120 +1,204 @@
 #include "protoparse.h"
-#include "pptcpip.h"
 #include <errno.h>
 #include <string.h>
 #include <stdlib.h>
 #include <limits.h>
 
 
-struct proto_parser proto_parsers[PPT_MAX+1];
-struct proto_parser_ops proto_parser_ops[PPT_MAX+1];
+static struct proto_parser *_pp_lookup(uint type);
+static struct prparse *none_parse(struct prparse *pprp, uint *nextppt);
+static struct prparse *none_create(byte_t *start, long off, long len,
+                                   long hlen, long plen, int mode);
 
-
-struct childnode {
-	struct list 	entry;
-	uint		cldtype;
+static struct proto_parser_ops none_proto_parser_ops = {
+  none_parse, 
+  none_create
 };
 
-#define l2cldn(le)  container((le), struct childnode, entry)
+struct proto_parser ieee_proto_parsers[PPT_PER_PF];
+struct proto_parser net_proto_parsers[PPT_PER_PF];
+struct proto_parser inet_proto_parsers[PPT_PER_PF];
+struct proto_parser pp_proto_parsers[PPT_PER_PF] = { 
+  { PPT_NONE, 1, &none_proto_parser_ops},
+};
 
 
-int register_proto_parser(unsigned type, struct proto_parser_ops *ppo)
+
+int pp_register(unsigned type, struct proto_parser_ops *ppo)
 {
   struct proto_parser *pp;
-  if ( (type > PPT_MAX) || (ppo == NULL) || (ppo->follows == NULL) || 
-       (ppo->parse == NULL) || (ppo->create == NULL) ) {
+
+  if ( (ppo == NULL) || (ppo->parse == NULL) || (ppo->create == NULL) ) {
     errno = EINVAL;
     return -1;
   }
-  pp = &proto_parsers[type];
+
+  pp = _pp_lookup(type);
+  if ( !pp ) {
+    errno = EINVAL;
+    return -1;
+  }
+
   if ( pp->valid ) {
     errno = EACCES;
     return -1;
   }
+
   pp->type = type;
-  l_init(&pp->children);
-  proto_parser_ops[type] = *ppo;
-  pp->ops = &proto_parser_ops[type];
+  pp->ops = ppo;
   pp->valid = 1;
+
   return 0;
 }
 
 
-/* NB:  In the future I may change the allocation model for this part of */
-/* the library to a static allocation of childnodes, etc.... */
-int add_proto_parser_parent(unsigned cldtype, unsigned partype)
+static struct proto_parser *_pp_lookup(uint type)
 {
-  struct proto_parser *par, *cld;
-  struct childnode *cnode;
-  if ( (cldtype > PPT_MAX) || (partype > PPT_MAX) ) {
-    errno = EINVAL;
-    return -1;
+  switch (PPT_FAMILY(type)) {
+  case PPT_PF_INET:
+    return &inet_proto_parsers[PPT_PROTO(type)];
+  case PPT_PF_NET:
+    return &net_proto_parsers[PPT_PROTO(type)];
+  case PPT_PF_IEEE:
+    return &ieee_proto_parsers[PPT_PROTO(type)];
+  case PPT_PF_PP:
+    if ( PPT_PROTO(type) >= PPT_PF_PP_RESERVED )
+      return NULL;
+    else
+      return &pp_proto_parsers[PPT_PROTO(type)];
+  default:
+    return NULL;
   }
-  par = &proto_parsers[partype];
-  cld = &proto_parsers[cldtype];
-  if ( !par->valid || !cld->valid ) {
-    errno = EINVAL;
-    return -1;
-  }
-  if ( (cnode = malloc(sizeof(*cnode))) == NULL )
-    return -1;
-  cnode->cldtype = cldtype;
-  l_enq(&par->children, &cnode->entry);
-  return 0;
 }
 
 
-void deregister_proto_parser(unsigned type)
+const struct proto_parser *pp_lookup(uint type)
+{
+  const struct proto_parser *pp = _pp_lookup(type);
+  if ( pp && !pp->valid )
+    pp = NULL;
+  return pp;
+}
+
+
+int pp_unregister(uint type)
 {
   struct proto_parser *pp;
-  if ( (type <= PPT_MAX) && (pp = &proto_parsers[type])->valid ) {
-    while ( !l_isempty(&pp->children) )
-      free(l2cldn(l_deq(&pp->children)));
-    pp->valid = 0;
-    pp->ops = NULL;
+
+  pp = _pp_lookup(type);
+  if ( !pp ) {
+    errno = EINVAL;
+    return -1;
   }
-}
 
+  if ( !pp->valid ) {
+    errno = EACCES;
+    return -1;
+  }
 
-void install_default_proto_parsers()
-{
-  register_proto_parser(PPT_NONE, &none_proto_parser_ops);
-  register_proto_parser(PPT_ETHERNET, &eth_proto_parser_ops);
-  register_proto_parser(PPT_ARP, &arp_proto_parser_ops);
-  add_proto_parser_parent(PPT_ARP, PPT_ETHERNET);
-  register_proto_parser(PPT_IPV4, &ipv4_proto_parser_ops);
-  add_proto_parser_parent(PPT_IPV4, PPT_ETHERNET);
-  register_proto_parser(PPT_IPV6, &ipv6_proto_parser_ops);
-  add_proto_parser_parent(PPT_IPV6, PPT_ETHERNET);
-  register_proto_parser(PPT_ICMP, &icmp_proto_parser_ops);
-  add_proto_parser_parent(PPT_ICMP, PPT_IPV4);
-  add_proto_parser_parent(PPT_IPV4, PPT_ICMP); /* embedded headers in ICMP */
-  register_proto_parser(PPT_ICMP6, &icmpv6_proto_parser_ops);
-  add_proto_parser_parent(PPT_ICMP6, PPT_IPV6);
-  register_proto_parser(PPT_UDP, &udp_proto_parser_ops);
-  add_proto_parser_parent(PPT_UDP, PPT_IPV4);
-  add_proto_parser_parent(PPT_UDP, PPT_IPV6);
-  register_proto_parser(PPT_TCP, &tcp_proto_parser_ops);
-  add_proto_parser_parent(PPT_TCP, PPT_IPV4);
-  add_proto_parser_parent(PPT_TCP, PPT_IPV6);
-}
-
-
-int prp_can_follow(unsigned partype, unsigned cldtype)
-{
-  struct proto_parser *ppp, *cpp;
-  struct list *l;
-  if ( (partype > PPT_MAX) || !(ppp = &proto_parsers[partype])->valid )
-    return 0;
-  if ( (cldtype > PPT_MAX) || !(cpp = &proto_parsers[cldtype])->valid )
-    return 0;
-  l_for_each(l, &ppp->children)
-    if ( l2cldn(l)->cldtype == cldtype )
-      return 1;
+  pp->valid = 0;
+  pp->ops = NULL;
   return 0;
 }
 
 
+/* -- ops for the "NONE" protocol type -- */
+
+static void none_update(struct prparse *prp);
+static int none_fixlen(struct prparse *prp);
+static int none_fixcksum(struct prparse *prp);
+static struct prparse *none_copy(struct prparse *oprp, byte_t *buffer);
+static void none_free(struct prparse *prp);
+
+static struct prparse_ops none_prparse_ops = {
+  none_update,
+  none_fixlen,
+  none_fixcksum,
+  none_copy,
+  none_free
+};
+
+
+static struct prparse *none_parse(struct prparse *pprp, uint *nextppt)
+{
+  struct prparse *prp;
+
+  abort_unless(pprp);
+  abort_unless(nextppt);
+
+  *nextppt = PPT_INVALID;
+  prp = none_create(pprp->data, prp_poff(pprp), prp_plen(pprp),
+                    0, prp_plen(pprp), PPCF_FILL);
+  if ( prp != NULL ) {
+    prp->region = pprp;
+    l_ins(&pprp->node, &prp->node);
+  }
+  return prp;
+}
+
+
+static struct prparse *none_create(byte_t *start, long off, long len,
+                                   long hlen, long plen, int mode)
+{
+  struct prparse *prp;
+
+  abort_unless(off >= 0 && len >= 0 && hlen >= 0 && plen >= 0);
+
+  if ( mode != PPCF_FILL )
+    return NULL;
+
+  prp = malloc(sizeof(*prp));
+  if ( !prp )
+    return NULL;
+
+  prp->type = PPT_NONE;
+  prp->error = 0;
+  prp->ops = &none_prparse_ops;
+  l_init(&prp->node);
+  prp->region = NULL;
+  prp->data = start;
+  prp->noff = PRP_OI_MIN_NUM;
+  prp_soff(prp) = off;
+  prp_eoff(prp) = prp_soff(prp) + len;
+  prp_poff(prp) = prp_soff(prp) + hlen;
+  prp_toff(prp) = prp_poff(prp) + plen;
+
+  return prp;
+}
+
+
+static void none_update(struct prparse *prp)
+{
+}
+
+
+static int none_fixlen(struct prparse *prp)
+{
+  return 0;
+}
+
+
+static int none_fixcksum(struct prparse *prp)
+{
+  return 0;
+}
+
+
+static struct prparse *none_copy(struct prparse *oprp, byte_t *buffer)
+{
+  return none_create(buffer, prp_soff(oprp), prp_totlen(oprp),
+                     prp_hlen(oprp), prp_plen(oprp), PPCF_FILL);
+}
+
+
+static void none_free(struct prparse *prp)
+{
+  free(prp);
+}
+
+
+
+/* -- Protocol Parse Functions -- */
 struct prparse *prp_next_in_region(struct prparse *from, struct prparse *reg)
 {
   struct prparse *prp;
@@ -138,30 +222,24 @@ int prp_region_empty(struct prparse *reg)
 
 struct prparse *prp_create_parse(byte_t *buf, long off, long len)
 {
-  struct proto_parser *pp = &proto_parsers[PPT_NONE];
-  struct prparse *prp;
-  if ( !pp->valid || !buf || off < 0 || len < 0 ) {
+  if ( !buf || off < 0 || len < 0 ) {
     errno = EINVAL;
     return NULL;
   }
-  abort_unless(pp->ops && pp->ops->create);
-  prp = (*pp->ops->create)(buf, off, len, 0, len, PPCF_FILL);
-  prp->region = NULL;
-  return prp;
+  return none_create(buf, off, len, 0, len, PPCF_FILL);
 }
 
 
-struct prparse *prp_parse_packet(unsigned ppidx, byte_t *pkt, long off,
+struct prparse *prp_parse_packet(unsigned ippt, byte_t *pkt, long off,
                                  long len)
 {
-  struct prparse *first, *last, *nprp;
-  struct proto_parser *pp, *lastpp;
-  struct list *child;
-  unsigned cldid;
+  struct prparse *first, *prp;
+  const struct proto_parser *pp;
+  uint nextppt;
   int errval;
 
-  if ( (ppidx > PPT_MAX) || !(pp = &proto_parsers[ppidx])->valid || 
-       (off < 0) || (len < 0)) {
+  pp = pp_lookup(ippt);
+  if ( (off < 0) || (len < 0) || !pp ) {
     errno = EINVAL;
     return NULL;
   }
@@ -169,28 +247,17 @@ struct prparse *prp_parse_packet(unsigned ppidx, byte_t *pkt, long off,
   if ( !(first = prp_create_parse(pkt, off, len)) )
     return NULL;
 
-  last = first;
+  prp = first;
   do { 
-    if ( !(nprp = (*pp->ops->parse)(last)) ) {
+    nextppt = PPT_INVALID;
+    if ( !(prp = (*pp->ops->parse)(prp, &nextppt)) ) {
       errval = errno;
       goto err;
     }
     /* don't continue parsing if the lengths are screwed up */
-    if ( (nprp->error & PPERR_HLENMASK) || !prp_plen(nprp) ) 
+    if ( (prp->error & PPERR_HLENMASK) || !prp_plen(prp) ) 
       break;
-    last = nprp;
-    lastpp = pp;
-    pp = NULL;
-    l_for_each(child, &lastpp->children) {
-      cldid = l2cldn(child)->cldtype;
-      abort_unless(cldid <= PPT_MAX); 
-      pp = &proto_parsers[cldid];
-      abort_unless(pp->valid);
-      if ( (*pp->ops->follows)(last) )
-        break;
-      else
-        pp = NULL;
-    }
+    pp = pp_lookup(nextppt);
   } while ( pp );
 
   return first;
@@ -204,11 +271,12 @@ err:
 
 int prp_push(unsigned ppidx, struct prparse *pprp, int mode)
 {
-  struct proto_parser *pp;
+  const struct proto_parser *pp;
   long off, len, plen, hlen;
   struct prparse *prp, *next;
 
-  if ( (ppidx > PPT_MAX) || !(pp = &proto_parsers[ppidx])->valid || !pprp ) {
+  pp = pp_lookup(ppidx);
+  if ( !pp || !pprp ) {
     errno = EINVAL;
     return -1;
   }
@@ -453,6 +521,7 @@ int prp_insert(struct prparse *prp, long off, long len, int moveup)
   byte_t *op, *np;
   long mlen;
   long low, high;
+  uint i;
 
   if ( prp == NULL || off < 0 || len < 0 ) {
     errno = EINVAL;
@@ -491,23 +560,13 @@ int prp_insert(struct prparse *prp, long off, long len, int moveup)
   /* adjust all the offsets that should change */
   for ( prp = prp_next(prp) ; !prp_list_end(prp) ; prp = prp_next(prp) ) {
     if ( moveup ) {
-      if ( prp_soff(prp) >= off )
-        prp_soff(prp) += len;
-      if ( prp_poff(prp) >= off )
-        prp_poff(prp) += len;
-      if ( prp_toff(prp) >= off )
-        prp_toff(prp) += len;
-      if ( prp_eoff(prp) >= off )
-        prp_eoff(prp) += len;
+      for ( i = 0 ; i < prp->noff ; ++i )
+        if ( (prp->offs[i] != PRP_OFF_INVALID) && (prp->offs[i] >= off) )
+          prp->offs[i] += len;
     } else {
-      if ( prp_soff(prp) < off )
-        prp_soff(prp) -= len;
-      if ( prp_poff(prp) < off )
-        prp_poff(prp) -= len;
-      if ( prp_toff(prp) < off )
-        prp_toff(prp) -= len;
-      if ( prp_eoff(prp) < off )
-        prp_eoff(prp) -= len;
+      for ( i = 0 ; i < prp->noff ; ++i )
+        if ( (prp->offs[i] != PRP_OFF_INVALID) && (prp->offs[i] < off) )
+          prp->offs[i] -= len;
     }
   }
 
@@ -519,6 +578,7 @@ int prp_cut(struct prparse *prp, long off, long len, int moveup)
 {
   byte_t *op, *np;
   long mlen;
+  uint i;
 
   if ( prp == NULL || off < 0 || len < 0 ) {
     errno = EINVAL;
@@ -555,23 +615,13 @@ int prp_cut(struct prparse *prp, long off, long len, int moveup)
     off += len;
   for ( prp = prp_next(prp) ; !prp_list_end(prp) ; prp = prp_next(prp) ) {
     if ( moveup ) {
-      if ( prp_soff(prp) < off )
-        prp_soff(prp) += len;
-      if ( prp_poff(prp) < off )
-        prp_poff(prp) += len;
-      if ( prp_toff(prp) < off )
-        prp_toff(prp) += len;
-      if ( prp_eoff(prp) < off )
-        prp_eoff(prp) += len;
+      for ( i = 0 ; i < prp->noff ; ++i )
+        if ( (prp->offs[i] != PRP_OFF_INVALID) && (prp->offs[i] < off) )
+          prp->offs[i] += len;
     } else {
-      if ( prp_soff(prp) >= off )
-        prp_soff(prp) -= len;
-      if ( prp_poff(prp) >= off )
-        prp_poff(prp) -= len;
-      if ( prp_toff(prp) >= off )
-        prp_toff(prp) -= len;
-      if ( prp_eoff(prp) >= off )
-        prp_eoff(prp) -= len;
+      for ( i = 0 ; i < prp->noff ; ++i )
+        if ( (prp->offs[i] != PRP_OFF_INVALID) && (prp->offs[i] >= off) )
+          prp->offs[i] -= len;
     }
   }
 

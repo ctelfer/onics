@@ -139,7 +139,7 @@ int main(int argc, char *argv[])
   ns_free((struct ns_element *)ns);
   printf("successfully freed node after id collision in namespace\n");
 
-  E(ns_deregister(tcpns));
+  E(ns_unregister(tcpns));
   ns_free((struct ns_element *)tcpns);
   E(ns_name_lookup(NULL, "tcp", NSTYPE_ANY));
   E(ns_name_lookup(NULL, "tcp.ports.oddrange", NSTYPE_ANY));

@@ -20,7 +20,7 @@ struct eth2h {
   uint16_t      ethtype;
 };
 #define ETHTYPE_IP              0x0800
-#define ETHTYPE_IPV6            0x08DD
+#define ETHTYPE_IPV6            0x86DD
 #define ETHTYPE_ARP             0x0806
 #define ETHHLEN                 14
 

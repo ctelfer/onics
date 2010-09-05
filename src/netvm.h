@@ -172,7 +172,7 @@ enum {
   NETVM_PRP_EOFF,
 };
 
-#define NETVM_ISPRPOFF(f) ((f) >= NETVM_PRP_OFF_BASE)
+#define NETVM_ISPRPOFF(f)	((f) >= NETVM_PRP_OFF_BASE)
 
 /* 
  * If immed is not set for a load/store instruction then the address to load
@@ -182,14 +182,14 @@ enum {
  * Header descriptors have 2 forms.
  * Packed:
  * 	packet number = 0;
- * 	8 bits - ppt
- * 	3 bits - prp index
+ * 	prp index = 0
+ * 	16 bits - ppt
  * 	4 bits - field
- * 	17 bits - offset 
+ * 	12 bits - offset 
  * 
  * Full:
  * 	(top of stack)
- * 	pkt number:4  PPT: 8  prp index:8  field:12
+ * 	PPT: 16  pkt number:4  prp index:4  field:8
  * 	offset:32
  *
  * When no flags are set the pdesc comes on top of the stack and the offset 
@@ -197,17 +197,38 @@ enum {
  * instruction.  Otherwise the parse descriptor is on the stack in "full" form:
  */
 
-#define NETVM_PDESC(ht, idx, fld, off) \
-  ((((uint32_t)(ht) & 0xFF) << 24)|\
-   (((uint32_t)(idx) & 0x7) << 21)|\
-   (((uint32_t)(fld) & 0xF) << 17)|\
-   ((uint32_t)(off) & 0x1FFFF))
+#define NETVM_IPD_PPT_OFF	0
+#define NETVM_IPD_PPT_LEN	16
+#define NETVM_IPD_PPT_MASK	0xffff
+#define NETVM_IPD_FLD_OFF	16
+#define NETVM_IPD_FLD_LEN	4
+#define NETVM_IPD_FLD_MASK	0xf
+#define NETVM_IPD_OFF_OFF	20
+#define NETVM_IPD_OFF_LEN	12
+#define NETVM_IPD_OFF_MASK	0xfff
 
-#define NETVM_FULL_PDESC(pn, ht, idx, fld) \
-  ((((uint32_t)(pn) & 0xF) << 28)|\
-   (((uint32_t)(ht) & 0xFF) << 20)|\
-   (((uint32_t)(idx) & 0xFF) << 12)|\
-   ((uint32_t)(fld) & 0xFFF))
+#define NETVM_IPDESC(ppt, fld, off) \
+  ((((uint32_t)(ppt) & NETVM_IPD_PPT_MASK) << NETVM_IPD_PPT_OFF)|\
+   (((uint32_t)(fld) & NETVM_IPD_FLD_MASK) << NETVM_IPD_FLD_OFF)|\
+   (((uint32_t)(off) & NETVM_IPD_OFF_MASK) << NETVM_IPD_OFF_OFF))
+
+#define NETVM_PD_PPT_OFF	0
+#define NETVM_PD_PPT_LEN	16
+#define NETVM_PD_PPT_MASK	0xffff
+#define NETVM_PD_PKT_OFF	16
+#define NETVM_PD_PKT_LEN	4
+#define NETVM_PD_PKT_MASK	0xf
+#define NETVM_PD_IDX_OFF	20
+#define NETVM_PD_IDX_LEN	4
+#define NETVM_PD_IDX_MASK	0xf
+#define NETVM_PD_FLD_OFF	24
+#define NETVM_PD_FLD_LEN	8
+#define NETVM_PD_FLD_MASK	0xff
+#define NETVM_PDESC(pkt, ppt, idx, fld) \
+  ((((uint32_t)(pkt) & NETVM_PD_PKT_MASK) << NETVM_PD_PKT_OFF)|\
+   (((uint32_t)(ppt) & NETVM_PD_PPT_MASK) << NETVM_PD_PPT_OFF)|\
+   (((uint32_t)(idx) & NETVM_PD_IDX_MASK) << NETVM_PD_IDX_OFF)|\
+   (((uint32_t)(fld) & NETVM_PD_FLD_MASK) << NETVM_PD_FLD_OFF))
 
 #define NETVM_PRP_LAYER   255   /* find header of type MPKT_LAYER_* */
 /* 
@@ -219,9 +240,9 @@ enum {
 
 struct netvm_prp_desc {
   uint8_t               pktnum;     /* which packet entry */
-  uint8_t               ptype;      /* PPT_*;  PPT_NONE == absolute idx */
-  uint16_t              idx;        /* 0 == 1st prp, 1 == 2nd prp,... */
-  uint32_t              field;      /* NETVM_PRP_* or prp field id */
+  uint8_t               idx;        /* 0 == 1st prp, 1 == 2nd prp,... */
+  uint8_t               field;      /* NETVM_PRP_* or prp field id */
+  uint16_t              ptype;      /* PPT_*;  PPT_NONE == absolute idx */
   uint32_t              offset;     /* offset into packet for LD/STPKT */
                                     /* or proto field index for PRFLD */
 };

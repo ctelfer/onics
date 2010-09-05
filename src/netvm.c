@@ -16,6 +16,7 @@
 #include "netvm_op_macros.h"
 
 #define MAXINST         0x7ffffffe
+#define PPT_TO_LIDX(ppt) ((ppt) & 0x3)
 
 /* 
  * find header based on packet number, header type, and index.  So (3,8,1) 
@@ -174,16 +175,16 @@ static void get_pd(struct netvm *vm, struct netvm_inst *inst,
   if ( IMMED(inst) ) {
     val = inst->val;
     pd->pktnum = 0;
-    pd->ptype = (val >> 24) & 0xff;
-    pd->idx = (val >> 21) & 0x7;
-    pd->field = (val >> 17) & 0xf;
-    pd->offset = val & 0x1ffff;
+    pd->idx =    0;
+    pd->ptype =  (val >> NETVM_IPD_PPT_OFF) & NETVM_IPD_PPT_MASK;
+    pd->field =  (val >> NETVM_IPD_FLD_OFF) & NETVM_IPD_FLD_MASK;
+    pd->offset = (val >> NETVM_IPD_OFF_OFF) & NETVM_IPD_OFF_MASK;
   } else { 
     S_POP(vm, val);
-    pd->pktnum = (val >> 28) & 0xf;
-    pd->ptype = (val >> 20) & 0xff;
-    pd->idx = (val >> 12) & 0xff;
-    pd->field = val & 0xfff;
+    pd->ptype =  (val >> NETVM_PD_PPT_OFF) & NETVM_PD_PPT_MASK;
+    pd->pktnum = (val >> NETVM_PD_PKT_OFF) & NETVM_PD_PKT_MASK;
+    pd->idx =    (val >> NETVM_PD_IDX_OFF) & NETVM_PD_IDX_MASK;
+    pd->field =  (val >> NETVM_PD_FLD_OFF) & NETVM_PD_FLD_MASK;
     S_POP(vm, pd->offset);
   }
 }
@@ -205,11 +206,11 @@ static void get_prp_info(struct netvm *vm, struct netvm_inst *inst,
   width = inst->width;
   FATAL(vm, NETVM_ERR_IOVFL, (pd->offset + width < pd->offset));
 
-  if ( pd->ptype == NETVM_PRP_LAYER ) {
-    FATAL(vm, NETVM_ERR_PRPIDX, pd->idx > MPKT_LAYER_MAX);
+  if ( PPT_IS_PCLASS(pd->ptype) ) {
+    uint lidx = PPT_TO_LIDX(pd->ptype);
     FATAL(vm, NETVM_ERR_PKTNUM, (pd->pktnum >= NETVM_MAXPKTS));
     FATAL(vm, NETVM_ERR_NOPKT, !(pkt=vm->packets[pd->pktnum]));
-    prp = pkt->layer[pd->idx];
+    prp = pkt->layer[lidx];
   } else {
     FATAL(vm, NETVM_ERR_PRPFLD, !NETVM_ISPRPOFF(pd->field));
     prp = find_header(vm, pd);
@@ -311,15 +312,17 @@ static void ni_ldprpf(struct netvm *vm)
   struct netvm_prp_desc pd0;
   struct prparse *prp;
   uint32_t oidx;
+  long off;
+  uint32_t vmoff;
 
   get_pd(vm, inst, &pd0);
   if ( vm->error )
     return;
-  if ( pd0.ptype == NETVM_PRP_LAYER ) {
+  if ( PPT_IS_PCLASS(pd0.ptype) ) {
+    uint lidx = PPT_TO_LIDX(pd0.ptype);
     FATAL(vm, NETVM_ERR_PKTNUM, (pd0.pktnum >= NETVM_MAXPKTS));
     FATAL(vm, NETVM_ERR_NOPKT, !vm->packets[pd0.pktnum]);
-    FATAL(vm, NETVM_ERR_PRPIDX, (pd0.idx > MPKT_LAYER_MAX));
-    prp = vm->packets[pd0.pktnum]->layer[pd0.idx];
+    prp = vm->packets[pd0.pktnum]->layer[lidx];
     /* Special case to make it easy to check for layer headers */
   } else {
     prp = find_header(vm, &pd0);
@@ -346,7 +349,12 @@ static void ni_ldprpf(struct netvm *vm)
     if ( oidx >= prp->noff ) {
       VMERR(vm, NETVM_ERR_PRPFLD);
     }
-    S_PUSH(vm, (uint32_t)prp->offs[oidx]);
+    off = prp->offs[oidx];
+    if ( off != PRP_OFF_INVALID )
+      vmoff = off + pd0.offset;
+    else
+      vmoff = 0xFFFFFFFF;
+    S_PUSH(vm, vmoff);
   }
 }
 
@@ -556,11 +564,11 @@ static void ni_hasprp(struct netvm *vm)
   get_pd(vm, inst, &pd0);
   if ( vm->error )
     return;
-  if ( pd0.ptype == NETVM_PRP_LAYER ) {
-    FATAL(vm, NETVM_ERR_LAYER, pd0.idx > MPKT_LAYER_MAX);
+  if ( PPT_IS_PCLASS(pd0.ptype) ) {
+    uint lidx = PPT_TO_LIDX(pd0.ptype);
     FATAL(vm, NETVM_ERR_PKTNUM, (pd0.pktnum >= NETVM_MAXPKTS));
     FATAL(vm, NETVM_ERR_NOPKT, !(pkt=vm->packets[pd0.pktnum]));
-    val = pkt->layer[pd0.idx] != NULL;
+    val = pkt->layer[lidx] != NULL;
   } else {
     val = find_header(vm, &pd0) != NULL;
   }
