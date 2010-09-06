@@ -561,10 +561,10 @@ static void ni_numop(struct netvm *vm)
 	case NETVM_OC_TOHOST:
 		switch (inst->width) {
 		case 2:
-			out = hton16(v1);
+			out = ntoh16(v1);
 			break;
 		case 4:
-			out = hton32(v1);
+			out = ntoh32(v1);
 			break;
 		}
 		break;
@@ -574,7 +574,6 @@ static void ni_numop(struct netvm *vm)
 		break;
 	case 2:
 		out = v1 | -(v1 & 0x8000);
-		break;
 		break;
 	case NETVM_OC_ADD:
 		out = v1 + v2;
@@ -723,7 +722,8 @@ static void ni_branch(struct netvm *vm)
 	} else {
 		abort_unless(!vm->matchonly);
 		S_POP(vm, off);
-		FATAL(vm, NETVM_ERR_INSTADDR, vm->pc + off + 1 > vm->ninst);
+		FATAL(vm, NETVM_ERR_INSTADDR, 
+		      (uint32_t)(vm->pc + off + 1) > vm->ninst);
 	}
 	if (inst->opcode != NETVM_OC_BR) {
 		uint32_t cond;
