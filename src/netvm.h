@@ -24,40 +24,42 @@ typedef void (*netvm_op) (struct netvm * vm);
  *
  * Field types:
  * v, v1, v2 - a generic numeric value
- * addr - an offset into memory
+ * sa - a source address in memory
+ * da - a destination address in memory
  * len - a length, usually of some region in memory
  * pdesc - a header descriptor (see below)
- * pktnum - an index into the packet table
+ * pkn - an index into the packet table
  * pa - a packet address
  * rxaddr - address of regular expression in memory
  * rxlen - length of regular expression in memory
+ * cp - coprocessor identifier
  */
 
 enum {
 	NETVM_OC_NOP,		/* no operation */
 	NETVM_OC_POP,		/* discards top of stack */
 	NETVM_OC_PUSH,		/* [|V] pushes immediate value onto stack */
-	NETVM_OC_DUP,		/* [|-BBV] dups slot "val" from the top of stack */
-	NETVM_OC_SWAP,		/* [|BWV] swap stack positions "val" and "width" */
+	NETVM_OC_DUP,		/* [|-BBV] dups slot "val" from top of stack */
+	NETVM_OC_SWAP,		/* [|BWV] swap stack pos "val" and "width" */
 				/* 0-based counting from the top of the stack */
 	NETVM_OC_LDMEM,		/* [addr|WISR] load from memory */
 	NETVM_OC_STMEM,		/* [v,addr|WI] store to memory */
 	NETVM_OC_LDPKT,		/* [pdesc|IWSHTP] load bytes from packet */
-	NETVM_OC_LDPEXST,	/* [pktnum|I] push true if pktnum exists */
-	NETVM_OC_LDCLASS,	/* [pktnum|I] load packet class */
-	NETVM_OC_LDTSSEC,	/* [pktnum|I] load packet timestamp */
-	NETVM_OC_LDTSNSEC,	/* [pktnum|I] load packet timestamp */
+	NETVM_OC_LDPEXST,	/* [pkn|I] push true if pkn exists */
+	NETVM_OC_LDCLASS,	/* [pkn|I] load packet class */
+	NETVM_OC_LDTSSEC,	/* [pkn|I] load packet timestamp */
+	NETVM_OC_LDTSNSEC,	/* [pkn|I] load packet timestamp */
 	NETVM_OC_LDPRPF,	/* [pdesc|I] load field from proto parse */
-	NETVM_OC_BULKM2M,	/* [saddr,daddr,len|I] move data from saddr to daddr */
-	NETVM_OC_BULKP2M,	/* [pa,addr,len,pktnum|I] move bytes from pa to addr */
-	NETVM_OC_MEMCMP,	/* [addr1,addr2,len|I] compare bytes in mem */
-	NETVM_OC_PFXCMP,	/* [addr1,addr2,pfx,len|I] compare bits via prefix */
-	NETVM_OC_MASKEQ,	/* [addr1,addr2,maddr,len|I] compare bytes via mask */
+	NETVM_OC_BULKM2M,	/* [sa,da,len|I] move data from sa to da */
+	NETVM_OC_BULKP2M,	/* [pa,da,len,pkn|I] move bytes from pa to da */
+	NETVM_OC_MEMCMP,	/* [a1,a2,len|I] compare bytes in mem */
+	NETVM_OC_PFXCMP,	/* [a1,a2,pfx,len|I] compare bits via prefix */
+	NETVM_OC_MASKEQ,	/* [a1,a2,mka,len|I] compare bytes via mask */
 	NETVM_OC_NOT,		/* [v] logcal not (1 or 0) */
 	NETVM_OC_INVERT,	/* [v] bit-wise inversion */
 	NETVM_OC_TOBOOL,	/* [v] if v != 0, 1, otherwise 0 */
 	NETVM_OC_POPL,		/* [v|W] # of bits in v for lower W bytes */
-	NETVM_OC_NLZ,		/* [v|W] # of leading zeroes in v for lower W bytes */
+	NETVM_OC_NLZ,		/* [v|W] # leading 0s in v for lower W bytes */
 	NETVM_OC_TONET,		/* [v|W] convert to network byte order */
 	NETVM_OC_TOHOST,	/* [v|W] convert to host byte order */
 	NETVM_OC_SIGNX,		/* [v|W] sign extend based on width */
@@ -68,61 +70,65 @@ enum {
 	NETVM_OC_MOD,		/* [v1,v2|I] remainder of v1 / v2 */
 	NETVM_OC_SHL,		/* [v1,v2|I] v1 left shifted by (v2 % 32) */
 	NETVM_OC_SHR,		/* [v1,v2|I] v1 right shifted by (v2 % 32) */
-	NETVM_OC_SHRA,		/* [v1,v2|I] v1 right arithmatic shifted by (v2 % 32) */
+	NETVM_OC_SHRA,		/* [v1,v2|I] v1 right arith shift by (v2 %32) */
 	NETVM_OC_AND,		/* [v1,v2|I] bitwise v1 and v2 */
 	NETVM_OC_OR,		/* [v1,v2|I] bitwise v1 or v2 */
 	NETVM_OC_XOR,		/* [v1,v2|I] bitwise v1 exclusive or v2 */
 	NETVM_OC_EQ,		/* [v1,v2|I] v1 equals v2 */
 	NETVM_OC_NEQ,		/* [v1,v2|I] v1 not equal to v2 */
-	NETVM_OC_LT,		/* [v1,v2|I] v1 less than v2 */
-	NETVM_OC_LE,		/* [v1,v2|I] v1 less than or equal to v2 */
-	NETVM_OC_GT,		/* [v1,v2|I] v1 greater than v2 */
-	NETVM_OC_GE,		/* [v1,v2|I] v1 greater than or equal to v2 */
-	NETVM_OC_SLT,		/* [v1,v2|I] v1 less than v2 (signed) */
-	NETVM_OC_SLE,		/* [v1,v2|I] v1 less than or equal to v2 (signed) */
-	NETVM_OC_SGT,		/* [v1,v2|I] v1 greater than v2 (signed) */
-	NETVM_OC_SGE,		/* [v1,v2|I] v1 greater than or equal to v2 (signed) */
-	NETVM_OC_HASPRP,	/* [pdesc|I] true if has header (field in HD ignored) */
-	NETVM_OC_GETCPT,	/* [coproc|I] push the 'type' of co-processor 'coproc' */
-				/*            push NETVM_CPT_NONE if it doesn't exist */
-	NETVM_OC_CPOP,		/* [coproc parameters,coproc|I] call a coprocessor op. */
-				/*   if IMMED, the coprocessor # is taken from 'width' */
+	NETVM_OC_LT,		/* [v1,v2|I] v1 < v2 */
+	NETVM_OC_LE,		/* [v1,v2|I] v1 <= v2 */
+	NETVM_OC_GT,		/* [v1,v2|I] v1 > v2 */
+	NETVM_OC_GE,		/* [v1,v2|I] v1 >= v2 */
+	NETVM_OC_SLT,		/* [v1,v2|I] v1 < v2 (signed) */
+	NETVM_OC_SLE,		/* [v1,v2|I] v1 <= v2 (signed) */
+	NETVM_OC_SGT,		/* [v1,v2|I] v1 > v2 (signed) */
+	NETVM_OC_SGE,		/* [v1,v2|I] v1 >= v2 (signed) */
+	NETVM_OC_HASPRP,	/* [pdesc|I] true if has prp (field ignored) */
+	NETVM_OC_GETCPT,	/* [cp|I] push the type of co-processor 'cp' */
+				/*    push NETVM_CPT_NONE if it doesn't exist */
+	NETVM_OC_CPOP,		/* [cp params,cp|I] call a coprocessor op. */
+				/*   if IMMED, the cp # is taken from 'width' */
 				/*   The coprocessor op # is in 'flags' >> 8 */
-				/*   Note that a coprocessor op may be marked matchonly. */
+				/*   A cp op may be marked matchonly. */
 				/*   IMMED must be set in matchonly mode. */
-	NETVM_OC_HALT,		/* [|V] halt program, store 'val' in error code */
-	NETVM_OC_BR,		/* [v|I] set PC to v (must be > PC in matchonly mode */
-	NETVM_OC_BNZ,		/* [c,v|I] set PC to v if c is non-zero */
-	NETVM_OC_BZ,		/* [c,v|I] set PC to v if c is zero */
-				/*         (must be > PC in matchonly mode */
+	NETVM_OC_HALT,		/* [|V] halt program, store 'val' in ret code */
+	NETVM_OC_BR,		/* [v|I] PC += v (must be > 0 in matchonly) */
+	NETVM_OC_BNZ,		/* [c,v|I] PC += v if c is non-zero (ditto) */
+	NETVM_OC_BZ,		/* [c,v|I] PC += v if c is zero (ditto) */
 	NETVM_OC_MAX_MATCH = NETVM_OC_BZ,
 
 	/* not allowed in pure match run */
 	NETVM_OC_JUMP,		/* [addr|I] branch to absolute address addr */
-	NETVM_OC_CALL,		/* [(args..,)v,narg|I]: branch and link to v: put RA */
-				/*      narg deep in the stack, pushing the rest up */
-	NETVM_OC_RETURN,	/* [v,(rets..,)nret|I]: branch to the addr nret deep */
-				/*      in the stack.  shift the remaining items down */
+	NETVM_OC_CALL,		/* [(args..,)v,narg|I]: branch and link to v */ 
+				/*   put return address narg deep in the */
+				/*   stack, pushing the rest (args) up */
+	NETVM_OC_RETURN,	/* [v,(rets..,)nret|I]: branch to the addr */
+				/*   nret deep in the stack.  shift the */
+				/*   remaining stack values down */
 	NETVM_OC_STPKT,		/* [v,pdesc|IWH] store into packet memory */
-	NETVM_OC_STCLASS,	/* [v,pktnum|I] store into packet class */
-	NETVM_OC_STTSSEC,	/* [v,pktnum|I] store into timestamp */
-	NETVM_OC_STTSNSEC,	/* [v,pktnum|I] store into timestamp */
-	NETVM_OC_BULKM2P,	/* [pa,addr,len,pktnum|I] move bytes from pa to addr */
-	NETVM_OC_PKTSWAP,	/* [p1,p2|I] swap packets.  If "I", p1 in width */
-	NETVM_OC_PKTNEW,	/* [pdesc|I] create packet: offset==len, ptype==dl */
-	NETVM_OC_PKTCOPY,	/* [pktnum2,pktnum1|I] copy packet in slot1 to slot2 */
-	NETVM_OC_PKTDEL,	/* [pktnum|I] delete packet */
-	NETVM_OC_SETLAYER,	/* [pdesc|I] set header to layer stored in 'width' */
-	NETVM_OC_CLRLAYER,	/* [pktnum|I] clear layer stored in 'width' */
-	NETVM_OC_PRPPUSH,	/* [pdesc|I] create header of ptype in packet pktnum */
-	NETVM_OC_PRPPOP,	/* [pktnum|I] pop the top header off of packet pktnum */
-	NETVM_OC_PRPUP,		/* [pdesc|I] update the fields in the header */
-	NETVM_OC_FIXDLT,	/* [pktnum|I] set dltype based on PPT_ of 2nd header */
-	NETVM_OC_FIXLEN,	/* [ptknum|I] fix length fields in the packet */
-	NETVM_OC_FIXCKSUM,	/* [ptknum|I] fix checksum fields in the packet */
-	NETVM_OC_PKTINS,	/* [len,pdesc|I] insert len bytes at hd.offset */
-	NETVM_OC_PKTCUT,	/* [len,pdesc|I] cut len bytes at hd.offset */
-	NETVM_OC_PRPADJ,	/* [amt,pdesc|I] adjust offset field by amt (signed) */
+	NETVM_OC_STCLASS,	/* [v,pkn|I] store into packet class */
+	NETVM_OC_STTSSEC,	/* [v,pkn|I] store into timestamp */
+	NETVM_OC_STTSNSEC,	/* [v,pkn|I] store into timestamp */
+	NETVM_OC_BULKM2P,	/* [pa,sa,len,pkn|I] move bytes from pa to sa */
+	NETVM_OC_PKTSWAP,	/* [p1,p2|I] swap packets, if "I" p1 in width */
+	NETVM_OC_PKTNEW,	/* [pdesc|I] create packet: */
+	                        /*   offset == len, ptype == dl type */
+	NETVM_OC_PKTCOPY,	/* [pkn2,pkn1|I]copy packet from pkn1 to pkn2 */
+	NETVM_OC_PKTDEL,	/* [pkn|I] delete packet */
+	NETVM_OC_SETLAYER,	/* [pdesc|I] set prp to layer 'width' */
+	NETVM_OC_CLRLAYER,	/* [pkn|I] clear layer 'width' */
+	NETVM_OC_PRPPUSH,	/* [pdesc|I] "push" prp of ptype in packet pkn */
+				/*   to innermost header */
+	NETVM_OC_PRPPOP,	/* [pkn|I] pop the top prp off of packet pkn */
+	NETVM_OC_PRPUP,		/* [pdesc|I] update the fields in the prp */
+	NETVM_OC_FIXDLT,	/* [pkn|I] set dltype from PPT_ of 2nd prp */
+	NETVM_OC_FIXLEN,	/* [pkn|I] fix length fields in the packet */
+	NETVM_OC_FIXCKSUM,	/* [pkn|I] fix checksum fields in the packet */
+	NETVM_OC_PKTINS,	/* [len,pdesc|I] insert len bytes @ pd.offset */
+	NETVM_OC_PKTCUT,	/* [len,pdesc|I] cut len bytes @ pd.offset */
+	NETVM_OC_PRPADJ,	/* [amt,pdesc|I] adjust offset 'field' by */
+	                        /*   amt (signed) bytes in prp */
 
 	NETVM_OC_MAX = NETVM_OC_PRPADJ
 /* 
