@@ -11,8 +11,7 @@ typedef void (*netvm_op) (struct netvm * vm);
  * W -> uses width field to determine now many bytes to manipulate
  * I -> Immediate flag honored for last argument
  * S -> will sign extend on load if sign extention flag set
- * N -> will convert to network byte order on store if TONET flag set
- * H -> will convert to host byte order on load if TOHOST flag set
+ * A -> byte swap multi-byte values before loading/storing
  * T -> with 1-byte load will treat as TCP offset and convert to byte length 
  * P -> with 1-byte load will treat as IP header len and convert to byte length 
  * M -> MOVEUP flag used for INS and CUT operations
@@ -44,7 +43,7 @@ enum {
 				/* 0-based counting from the top of the stack */
 	NETVM_OC_LDMEM,		/* [addr|WISR] load from memory */
 	NETVM_OC_STMEM,		/* [v,addr|WI] store to memory */
-	NETVM_OC_LDPKT,		/* [pdesc|IWSHTP] load bytes from packet */
+	NETVM_OC_LDPKT,		/* [pdesc|IWSATP] load bytes from packet */
 	NETVM_OC_LDPEXST,	/* [pkn|I] push true if pkn exists */
 	NETVM_OC_LDCLASS,	/* [pkn|I] load packet class */
 	NETVM_OC_LDTSSEC,	/* [pkn|I] load packet timestamp */
@@ -60,8 +59,6 @@ enum {
 	NETVM_OC_TOBOOL,	/* [v] if v != 0, 1, otherwise 0 */
 	NETVM_OC_POPL,		/* [v|W] # of bits in v for lower W bytes */
 	NETVM_OC_NLZ,		/* [v|W] # leading 0s in v for lower W bytes */
-	NETVM_OC_TONET,		/* [v|W] convert to network byte order */
-	NETVM_OC_TOHOST,	/* [v|W] convert to host byte order */
 	NETVM_OC_SIGNX,		/* [v|W] sign extend based on width */
 	NETVM_OC_ADD,		/* [v1,v2|I] add v1 and v2 */
 	NETVM_OC_SUB,		/* [v1,v2|I] subtract v2 from v1 */
@@ -106,7 +103,7 @@ enum {
 	NETVM_OC_RETURN,	/* [v,(rets..,)nret|I]: branch to the addr */
 				/*   nret deep in the stack.  shift the */
 				/*   remaining stack values down */
-	NETVM_OC_STPKT,		/* [v,pdesc|IWH] store into packet memory */
+	NETVM_OC_STPKT,		/* [v,pdesc|IWA] store into packet memory */
 	NETVM_OC_STCLASS,	/* [v,pkn|I] store into packet class */
 	NETVM_OC_STTSSEC,	/* [v,pkn|I] store into timestamp */
 	NETVM_OC_STTSNSEC,	/* [v,pkn|I] store into timestamp */
@@ -149,8 +146,7 @@ enum {
 enum {
 	NETVM_IF_IMMED = 0x01,	/* last op is immediate rather than on stack */
 	NETVM_IF_SIGNED = 0x02,	/* number, value or all operands are signed */
-	NETVM_IF_TONET = 0x04,	/* for store operations */
-	NETVM_IF_TOHOST = 0x08,	/* for load operation s */
+	NETVM_IF_SWAP = 0x04,	/* for load operation s */
 
 	NETVM_IF_CPIMMED = 0x10,/* last op is immediate in coprocessor */
 	NETVM_IF_IPHLEN = 0x10,	/* on 1 byte packet load instructions */

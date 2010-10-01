@@ -18,6 +18,14 @@
 #define MAXINST         0x7ffffffe
 #define PPT_TO_LIDX(ppt) ((ppt) & 0x3)
 
+
+#define swap16(v) ( (((uint16_t)(v) << 8) & 0xFF00) | \
+		    (((uint16_t)(v) >> 8) & 0xFF) )
+#define swap32(v) ( (((uint32_t)(v) << 24) & 0xFF000000ul) | \
+		    (((uint32_t)(v) << 8) & 0xFF0000ul)    | \
+		    (((uint32_t)(v) >> 8) & 0xFF00ul)      | \
+		    (((uint32_t)(v) >> 24) & 0xFFul) )
+
 /* 
  * find header based on packet number, header type, and index.  So (3,8,1) 
  * means find the 2nd (0-based counting) TCP (PPT_TCP == 8) header in the 4th
@@ -116,6 +124,7 @@ static void ni_ldmem(struct netvm *vm)
 	uint32_t val;
 	register int width = inst->width;
 	register uint32_t addr;
+	byte_t *p;
 	FATAL(vm, NETVM_ERR_MEMADDR, !vm->mem || !vm->memsz);
 	if (IMMED(inst)) {
 		addr = inst->val;
@@ -132,22 +141,36 @@ static void ni_ldmem(struct netvm *vm)
 		width = -width;
 	switch (width) {
 	case -1:
-		val = (int32_t) * (int8_t *) (vm->mem + addr);
+		/* let the compiler optimize the sign extension */
+		val = (int32_t) *(int8_t *)(vm->mem + addr);
 		break;
 	case -2:
-		val = (int32_t) * (int16_t *) (vm->mem + addr);
+		p = vm->mem + addr;
+		val = *p++ << 8;
+		val |= *p;
+		val |= -(val & 0x8000);
 		break;
 	case -4:
-		val = (int32_t) * (int32_t *) (vm->mem + addr);
+		p = vm->mem + addr;
+		val = *p++ << 24;
+		val |= *p++ << 16;
+		val |= *p++ << 8;
+		val |= *p;
 		break;
 	case 1:
-		val = *(uint8_t *) (vm->mem + addr);
+		val = *(byte_t *) (vm->mem + addr);
 		break;
 	case 2:
-		val = *(uint16_t *) (vm->mem + addr);
+		p = vm->mem + addr;
+		val = *p++ << 8;
+		val |= *p;
 		break;
 	case 4:
-		val = *(uint32_t *) (vm->mem + addr);
+		p = vm->mem + addr;
+		val = *p++ << 24;
+		val |= *p++ << 16;
+		val |= *p++ << 8;
+		val |= *p;
 		break;
 	default:
 		abort_unless(0);	/* should be checked at validation */
@@ -163,6 +186,7 @@ static void ni_stmem(struct netvm *vm)
 	uint32_t val;
 	register int width = inst->width;
 	register uint32_t addr;
+	byte_t *p;
 	if (IMMED(inst)) {
 		addr = inst->val;
 	} else {
@@ -173,13 +197,19 @@ static void ni_stmem(struct netvm *vm)
 	S_POP(vm, val);
 	switch (width) {
 	case 1:
-		*(uint8_t *) (vm->mem + addr) = val;
+		*(byte_t *)(vm->mem + addr) = val;
 		break;
 	case 2:
-		*(uint16_t *) (vm->mem + addr) = val;
+		p = vm->mem + addr;
+		*p++ = (val >> 8) & 0xFF;
+		*p = val & 0xFF;
 		break;
 	case 4:
-		*(uint32_t *) (vm->mem + addr) = val;
+		p = vm->mem + addr;
+		*p++ = (val >> 24) & 0xFF;
+		*p++ = (val >> 16) & 0xFF;
+		*p++ = (val >> 8) & 0xFF;
+		*p = val & 0xFF;
 		break;
 	default:
 		abort_unless(0);	/* should be checked at validation */
@@ -258,6 +288,7 @@ static void ni_ldpkt(struct netvm *vm)
 	struct prparse *prp;
 	uint32_t addr;
 	uint32_t val;
+	byte_t *p;
 
 	get_prp_info(vm, inst, &pd0, &addr, &prp);
 	if (vm->error)
@@ -265,7 +296,7 @@ static void ni_ldpkt(struct netvm *vm)
 
 	switch (inst->width) {
 	case 1:
-		val = *(uint8_t *) (prp->data + addr);
+		val = *(byte_t *)(prp->data + addr);
 		if (inst->flags & NETVM_IF_IPHLEN) {
 			val = (val & 0xf) << 2;
 		} else if (inst->flags & NETVM_IF_TCPHLEN) {
@@ -276,16 +307,22 @@ static void ni_ldpkt(struct netvm *vm)
 		}
 		break;
 	case 2:
-		val = *(uint16_t *) (prp->data + addr);
-		if (inst->flags & NETVM_IF_TOHOST)
-			val = ntoh16(val);
+		p = prp->data + addr;
+		val = *p++ << 8;
+		val |= *p;
+		if (inst->flags & NETVM_IF_SWAP)
+			val = swap16(val);
 		if (ISSIGNED(inst))
 			val |= -(val & 0x8000);
 		break;
 	case 4:
-		val = *(uint32_t *) (prp->data + addr);
-		if (inst->flags & NETVM_IF_TOHOST)
-			val = ntoh32(val);
+		p = prp->data + addr;
+		val = *p++ << 24;
+		val |= *p++ << 16;
+		val |= *p++ << 8;
+		val |= *p;
+		if (inst->flags & NETVM_IF_SWAP)
+			val = swap32(val);
 		if (ISSIGNED(inst))
 			val |= -(val & 0x80000000);
 		break;
@@ -548,26 +585,6 @@ static void ni_numop(struct netvm *vm)
 			out = nlz_32(v1) - 32 + inst->width * 8;
 		}
 		break;
-	case NETVM_OC_TONET:
-		switch (inst->width) {
-		case 2:
-			out = hton16(v1);
-			break;
-		case 4:
-			out = hton32(v1);
-			break;
-		}
-		break;
-	case NETVM_OC_TOHOST:
-		switch (inst->width) {
-		case 2:
-			out = ntoh16(v1);
-			break;
-		case 4:
-			out = ntoh32(v1);
-			break;
-		}
-		break;
 	case NETVM_OC_SIGNX:
 	case 1:
 		out = v1 | -(v1 & 0x80);
@@ -807,6 +824,7 @@ static void ni_stpkt(struct netvm *vm)
 	struct prparse *prp;
 	uint32_t addr;
 	uint32_t val;
+	byte_t *p;
 
 	get_prp_info(vm, inst, &pd0, &addr, &prp);
 	if (vm->error)
@@ -815,23 +833,29 @@ static void ni_stpkt(struct netvm *vm)
 
 	switch (inst->width) {
 	case 1:{
-			*(uint8_t *) (prp->data + addr) = val;
-		}
-		break;
+		*(byte_t *)(prp->data + addr) = val;
+	} break;
+
 	case 2:{
-			uint16_t v = val;
-			if (inst->flags & NETVM_IF_TOHOST)
-				v = hton16(v);
-			*(uint16_t *) (prp->data + addr) = v;
-		}
-		break;
+		uint16_t v = val;
+		if (inst->flags & NETVM_IF_SWAP)
+			v = swap16(v);
+		p = prp->data + addr;
+		*p++ = (v >> 8) & 0xFF;
+		*p = v & 0xFF;
+	} break;
+
 	case 4:{
-			uint32_t v = val;
-			if (inst->flags & NETVM_IF_TOHOST)
-				v = hton32(v);
-			*(uint32_t *) (prp->data + addr) = v;
-		}
-		break;
+		uint32_t v = val;
+		if (inst->flags & NETVM_IF_SWAP)
+			v = swap32(v);
+		p = prp->data + addr;
+		*p++ = (v >> 24) & 0xFF;
+		*p++ = (v >> 16) & 0xFF;
+		*p++ = (v >> 8) & 0xFF;
+		*p = v & 0xFF;
+	} break;
+
 	default:
 		abort_unless(0);	/* should be checked in get_prp_info() */
 	}
@@ -1175,8 +1199,6 @@ netvm_op g_netvm_ops[NETVM_OC_MAX + 1] = {
 	ni_numop,		/* TOBOOL */
 	ni_numop,		/* POPL */
 	ni_numop,		/* NLZ */
-	ni_numop,		/* TONET */
-	ni_numop,		/* TOHOST */
 	ni_numop,		/* SIGNX */
 	ni_numop,		/* ADD */
 	ni_numop,		/* SUB */
@@ -1292,8 +1314,6 @@ int netvm_validate(struct netvm *vm)
 			   (inst->opcode == NETVM_OC_STPKT) ||
 			   (inst->opcode == NETVM_OC_POPL) ||
 			   (inst->opcode == NETVM_OC_NLZ) ||
-			   (inst->opcode == NETVM_OC_TONET) ||
-			   (inst->opcode == NETVM_OC_TOHOST) ||
 			   (inst->opcode == NETVM_OC_SIGNX)
 		    ) {
 			if ((inst->width != 1) && (inst->width != 2)

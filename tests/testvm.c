@@ -68,11 +68,11 @@ struct netvm_inst vm_prog_toggledf[] = {
 	/*1 */ {NETVM_OC_NEQ, 0, NETVM_IF_IMMED, PPT_IPV4},
 	/*2 */ {NETVM_OC_BNZ, 0, NETVM_IF_IMMED, 4 /* END of prog */ },
 	/* 2 bytes starting 8 from IP hdr */
-	/*3 */ {NETVM_OC_LDPKT, 2, NETVM_IF_IMMED | NETVM_IF_TOHOST,
+	/*3 */ {NETVM_OC_LDPKT, 2, NETVM_IF_IMMED,
 		NETVM_IPDESC(PPT_IPV4, NETVM_PRP_SOFF, 6)},
 	/* toggle the DF bit */
 	/*4 */ {NETVM_OC_XOR, 0, NETVM_IF_IMMED, IPH_DFMASK},
-	/*5 */ {NETVM_OC_STPKT, 2, NETVM_IF_IMMED | NETVM_IF_TONET,
+	/*5 */ {NETVM_OC_STPKT, 2, NETVM_IF_IMMED,
 		NETVM_IPDESC(PPT_IPV4, NETVM_PRP_SOFF, 6)},
 	/*6 */ {NETVM_OC_FIXCKSUM, 0, NETVM_IF_IMMED, 0}
 };
@@ -122,7 +122,6 @@ struct netvm_inst vm_prog_helloworld[] = {
 };
 
 
-uint32_t fibX = 7;
 #define FIB_I0_OFFSET      (ROSEGOFF)
 #define FIB_I0_SIZE        sizeof(uint32_t)
 const char fibs1[] = "Fibonnaci number ";
@@ -135,7 +134,7 @@ const char fibs3[] = "\n";
 #define FIB_I3_OFFSET      (FIB_I2_OFFSET + FIB_I2_SIZE)
 #define FIB_I3_SIZE        (sizeof(fibs3)-1)
 struct meminit fibi[] = {
-	{(byte_t *) & fibX, FIB_I0_SIZE, FIB_I0_OFFSET},
+	{(byte_t *) "\x00\x00\x00\x07", FIB_I0_SIZE, FIB_I0_OFFSET}, /* #7 */
 	{(byte_t *) fibs1, FIB_I1_SIZE, FIB_I1_OFFSET},
 	{(byte_t *) fibs2, FIB_I2_SIZE, FIB_I2_OFFSET},
 	{(byte_t *) fibs3, FIB_I3_SIZE, FIB_I3_OFFSET}
