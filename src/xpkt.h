@@ -33,78 +33,6 @@ struct xpkt_tag_hdr {
 };
 
 
-#define XPKT_TAG_NOP		0
-#define XPKT_TAG_TIMESTAMP	1
-#define XPKT_TAG_SNAPINFO	2
-#define XPKT_TAG_INIFACE	3
-#define XPKT_TAG_OUTIFACE	4
-#define XPKT_TAG_FLOW		5
-#define XPKT_TAG_CLASS		6
-#define XPKT_TAG_PARSE		7
-#define XPKT_TAG_NUM_TYPES	8	/* Number of basic types defined */
-
-#define XPKT_TAG_INVALID	127
-#define XPKT_TAG_ANY		XPKT_TAG_INVALID
-#define XPKT_TAG_APPINFO	128	/* first non-basic tag type */
-
-#define XPKT_TAG_NOP_NWORDS		1
-struct xpkt_tag_nop {
-	struct xpkt_tag_hdr xpt_nop_hdr; /* 0, 1, zero */
-};
-
-#define XPKT_TAG_TIMESTAMP_NWORDS	3
-struct xpkt_tag_ts {
-	struct xpkt_tag_hdr xpt_ts_hdr; /* 1, 3, zero */
-	uint32_t xpt_ts_sec;
-	uint32_t xpt_ts_nsec;
-};
-
-
-#define XPKT_TAG_SNAPINFO_NWORDS	2
-struct xpkt_tag_snapinfo {
-	struct xpkt_tag_hdr xpt_si_hdr; /* 2, 2, zero */
-	uint32_t xpt_si_wire_len;
-};
-
-
-#define XPKT_TAG_INIFACE_NWORDS		1
-#define XPKT_TAG_OUTIFACE_NWORDS	1
-struct xpkt_tag_iface {
-	struct xpkt_tag_hdr xpt_if_hdr; /* 3|4, 1, iface */
-};
-#define xpt_if_iface	xpt_if_hdr.xpt_xhword
-
-
-#define XPKT_TAG_FLOW_NWORDS		3
-struct xpkt_tag_flowid {
-	struct xpkt_tag_hdr xpt_fl_hdr; /* 5, 3, zero */
-	uint64_t xpt_fl_id;
-};
-
-
-#define XPKT_TAG_CLASS_NWORDS		3
-struct xpkt_tag_class {
-	struct xpkt_tag_hdr xpt_cl_hdr; /* 6, 3, zero */
-	uint64_t xpt_cl_tag;
-};
-
-
-#define XPKT_TAG_PARSEINFO_NWORDS	3
-struct xpkt_tag_parseinfo {
-	struct xpkt_tag_hdr xpt_pi_hdr; /* 8, 3, proto */
-	uint32_t xpt_pi_off;
-	uint32_t xpt_pi_len;
-};
-#define xpt_pi_proto	xpt_pi_hdr.xpt_xhword
-
-
-struct xpkt_tag_appinfo {
-	struct xpkt_tag_hdr xpt_ai_hdr; /* 128, 1-255, subtype? */
-	byte_t xpt_ai_data[254 * 4];
-};
-#define xpt_ai_subtype	xpt_ai_hdr.xpt_xhword
-
-
 struct xpkt {
 	struct xpkthdr hdr;
 	uint32_t xpkt_tags[1];
@@ -223,21 +151,23 @@ struct xpkt_tag_hdr *xpkt_next_tag(struct xpkt *x, struct xpkt_tag_hdr *cur);
 struct xpkt_tag_hdr *xpkt_find_tag(struct xpkt *x, byte_t type, int idx);
 
 
-#define XPKT_ADDTAG_NOPCLOB	0
-#define XPKT_ADDTAG_PUSHUP	1
-#define XPKT_ADDTAG_PUSHDOWN	2
 /*
- * Insert a tag into the xpkt.  The 'method' field determines how the
+ * Return the index of a tag within the xpkt.  (for use with xpkt_del_tag)
+ * for example. 
+ * Returns:
+ *  >= 0 - The tag index
+ *  <  0 - Tag not found within the packet
+ */
+int xpkt_find_tag_idx(struct xpkt *x, struct xpkt_tag_hdr *xth);
+
+/*
+ * Insert a tag into the xpkt.  The 'moveup' field determines how the
  * tag will be inserted:
- * - NOPCLOB - clobber the first region of nops of sufficient size 
- *            for the tag.
- * - PUSHUP - Push all data after the tags up to make space for the tag.
- *            This method assumes there is sufficient space past the packet
- *            ending and that data after the xpkt can be clobbered.
- * - PUSHDOWN - Push down the data from metadata to packet header to make
- *            space for the tag.  This method assumes there is sufficient
- *            space before the xpkt header and that any data there can be
- *            clobbered.
+ * - 0 - clobber the first region of nops of sufficient size 
+ *       for the tag.
+ * - 1 - Push all data after the tags up to make space for the tag.
+ *       This method assumes there is sufficient space past the packet
+ *       ending and that data after the xpkt can be clobbered.
  *
  * Returns:
  *  0 -> Operation succeeded
@@ -245,29 +175,116 @@ struct xpkt_tag_hdr *xpkt_find_tag(struct xpkt *x, byte_t type, int idx);
  * -2 -> Duplicate tag of a type that can have only one per xpkt
  * -3 -> Insufficient nop space and method == NOPCLOB.  OR insufficient
  *       tag space (will roll over tag length).
- *
- * The 'p' parameter will be changed if PUSHUP is specified
- * and the function succeeds.
  */
-int xpkt_add_tag(struct xpkt **x, struct xpkt_tag_hdr *xth, int method);
+int xpkt_add_tag(struct xpkt *x, struct xpkt_tag_hdr *xth, int moveup);
 
-#define XPKT_DELTAG_NOPFILL	0
-#define XPKT_DELTAG_PULLUP	1
-#define XPKT_DELTAG_PULLDOWN	2
 /*
- * Delete a tag from the xpkt.  The 'method' field determines how the
+ * Delete a tag from the xpkt.  The 'pulldown' field determines how the
  * tag will be deleted:
- * - NOPFILL - Clobber the existing tag space with NOPS.
- * - PULLUP - Pull from packet beginning up 
- * - PULLDOWN - Pull from the end of the packet down
+ * - 0 - Clobber the existing tag space with NOPS.
+ * - 1 - Pull from the end of the packet down
  *
  * Returns
  *  0 -> success
  * -1 -> malformed tag
- *
- * The 'p' parameter will be changed if PULLUP is specified
- * and the function succeeds.
  */
-int xpkt_del_tag(struct xpkt **x, struct xpkt_tag_hdr *xth, int method);
+int xpkt_del_tag(struct xpkt *x, byte_t tag, int idx, int pulldown);
+
+
+/* tag definitions */
+
+#define XPKT_TAG_NOP		0
+#define XPKT_TAG_TIMESTAMP	1
+#define XPKT_TAG_SNAPINFO	2
+#define XPKT_TAG_INIFACE	3
+#define XPKT_TAG_OUTIFACE	4
+#define XPKT_TAG_FLOW		5
+#define XPKT_TAG_CLASS		6
+#define XPKT_TAG_PARSEINFO	7
+#define XPKT_TAG_NUM_TYPES	8	/* Number of basic types defined */
+
+#define XPKT_TAG_INVALID	127
+#define XPKT_TAG_ANY		XPKT_TAG_INVALID
+#define XPKT_TAG_APPINFO	128	/* first non-basic tag type */
+
+
+#define XPKT_TAG_NOP_NWORDS		1
+struct xpkt_tag_nop {
+	struct xpkt_tag_hdr xpt_nop_hdr; /* 0, 1, zero */
+};
+
+void xpkt_tag_nop_init(struct xpkt_tag_nop *t);
+
+
+#define XPKT_TAG_TIMESTAMP_NWORDS	3
+struct xpkt_tag_ts {
+	struct xpkt_tag_hdr xpt_ts_hdr; /* 1, 3, zero */
+	uint32_t xpt_ts_sec;
+	uint32_t xpt_ts_nsec;
+};
+
+void xpkt_tag_ts_init(struct xpkt_tag_ts *t, uint32_t sec, uint32_t nsec);
+
+
+#define XPKT_TAG_SNAPINFO_NWORDS	2
+struct xpkt_tag_snapinfo {
+	struct xpkt_tag_hdr xpt_si_hdr; /* 2, 2, zero */
+	uint32_t xpt_si_wire_len;
+};
+
+void xpkt_tag_si_init(struct xpkt_tag_snapinfo *t, uint32_t wirelen);
+
+
+#define XPKT_TAG_INIFACE_NWORDS		1
+#define XPKT_TAG_OUTIFACE_NWORDS	1
+struct xpkt_tag_iface {
+	struct xpkt_tag_hdr xpt_if_hdr; /* 3|4, 1, iface */
+};
+#define xpt_if_iface	xpt_if_hdr.xth_xhword
+
+void xpkt_tag_iif_init(struct xpkt_tag_iface *t, uint16_t iface);
+void xpkt_tag_oif_init(struct xpkt_tag_iface *t, uint16_t iface);
+
+
+#define XPKT_TAG_FLOW_NWORDS		3
+struct xpkt_tag_flowid {
+	struct xpkt_tag_hdr xpt_fl_hdr; /* 5, 3, zero */
+	uint64_t xpt_fl_id;
+};
+
+void xpkt_tag_flowid_init(struct xpkt_tag_flowid *t, uint64_t id);
+
+
+#define XPKT_TAG_CLASS_NWORDS		3
+struct xpkt_tag_class {
+	struct xpkt_tag_hdr xpt_cl_hdr; /* 6, 3, zero */
+	uint64_t xpt_cl_tag;
+};
+
+void xpkt_tag_class_init(struct xpkt_tag_class *t, uint64_t tag);
+
+
+#define XPKT_TAG_PARSEINFO_NWORDS	3
+struct xpkt_tag_parseinfo {
+	struct xpkt_tag_hdr xpt_pi_hdr; /* 8, 3, proto */
+	uint32_t xpt_pi_off;
+	uint32_t xpt_pi_len;
+};
+#define xpt_pi_proto	xpt_pi_hdr.xth_xhword
+
+void xpkt_tag_pi_init(struct xpkt_tag_parseinfo *t, uint16_t proto,
+		      uint32_t off, uint32_t len);
+
+
+struct xpkt_tag_appinfo {
+	struct xpkt_tag_hdr xpt_ai_hdr; /* 128, 1-255, subtype? */
+	byte_t xpt_ai_data[254 * 4];
+};
+#define xpt_ai_subtype	xpt_ai_hdr.xth_xhword
+
+/* nw is the number of words of data in the tag */
+/* if nw == 0, then p must not be null and nw must be <= 254 */
+void xpkt_tag_ai_init(struct xpkt_tag_appinfo *t, uint16_t subtype,
+		      uint32_t *p, uint nw);
 
 #endif /* __xpkt_h */

@@ -155,7 +155,7 @@ void xpkt_pack_hdr(struct xpkthdr *xh)
 }
 
 
-int xpkt_unpack_tags(uint32_t *tags, uint tlen)
+int xpkt_unpack_tags(uint32_t *tags, uint16_t tlen)
 {
 	struct xpkt_tag_hdr *xth;
 	uint32_t *tend;
@@ -187,7 +187,7 @@ int xpkt_unpack_tags(uint32_t *tags, uint tlen)
 }
 
 
-int xpkt_validate_tags(uint32_t *tags, uint tlen)
+int xpkt_validate_tags(uint32_t *tags, uint16_t tlen)
 {
 	int rv;
 	struct xpkt_tag_hdr *xth;
@@ -226,7 +226,7 @@ int xpkt_validate_tags(uint32_t *tags, uint tlen)
 }
 
 
-void xpkt_pack_tags(uint32_t *tags, uint tlen)
+void xpkt_pack_tags(uint32_t *tags, uint16_t tlen)
 {
 	struct xpkt_tag_hdr *xth;
 	uint32_t *tend;
@@ -339,18 +339,36 @@ struct xpkt_tag_hdr *xpkt_find_tag(struct xpkt *x, byte_t type, int idx)
 }
 
 
-int xpkt_add_tag(struct xpkt **xp, struct xpkt_tag_hdr *xth, int method)
+int xpkt_find_tag_idx(struct xpkt *x, struct xpkt_tag_hdr *xth)
 {
-	struct xpkt *x;
+	struct xpkt_tag_hdr *trav;
+	int idx = 0;
+
+	abort_unless(x && xth);
+
+	trav = xpkt_next_tag(x, NULL);
+	while (trav && (trav != xth)) {
+		if (trav->xth_type == xth->xth_type)
+			++idx;
+		xth = xpkt_next_tag(x, xth);
+	}
+	if (!trav)
+		return -1;
+	else
+		return idx;
+}
+
+
+int xpkt_add_tag(struct xpkt *x, struct xpkt_tag_hdr *xth, int moveup)
+{
 	int rv;
 	int flen = 0;
 	byte_t *lo, *hi;
 	uint16_t ntl;
 	struct xpkt_tag_hdr *trav;
 
-	abort_unless(xp && *xp && xth);
+	abort_unless(x && xth);
 
-	x = *xp;
 	ntl = xth->xth_nwords * 4;
 
 	if (xth->xth_type == XPKT_TAG_INVALID)
@@ -366,12 +384,17 @@ int xpkt_add_tag(struct xpkt **xp, struct xpkt_tag_hdr *xth, int method)
 		if (ntl == 0)
 			return -1;
 	}
-	if (0xFFFF - x->xpkt_tlen < ntl)
+	if (XPKT_TLEN_MAX - x->xpkt_tlen < ntl)
 		return -3;
 
+	if (moveup) {
+		lo = (byte_t *)x + XPKT_HLEN + x->xpkt_tlen;
+		hi = lo + ntl;
+		memmove(hi, lo, xpkt_data_len(x));
+		memcpy(lo, xth, ntl);
+		x->xpkt_tlen += ntl;
 
-	switch(method) {
-	case XPKT_ADDTAG_NOPCLOB:
+	} else {
 		for (trav = xpkt_next_tag(x, NULL)  ;
                      (trav != NULL)                 ;
 		     trav = xpkt_next_tag(x, trav)) {
@@ -382,63 +405,28 @@ int xpkt_add_tag(struct xpkt **xp, struct xpkt_tag_hdr *xth, int method)
 			if (flen >= ntl)
 				break;
 		}
-		if (trav == NULL)
-			return -3;
-		memcpy((byte_t *)trav - (ntl - 4), xth, ntl);
-		break;
-	case XPKT_ADDTAG_PUSHUP:
-		lo = (byte_t *)x + XPKT_HLEN + x->xpkt_tlen;
-		hi = lo + ntl;
-		memmove(hi, lo, xpkt_data_len(x));
-		memcpy(lo, xth, ntl);
-		x->xpkt_tlen += ntl;
-		break;
-	case XPKT_ADDTAG_PUSHDOWN:
-		lo = (byte_t *)x - ntl;
-		hi = (byte_t *)x;
-		x->xpkt_tlen += ntl;
-		memcpy(lo, hi, XPKT_HLEN + x->xpkt_tlen);
-		memcpy((byte_t *)x->xpkt_tags + x->xpkt_tlen, xth, ntl);
-		*xp = (struct xpkt *)lo;
-		break;
-	default:
-		abort_unless(0);
 	}
 
 	return 0;
 }
 
 
-int xpkt_del_tag(struct xpkt **xp, struct xpkt_tag_hdr *xth, int method)
+int xpkt_del_tag(struct xpkt *x, byte_t type, int idx, int pulldown)
 {
-	struct xpkt *x;
-	byte_t *lo, *hi;
 	int ntl;
-	struct xpkt_tag_hdr *trav;
+	struct xpkt_tag_hdr *xth;
 
-	abort_unless(xp && *xp && xth);
+	abort_unless(x);
 
-	x = *xp;
-
-	if (xth->xth_type < XPKT_TAG_NUM_TYPES) {
-		if (tagops[xth->xth_type].nwords != xth->xth_nwords)
-			return -1;
-	} else {
-		if (xth->xth_nwords == 0)
-			return -1;
-	}
+	/* Assume that an added tag has been validated */
+	if (!(xth = xpkt_find_tag(x, type, idx)))
+		return -1;
 	ntl = xth->xth_nwords * 4;
 
-	/* Check for proper location */
-	for (trav = xpkt_next_tag(x, NULL)   ;
-	     (trav != NULL) && (trav != xth) ;
-	     trav = xpkt_next_tag(x, trav))
-		;
-	if (trav == NULL)
-		return -1;
-
-	switch(method) {
-	case XPKT_DELTAG_NOPFILL:
+	if (pulldown) {
+		memmove(xth, (byte_t *)xth + ntl,
+			x->xpkt_len - ((byte_t*)xth - (byte_t *)x + ntl));
+	} else {
 		while (ntl > 0) {
 			xth->xth_type = XPKT_TAG_NOP;
 			xth->xth_nwords = 1;
@@ -446,20 +434,103 @@ int xpkt_del_tag(struct xpkt **xp, struct xpkt_tag_hdr *xth, int method)
 			xth++;
 			ntl -= 4;
 		}
-		break;
-
-	case XPKT_DELTAG_PULLUP:
-		lo = (byte_t *)x;
-		hi = lo + ntl;
-		memmove(hi, lo, ((byte_t*)xth - (byte_t *)x));
-		*xp = (struct xpkt *)hi;
-		break;
-
-	case XPKT_DELTAG_PULLDOWN:
-		memmove((byte_t *)xth, (byte_t *)xth + ntl,
-			x->xpkt_len - ((byte_t*)xth - (byte_t *)x + ntl));
-		break;
 	}
 
 	return 0;
+}
+
+
+void xpkt_tag_nop_init(struct xpkt_tag_nop *t)
+{
+	abort_unless(t);
+	t->xpt_nop_hdr.xth_type =  XPKT_TAG_NOP;
+	t->xpt_nop_hdr.xth_nwords = XPKT_TAG_NOP_NWORDS;
+	t->xpt_nop_hdr.xth_xhword = 0;
+}
+
+
+void xpkt_tag_ts_init(struct xpkt_tag_ts *t, uint32_t sec, uint32_t nsec)
+{
+	abort_unless(t);
+	t->xpt_ts_hdr.xth_type =  XPKT_TAG_TIMESTAMP;
+	t->xpt_ts_hdr.xth_nwords = XPKT_TAG_TIMESTAMP_NWORDS;
+	t->xpt_ts_hdr.xth_xhword = 0;
+	t->xpt_ts_sec = sec;
+	t->xpt_ts_nsec = nsec;
+}
+
+
+void xpkt_tag_si_init(struct xpkt_tag_snapinfo *t, uint32_t wirelen)
+{
+	abort_unless(t);
+	t->xpt_si_hdr.xth_type =  XPKT_TAG_SNAPINFO;
+	t->xpt_si_hdr.xth_nwords = XPKT_TAG_SNAPINFO_NWORDS;
+	t->xpt_si_hdr.xth_xhword = 0;
+	t->xpt_si_wire_len = wirelen;
+}
+
+
+void xpkt_tag_iif_init(struct xpkt_tag_iface *t, uint16_t iface)
+{
+	abort_unless(t);
+	t->xpt_if_hdr.xth_type =  XPKT_TAG_INIFACE;
+	t->xpt_if_hdr.xth_nwords = XPKT_TAG_INIFACE_NWORDS;
+	t->xpt_if_hdr.xth_xhword = iface;
+}
+
+
+void xpkt_tag_oif_init(struct xpkt_tag_iface *t, uint16_t iface)
+{
+	abort_unless(t);
+	t->xpt_if_hdr.xth_type =  XPKT_TAG_OUTIFACE;
+	t->xpt_if_hdr.xth_nwords = XPKT_TAG_OUTIFACE_NWORDS;
+	t->xpt_if_hdr.xth_xhword = iface;
+}
+
+
+void xpkt_tag_flowid_init(struct xpkt_tag_flowid *t, uint64_t id)
+{
+	abort_unless(t);
+	t->xpt_fl_hdr.xth_type =  XPKT_TAG_FLOW;
+	t->xpt_fl_hdr.xth_nwords = XPKT_TAG_FLOW_NWORDS;
+	t->xpt_fl_hdr.xth_xhword = 0;
+	t->xpt_fl_id = id;
+}
+
+
+void xpkt_tag_class_init(struct xpkt_tag_class *t, uint64_t tag)
+{
+	abort_unless(t);
+	t->xpt_cl_hdr.xth_type =  XPKT_TAG_CLASS;
+	t->xpt_cl_hdr.xth_nwords = XPKT_TAG_CLASS_NWORDS;
+	t->xpt_cl_hdr.xth_xhword = 0;
+	t->xpt_cl_tag = tag;
+}
+
+
+void xpkt_tag_pi_init(struct xpkt_tag_parseinfo *t, uint16_t proto,
+		      uint32_t off, uint32_t len)
+{
+	abort_unless(t);
+	t->xpt_pi_hdr.xth_type =  XPKT_TAG_PARSEINFO;
+	t->xpt_pi_hdr.xth_nwords = XPKT_TAG_PARSEINFO_NWORDS;
+	t->xpt_pi_hdr.xth_xhword = proto;
+	t->xpt_pi_off = off;
+	t->xpt_pi_len = len;
+}
+
+
+void xpkt_tag_ai_init(struct xpkt_tag_appinfo *t, uint16_t subtype, uint32_t *p,
+		      uint nw)
+{
+	abort_unless(t);
+	if (nw > 0) {
+		abort_unless(nw < 255);
+		abort_unless(p);
+		memcpy(t->xpt_ai_data, p, nw * sizeof(uint32_t));
+	}
+
+	t->xpt_ai_hdr.xth_type = XPKT_TAG_APPINFO;
+	t->xpt_ai_hdr.xth_nwords = nw + 1;
+	t->xpt_ai_hdr.xth_xhword = subtype;
 }

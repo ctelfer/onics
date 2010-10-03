@@ -6,6 +6,14 @@
 #include <cat/optparse.h>
 #include <cat/bitset.h>
 
+
+/*
+ * This program demultiplexes xpkts out of multiple file descriptors.
+ * For any given packet that comes in, if the outgoing interface is specified
+ * then the program tries to send the packet out fd 3+outif.  Otherwise
+ * it sends the packet out fd 1 (stdout).
+ */
+
 #define MAX_FDS      256
 
 int g_nfd = 0;
@@ -63,17 +71,22 @@ int main(int argc, char *argv[])
 {
 	int rv, fd;
 	struct pktbuf *p;
+	struct xpkt_tag_iface *xif;
 
 	bset_set(g_fdseen, 0);
 	bset_set(g_fdseen, 1);
+	bset_set_to(g_fdok, 1, 1);
 	bset_set(g_fdseen, 2);
 
 	pkb_init(1);
 
 	while ((rv = pkb_fd_read(0, &p)) > 0) {
 		++g_npkts;
-		/* TODO META */
 		fd = 1;
+		xif = (struct xpkt_tag_iface *)
+			pkb_find_tag(p, XPKT_TAG_OUTIFACE, 0);
+		if ((xif != NULL) && (xif->xpt_if_iface + 3 < MAX_FDS))
+			fd = xif->xpt_if_iface + 3;
 
 		if (!bset_test(g_fdseen, fd)) {
 			bset_set(g_fdseen, fd);

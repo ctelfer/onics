@@ -6,6 +6,7 @@
 #include <cat/list.h>
 #include "protoparse.h"
 #include "dltypes.h"
+#include "xpkt.h"
 
 enum {
 	PKB_LAYER_DL = 0,
@@ -23,11 +24,11 @@ struct pktbuf {
 	struct list 	pkb_entry;
 	byte_t *	pkb_buf;
 	long		pkb_bsize;
-	struct xpkt *	pkb_xmeta;
-	long		pkb_xmsize;
+	struct xpkt *	pkb_xpkt;
+	long		pkb_xsize;
 	struct prparse  pkb_prp;
 	struct prparse *pkb_layers[PKB_LAYER_NUM];
-	ushort		pkb_xmlen;
+	ushort		pkb_xtlen;
 	ushort		pkb_flags;
 };
 
@@ -130,5 +131,25 @@ int  pkb_wrapprp(struct pktbuf *pkb, int ptype);
 
 /* Remove a protocol parse from the beginning or end of the packet */
 void pkb_popprp(struct pktbuf *pkb, int fromfront);
+
+/* Obtain the xpkt for a packet buffer to manipulate the tags.  */
+/* This will return NULL if the packet buffer is packed.  */
+/* Also, one must NOT modify the xpkt header fields (directly). */
+struct xpkt *pkb_get_xkpt(struct pktbuf *pkb);
+
+/* Iterate to the next tag in the packet buffer */
+struct xpkt_tag_hdr *pkb_next_tag(struct pktbuf *pkb, struct xpkt_tag_hdr *t);
+
+/* Find a specific tag in the packet buffer */
+struct xpkt_tag_hdr *pkb_find_tag(struct pktbuf *pkb, byte_t type, int idx);
+
+/* Find the index of a specific tag in the packet buffer (-1 if not found) */
+int pkb_find_tag_idx(struct pktbuf *pkb, struct xpkt_tag_hdr *xth);
+
+/* add a tag to a packet buffer */
+int pkb_add_tag(struct pktbuf *pkb, struct xpkt_tag_hdr *xth);
+
+/* remove a tag from a packet buffer */
+int pkb_del_tag(struct pktbuf *pkb, byte_t type, int idx);
 
 #endif /* __pktbuf_h */

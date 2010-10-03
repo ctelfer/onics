@@ -74,6 +74,9 @@ int readpkt(void *arg, struct callback *cb)
 	int rv;
 	struct pktbuf *p;
 	struct ue_ioevent *ioe = container(cb, struct ue_ioevent, cb);
+	struct xpkt_tag_iface *xifp;
+	struct xpkt_tag_iface xif;
+	int n;
 
 	if ((rv = pkb_fd_read(ioe->fd, &p)) <= 0) {
 		if (rv < 0)
@@ -82,7 +85,29 @@ int readpkt(void *arg, struct callback *cb)
 		return 0;
 	}
 	++g_npkts;
-	/* TODO META */
+	xifp = (struct xpkt_tag_iface *)pkb_find_tag(p, XPKT_TAG_INIFACE, 0);
+	if (xifp) {
+		/* there's an existing tag:  so modify it */
+		if (ioe->fd >= 3) {
+			xifp->xpt_if_iface = ioe->fd - 3;
+		} else {
+			/* these should always succeed */
+			n = pkb_find_tag_idx(p, (struct xpkt_tag_hdr *)xifp);
+			abort_unless(n >= 0);
+			rv = pkb_del_tag(p, xifp->xpt_if_hdr.xth_type, n);
+			abort_unless(rv == 0);
+		}
+	} else {
+		if (ioe->fd >= 3) {
+			xpkt_tag_oif_init(&xif, ioe->fd - 3);
+			rv = pkb_add_tag(p, (struct xpkt_tag_hdr *)&xif);
+			if (rv < 0) {
+				pkb_free(p);
+				return 0;
+			}
+		}
+	}
+
 	pkb_pack(p);
 	if (pkb_fd_write(1, p) < 0)
 		errsys("Error writing packet %lu\n", g_npkts);

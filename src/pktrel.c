@@ -79,6 +79,7 @@ int main(int argc, char *argv[])
 	int rv;
 	struct pktbuf *p;
 	struct cat_time cur, next, diff;
+	struct xpkt_tag_ts *ts;
 
 	pkb_init(1);
 
@@ -89,11 +90,15 @@ int main(int argc, char *argv[])
 	}
 
 	while ((rv = pkb_fd_read(0, &p)) > 0) {
-		/*
-		TODO META
-		tm_lset(&next, p->pkb_tssec, p->pkb_tsnsec);
-		*/
-		next.sec = next.nsec = 0;
+		ts = (struct xpkt_tag_ts *)pkb_find_tag(p, XPKT_TAG_TIMESTAMP, 0);
+		if (ts) {
+			tm_lset(&next, ts->xpt_ts_sec, ts->xpt_ts_nsec);
+		} else {
+			/* free all packets that lack timestamp fields */
+			pkb_free(p);
+			continue;
+		}
+
 		if (next.sec < 0 || next.nsec < 0) {
 			fprintf(stderr,
 				"Invalid timestamp on packet %lu (%ld.%09ld)",

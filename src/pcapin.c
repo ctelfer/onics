@@ -11,11 +11,14 @@
 
 pcap_t *g_pcap;
 FILE *g_infile = NULL;
+uint g_ifnum = 0;
 
 struct clopt g_options[] = {
 	CLOPT_INIT(CLOPT_STRING, 'i', "--iface", "interfact to sniff from"),
 	CLOPT_INIT(CLOPT_STRING, 'f', "--file", "file to read from"),
-	CLOPT_INIT(CLOPT_NOARG, 'p', "--promisc",
+	CLOPT_INIT(CLOPT_UINT,   'n', "--iface-num",
+		   "interface number to tag packets with"),
+	CLOPT_INIT(CLOPT_NOARG,  'p', "--promisc",
 		   "set interface in promiscuous mode"),
 	CLOPT_INIT(CLOPT_STRING, 'h', "--help", "print help")
 };
@@ -53,6 +56,9 @@ void parse_args(int argc, char *argv[])
 			pktsrc = opt->val.str_val;
 			usefile = 1;
 			break;
+		case 'n':
+			g_ifnum = opt->val.uint_val;
+			break;
 		case 'p':
 			promisc = 1;
 			break;
@@ -81,6 +87,22 @@ void parse_args(int argc, char *argv[])
 }
 
 
+static void init_tags(struct pktbuf *p)
+{
+	struct xpkt_tag_iface ti;
+	struct xpkt_tag_ts ts;
+	int rv;
+
+	xpkt_tag_iif_init(&ti, g_ifnum);
+	rv = pkb_add_tag(p, (struct xpkt_tag_hdr *)&ti);
+	abort_unless(rv);
+
+	xpkt_tag_ts_init(&ts, 0, 0);
+	rv = pkb_add_tag(p, (struct xpkt_tag_hdr *)&ts);
+	abort_unless(rv);
+}
+
+
 int main(int argc, char *argv[])
 {
 	int dlt;
@@ -88,6 +110,9 @@ int main(int argc, char *argv[])
 	struct pcap_pkthdr pcapph;
 	const byte_t *packet;
 	struct pktbuf *p;
+	struct xpkt_tag_ts *ts;
+	struct xpkt_tag_snapinfo si;
+	int rv;
 
 	parse_args(argc, argv);
 	switch ((dlt = pcap_datalink(g_pcap))) {
@@ -103,20 +128,31 @@ int main(int argc, char *argv[])
 	if (!(p = pkb_create(PKTMAX)))
 		errsys("ptk_create: ");
 	pkb_set_dltype(p, dltype);
+	init_tags(p);
+	ts = (struct xpkt_tag_ts *)pkb_find_tag(p, XPKT_TAG_TIMESTAMP, 0);
+	abort_unless(ts);
 
 	while ((packet = (byte_t *) pcap_next(g_pcap, &pcapph)) != NULL) {
-		/* 
-		TODO META
-		p->pkb_tssec = pcapph.ts.tv_sec;
-		p->pkb_tsnsec = pcapph.ts.tv_usec * 1000;
-		p->pkb_caplen = pcapph.len;
-	        */
+		ts->xpt_ts_sec = pcapph.ts.tv_sec;
+		ts->xpt_ts_nsec = pcapph.ts.tv_usec * 1000;
+
 		pkb_set_len(p, pcapph.caplen);
+
+		if (pcapph.len != pcapph.caplen) {
+			xpkt_tag_si_init(&si, pcapph.len);
+			rv = pkb_add_tag(p, &si.xpt_si_hdr);
+			abort_unless(rv == 0);
+		}
+
 		memcpy(p->pkb_buf, packet, pcapph.caplen);
-		abort_unless(pkb_pack(p) == 0);
+		rv = pkb_pack(p);
+		abort_unless(rv == 0);
 		if (pkb_fd_write(0, p) < 0)
 			errsys("pkb_file_write: ");
 		pkb_unpack(p);
+
+		if (pcapph.len != pcapph.caplen)
+			pkb_del_tag(p, XPKT_TAG_SNAPINFO, 0);
 	}
 	pkb_free(p);
 	pcap_close(g_pcap);
