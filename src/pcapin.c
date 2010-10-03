@@ -84,7 +84,7 @@ void parse_args(int argc, char *argv[])
 int main(int argc, char *argv[])
 {
 	int dlt;
-	enum pktdltype_e dltype;
+	uint16_t dltype;
 	struct pcap_pkthdr pcapph;
 	const byte_t *packet;
 	struct pktbuf *p;
@@ -92,22 +92,31 @@ int main(int argc, char *argv[])
 	parse_args(argc, argv);
 	switch ((dlt = pcap_datalink(g_pcap))) {
 	case DLT_EN10MB:
-		dltype = PKTDL_ETHERNET2;
+		dltype = DLT_ETHERNET2;
 		break;
 	default:
 		err("unsupported datalink type: %d", dlt);
 	}
-	if (pkb_create(&p, PKTMAX, dltype) < 0)
+
+	pkb_init(1);
+
+	if (!(p = pkb_create(PKTMAX)))
 		errsys("ptk_create: ");
-	p->pkb_offset = 0;
-	p->pkb_class = 0;
+	pkb_set_dltype(p, dltype);
+
 	while ((packet = (byte_t *) pcap_next(g_pcap, &pcapph)) != NULL) {
-		p->pkb_len = pcapph.len;
+		/* 
+		TODO META
 		p->pkb_tssec = pcapph.ts.tv_sec;
 		p->pkb_tsnsec = pcapph.ts.tv_usec * 1000;
-		memcpy(p->pkb_buffer, packet, p->pkb_len);
-		if (pkb_file_write(stdout, p) < 0)
+		p->pkb_caplen = pcapph.len;
+	        */
+		pkb_set_len(p, pcapph.caplen);
+		memcpy(p->pkb_buf, packet, pcapph.caplen);
+		abort_unless(pkb_pack(p) == 0);
+		if (pkb_fd_write(0, p) < 0)
 			errsys("pkb_file_write: ");
+		pkb_unpack(p);
 	}
 	pkb_free(p);
 	pcap_close(g_pcap);

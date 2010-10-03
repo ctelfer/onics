@@ -1,13 +1,16 @@
 #ifndef __stdpp_h
 #define __stdpp_h
+#include "protoparse.h"
 #include "tcpip_hdrs.h"
+#include "dltypes.h"
 
 
 /* Register all the standard protocol parsers. */
 int register_std_proto_parsers();
 void unregister_std_proto_parsers();
 
-#define PPT_ETHERNET		PPT_BUILD(PPT_PF_IEEE, 0)
+#define PPT_RAWDATA		PPT_BUILD(PPT_PF_DLT, DLT_NONE)
+#define PPT_ETHERNET2		PPT_BUILD(PPT_PF_DLT, DLT_ETHERNET2)
 
 #define PPT_IPV4		PPT_BUILD(PPT_PF_NET, 0)
 #define PPT_IPV6		PPT_BUILD(PPT_PF_NET, 1)

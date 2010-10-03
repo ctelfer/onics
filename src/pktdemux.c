@@ -64,11 +64,16 @@ int main(int argc, char *argv[])
 	int rv, fd;
 	struct pktbuf *p;
 
-	fclose(stdout);
+	bset_set(g_fdseen, 0);
+	bset_set(g_fdseen, 1);
+	bset_set(g_fdseen, 2);
+
+	pkb_init(1);
 
 	while ((rv = pkb_fd_read(0, &p)) > 0) {
 		++g_npkts;
-		fd = (p->pkb_class & 0xFF) + 3;
+		/* TODO META */
+		fd = 1;
 
 		if (!bset_test(g_fdseen, fd)) {
 			bset_set(g_fdseen, fd);

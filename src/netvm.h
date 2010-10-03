@@ -1,7 +1,8 @@
 #ifndef __netvm_h
 #define __netvm_h
 #include "tcpip_hdrs.h"
-#include "metapkt.h"
+#include "stdpp.h"
+#include "pktbuf.h"
 
 struct netvm;			/* forward declaration */
 typedef void (*netvm_op) (struct netvm * vm);
@@ -45,9 +46,6 @@ enum {
 	NETVM_OC_STMEM,		/* [v,addr|WI] store to memory */
 	NETVM_OC_LDPKT,		/* [pdesc|IWSATP] load bytes from packet */
 	NETVM_OC_LDPEXST,	/* [pkn|I] push true if pkn exists */
-	NETVM_OC_LDCLASS,	/* [pkn|I] load packet class */
-	NETVM_OC_LDTSSEC,	/* [pkn|I] load packet timestamp */
-	NETVM_OC_LDTSNSEC,	/* [pkn|I] load packet timestamp */
 	NETVM_OC_LDPRPF,	/* [pdesc|I] load field from proto parse */
 	NETVM_OC_BULKM2M,	/* [sa,da,len|I] move data from sa to da */
 	NETVM_OC_BULKP2M,	/* [pa,da,len,pkn|I] move bytes from pa to da */
@@ -104,9 +102,6 @@ enum {
 				/*   nret deep in the stack.  shift the */
 				/*   remaining stack values down */
 	NETVM_OC_STPKT,		/* [v,pdesc|IWA] store into packet memory */
-	NETVM_OC_STCLASS,	/* [v,pkn|I] store into packet class */
-	NETVM_OC_STTSSEC,	/* [v,pkn|I] store into timestamp */
-	NETVM_OC_STTSNSEC,	/* [v,pkn|I] store into timestamp */
 	NETVM_OC_BULKM2P,	/* [pa,sa,len,pkn|I] move bytes from pa to sa */
 	NETVM_OC_PKTSWAP,	/* [p1,p2|I] swap packets, if "I" p1 in width */
 	NETVM_OC_PKTNEW,	/* [pdesc|I] create packet: */
@@ -234,7 +229,7 @@ enum {
 #define NETVM_PRP_LAYER   255	/* find header of type MPKT_LAYER_* */
 /* 
  * When ptype == NETVM_PRP_LAYER, the header referred to is one of the layer
- * pointers stored in metapkt.  This allows quick access to the network, 
+ * pointers stored in pktbuf.  This allows quick access to the network, 
  * data link, transport, and tunnel headers.  It also allows them to be accessed
  * by layer. (e.g. transport).  In this case the idx field tells which layer.
  */
@@ -305,7 +300,7 @@ struct netvm {
 	uint32_t memsz;
 	uint32_t rosegoff;
 
-	struct metapkt *packets[NETVM_MAXPKTS];
+	struct pktbuf *packets[NETVM_MAXPKTS];
 
 	struct netvm_coproc *coprocs[NETVM_MAXCOPROC];
 

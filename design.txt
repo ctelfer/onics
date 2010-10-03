@@ -362,22 +362,3 @@ IPsecIn
 
 IPsecOut
   - Encapsulate and encrypt packets using IPsec
-
-
-
------------------------------
-Netronome-specific Tool Ideas
------------------------------
-  * Obviously, I won't consider these without explicit authorization to
-    release 
-
-Receive from NFE/Send to NFE
-
-NFM-to-metapkt conversion
-  * use NFM Rules engine to affix classification tags
-
-NetVM embedded in an IXP/NFP
-
-Other tools at IXP/NFP level?  
-
-Graph system - nettool integration

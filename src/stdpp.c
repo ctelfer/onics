@@ -182,7 +182,7 @@ static struct prparse *eth_parse(struct prparse *pprp, uint * nextppt)
 
 	abort_unless(pprp && nextppt);
 
-	prp = newprp(sizeof(*prp), PPT_ETHERNET, pprp, &eth_prparse_ops, 0);
+	prp = newprp(sizeof(*prp), PPT_ETHERNET2, pprp, &eth_prparse_ops, 0);
 	if (!prp)
 		return NULL;
 	if (prp_totlen(prp) < ETHHLEN) {
@@ -235,7 +235,7 @@ static struct prparse *eth_create(byte_t * start, long off, long len,
 		if (hlen < ETHHLEN)
 			return NULL;
 	}
-	prp = crtprp(sizeof(struct prparse), PPT_ETHERNET, start, off, hlen,
+	prp = crtprp(sizeof(struct prparse), PPT_ETHERNET2, start, off, hlen,
 		     plen, 0, &eth_prparse_ops, 0);
 	if (prp)
 		memset(start + off, 0, ETHHLEN);
@@ -1313,7 +1313,7 @@ struct prparse_ops tcp_prparse_ops = {
 
 int register_std_proto_parsers()
 {
-	if (pp_register(PPT_ETHERNET, &eth_proto_parser_ops) < 0)
+	if (pp_register(PPT_ETHERNET2, &eth_proto_parser_ops) < 0)
 		goto fail;
 	if (pp_register(PPT_ARP, &arp_proto_parser_ops) < 0)
 		goto fail;
@@ -1338,7 +1338,7 @@ fail:
 
 void unregister_std_proto_parsers()
 {
-	pp_unregister(PPT_ETHERNET);
+	pp_unregister(PPT_ETHERNET2);
 	pp_unregister(PPT_ARP);
 	pp_unregister(PPT_IPV4);
 	pp_unregister(PPT_IPV6);

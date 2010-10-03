@@ -513,6 +513,21 @@ void run_without_packets(struct netvm *vm, struct meminit *mi, size_t nmi)
 }
 
 
+static void send_clr_packets(struct netvm *vm, int npkt)
+{
+	int i;
+	struct pktbuf *p;
+	for (i = 0; i < NETVM_MAXPKTS; ++i) {
+		p = netvm_clrpkt(vm, i, 1);
+		if (p) {
+			if (pkb_file_write(stdout, p) < 0)
+				err("Error writing out packet %d", npkt);
+			pkb_free(p);
+		}
+	}
+}
+
+
 void run_with_packets(struct netvm *vm, int filter, struct meminit *mi,
 		      size_t nmi)
 {
@@ -524,6 +539,8 @@ void run_with_packets(struct netvm *vm, int filter, struct meminit *mi,
 	uint32_t rc;
 
 	while (pkb_file_read(stdin, &p) > 0) {
+		if (pkb_parse(p) < 0)
+			errsys("Error parsing packets");
 		++npkt;
 		netvm_restart(vm);
 		netvm_loadpkt(vm, p, 0);
@@ -535,16 +552,8 @@ void run_with_packets(struct netvm *vm, int filter, struct meminit *mi,
 		fprintf(stderr, "Packet %5u: ", npkt);
 		print_vmret(vmrv, rc);
 
-		if (filter && vmrv >= 0) {
-			for (i = 0; i < NETVM_MAXPKTS; ++i) {
-				p = netvm_clrpkt(vm, i, 1);
-				if (p) {
-					if (pkb_file_write(stdout, p) < 0)
-						err("Error writing out packet %d\n", npkt);
-					pkb_free(p);
-				}
-			}
-		}
+		if (filter && vmrv >= 0)
+			send_clr_packets(vm, npkt);
 	}
 	netvm_reset(vm);
 
@@ -561,7 +570,10 @@ int main(int argc, char *argv[])
 	int rv;
 
 	parse_options(argc, argv);
+
 	register_std_proto_parsers();
+	pkb_init(1);
+
 	prog = &vm_progs[prognum];
 	file_emitter_init(&fe, (prog->filter ? stderr : stdout));
 	netvm_init(&vm, vm_stack, array_length(vm_stack), vm_memory,

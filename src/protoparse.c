@@ -15,7 +15,7 @@ static struct proto_parser_ops none_proto_parser_ops = {
 	none_create
 };
 
-struct proto_parser ieee_proto_parsers[PPT_PER_PF];
+struct proto_parser dlt_proto_parsers[PPT_PER_PF];
 struct proto_parser net_proto_parsers[PPT_PER_PF];
 struct proto_parser inet_proto_parsers[PPT_PER_PF];
 struct proto_parser pp_proto_parsers[PPT_PER_PF] = {
@@ -59,8 +59,8 @@ static struct proto_parser *_pp_lookup(uint type)
 		return &inet_proto_parsers[PPT_PROTO(type)];
 	case PPT_PF_NET:
 		return &net_proto_parsers[PPT_PROTO(type)];
-	case PPT_PF_IEEE:
-		return &ieee_proto_parsers[PPT_PROTO(type)];
+	case PPT_PF_DLT:
+		return &dlt_proto_parsers[PPT_PROTO(type)];
 	case PPT_PF_PP:
 		if (PPT_PROTO(type) >= PPT_PF_PP_RESERVED)
 			return NULL;
@@ -137,6 +137,23 @@ static struct prparse *none_parse(struct prparse *pprp, uint * nextppt)
 }
 
 
+static void none_init(struct prparse *prp, byte_t *buf, long off, long len,
+		       long hlen, long plen)
+{
+	prp->type = PPT_NONE;
+	prp->error = 0;
+	prp->ops = &none_prparse_ops;
+	l_init(&prp->node);
+	prp->region = NULL;
+	prp->data = buf;
+	prp->noff = PRP_OI_MIN_NUM;
+	prp_soff(prp) = off;
+	prp_eoff(prp) = prp_soff(prp) + len;
+	prp_poff(prp) = prp_soff(prp) + hlen;
+	prp_toff(prp) = prp_poff(prp) + plen;
+}
+
+
 static struct prparse *none_create(byte_t * start, long off, long len,
 				   long hlen, long plen, int mode)
 {
@@ -151,17 +168,7 @@ static struct prparse *none_create(byte_t * start, long off, long len,
 	if (!prp)
 		return NULL;
 
-	prp->type = PPT_NONE;
-	prp->error = 0;
-	prp->ops = &none_prparse_ops;
-	l_init(&prp->node);
-	prp->region = NULL;
-	prp->data = start;
-	prp->noff = PRP_OI_MIN_NUM;
-	prp_soff(prp) = off;
-	prp_eoff(prp) = prp_soff(prp) + len;
-	prp_poff(prp) = prp_soff(prp) + hlen;
-	prp_toff(prp) = prp_poff(prp) + plen;
+	none_init(prp, start, off, len, hlen, plen);
 
 	return prp;
 }
@@ -220,37 +227,31 @@ int prp_region_empty(struct prparse *reg)
 }
 
 
-struct prparse *prp_create_parse(byte_t * buf, long off, long len)
+void prp_init_parse(struct prparse *base, byte_t *buf, long len)
 {
-	if (!buf || off < 0 || len < 0) {
-		errno = EINVAL;
-		return NULL;
-	}
-	return none_create(buf, off, len, 0, len, PPCF_FILL);
+	abort_unless(base && buf && (len >= 0));
+	none_init(base, buf, 0, len, 0, 0);
 }
 
 
-struct prparse *prp_parse_packet(unsigned ippt, byte_t * pkt, long off,
-				 long len)
+int prp_parse_packet(struct prparse *base, uint ippt)
 {
-	struct prparse *first, *prp;
+	struct prparse *prp;
 	const struct proto_parser *pp;
 	uint nextppt;
 	int errval;
 
+	abort_unless(base && base->type == PPT_NONE);
 	pp = pp_lookup(ippt);
-	if ((off < 0) || (len < 0) || !pp) {
+	if (!pp) {
 		errno = EINVAL;
-		return NULL;
+		return -1;
 	}
 
-	if (!(first = prp_create_parse(pkt, off, len)))
-		return NULL;
-
-	prp = first;
+	prp = base;
 	do {
 		nextppt = PPT_INVALID;
-		if (!(prp = (*pp->ops->parse) (prp, &nextppt))) {
+		if (!(prp = (*pp->ops->parse)(prp, &nextppt))) {
 			errval = errno;
 			goto err;
 		}
@@ -260,12 +261,12 @@ struct prparse *prp_parse_packet(unsigned ippt, byte_t * pkt, long off,
 		pp = pp_lookup(nextppt);
 	} while (pp);
 
-	return first;
+	return 0;
 
  err:
-	prp_free_all(first);
+	prp_clear(base);
 	errno = errval;
-	return NULL;
+	return -1;
 }
 
 
@@ -323,35 +324,30 @@ int prp_push(unsigned ppidx, struct prparse *pprp, int mode)
 }
 
 
-void prp_free(struct prparse *prp)
+/* clear from back to front */
+void prp_clear(struct prparse *prp)
+{
+	struct prparse *next, *prev;
+	abort_unless(prp && prp->region == NULL);
+	for (next = prp_prev(prp); next != prp; next = prev) {
+		abort_unless(next->ops && next->ops->free);
+		prev = prp_prev(next);
+		l_rem(&next->node);
+		(*next->ops->free)(next);
+	}
+}
+
+
+void prp_free_parse(struct prparse *prp)
 {
 	struct prparse *next;
 	if (!prp)
 		return;
+	abort_unless(prp->region != NULL);
 	abort_unless(prp->ops && prp->ops->free);
-	if (prp->region == NULL) {
-		prp_free_all(prp);
-		return;
-	}
 	for (next = prp_next_in_region(prp, prp); next != NULL;
 	     next = prp_next_in_region(next, prp))
 		next->region = prp->region;
-	l_rem(&prp->node);
-	(*prp->ops->free) (prp);
-}
-
-
-void prp_free_all(struct prparse *prp)
-{
-	struct prparse *next, *prev;
-	abort_unless(prp_list_head(prp));
-	for (next = prp_prev(prp); !prp_list_head(next); next = prev) {
-		abort_unless(next->ops && next->ops->free);
-		prev = prp_prev(next);
-		l_rem(&next->node);
-		(*next->ops->free) (next);
-	}
-	abort_unless(prp->ops && prp->ops->free);
 	l_rem(&prp->node);
 	(*prp->ops->free) (prp);
 }
@@ -379,22 +375,22 @@ void prp_free_region(struct prparse *prp)
 
 	if (prp == NULL)
 		return;
+	if (prp->region == NULL) {
+		prp_clear(prp);
+		return;
+	}
 
 	/* find the last node potentially in the region */
-	if (prp->region == NULL) {
-		trav = prp_prev(prp);	/* shortcut for root nodes */
-	} else {
-		hold = NULL;
-		trav = prp_next(prp);
-		while (!prp_list_end(trav) && (prp_soff(trav) <= prp_eoff(prp))) {
-			hold = trav;
-			trav = prp_next(trav);
-		}
-		if (hold == NULL)
-			trav = prp;
-		else
-			trav = hold;
+	hold = NULL;
+	trav = prp_next(prp);
+	while (!prp_list_end(trav) && (prp_soff(trav) <= prp_eoff(prp))) {
+		hold = trav;
+		trav = prp_next(trav);
 	}
+	if (hold == NULL)
+		trav = prp;
+	else
+		trav = hold;
 
 	/* work backwards from last node potentially in the region */
 	/* This is because working backwards we cannot delete a node */
@@ -411,52 +407,56 @@ void prp_free_region(struct prparse *prp)
 
 	abort_unless(prp->ops && prp->ops->free);
 	l_rem(&prp->node);
-	(*prp->ops->free) (prp);
+	(*prp->ops->free)(prp);
 }
 
 
-struct prparse *prp_copy(struct prparse *oprp, byte_t * buffer)
+int prp_copy(struct prparse *nprp, struct prparse *oprp, byte_t *buffer)
 {
-	struct prparse *first = NULL, *trav, *last, *nprp, *oreg, *nreg;
+	struct prparse *trav, *last, *aprp, *oreg, *nreg;
+	int errval;
 
-	if (!oprp || !buffer || oprp->region != NULL) {
+	if (!nprp || !oprp || !buffer || oprp->region != NULL) {
 		errno = EINVAL;
-		return NULL;
+		return -1;
 	}
 
-	abort_unless(oprp->ops && oprp->ops->copy);
-	if (!(first = (*oprp->ops->copy) (oprp, buffer)))
-		goto err;
+	*nprp = *oprp;
+	nprp->data = NULL;
+	l_init(&nprp->node);
 
-	for (last = first, trav = prp_next(oprp); !prp_list_end(trav);
-	     last = nprp, trav = prp_next(trav)) {
+	for (last = nprp, trav = prp_next(oprp); !prp_list_end(trav);
+	     last = aprp, trav = prp_next(trav)) {
 		abort_unless(oprp->ops && oprp->ops->copy);
-		if (!(nprp = (*trav->ops->copy) (trav, buffer)))
+		if (!(aprp = (*trav->ops->copy) (trav, buffer))) {
+			errval = errno;
 			goto err;
-		l_ins(&last->node, &nprp->node);
+		}
+		l_ins(&last->node, &aprp->node);
 	}
 
 	/* patch up regions: recall that each parse (except the root parse) */
 	/* MUST have a region that comes before it in the list. */
-	for (nprp = prp_next(first), trav = prp_next(oprp);
+	for (aprp = prp_next(nprp), trav = prp_next(oprp);
 	     !prp_list_end(trav);
-	     nprp = prp_next(nprp), trav = prp_next(trav)) {
+	     aprp = prp_next(aprp), trav = prp_next(trav)) {
 		oreg = prp_prev(trav);
-		nreg = prp_prev(nprp);
+		nreg = prp_prev(aprp);
 		abort_unless(trav->region != NULL);
 		while (oreg != trav->region) {
 			abort_unless(oreg != NULL);
 			oreg = prp_prev(oreg);
 			nreg = prp_prev(nreg);
 		}
-		nprp->region = nreg;
+		aprp->region = nreg;
 	}
 
-	return first;
+	return 0;
 
- err:
-	prp_free_all(first);
-	return NULL;
+err:
+	prp_clear(aprp);
+	errno = errval;
+	return -1;
 }
 
 

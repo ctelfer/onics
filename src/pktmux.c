@@ -82,8 +82,8 @@ int readpkt(void *arg, struct callback *cb)
 		return 0;
 	}
 	++g_npkts;
-	p->pkb_class &= 0xFF;
-	p->pkb_class |= ioe->fd - 3;
+	/* TODO META */
+	pkb_pack(p);
 	if (pkb_fd_write(1, p) < 0)
 		errsys("Error writing packet %lu\n", g_npkts);
 	pkb_free(p);
@@ -100,6 +100,8 @@ int main(int argc, char *argv[])
 	optparse_reset(&g_oparser, argc, argv);
 	parse_options();
 	fclose(stdin);
+
+	pkb_init(1);
 
 	ue_init(&mux, &estdmm);
 	for (i = 3; i < 3 + g_nfd; ++i) {

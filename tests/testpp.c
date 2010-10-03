@@ -11,7 +11,7 @@ const char *pnames(uint ppt)
 		return "Packet";
 	case PPT_INVALID:
 		return "Invalid Header";
-	case PPT_ETHERNET:
+	case PPT_ETHERNET2:
 		return "Ethernet";
 	case PPT_ARP:
 		return "ARP";
@@ -40,21 +40,17 @@ int main(int argc, char *argv[])
 	unsigned nprp = 0;
 
 	register_std_proto_parsers();
+	pkb_init(1);
 
 	while (pkb_file_read(stdin, &p) > 0) {
+		if (pkb_parse(p) < 0)
+			errsys("Error parsing packet");
 		++npkt;
-		if (p->pkb_dltype != PKTDL_ETHERNET2) {
+		if (pkb_get_dltype(p) != DLT_ETHERNET2) {
 			printf("Unknown data type for packet %u\n", npkt);
 			continue;
 		}
-		prp =
-		    prp_parse_packet(PPT_ETHERNET, p->pkb_buffer, p->pkb_offset,
-				     p->pkb_len);
-		if (prp == NULL) {
-			printf("Could not parse ethernet packet %u\n", npkt);
-			continue;
-		}
-
+		prp = &p->pkb_prp;
 		for (nprp = 1, t = prp_next(prp); !prp_list_end(t);
 		     t = prp_next(t), ++nprp) {
 			printf("%4u:\tHeader %u -- %s\n", npkt, nprp,

@@ -9,7 +9,7 @@ OPTS=-g
 LIBS=-L${CATLIB_ROOT}/lib -lcat_dbg -lpcap
 DEFS=
 BINDIR=../bin
-LIBOBJS= metapkt.o namespace.o netvm.o netvm_rt.o pktbuf.o stdpp.o \
+LIBOBJS= xpkt.o namespace.o netvm.o netvm_rt.o pktbuf.o stdpp.o \
 	 protoparse.o util.o lex.pml.o pmltree.o netvm_std_coproc.o
 
 TARGETS=${BINDIR}/pcapin \
@@ -20,24 +20,24 @@ TARGETS=${BINDIR}/pcapin \
 
 all: ${LIBOBJS} ${TARGETS}
 
-${BINDIR}/pcapin: pcapin.o pktbuf.o
-	${CC} -o ../bin/pcapin pcapin.o pktbuf.o ${DEFS} ${OPTS} \
-		${INCS} ${LIBS}
-
-${BINDIR}/pcapout: pcapout.o pktbuf.o
-	${CC} -o ../bin/pcapout pcapout.o pktbuf.o ${DEFS} ${OPTS} \
-		${INCS} ${LIBS}
-
-${BINDIR}/pktmux: pktmux.o pktbuf.o
-	${CC} -o ../bin/pktmux pktmux.o pktbuf.o  \
+${BINDIR}/pcapin: pcapin.o pktbuf.o xpkt.o protoparse.o
+	${CC} -o ../bin/pcapin pcapin.o pktbuf.o xpkt.o protoparse.o \
 		${DEFS} ${OPTS} ${INCS} ${LIBS}
 
-${BINDIR}/pktdemux: pktdemux.o pktbuf.o
-	${CC} -o ../bin/pktdemux pktdemux.o pktbuf.o  \
+${BINDIR}/pcapout: pcapout.o pktbuf.o xpkt.o protoparse.o
+	${CC} -o ../bin/pcapout pcapout.o pktbuf.o xpkt.o protoparse.o \
 		${DEFS} ${OPTS} ${INCS} ${LIBS}
 
-${BINDIR}/pktrel: pktrel.o pktbuf.o
-	${CC} -o ../bin/pktrel pktrel.o pktbuf.o  \
+${BINDIR}/pktmux: pktmux.o pktbuf.o xpkt.o protoparse.o
+	${CC} -o ../bin/pktmux pktmux.o pktbuf.o xpkt.o protoparse.o \
+		${DEFS} ${OPTS} ${INCS} ${LIBS}
+
+${BINDIR}/pktdemux: pktdemux.o pktbuf.o xpkt.o protoparse.o
+	${CC} -o ../bin/pktdemux pktdemux.o pktbuf.o xpkt.o protoparse.o \
+		${DEFS} ${OPTS} ${INCS} ${LIBS}
+
+${BINDIR}/pktrel: pktrel.o pktbuf.o xpkt.o protoparse.o
+	${CC} -o ../bin/pktrel pktrel.o pktbuf.o xpkt.o protoparse.o \
 		${DEFS} ${OPTS} ${INCS} ${LIBS}
 
 .c.o: $<

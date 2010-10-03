@@ -11,7 +11,7 @@
 /* Protocol Families */
 #define PPT_PF_INET		0
 #define PPT_PF_NET		1
-#define PPT_PF_IEEE		2
+#define PPT_PF_DLT		2
 #define PPT_PF_PP		255
 #define PPT_PER_PF		256
 
@@ -174,6 +174,7 @@ struct prparse {
 #define prp_next(prp) container((prp)->node.next, struct prparse, node)
 #define prp_list_head(prp) ((prp)->region == NULL)
 #define prp_list_end(prp) ((prp)->region == NULL)
+#define prp_empty(prp) (l_isempty(&(prp)->node))
 
 /* Find the next parse in the specified region or return NULL if none */
 /* exists in the parse list.  use the region parse as the 'from' for */
@@ -219,12 +220,6 @@ struct prparse *prp_next_in_region(struct prparse *from, struct prparse *reg);
 /* returns 1 if a region contains no parses that refer to it */
 int prp_region_empty(struct prparse *reg);
 
-/* Creates a 'default' header parse at buf + off given len bytes to use. */
-/* The "data portion" (i.e. the space the protocol data is expected to */
-/* take up) is pktlen bytes.  There are hdrm bytes reserved from off for */
-/* growing at the front of the parse.  */
-struct prparse *prp_create_parse(byte_t * buf, long off, long len);
-
 /* Create a new header in a parsed packet.  The "mode" determines how this */
 /* header is created.  if mode == PPCF_FILL, then 'prp' must be the */
 /* innermost header and the new header will fill inside the curent one. If */
@@ -236,26 +231,33 @@ struct prparse *prp_create_parse(byte_t * buf, long off, long len);
 int prp_push(unsigned ppidx, struct prparse *prp, int mode);
 
 
-/* Given a buffer and start offset and a first protocol parser to start with */
-/* parse all headers as automatically as possible */
-struct prparse *prp_parse_packet(unsigned firstpp, byte_t * pbuf, long off,
-				 long len);
+/* Initializes a fresh parse of PPT_NONE.  This can be used to create the */
+/* base for a full parse. */
+void prp_init_parse(struct prparse *base, byte_t *buf, long len);
 
-/* Free a parse.  All sub regions of the parse are made part of prp's */
-/* parent region.  If prp is a root region, this is the equivalent of */
-/* prp_free_all() on the entire parse. */
-void prp_free(struct prparse *prp);
+/* Given an initialized protocol parse header for a buffer (PPT_NONE) and */
+/* an initial protocol parse type, parse the packet and add to the list */
+/* of PRPs.  Returns -1 on an allocation error.  Otherwise, parse errors */
+/* (which may be acceptable for certain applications) are stored in the */
+/* error fields of the generated parses. */
+int prp_parse_packet(struct prparse *base, uint firstppt);
 
-/* Free a complete parse tree.  prp->region == NULL */
-void prp_free_all(struct prparse *prp);
+/* Free a complete parse tree.  prp->region == NULL  This does not free. */
+/* the base parse itself. (i.e. the root region) */
+void prp_clear(struct prparse *prp);
 
-/* Free a header parse, or, if freechildren is non-zero, also free all child */
-/* headers of the current header parse */
+/* Free a single parse.  All sub regions of the parse are made part of prp's */
+/* parent region.  It is an error to call this on the root region. */
+void prp_free_parse(struct prparse *prp);
+
+/* Free a header parse, and all child headers.  If called on the root */
+/* parse, then this is equivalent to prp_clear() */
 void prp_free_region(struct prparse *prp);
 
-
-/* copy a header parse (but not the packet buffer itself) */
-struct prparse *prp_copy(struct prparse *prp, byte_t * buffer);
+/*
+ * copy a header parse (but not the packet buffer itself).
+ */
+int prp_copy(struct prparse *nprp, struct prparse *oprp, byte_t *buffer);
 
 /* Associate a header parse with a new packet buffer (which must be sized */
 /* correctly based on the header parse). */

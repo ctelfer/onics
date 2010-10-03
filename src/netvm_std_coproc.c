@@ -220,7 +220,7 @@ static void pktq_reset(struct netvm_coproc *ncp)
 	for (i = 0; i < cp->nqueues; ++i) {
 		struct list *l;
 		while ((l = l_deq(&cp->queues[i])))
-			metapkt_free(container(l, struct metapkt, entry), 1);
+			pkb_free(container(l, struct pktbuf, pkb_entry));
 	}
 }
 
@@ -254,7 +254,7 @@ static void nci_qop(struct netvm *vm, struct netvm_coproc *ncp, int cpi)
 	struct netvm_pktq_cp *cp = container(ncp, struct netvm_pktq_cp, coproc);
 	struct netvm_inst *inst = &vm->inst[vm->pc];
 	uint32_t pktnum, qnum;
-	struct metapkt *pkt;
+	struct pktbuf *pkb;
 	struct list *l;
 	if (CPIMMED(inst)) {
 		pktnum = inst->val;
@@ -266,14 +266,14 @@ static void nci_qop(struct netvm *vm, struct netvm_coproc *ncp, int cpi)
 	FATAL(vm, NETVM_ERR_BADCPOP, qnum >= cp->nqueues);
 
 	if (CPOP(inst) == NETVM_CPOC_ENQ) {
-		FATAL(vm, NETVM_ERR_NOPKT, !(pkt = vm->packets[pktnum]));
-		l_enq(&cp->queues[qnum], &pkt->entry);
+		FATAL(vm, NETVM_ERR_NOPKT, !(pkb = vm->packets[pktnum]));
+		l_enq(&cp->queues[qnum], &pkb->pkb_entry);
 		vm->packets[pktnum] = NULL;
 	} else {
 		if ((l = l_deq(&cp->queues[qnum]))) {
-			metapkt_free(vm->packets[pktnum], 1);
+			pkb_free(vm->packets[pktnum]);
 			vm->packets[pktnum] =
-			    container(l, struct metapkt, entry);
+			    container(l, struct pktbuf, pkb_entry);
 		}
 	}
 }
@@ -395,7 +395,7 @@ static void nci_rexp(struct netvm *vm, struct netvm_coproc *ncp, int cpi)
 	struct netvm_inst *inst = &vm->inst[vm->pc];
 	int32_t nm;
 	uint32_t pktnum, poff, len, ridx;
-	struct metapkt *pkt;
+	struct pktbuf *pkb;
 	struct prparse *prp;
 	struct raw r;
 
@@ -409,13 +409,13 @@ static void nci_rexp(struct netvm *vm, struct netvm_coproc *ncp, int cpi)
 
 	FATAL(vm, NETVM_ERR_BADCPOP, (nm < 0));
 	FATAL(vm, NETVM_ERR_PKTNUM, (pktnum >= NETVM_MAXPKTS));
-	FATAL(vm, NETVM_ERR_NOPKT, !(pkt = vm->packets[pktnum]));
+	FATAL(vm, NETVM_ERR_NOPKT, !(pkb = vm->packets[pktnum]));
 	S_POP(vm, ridx);
 	FATAL(vm, NETVM_ERR_BADCPOP, (ridx >= cp->nrexes));
 	S_POP(vm, len);
 	S_POP(vm, poff);
 	FATAL(vm, NETVM_ERR_IOVFL, (len + poff < len));
-	prp = pkt->headers;
+	prp = &pkb->pkb_prp;
 	FATAL(vm, NETVM_ERR_PKTADDR,
 	      (poff < prp_soff(prp)) || (poff + len > prp_totlen(prp)));
 	r.data = prp->data + poff;

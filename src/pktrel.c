@@ -80,6 +80,8 @@ int main(int argc, char *argv[])
 	struct pktbuf *p;
 	struct cat_time cur, next, diff;
 
+	pkb_init(1);
+
 	signal(SIGALRM, alarm_handler);
 	if (g_start_delay > 0) {
 		struct cat_time t;
@@ -87,7 +89,11 @@ int main(int argc, char *argv[])
 	}
 
 	while ((rv = pkb_fd_read(0, &p)) > 0) {
+		/*
+		TODO META
 		tm_lset(&next, p->pkb_tssec, p->pkb_tsnsec);
+		*/
+		next.sec = next.nsec = 0;
 		if (next.sec < 0 || next.nsec < 0) {
 			fprintf(stderr,
 				"Invalid timestamp on packet %lu (%ld.%09ld)",
@@ -105,6 +111,7 @@ int main(int argc, char *argv[])
 			cur = next;
 		}
 
+		pkb_pack(p);
 		if (pkb_fd_write(1, p) < 0)
 			errsys("Error writing packet %lu", g_npkts);
 		pkb_free(p);
