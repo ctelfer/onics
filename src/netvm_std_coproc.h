@@ -7,10 +7,47 @@
 
 
 /* --------- Global Coprocessor Definitions --------- */
-#define NETVM_CPT_OUTPORT   1
-#define NETVM_CPT_PKTQ      2
-#define NETVM_CPT_REX       3
+#define NETVM_CPT_XPKT      1
+#define NETVM_CPT_OUTPORT   2
+#define NETVM_CPT_PKTQ      3
+#define NETVM_CPT_REX       4
 
+
+/* --------- Xpkt Coprocessor --------- */
+
+
+/* 
+ * Tag descriptor value format: 
+ *  | idx(16) | tag type(8) | pkt(8) |
+ */
+
+struct netvm_xpktcp_tagdesc {
+	uint16_t	index;
+	uint8_t		type;
+	uint8_t		pktnum;
+};
+
+enum {
+	NETVM_CPOC_HASTAG,	/* mo, val == tagdesc */
+	NETVM_CPOC_RDTAG,	/* mo, val == tagdesc */
+	NETVM_CPOC_ADDTAG,	/* val == tagdesc */
+	NETVM_CPOC_DELTAG,	/* val == tagdesc */
+	NETVM_CPOC_LDTAG,	/* [addr] mo, val == width */
+	NETVM_CPOC_STTAG,	/* [vaddr,v] val == width */
+
+	NETVM_CPOC_NUMXPKT,
+};
+
+
+struct netvm_xpkt_cp {
+	struct netvm_coproc coproc;
+	netvm_cpop ops[NETVM_CPOC_NUMXPKT];
+	byte_t tag[XPKT_TAG_MAXW * 4];
+};
+
+
+int init_xpkt_cp(struct netvm_xpkt_cp *cp);
+void fini_xpkt_cp(struct netvm_xpkt_cp *cp);
 
 
 /* --------- Output Port Coprocessor --------- */
@@ -110,12 +147,14 @@ void fini_rex_cp(struct netvm_rex_cp *cp);
 /* --------- Install / Finalize Standard Coprocessors as a Bundle --------- */
 
 enum {
-	NETVM_CPI_OUTPORT = 0,
-	NETVM_CPI_PKTQ = 1,
-	NETVM_CPI_REX = 2,
+	NETVM_CPI_XPKT = 0,
+	NETVM_CPI_OUTPORT = 1,
+	NETVM_CPI_PKTQ = 2,
+	NETVM_CPI_REX = 3,
 };
 
 struct netvm_std_coproc {
+	struct netvm_xpkt_cp xpkt;
 	struct netvm_outport_cp outport;
 	struct netvm_pktq_cp pktq;
 	struct netvm_rex_cp rex;

@@ -1,11 +1,264 @@
+#include <stdlib.h>
+#include <string.h>
+#include <cat/mem.h>
+#include <cat/emit_format.h>
 #include "netvm.h"
 #include "netvm_std_coproc.h"
 #include "netvm_op_macros.h"
-#include <cat/mem.h>
-#include <cat/emit_format.h>
-#include <stdlib.h>
-#include <string.h>
+#include "pktbuf.h"
 
+#define swap16(v) ( (((uint16_t)(v) << 8) & 0xFF00) | \
+		    (((uint16_t)(v) >> 8) & 0xFF) )
+#define swap32(v) ( (((uint32_t)(v) << 24) & 0xFF000000ul) | \
+		    (((uint32_t)(v) << 8) & 0xFF0000ul)    | \
+		    (((uint32_t)(v) >> 8) & 0xFF00ul)      | \
+		    (((uint32_t)(v) >> 24) & 0xFFul) )
+
+
+/* --------- Xpkt Coprocessor --------- */
+
+static int xpktcp_register(struct netvm_coproc *cp, struct netvm *vm, int cpid)
+{
+	return 0;
+}
+
+
+static void xpktcp_reset(struct netvm_coproc *cp)
+{
+}
+
+
+static int xpktcp_validate(struct netvm_inst *inst, struct netvm *vm)
+{
+	if ((IMMED(inst) &&
+	     (CPOP(inst) < NETVM_CPOC_HASTAG || CPOP(inst) > NETVM_CPOC_STTAG))
+	     || (CPOP(inst) >= NETVM_CPOC_LDTAG && 
+		 CPOP(inst) <= NETVM_CPOC_STTAG && 
+		 inst->val != 1 && inst->val != 2 && inst->val != 4))
+	{
+		return -1;
+	}
+
+	/* Write and store operations not permitted in matchonly mode */
+	if (vm->matchonly) {
+	       if ((CPOP(inst) == NETVM_CPOC_STTAG)  || 
+	           (CPOP(inst) == NETVM_CPOC_ADDTAG) ||
+	           (CPOP(inst) == NETVM_CPOC_DELTAG))
+		return -1;
+	}
+	return 0;
+}
+
+
+static void xtagdesc(struct netvm_xpktcp_tagdesc *td, uint32_t val)
+{
+	td->index = val >> 16;
+	td->type = (val >> 8) & 0xFF;
+	td->pktnum = val & 0xFF;
+}
+
+
+void xpktcp_hastag(struct netvm *vm, struct netvm_coproc *cp, int cpi)
+{
+	struct netvm_inst *inst = &vm->inst[vm->pc];
+	struct netvm_xpktcp_tagdesc td;
+	struct pktbuf *pkb;
+	uint32_t n;
+
+	if (CPIMMED(inst)) {
+		n = inst->val;
+	} else {
+		S_POP(vm, n);
+	}
+	xtagdesc(&td, n);
+	FATAL(vm, NETVM_ERR_PKTNUM, (td.pktnum >= NETVM_MAXPKTS));
+	FATAL(vm, NETVM_ERR_NOPKT, !(pkb = vm->packets[td.pktnum]));
+
+	n = pkb_find_tag(pkb, td.type, td.index) != NULL;
+	S_PUSH(vm, n);
+}
+
+
+void xpktcp_rdtag(struct netvm *vm, struct netvm_coproc *cp, int cpi)
+{
+	struct netvm_xpkt_cp *xcp = container(cp, struct netvm_xpkt_cp, coproc);
+	struct netvm_inst *inst = &vm->inst[vm->pc];
+	struct netvm_xpktcp_tagdesc td;
+	struct pktbuf *pkb;
+	struct xpkt_tag_hdr *xth;
+	uint32_t n;
+
+	if (CPIMMED(inst)) {
+		n = inst->val;
+	} else {
+		S_POP(vm, n);
+	}
+	xtagdesc(&td, n);
+	FATAL(vm, NETVM_ERR_PKTNUM, (td.pktnum >= NETVM_MAXPKTS));
+	FATAL(vm, NETVM_ERR_NOPKT, !(pkb = vm->packets[td.pktnum]));
+	xth = pkb_find_tag(pkb, td.type, td.index);
+	FATAL(vm, NETVM_ERR_BADCPOP, (xth == NULL));
+	memcpy(xcp->tag, xth, xth->xth_nwords * 4);
+	/* The tag must be in packed form for the VM */
+	xpkt_pack_tags((uint32_t *)xcp->tag, xth->xth_nwords * 4);
+}
+
+
+void xpktcp_addtag(struct netvm *vm, struct netvm_coproc *cp, int cpi)
+{
+	struct netvm_xpkt_cp *xcp = container(cp, struct netvm_xpkt_cp, coproc);
+	struct netvm_inst *inst = &vm->inst[vm->pc];
+	struct netvm_xpktcp_tagdesc td;
+	struct pktbuf *pkb;
+	uint32_t n;
+	int rv;
+
+	if (CPIMMED(inst)) {
+		n = inst->val;
+	} else {
+		S_POP(vm, n);
+	}
+	xtagdesc(&td, n);
+	FATAL(vm, NETVM_ERR_PKTNUM, (td.pktnum >= NETVM_MAXPKTS));
+	FATAL(vm, NETVM_ERR_NOPKT, !(pkb = vm->packets[td.pktnum]));
+	rv = pkb_add_tag(pkb, (struct xpkt_tag_hdr *)xcp->tag);
+	FATAL(vm, NETVM_ERR_BADCPOP, (rv < 0));
+}
+
+
+void xpktcp_deltag(struct netvm *vm, struct netvm_coproc *cp, int cpi)
+{
+	struct netvm_inst *inst = &vm->inst[vm->pc];
+	struct netvm_xpktcp_tagdesc td;
+	struct pktbuf *pkb;
+	uint32_t n;
+	int rv;
+
+	if (CPIMMED(inst)) {
+		n = inst->val;
+	} else {
+		S_POP(vm, n);
+	}
+	xtagdesc(&td, n);
+	FATAL(vm, NETVM_ERR_PKTNUM, (td.pktnum >= NETVM_MAXPKTS));
+	FATAL(vm, NETVM_ERR_NOPKT, !(pkb = vm->packets[td.pktnum]));
+	rv = pkb_del_tag(pkb, td.type, td.index);
+	FATAL(vm, NETVM_ERR_BADCPOP, (rv < 0));
+}
+
+
+void xpktcp_ldtag(struct netvm *vm, struct netvm_coproc *cp, int cpi)
+{
+	struct netvm_xpkt_cp *xcp = container(cp, struct netvm_xpkt_cp, coproc);
+	struct netvm_inst *inst = &vm->inst[vm->pc];
+	uint32_t addr;
+	uint32_t val;
+	byte_t *p;
+
+	S_POP(vm, addr);
+
+	switch (inst->val) {
+	case 1:
+		FATAL(vm, NETVM_ERR_MEMADDR, addr >= XPKT_TAG_MAXW * 4);
+		val = *(byte_t *)(xcp->tag + addr);
+		if (ISSIGNED(inst))
+			val |= -(val & 0x80);
+		break;
+	case 2:
+		FATAL(vm, NETVM_ERR_MEMADDR, addr > XPKT_TAG_MAXW * 4 - 2);
+		p = xcp->tag + addr;
+		val = *p++ << 8;
+		val |= *p;
+		if (inst->flags & NETVM_IF_SWAP)
+			val = swap16(val);
+		if (ISSIGNED(inst))
+			val |= -(val & 0x8000);
+		break;
+	case 4:
+		FATAL(vm, NETVM_ERR_MEMADDR, addr > XPKT_TAG_MAXW * 4 - 4);
+		p = xcp->tag + addr;
+		val = *p++ << 24;
+		val |= *p++ << 16;
+		val |= *p++ << 8;
+		val |= *p;
+		if (inst->flags & NETVM_IF_SWAP)
+			val = swap32(val);
+		if (ISSIGNED(inst))
+			val |= -(val & 0x80000000);
+		break;
+	default:
+		abort_unless(0);	/* should be checked at validation */
+		VMERR(vm, NETVM_ERR_WIDTH);
+	}
+	S_PUSH(vm, val);
+}
+
+
+void xpktcp_sttag(struct netvm *vm, struct netvm_coproc *cp, int cpi)
+{
+	struct netvm_inst *inst = &vm->inst[vm->pc];
+	uint32_t addr;
+	uint32_t val;
+	byte_t *p;
+
+	S_POP(vm, addr);
+	S_POP(vm, val);
+
+	switch (inst->val) {
+	case 1:
+		FATAL(vm, NETVM_ERR_MEMADDR, addr >= XPKT_TAG_MAXW * 4);
+		*(byte_t *)(vm->mem + addr) = val;
+		break;
+	case 2:
+		FATAL(vm, NETVM_ERR_MEMADDR, addr > XPKT_TAG_MAXW * 4 - 2);
+		p = vm->mem + addr;
+		*p++ = (val >> 8) & 0xFF;
+		*p = val & 0xFF;
+		break;
+	case 4:
+		FATAL(vm, NETVM_ERR_MEMADDR, addr > XPKT_TAG_MAXW * 4 - 4);
+		p = vm->mem + addr;
+		*p++ = (val >> 24) & 0xFF;
+		*p++ = (val >> 16) & 0xFF;
+		*p++ = (val >> 8) & 0xFF;
+		*p = val & 0xFF;
+		break;
+	default:
+		abort_unless(0);	/* should be checked at validation */
+		VMERR(vm, NETVM_ERR_WIDTH);
+	}
+
+}
+
+
+int init_xpkt_cp(struct netvm_xpkt_cp *cp)
+{
+	netvm_cpop *opp;
+	abort_unless(cp);
+	cp->coproc.type = NETVM_CPT_XPKT;
+	cp->coproc.numops = NETVM_CPOC_NUMXPKT;
+	cp->coproc.ops = cp->ops;
+	cp->coproc.regi = &xpktcp_register;
+	cp->coproc.reset = &xpktcp_reset;
+	cp->coproc.validate = &xpktcp_validate;
+	opp = cp->ops;
+	opp[NETVM_CPOC_HASTAG] = xpktcp_hastag;
+	opp[NETVM_CPOC_RDTAG] = xpktcp_rdtag;
+	opp[NETVM_CPOC_ADDTAG] = xpktcp_addtag;
+	opp[NETVM_CPOC_DELTAG] = xpktcp_deltag;
+	opp[NETVM_CPOC_LDTAG] = xpktcp_ldtag;
+	opp[NETVM_CPOC_STTAG] = xpktcp_sttag;
+	return 0;
+}
+
+
+void fini_xpkt_cp(struct netvm_xpkt_cp *cp)
+{
+	abort_unless(cp);
+}
+
+
+/* --------- Outport Coprocessor --------- */
 
 static int outport_register(struct netvm_coproc *cp, struct netvm *vm, int cpi)
 {
@@ -528,6 +781,7 @@ int init_netvm_std_coproc(struct netvm *vm, struct netvm_std_coproc *cps)
 {
 	abort_unless(vm && cps);
 
+	init_xpkt_cp(&cps->xpkt);
 	init_outport_cp(&cps->outport, NULL);
 	if (init_rex_cp(&cps->rex, &stdmm) < 0)
 		return -1;
@@ -536,6 +790,8 @@ int init_netvm_std_coproc(struct netvm *vm, struct netvm_std_coproc *cps)
 		return -1;
 	}
 
+	if (netvm_set_coproc(vm, NETVM_CPI_XPKT, &cps->xpkt.coproc) < 0)
+		goto err;
 	if (netvm_set_coproc(vm, NETVM_CPI_OUTPORT, &cps->outport.coproc) < 0)
 		goto err;
 	if (netvm_set_coproc(vm, NETVM_CPI_PKTQ, &cps->pktq.coproc) < 0)
@@ -554,6 +810,7 @@ err:
 void fini_netvm_std_coproc(struct netvm_std_coproc *cps)
 {
 	abort_unless(cps);
+	fini_xpkt_cp(&cps->xpkt);
 	fini_outport_cp(&cps->outport);
 	fini_pktq_cp(&cps->pktq);
 	fini_rex_cp(&cps->rex);

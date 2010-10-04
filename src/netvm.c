@@ -703,7 +703,7 @@ static void ni_cpop(struct netvm *vm)
 	      (cpi >= NETVM_MAXCOPROC)
 	      || ((coproc = vm->coprocs[cpi]) == NULL));
 	FATAL(vm, NETVM_ERR_BADCPOP, op >= coproc->numops);
-	(*coproc->ops[op]) (vm, coproc, cpi);
+	(*coproc->ops[op])(vm, coproc, cpi);
 }
 
 
@@ -1319,17 +1319,17 @@ int netvm_setcode(struct netvm *vm, struct netvm_inst *inst, uint32_t ni)
 }
 
 
-int netvm_set_coproc(struct netvm *vm, int cpi, struct netvm_coproc *coproc)
+int netvm_set_coproc(struct netvm *vm, int cpid, struct netvm_coproc *coproc)
 {
 	int rv;
 
-	abort_unless(vm && cpi < NETVM_MAXCOPROC);
+	abort_unless(vm && cpid < NETVM_MAXCOPROC);
 
 	if ((coproc != NULL) && (coproc->regi != NULL))
-		if ((rv = (*coproc->regi) (coproc, vm, cpi)) < 0)
+		if ((rv = (*coproc->regi) (coproc, vm, cpid)) < 0)
 			return rv;
 
-	vm->coprocs[cpi] = coproc;
+	vm->coprocs[cpid] = coproc;
 	return 0;
 }
 

@@ -19,6 +19,8 @@
  */
 #define XPKT_HLEN	8
 #define XPKT_TLEN_MAX	65532
+#define XPKT_TAG_MINW	1
+#define XPKT_TAG_MAXW	255
 struct xpkthdr {
 	uint32_t xh_len;
 	uint16_t xh_dltype;

@@ -268,16 +268,31 @@ struct netvm_inst {
 
 
 struct netvm_coproc;
-typedef void (*netvm_cpop) (struct netvm * vm, struct netvm_coproc * coproc,
-			    int cpi);
+/*
+ * A coprocessor operation has the following characteristics.
+ *  - width = co-processor ID
+ *  - flags >> 8 = co-processor opcode #
+ *  - flags & NETVM_IF_CPIMMED means IMMED for coprocessor fields (val)
+ */
+typedef void (*netvm_cpop)(struct netvm *vm, struct netvm_coproc *cpc, int cpi);
 
+/*
+ * Methods:
+ *  - regi -> Operations to initialize the coprocessor when first registered
+ *            with the vm.  Perform any resource allocations here 
+ *  - reset -> Operations to run when the VM is resetting
+ *  - validate -> Called to validate a coprocessor instruction.  Keep in mind
+ *            that the VM can be queried including its 'matchonly' state,
+ *            so instructions that should be matchonly should be rejected here.
+ *
+ */
 struct netvm_coproc {
 	uint32_t type;
 	uint numops;
 	netvm_cpop *ops;
-	int (*regi) (struct netvm_coproc * coproc, struct netvm * vm, int cpi);
-	void (*reset) (struct netvm_coproc * coproc);
-	int (*validate) (struct netvm_inst * inst, struct netvm * vm);
+	int (*regi)(struct netvm_coproc * coproc, struct netvm * vm, int cpi);
+	void (*reset)(struct netvm_coproc * coproc);
+	int (*validate)(struct netvm_inst * inst, struct netvm * vm);
 };
 
 #ifndef NETVM_MAXCOPROC
