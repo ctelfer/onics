@@ -19,12 +19,16 @@
 
 static int xpktcp_register(struct netvm_coproc *cp, struct netvm *vm, int cpid)
 {
+	struct netvm_xpkt_cp *xcp = container(cp, struct netvm_xpkt_cp, coproc);
+	memset(xcp->tag, 0, sizeof(xcp->tag));
 	return 0;
 }
 
 
 static void xpktcp_reset(struct netvm_coproc *cp)
 {
+	struct netvm_xpkt_cp *xcp = container(cp, struct netvm_xpkt_cp, coproc);
+	memset(xcp->tag, 0, sizeof(xcp->tag));
 }
 
 
@@ -121,6 +125,13 @@ void xpktcp_addtag(struct netvm *vm, struct netvm_coproc *cp, int cpi)
 	xtagdesc(&td, n);
 	FATAL(vm, NETVM_ERR_PKTNUM, (td.pktnum >= NETVM_MAXPKTS));
 	FATAL(vm, NETVM_ERR_NOPKT, !(pkb = vm->packets[td.pktnum]));
+
+	/* Extract the length of the option we are trying to write */
+	/* it is an error to try to add an empty tag. */
+	n = xcp->tag[1] * 4;
+	FATAL(vm, NETVM_ERR_BADCPOP, n == 0);
+	rv = xpkt_unpack_tags((uint32_t *)xcp->tag, xcp->tag[1] * 4);
+	FATAL(vm, NETVM_ERR_BADCPOP, (rv < 0));
 	rv = pkb_add_tag(pkb, (struct xpkt_tag_hdr *)xcp->tag);
 	FATAL(vm, NETVM_ERR_BADCPOP, (rv < 0));
 }
