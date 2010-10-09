@@ -61,6 +61,28 @@ void parse_options()
 }
 
 
+void setmeta(struct pcap_pkthdr *ph, struct pktbuf *p)
+{
+	struct xpkt_tag_ts *ts;
+	struct xpkt_tag_snapinfo *si;
+
+	ts = (struct xpkt_tag_ts *)pkb_find_tag(p, XPKT_TAG_TIMESTAMP, 0);
+	if (ts) {
+		ph->ts.tv_sec = ts->xpt_ts_sec;
+		ph->ts.tv_usec = ts->xpt_ts_nsec / 1000;
+	} else {
+		ph->ts.tv_sec = 0;
+		ph->ts.tv_usec = 0;
+	}
+
+	si = (struct xpkt_tag_snapinfo *) pkb_find_tag(p, XPKT_TAG_SNAPINFO, 0);
+	if (si)
+		ph->len = si->xpt_si_wire_len;
+	else
+		ph->len = pkb_get_len(p);
+}
+
+
 int main(int argc, char *argv[])
 {
 	int rv;
@@ -111,15 +133,10 @@ int main(int argc, char *argv[])
 			    "Pkt %u type = %d", 
 			    first_dltype, pktnum, pkb_get_dltype(p));
 		if (g_dumper != NULL) {
-			pcapph.len = pkb_get_len(p);
 			pcapph.caplen = pkb_get_len(p);
-			/*
-		        TODO
-			pcapph.ts.tv_sec = p->pkb_tssec;
-			pcapph.ts.tv_usec = p->pkb_tsnsec / 1000;
-			*/
-			pcapph.ts.tv_sec = 0;
-			pcapph.ts.tv_usec = 0;
+
+			setmeta(&pcapph, p);
+
 			pcap_dump((u_char *) g_dumper, &pcapph, pkb_data(p));
 		} else {
 			if (pcap_inject(g_pcap, pkb_data(p), pkb_get_len(p))< 0)
