@@ -122,7 +122,7 @@ struct pktbuf *pkb_create(long bsize)
 	pkb->pkb_bsize = bsize;
 	pkb->pkb_xpkt = xmp;
 	pkb->pkb_xsize = pkb_xpkt_pool_size;
-	pkb->pkb_xtlen = 0;
+	pkb->pkb_xhlen = 0;
 
 	prp_init_parse(&pkb->pkb_prp, dp, bsize);
 	for (i = 0; i < PKB_LAYER_NUM; ++i)
@@ -159,11 +159,10 @@ struct pktbuf *pkb_copy(struct pktbuf *opkb)
 	       prp_plen(&opkb->pkb_prp));
 
 	if ((opkb->pkb_flags & PKB_F_PACKED)) {
-		memcpy(npkb->pkb_xpkt, opkb->pkb_xpkt, 
-		       opkb->pkb_xtlen + XPKT_HLEN);
+		memcpy(npkb->pkb_xpkt, opkb->pkb_xpkt, opkb->pkb_xhlen);
 	} else {
 		memcpy(npkb->pkb_xpkt, opkb->pkb_xpkt, 
-		       opkb->pkb_xpkt->xpkt_len);
+		       xpkt_doff(opkb->pkb_xpkt));
 	}
 
 	/* Set the layers in the new packet buffer */
@@ -424,10 +423,10 @@ int pkb_pack(struct pktbuf *pkb)
 
 	x = pkb->pkb_xpkt;
 
-	/* When the buffer is packed, the pkb_xtlen caches the tag length */
-	pkb->pkb_xtlen = x->xpkt_tlen;
+	/* When the buffer is packed, the pkb_xhlen caches the tag length */
+	pkb->pkb_xhlen = xpkt_doff(x);
 
-	len = x->xpkt_len + prp_plen(&pkb->pkb_prp);
+	len = pkb->pkb_xhlen + prp_plen(&pkb->pkb_prp);
 	if (len > SIZE_MAX)
 		return -1;
 	if (xpkt_validate_tags(x->xpkt_tags, x->xpkt_tlen) < 0)
@@ -479,9 +478,8 @@ int pkb_file_write(FILE *fp, struct pktbuf *pkb)
 	if (!(pkb->pkb_flags & PKB_F_PACKED))
 		return -1;
 
-	dlen = pkb->pkb_xtlen * 4 + XPKT_HLEN;
-	nw = fwrite(pkb->pkb_xpkt, 1, dlen, fp);
-	if (nw < dlen)
+	nw = fwrite(pkb->pkb_xpkt, 1, pkb->pkb_xhlen, fp);
+	if (nw < pkb->pkb_xhlen)
 		return -1;
 
 	doff = prp_poff(&pkb->pkb_prp);
@@ -506,9 +504,8 @@ int pkb_fd_write(int fd, struct pktbuf *pkb)
 	if (!(pkb->pkb_flags & PKB_F_PACKED))
 		return -1;
 
-	dlen = pkb->pkb_xtlen * 4 + XPKT_HLEN;
-	nw = io_write(fd, pkb->pkb_xpkt, dlen);
-	if (nw < dlen)
+	nw = io_write(fd, pkb->pkb_xpkt, pkb->pkb_xhlen);
+	if (nw < pkb->pkb_xhlen)
 		return -1;
 
 	doff = prp_poff(&pkb->pkb_prp);

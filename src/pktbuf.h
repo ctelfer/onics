@@ -28,7 +28,7 @@ struct pktbuf {
 	long		pkb_xsize;
 	struct prparse  pkb_prp;
 	struct prparse *pkb_layers[PKB_LAYER_NUM];
-	ushort		pkb_xtlen;
+	long		pkb_xhlen;
 	ushort		pkb_flags;
 };
 

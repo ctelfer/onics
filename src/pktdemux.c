@@ -94,6 +94,8 @@ int main(int argc, char *argv[])
 		}
 
 		if (bset_test(g_fdok, fd)) {
+			rv = pkb_pack(p);
+			abort_unless(rv == 0);
 			if (pkb_fd_write(fd, p) < 0)
 				errsys("Error writing packet %lu to %u\n",
 				       g_npkts, fd);

@@ -108,7 +108,8 @@ int readpkt(void *arg, struct callback *cb)
 		}
 	}
 
-	pkb_pack(p);
+	rv = pkb_pack(p);
+	abort_unless(rv == 0);
 	if (pkb_fd_write(1, p) < 0)
 		errsys("Error writing packet %lu\n", g_npkts);
 	pkb_free(p);
