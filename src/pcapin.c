@@ -95,11 +95,11 @@ static void init_tags(struct pktbuf *p)
 
 	xpkt_tag_iif_init(&ti, g_ifnum);
 	rv = pkb_add_tag(p, (struct xpkt_tag_hdr *)&ti);
-	abort_unless(rv);
+	abort_unless(rv == 0);
 
 	xpkt_tag_ts_init(&ts, 0, 0);
 	rv = pkb_add_tag(p, (struct xpkt_tag_hdr *)&ts);
-	abort_unless(rv);
+	abort_unless(rv == 0);
 }
 
 
@@ -147,8 +147,8 @@ int main(int argc, char *argv[])
 		memcpy(p->pkb_buf, packet, pcapph.caplen);
 		rv = pkb_pack(p);
 		abort_unless(rv == 0);
-		if (pkb_fd_write(0, p) < 0)
-			errsys("pkb_file_write: ");
+		if (pkb_fd_write(1, p) < 0)
+			errsys("pkb_fd_write: ");
 		pkb_unpack(p);
 
 		if (pcapph.len != pcapph.caplen)

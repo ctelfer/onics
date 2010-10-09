@@ -66,7 +66,7 @@ uint16_t ppt2dlt(uint16_t ppt)
 void pkb_init(uint num_buf_expected)
 {
 	int i;
-	pc_init(&pkb_xpkt_pool, sizeof(struct pktbuf), 65536,
+	pc_init(&pkb_buf_pool, sizeof(struct pktbuf), 65536,
 		num_buf_expected, 0, &stdmm);
 	pc_init(&pkb_xpkt_pool, pkb_xpkt_pool_size, pkb_xpkt_pool_size * 32,
 		num_buf_expected, 0, &stdmm);
@@ -276,7 +276,7 @@ int pkb_file_read(FILE *fp, struct pktbuf **pkbp)
 	int errval;
 	struct pktbuf *pkb;
 	uint hpad = HPADMIN;
-	uint hread;
+	uint n;
 	uint off;
 	struct xpkt *x;
 	size_t nr;
@@ -291,28 +291,29 @@ int pkb_file_read(FILE *fp, struct pktbuf **pkbp)
 		return -1;
 	}
 
-	hread = xh.xh_tlen + dlt_offset(xh.xh_dltype);
-	if (hpad < hread)
-		hpad = hread;
+	n = xh.xh_tlen * 4 + XPKT_HLEN;
+	if (hpad < n)
+		hpad = n;
 
-	if ((xh.xh_len > PKB_MAX_DATA_LEN - hpad - TPADMIN) ||
-	    (xh.xh_tlen + sizeof(xh) > pkb_xpkt_pool_size)) {
+	off = dlt_offset(xh.xh_dltype);
+	n = hpad + TPADMIN + off;
+	if ((xh.xh_len > PKB_MAX_DATA_LEN - n) ||
+	    (xh.xh_tlen * 4 + XPKT_HLEN > pkb_xpkt_pool_size)) {
 		errno = ENOMEM;
 		return -1;
 	}
 
-	if (!(pkb = pkb_create(xh.xh_len + hpad + TPADMIN)))
+	if (!(pkb = pkb_create(xh.xh_len + n)))
 		return -1;
 
-	off = hpad - xh.xh_tlen;
-	nr = fread(pkb->pkb_buf + off, 1, xh.xh_len - XPKT_HLEN, fp);
+	n = hpad - xh.xh_tlen * 4 + off;
+	nr = fread(pkb->pkb_buf + n, 1, xh.xh_len - XPKT_HLEN, fp);
 	if (nr < xh.xh_len - XPKT_HLEN)
 		goto err_have_buf;
 
 	x = pkb->pkb_xpkt;
 	x->hdr = xh;
-	memcpy(x->xpkt_tags, pkb->pkb_buf + off, xh.xh_tlen);
-	pkb->pkb_xtlen = xh.xh_tlen = XPKT_HLEN;
+	memcpy(x->xpkt_tags, pkb->pkb_buf + n, xh.xh_tlen * 4);
 	if (xpkt_unpack_tags(x->xpkt_tags, x->xpkt_tlen) < 0) {
 		errno = EIO;
 		goto err_have_buf;
@@ -322,8 +323,8 @@ int pkb_file_read(FILE *fp, struct pktbuf **pkbp)
 		goto err_have_buf;
 	}
 
-	prp_adj_off(&pkb->pkb_prp, PRP_OI_POFF, hpad);
-	prp_adj_off(&pkb->pkb_prp, PRP_OI_TOFF, hpad + xpkt_data_len(x));
+	prp_poff(&pkb->pkb_prp) = hpad + off;
+	prp_toff(&pkb->pkb_prp) = hpad + off + xpkt_data_len(x);
 
 	pkb->pkb_flags = 0;
 
@@ -345,7 +346,7 @@ int pkb_fd_read(int fd, struct pktbuf **pkbp)
 	int errval;
 	struct pktbuf *pkb;
 	uint hpad = HPADMIN;
-	uint hread;
+	uint n;
 	uint off;
 	long dlen;
 	struct xpkt *x;
@@ -361,29 +362,30 @@ int pkb_fd_read(int fd, struct pktbuf **pkbp)
 		return -1;
 	}
 
-	hread = xh.xh_tlen + dlt_offset(xh.xh_dltype);
-	if (hpad < hread)
-		hpad = hread;
+	n = xh.xh_tlen * 4 + XPKT_HLEN;
+	if (hpad < n)
+		hpad = n;
 
-	if ((xh.xh_len > PKB_MAX_DATA_LEN - hpad - TPADMIN) ||
-	    (xh.xh_tlen + sizeof(xh) > pkb_xpkt_pool_size)) {
+	off = dlt_offset(xh.xh_dltype);
+	n = hpad + TPADMIN + off;
+	if ((xh.xh_len > PKB_MAX_DATA_LEN - n) ||
+	    (xh.xh_tlen * 4 + XPKT_HLEN > pkb_xpkt_pool_size)) {
 		errno = ENOMEM;
 		return -1;
 	}
 
-	if (!(pkb = pkb_create(xh.xh_len + hpad + TPADMIN)))
+	if (!(pkb = pkb_create(xh.xh_len + n)))
 		return -1;
 
-	off = hpad - xh.xh_tlen;
+	n = hpad - xh.xh_tlen * 4 + off;
 	dlen = xh.xh_len - XPKT_HLEN;
-	nr = io_read(fd, pkb->pkb_buf + off, dlen);
+	nr = io_read(fd, pkb->pkb_buf + n, dlen);
 	if (nr < dlen)
 		goto err_have_buf;
 
 	x = pkb->pkb_xpkt;
 	x->hdr = xh;
-	memcpy(x->xpkt_tags, pkb->pkb_buf + off, xh.xh_tlen);
-	pkb->pkb_xtlen = xh.xh_tlen = XPKT_HLEN;
+	memcpy(x->xpkt_tags, pkb->pkb_buf + n, xh.xh_tlen * 4);
 	if (xpkt_unpack_tags(x->xpkt_tags, x->xpkt_tlen) < 0) {
 		errno = EIO;
 		goto err_have_buf;
@@ -393,8 +395,8 @@ int pkb_fd_read(int fd, struct pktbuf **pkbp)
 		goto err_have_buf;
 	}
 
-	prp_poff(&pkb->pkb_prp) = hpad;
-	prp_toff(&pkb->pkb_prp) = hpad + dlen;
+	prp_poff(&pkb->pkb_prp) = hpad + off;
+	prp_toff(&pkb->pkb_prp) = hpad + off + xpkt_data_len(x);
 
 	pkb->pkb_flags = 0;
 
@@ -454,7 +456,7 @@ void pkb_unpack(struct pktbuf *pkb)
 	xpkt_unpack_tags(x->xpkt_tags, x->xpkt_tlen);
 
 	/* In unpacked state, the xpkt_len says there is no data: only tags */
-	x->xpkt_len = x->xpkt_tlen + XPKT_HLEN;
+	x->xpkt_len = x->xpkt_tlen * 4 + XPKT_HLEN;
 
 	pkb->pkb_flags &= ~PKB_F_PACKED;
 }
@@ -477,7 +479,7 @@ int pkb_file_write(FILE *fp, struct pktbuf *pkb)
 	if (!(pkb->pkb_flags & PKB_F_PACKED))
 		return -1;
 
-	dlen = pkb->pkb_xtlen + XPKT_HLEN;
+	dlen = pkb->pkb_xtlen * 4 + XPKT_HLEN;
 	nw = fwrite(pkb->pkb_xpkt, 1, dlen, fp);
 	if (nw < dlen)
 		return -1;
@@ -504,7 +506,7 @@ int pkb_fd_write(int fd, struct pktbuf *pkb)
 	if (!(pkb->pkb_flags & PKB_F_PACKED))
 		return -1;
 
-	dlen = pkb->pkb_xtlen + XPKT_HLEN;
+	dlen = pkb->pkb_xtlen * 4 + XPKT_HLEN;
 	nw = io_write(fd, pkb->pkb_xpkt, dlen);
 	if (nw < dlen)
 		return -1;
@@ -724,7 +726,7 @@ int pkb_add_tag(struct pktbuf *pkb, struct xpkt_tag_hdr *xth)
 
 	/* none of these can overflow:  long is 32 bits and tlen is 16, and */
 	/* nwords is 8.  */
-	mlen = pkb->pkb_xpkt->xpkt_tlen + XPKT_HLEN;
+	mlen = pkb->pkb_xpkt->xpkt_tlen * 4 + XPKT_HLEN;
 	mlen += xth->xth_nwords * 4;
 
 	if (mlen > pkb->pkb_xsize)

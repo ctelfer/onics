@@ -140,8 +140,7 @@ int xpkt_validate_hdr(struct xpkthdr *xh)
 
 	if (xh->xh_len < XPKT_HLEN)
 		return -1;
-	if (((xh->xh_tlen & 3) != 0) || 
-	    (xh->xh_tlen > (xh->xh_len - XPKT_HLEN)))
+	if (xh->xh_tlen * 4 > (xh->xh_len - XPKT_HLEN))
 		return -2;
 	return 0;
 }
@@ -193,17 +192,25 @@ int xpkt_validate_tags(uint32_t *tags, uint16_t tlen)
 	struct xpkt_tag_hdr *xth;
 	uint32_t *tend;
 	uchar seen[XPKT_TAG_NUM_TYPES] = { 0 };
+	ptrdiff_t s;
 
 	abort_unless(tags);
 
 	tend = tags + tlen;
 	while (tags < tend) {
+		s = tend - tags;
+
 		xth = (struct xpkt_tag_hdr *)tags;
-		abort_unless(tags + xth->xth_nwords <= tend);
-		abort_unless(xth->xth_type != XPKT_TAG_INVALID);
+
+		if (s < xth->xth_nwords)
+			return -1;
+
+		if (xth->xth_type == XPKT_TAG_INVALID)
+			return -1;
+
 		if (xth->xth_type < XPKT_TAG_NUM_TYPES) {
-			abort_unless(xth->xth_nwords == 
-			             tagops[xth->xth_type].nwords);
+			if (xth->xth_nwords != tagops[xth->xth_type].nwords)
+				return -1;
 
 			/* check whether the tag is duped but shouldn't be */
 			if (!tagops[xth->xth_type].maydup) {
@@ -215,9 +222,10 @@ int xpkt_validate_tags(uint32_t *tags, uint16_t tlen)
 			/* call the tag-specific validation function */
 			rv = (*tagops[xth->xth_type].validate)(xth);
 			if (rv < 0)
-				return -2;
+				return -1;
 		} else {
-			abort_unless(xth->xth_nwords != 0);
+			if (xth->xth_nwords == 0)
+				return -1;
 		}
 		tags += xth->xth_nwords;
 	}
@@ -245,81 +253,36 @@ void xpkt_pack_tags(uint32_t *tags, uint16_t tlen)
 }
 
 
-static void compress(struct xpkt **xp, uint32_t *len, uint16_t *tlen,
-		     int movedown)
-{
-	byte_t *bound, *p;
-	struct xpkt *x;
-	uint run = 0;
-	uint skip;
-	uint otlen;
-	uint ndel = 0;
-	uint rlen;
-
-	abort_unless(xp && *xp && len && tlen);
-
-	x = *xp;
-	if (movedown)
-		bound = (byte_t *)x + *len;
-	else
-		bound = (byte_t *)x;
-
-	p = (byte_t *)x->xpkt_tags;
-	otlen = *tlen;
-	while (otlen > 0) {
-		if (*p == 0) {
-			++run;
-			continue;
-		}
-
-		if (run > 0) {
-			rlen = 4 * run;
-			if (movedown) {
-				memmove(p - rlen, p, bound - p);
-				p -= rlen;
-			} else {
-				memmove(bound + rlen, bound, p - rlen - bound);
-				bound += rlen;
-			}
-			ndel += run;
-			run = 0;
-		}
-		skip = *(p + 1) * 4;
-		p += skip;
-		otlen -= skip;
-	}
-
-	*len -= ndel * 4;
-	*tlen -= ndel * 4;
-	if (!movedown)
-		*xp = (struct xpkt *)bound;
-}
-
-
-void xpkt_compress(struct xpkt **x, int method)
-{
-	abort_unless(x && *x);
-	compress(x, &(*x)->xpkt_len, &(*x)->xpkt_tlen, method);
-}
-
-
 struct xpkt_tag_hdr *xpkt_next_tag(struct xpkt *x, struct xpkt_tag_hdr *cur)
 {
-	uint toff;
+	ptrdiff_t toff;
 
 	abort_unless(x);
+	/* XXX return NULL for all the aborts below? */
 
-	if (cur == NULL)
-		return x->xpkt_tlen ? 
-		         (struct xpkt_tag_hdr *)x->xpkt_tags :
-		         NULL;
+	if (cur == NULL) {
+		if (x->xpkt_tlen > 0) {
+		        cur = (struct xpkt_tag_hdr *)x->xpkt_tags;
+			abort_unless(cur->xth_nwords > 0);
+			abort_unless(x->xpkt_tlen >= cur->xth_nwords);
+			return cur;
+		}
+		return NULL;
+	}
 
 	abort_unless(cur->xth_nwords > 0);
 
-	toff = (byte_t *)cur - (byte_t *)x->xpkt_tags;
-	if (cur->xth_nwords >= x->xpkt_tlen - toff)
+	toff = (uint32_t*)cur - x->xpkt_tags;
+	if (cur->xth_nwords + toff >= x->xpkt_tlen) {
+		abort_unless(cur->xth_nwords + toff == x->xpkt_tlen);
 		return NULL;
-	return (struct xpkt_tag_hdr *)((byte_t *)cur + (cur->xth_nwords * 4));
+	}
+
+	cur = (struct xpkt_tag_hdr *)((uint32_t *)cur + cur->xth_nwords);
+	abort_unless(cur->xth_nwords > 0);
+	abort_unless(x->xpkt_tlen >=
+		     cur->xth_nwords + ((uint32_t *)cur - x->xpkt_tags));
+	return cur;
 }
 
 
@@ -364,46 +327,52 @@ int xpkt_add_tag(struct xpkt *x, struct xpkt_tag_hdr *xth, int moveup)
 	int rv;
 	int flen = 0;
 	byte_t *lo, *hi;
-	uint16_t ntl;
+	uint16_t tl;
 	struct xpkt_tag_hdr *trav;
 
 	abort_unless(x && xth);
 
-	ntl = xth->xth_nwords * 4;
 
 	if (xth->xth_type == XPKT_TAG_INVALID)
 		return -1;
+
 	if (xth->xth_type < XPKT_TAG_NUM_TYPES) {
 		rv = (*tagops[xth->xth_type].validate)(xth);
 		if (rv < 0)
 			return -1;
 		if (!tagops[xth->xth_type].maydup && 
 		    xpkt_find_tag(x, xth->xth_type, 0))
-			return -2;
+			return -1;
 	} else {
-		if (ntl == 0)
+		if (xth->xth_nwords == 0)
 			return -1;
 	}
-	if (XPKT_TLEN_MAX - x->xpkt_tlen < ntl)
-		return -3;
 
 	if (moveup) {
-		lo = (byte_t *)x + XPKT_HLEN + x->xpkt_tlen;
-		hi = lo + ntl;
+		tl = xth->xth_nwords * 4;
+		lo = (byte_t *)x + XPKT_HLEN + x->xpkt_tlen * 4;
+		hi = lo + tl;
 		memmove(hi, lo, xpkt_data_len(x));
-		memcpy(lo, xth, ntl);
-		x->xpkt_tlen += ntl;
+		memcpy(lo, xth, tl);
+		x->xpkt_tlen += xth->xth_nwords;
+		x->xpkt_len += tl;
 
 	} else {
+		tl = xth->xth_nwords;
 		for (trav = xpkt_next_tag(x, NULL)  ;
                      (trav != NULL)                 ;
 		     trav = xpkt_next_tag(x, trav)) {
 			if (trav->xth_type == XPKT_TAG_NOP)
-				flen += 4;
+				++flen;
 			else
 				flen = 0;
-			if (flen >= ntl)
+			if (flen >= tl)
 				break;
+		}
+		if (flen >= tl) {
+			memcpy((uint32_t *)trav - (tl - 1), xth, tl * 4);
+		} else {
+			return -1;
 		}
 	}
 
@@ -413,7 +382,7 @@ int xpkt_add_tag(struct xpkt *x, struct xpkt_tag_hdr *xth, int moveup)
 
 int xpkt_del_tag(struct xpkt *x, byte_t type, int idx, int pulldown)
 {
-	int ntl;
+	uint n;
 	struct xpkt_tag_hdr *xth;
 
 	abort_unless(x);
@@ -421,18 +390,21 @@ int xpkt_del_tag(struct xpkt *x, byte_t type, int idx, int pulldown)
 	/* Assume that an added tag has been validated */
 	if (!(xth = xpkt_find_tag(x, type, idx)))
 		return -1;
-	ntl = xth->xth_nwords * 4;
 
 	if (pulldown) {
-		memmove(xth, (byte_t *)xth + ntl,
-			x->xpkt_len - ((byte_t*)xth - (byte_t *)x + ntl));
+		n = xth->xth_nwords * 4;
+		memmove(xth, (byte_t *)xth + n,
+			x->xpkt_len - ((byte_t*)xth - (byte_t *)x + n));
+		x->xpkt_tlen -= xth->xth_nwords;
+		x->xpkt_len -= n;
 	} else {
-		while (ntl > 0) {
+		n = xth->xth_nwords;
+		while (n > 0) {
 			xth->xth_type = XPKT_TAG_NOP;
 			xth->xth_nwords = 1;
 			xth->xth_xhword = 0;
 			xth++;
-			ntl -= 4;
+			--n;
 		}
 	}
 
@@ -527,7 +499,7 @@ void xpkt_tag_ai_init(struct xpkt_tag_appinfo *t, uint16_t subtype, uint32_t *p,
 	if (nw > 0) {
 		abort_unless(nw < 255);
 		abort_unless(p);
-		memcpy(t->xpt_ai_data, p, nw * sizeof(uint32_t));
+		memcpy(t->xpt_ai_data, p, nw * 4);
 	}
 
 	t->xpt_ai_hdr.xth_type = XPKT_TAG_APPINFO;

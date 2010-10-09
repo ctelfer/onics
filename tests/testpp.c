@@ -12,7 +12,7 @@ const char *pnames(uint ppt)
 	case PPT_INVALID:
 		return "Invalid Header";
 	case PPT_ETHERNET2:
-		return "Ethernet";
+		return "Ethernet2";
 	case PPT_ARP:
 		return "ARP";
 	case PPT_IPV4:

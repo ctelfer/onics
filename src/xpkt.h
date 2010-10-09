@@ -18,7 +18,6 @@
  *  - payload(packet_len - tag_len - offset(dltype) - 8)
  */
 #define XPKT_HLEN	8
-#define XPKT_TLEN_MAX	65532
 #define XPKT_TAG_MINW	1
 #define XPKT_TAG_MAXW	255
 struct xpkthdr {
@@ -47,7 +46,7 @@ struct xpkt {
 static NETTOOLS_INLINE uint32_t xpkt_doff(struct xpkt *x)
 {
 	abort_unless(x);
-	return XPKT_HLEN + x->xpkt_tlen;
+	return XPKT_HLEN + x->xpkt_tlen * 4;
 }
 
 
@@ -114,19 +113,6 @@ int xpkt_validate_tags(uint32_t *tags, uint16_t tlen);
 /* Pack a set of xpkt tags to network byte order.  This routine assumes that */
 /* the tags are valid. */
 void xpkt_pack_tags(uint32_t *tags, uint16_t tlen);
-
-
-#define XPKT_COMPRESS_PULLUP 0 
-#define XPKT_COMPRESS_DOWNUP 1
-/*
- * Remove the NOPs from a set of packet tags.  The method field determines
- * how this is done:
- * - PULLUP - Pull from the start of the packet up.
- * - PULLDOWN - Pull from the end of the packet down.
- *
- * The x variable is modfied if PULLUP is set. 
- */
-void xpkt_compress(struct xpkt **x, int method);
 
 
 /*
