@@ -295,9 +295,7 @@ struct netvm_coproc {
 	int (*validate)(struct netvm_inst * inst, struct netvm * vm);
 };
 
-#ifndef NETVM_MAXCOPROC
 #define NETVM_MAXCOPROC 8
-#endif /* NETVM_MAXCOPROC */
 
 #define NETVM_CPT_NONE  ((uint32_t)0)
 
