@@ -44,6 +44,12 @@ struct netvm_var {
 };
 
 
+struct netvm_cpreq {
+	uint32_t cpt;
+	struct clist *addrs;
+};
+
+
 struct netvm_program {
 	int matchonly;
 	int linked;
@@ -56,6 +62,7 @@ struct netvm_program {
 	struct clist *ipatches;
 	struct htab *vars;
 	struct clist *varlist;	/* used for initialization after link */
+	struct netvm_cpreq cpreqs[NETVM_MAXCOPROC];
 };
 
 
@@ -77,14 +84,18 @@ int nprt_vinit_label(struct netvm_var *var, const char *label, uint32_t delta);
 int nprt_vinit_vaddr(struct netvm_var *var, const char *varnam, uint32_t delta);
 int nprg_vinit_fill(struct netvm_var *var, uint32_t val, int width);
 
+/* coprocessor patches */
+int nprg_add_cppatch(struct netvm_program *prog, uint32_t cpt, uint32_t iaddr);
+
 /* get the amount of memory required by the program */
 size_t mem_required(struct netvm_program *prog);
 
 /* resolve all instruction patches in the system */
-int nprg_link(struct netvm_program *prog);
+/* 'vm' may be NULL if the program has no coproc instruction patches */
+int nprg_link(struct netvm_program *prog, struct netvm *vm);
 
 /* load a program onto a VM */
-int nprg_load(struct netvm *vm, struct netvm_program *prog);
+int nprg_load(struct netvm_program *prog, struct netvm *vm);
 
 /* release all auxilliary data */
 void nprg_release(struct netvm_program *prog);
