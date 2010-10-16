@@ -3,7 +3,7 @@
 #include "pml.h"
 #include <cat/err.h>
 
-#define YY_EXTRA_TYPE	union pmllex_u
+#define YY_EXTRA_TYPE	struct pml_lex_val
 #define YY_NO_INPUT
 static void parse_eth_addr(yyscan_t scanner, const char *text);
 static void parse_num(yyscan_t scanner, const char *text);
@@ -124,47 +124,51 @@ dnum		0|[1-9][0-9]*
 
 void parse_eth_addr(yyscan_t scanner, const char *text)
 {
-	union pmllex_u lu;
+	struct pml_lex_val v;
 	unsigned n[6];
 	int i;
+	v.type  = PMLLV_SCALAR;
 	sscanf(text, "%x:%x:%x:%x:%x:%x", &n[0], &n[1], &n[2], &n[3], &n[4], 
                &n[5]);
 	for ( i = 0; i < 6; ++i )
-		lu.ethaddr[i] = n[i];
-	pmlset_extra(lu, scanner);
+		v.u.ethaddr[i] = n[i];
+	pmlset_extra(v, scanner);
 }
 
 
 void parse_num(yyscan_t scanner, const char *text)
 {
-	union pmllex_u lu;
-	lu.num = strtoul(text, NULL, 0);
-	pmlset_extra(lu, scanner);
+	struct pml_lex_val v;
+	v.type  = PMLLV_SCALAR;
+	v.u.num = strtoul(text, NULL, 0);
+	pmlset_extra(v, scanner);
 }
 
 
 void parse_ipv4_addr(yyscan_t scanner, const char *text)
 {
-	union pmllex_u lu;
+	struct pml_lex_val v;
 	unsigned n[4];
 	int i;
+	v.type  = PMLLV_SCALAR;
 	sscanf(text, "%u.%u.%u.%u", &n[0], &n[1], &n[2], &n[3]);
 	for ( i = 0; i < 4; ++i )
-		lu.v4addr[i] = n[i];
-	pmlset_extra(lu, scanner);
+		v.u.v4addr[i] = n[i];
+	pmlset_extra(v, scanner);
 }
 
 
 int parse_ipv6_addr(yyscan_t scanner, const char *text)
 {
+	struct pml_lex_val v;
 	const char *p = text, *nxt;
-	union pmllex_u lu;
 	byte_t prefix[16];
 	byte_t suffix[16];
 	char xdigits[5];
 	int plen = 0, slen = 0, zcomp = 0, n;
 	ushort xpair;
 
+	v.type  = PMLLV_SCALAR;
 	while ( (nxt = strchr(p, ':')) && (nxt != p) ) {
 		if ( plen >= 8 )
 			return -1;
@@ -198,12 +202,12 @@ int parse_ipv6_addr(yyscan_t scanner, const char *text)
 	}
 
 	n = plen * 2;
-	memcpy(&lu.v6addr[0], prefix, n);
-	memset(&lu.v6addr[n], 0, 16 - (n + slen * 2));
+	memcpy(&v.u.v6addr[0], prefix, n);
+	memset(&v.u.v6addr[n], 0, 16 - (n + slen * 2));
 	n = 16 - slen * 2;
-	memcpy(&lu.v6addr[n], suffix, slen * 2);
+	memcpy(&v.u.v6addr[n], suffix, slen * 2);
 
-	pmlset_extra(lu, scanner);
+	pmlset_extra(v, scanner);
 	return PMLTOK_IPV6ADDR;
 }
 
@@ -211,14 +215,15 @@ int parse_ipv6_addr(yyscan_t scanner, const char *text)
 static int copy_string(yyscan_t scanner, const char *text, int tok)
 {
 	size_t len;
-	union pmllex_u lu;
+	struct pml_lex_val v;
 
+	v.type  = PMLLV_STRING;
 	len = strlen(text) + 1;
-	if ( (lu.raw.data = malloc(len)) == NULL )
+	if ( (v.u.raw.data = malloc(len)) == NULL )
 		return -1;
-	memcpy(lu.raw.data, text, len);
-	lu.raw.len = len;
-	pmlset_extra(lu, scanner);
+	memcpy(v.u.raw.data, text, len);
+	v.u.raw.len = len;
+	pmlset_extra(v, scanner);
 
 	return tok;
 }

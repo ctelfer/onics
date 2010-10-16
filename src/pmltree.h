@@ -7,11 +7,11 @@
 #include <cat/list.h>
 #include <cat/hash.h>
 
-struct pml_prog {
-	struct list pmlp_decls;
-	struct htab pmlp_gvars;
-	struct htab pmlp_funcs;
-	struct pml_function *pmlp_inside;
+struct pml_ast {
+	struct list pmla_decls;
+	struct htab pmla_gvars;
+	struct htab pmla_funcs;
+	struct list pmla_rules;
 };
 
 
@@ -28,6 +28,7 @@ enum {
 	PMLTT_LOCATOR,
 	PMLTT_PKTACT,
 	PMLTT_SETACT,
+	PMLTT_RETURN,
 	PMLTT_PRINT,
 	PMLTT_LIST,
 	PMLTT_FUNCTION,
@@ -98,12 +99,6 @@ union pml_expr_u {
 };
 
 
-struct pml_stmt {
-	int pmls_type;
-	struct list pmls_ln;
-};
-
-
 struct pml_funcall {
 	int pmlfc_type;
 	struct list pmlfc_ln;
@@ -166,10 +161,15 @@ struct pml_set_action {
 	int pmlsa_type;
 	struct list pmlsa_ln;
 	int pmlsa_conv;		/* byte order conversion */
-	char *pmlsa_vname;
-	union pml_expr_u *pmlsa_off;
-	union pml_expr_u *pmlsa_len;
-	union pml_expr_u *pmlsa_newval;
+	struct pml_locator *pmlsa_variable;
+	union pml_expr_u *pmlsa_expr;
+};
+
+
+struct pml_return {
+	int pmlret_type;
+	struct list pmlret_ln;
+	union pml_expr_u *pmlret_expr;
 };
 
 
@@ -230,12 +230,12 @@ union pml_tree {
 	struct pml_binop binop;
 	struct pml_unop unop;
 	union pml_expr_u expr_u;
-	struct pml_stmt stmt;
 	struct pml_funcall funcall;
 	struct pml_if ifstmt;
 	struct pml_while whilestmt;
 	struct pml_pkt_action pktact;
 	struct pml_set_action setact;
+	struct pml_return retact;
 	struct pml_print print;
 	struct pml_list list;
 	struct pml_function function;

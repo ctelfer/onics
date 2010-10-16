@@ -110,6 +110,7 @@ union pml_tree *pmlt_alloc(int pmltt)
 		if ((p = calloc(1, sizeof(*p))) == NULL)
 			return NULL;
 		p->pmlb_type = pmltt;
+		l_init(&p->pmlb_ln);
 		p->pmlb_op = 0;
 		p->pmlb_left = NULL;
 		p->pmlb_right = NULL;
@@ -121,6 +122,7 @@ union pml_tree *pmlt_alloc(int pmltt)
 		if ((p = calloc(1, sizeof(*p))) == NULL)
 			return NULL;
 		p->pmlu_type = pmltt;
+		l_init(&p->pmlu_ln);
 		p->pmlu_op = 0;
 		p->pmlu_expr = NULL;
 		return (union pml_tree *)p;
@@ -131,6 +133,7 @@ union pml_tree *pmlt_alloc(int pmltt)
 		if ((p = calloc(1, sizeof(*p))) == NULL)
 			return NULL;
 		p->pmlfc_type = pmltt;
+		l_init(&p->pmlfc_ln);
 		p->pmlfc_func = NULL;
 		p->pmlfc_args = NULL;
 		return (union pml_tree *)p;
@@ -141,6 +144,7 @@ union pml_tree *pmlt_alloc(int pmltt)
 		if ((p = calloc(1, sizeof(*p))) == NULL)
 			return NULL;
 		p->pmlif_type = pmltt;
+		l_init(&p->pmlif_ln);
 		p->pmlif_test = NULL;
 		p->pmlif_tbody = NULL;
 		p->pmlif_fbody = NULL;
@@ -152,6 +156,7 @@ union pml_tree *pmlt_alloc(int pmltt)
 		if ((p = calloc(1, sizeof(*p))) == NULL)
 			return NULL;
 		p->pmlw_type = pmltt;
+		l_init(&p->pmlw_ln);
 		p->pmlw_test = NULL;
 		p->pmlw_body = NULL;
 		return (union pml_tree *)p;
@@ -162,6 +167,7 @@ union pml_tree *pmlt_alloc(int pmltt)
 		if ((p = calloc(1, sizeof(*p))) == NULL)
 			return NULL;
 		p->pmlloc_type = pmltt;
+		l_init(&p->pmlloc_ln);
 		p->pmlloc_name = NULL;
 		p->pmlloc_off = 0;
 		p->pmlloc_len = 0;
@@ -173,6 +179,7 @@ union pml_tree *pmlt_alloc(int pmltt)
 		if ((p = calloc(1, sizeof(*p))) == NULL)
 			return NULL;
 		p->pmlpa_type = pmltt;
+		l_init(&p->pmlpa_ln);
 		p->pmlpa_action = 0;
 		p->pmlpa_pkt = NULL;
 		p->pmlpa_name = NULL;
@@ -186,19 +193,29 @@ union pml_tree *pmlt_alloc(int pmltt)
 		if ((p = calloc(1, sizeof(*p))) == NULL)
 			return NULL;
 		p->pmlsa_type = pmltt;
+		l_init(&p->pmlsa_ln);
 		p->pmlsa_conv = 0;
-		p->pmlsa_vname = NULL;
-		p->pmlsa_off = NULL;
-		p->pmlsa_len = NULL;
-		p->pmlsa_newval = NULL;
+		p->pmlsa_variable = NULL;
+		p->pmlsa_expr = NULL;
 		return (union pml_tree *)p;
 	} break;
+
+	case PMLTT_RETURN:{
+		struct pml_return *p;
+		if ((p = calloc(1, sizeof(*p))) == NULL)
+			return NULL;
+		p->pmlret_type = pmltt;
+		l_init(&p->pmlret_ln);
+		p->pmlret_expr = NULL;
+		return (union pml_tree *)p;
+        } break;
 
 	case PMLTT_PRINT:{
 		struct pml_print *p;
 		if ((p = calloc(1, sizeof(*p))) == NULL)
 			return NULL;
 		p->pmlp_type = pmltt;
+		l_init(&p->pmlp_ln);
 		p->pmlp_fmt = NULL;
 		p->pmlp_args = NULL;
 		return (union pml_tree *)p;
@@ -219,6 +236,7 @@ union pml_tree *pmlt_alloc(int pmltt)
 		    (vtab_init(&p->pmlf_vars) < 0))
 			return NULL;
 		p->pmlf_type = pmltt;
+		l_init(&p->pmlf_ln);
 		p->pmlf_name = NULL;
 		p->pmlf_nparams = 0;
 		p->pmlf_pnames = NULL;
@@ -230,6 +248,7 @@ union pml_tree *pmlt_alloc(int pmltt)
 		if ((p = calloc(1, sizeof(*p))) == NULL)
 			return NULL;
 		p->pmlr_type = pmltt;
+		l_init(&p->pmlr_ln);
 		p->pmlr_pattern = NULL;
 		p->pmlr_stmts = NULL;
 		return (union pml_tree *)p;
@@ -306,10 +325,13 @@ void pmlt_free(union pml_tree *tree)
 
 	case PMLTT_SETACT:{
 		struct pml_set_action *p = &tree->setact;
-		free(p->pmlsa_vname);
-		pmlt_free((union pml_tree *)p->pmlsa_off);
-		pmlt_free((union pml_tree *)p->pmlsa_len);
-		pmlt_free((union pml_tree *)p->pmlsa_newval);
+		pmlt_free((union pml_tree *)p->pmlsa_variable);
+		pmlt_free((union pml_tree *)p->pmlsa_expr);
+	} break;
+
+	case PMLTT_RETURN:{
+		struct pml_return *p = &tree->retact;
+		pmlt_free((union pml_tree *)p->pmlret_expr);
 	} break;
 
 	case PMLTT_PRINT:{

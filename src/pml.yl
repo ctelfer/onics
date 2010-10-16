@@ -70,14 +70,19 @@
 %name PML
 %token_prefix PMLTOK_
 %include { 
+#include <cat/cat.h>
+#include <cat/list.h>
 #include "pmltree.h" 
 #include "pmllex.h"
 }
-%extra_argument { struct pml_prog *program }
+%extra_argument { struct pml_ast *ast }
 
 /* ----- Mappings between non-terminals and C types ----- */
 
-%type rule { struct pml_tree * }
+%type decl { union pml_tree * }
+%destructor decl { pmlt_free($$); }
+
+%type rule { struct pml_rule * }
 %destructor rule { pmlt_free($$); }
 
 %type pktpat { struct pml_expr_u * }
@@ -86,17 +91,20 @@
 %type expr { union pml_expr_u * }
 %destructor expr { pmlt_free($$); }
 
-%type stmt { struct pml_stmt * }
+%type stmt { union pml_tree * }
 %destructor stmt { pmlt_free($$); }
 
 %type stmtlist { struct pml_list * }
 %destructor stmtlist { pmlt_free($$); }
 
+%type stmts { struct pml_list * }
+%destructor stmts { pmlt_free($$); }
+
 %type pktact { struct pml_pkt_action * }
 %destructor pktact { pmlt_free($$); }
 
-%type var { struct pml_variable * }
-/* no destructor: cleaned up on program cleanup or function destructor */
+%type var { struct pml_locator * }
+%destructor var { pmlt_free($$); }
 
 %type exprlist { struct pml_list * }
 %destructor exprlist { pmlt_free($$); }
@@ -155,33 +163,117 @@
 %type field { union pml_field_u * } 
 %destructor field { pmlt_free($$); }
 
-%token_type { struct raw * }
-%token_destructor { if ($$ != NULL) free($$->data); }
+%token_type { struct pml_lex_val }
+%token_destructor { 
+	if ($$.type == PMLLV_STRING) {
+		free($$.u.raw.data);
+		$$.u.raw.data = NULL;
+	}
+}
 
 /* ----- Grammar ----- */
 
 prog ::= decllist.
 
-decllist ::= decllist decl.
-decllist ::= decllist rule.
+/* Declarations */
+decllist ::= decllist decl(A). { 
+	struct pml_node *n = A->pml_node;
+	if (n->pmln_type == PMLTT_FUNCION) {
+		/* TODO */
+	} else if (n->pmln_type == PMLTT_VARREF) {
+		/* TODO */
+	} else {
+		abort_unless(0);
+	}
+}
+
+decllist ::= decllist rule(A). {
+	l_ins(&ast->pmla_rules.prev, &A->pml_node->pmln_ln);
+}
+
 decllist ::= .
 
 
-rule ::= pktpat stmt.
-rule ::= pktpat stmtlist.
+/* Rules */
+rule(R) ::= pktpat(P) stmt(S). {
+	struct pml_list *l = (struct pml_list *)pmlt_alloc(PMLTT_LIST);
+	R = (struct pml_rule *)pmlt_alloc(PMLTT_RULE);
+	l_ins(&l->pmll_list, &S->pmlt_node->pmln_ln);
+	R->pmlr_pattern = P;
+	R->pmlr_stmts = l;
+}
+rule(R) ::= pktpat(P) stmtlist(SL). {
+	R = (struct pml_rule *)pmlt_alloc(PMLTT_RULE);
+	R->pmlr_pattern = P;
+	R->pmlr_stmts = SL;
+}
 
-stmtlist ::= LBRACE stmts RBRACE.
-stmts ::= stmt SEMICOLON.
-stmts ::= stmts stmt SEMICOLON.
+/* Statements */
+stmtlist(SL) ::= LBRACE stmts(SS) RBRACE. { SL = SS; }
 
-stmt ::= pktact.
-stmt ::= var ASSIGN expr.
-stmt ::= WHILE stmtlist.
-stmt ::= IF LPAREN expr RPAREN stmtlist.
-stmt ::= IF LPAREN expr RPAREN stmtlist ELSE stmtlist.
-stmt ::= RETURN expr.
-stmt ::= PRINT STRING.
-stmt ::= PRINT STRING COMMA exprlist.
+stmts(SS) ::= stmt(S) SEMICOLON. {
+	struct pml_list *l = (struct pml_list *)pmlt_alloc(PMLTT_LIST);
+	l_ins(&l->pmll_list, &S->pmlt_node->pmln_ln);
+	SS = l;
+}
+stmts(SSO) ::= stmts(SSI) stmt(S) SEMICOLON. {
+	l_ins(&SSI->pmll_list, &S->pmlt_node->pmln_ln);
+	SSO = SSI;
+}
+
+
+/* Specific types of statements */
+stmt(S) ::= pktact(PA). { S = (union pml_tree *)PA; }
+
+stmt(S) ::= var(V) ASSIGN expr(E). {
+	struct pml_set_action *a = 
+		(struct plm_set_action *)pmlt_alloc(PMLTT_SETACT);
+	a->pmlsa_variable = V;
+	a->pmlsa_expr = E;
+	S = (union pml_tree *)a;
+}
+
+stmt(S) ::= WHILE LPAREN expr(E) RPAREN stmtlist(SL). {
+	struct pml_while *w = (struct pml_while *)pmlt_alloc(PMLTT_WHILE);
+	w->pmlw_test = E;
+	w->pmlw_body = SL;
+	S = (union pml_tree *)w;
+}
+
+stmt(S) ::= IF LPAREN expr(E) RPAREN stmtlist(SL). {
+	struct pml_if *i = (struct pml_if *)pmlt_alloc(PMLTT_IF);
+	i->pmlif_test = E;
+	i->pmlif_tbody = SL;
+	S = (union pml_tree *)i;
+}
+
+stmt(S) ::= IF LPAREN expr(E) RPAREN stmtlist(SLT) ELSE stmtlist(SLF). {
+	struct pml_if *i = (struct pml_if *)pmlt_alloc(PMLTT_IF);
+	i->pmlif_test = E;
+	i->pmlif_tbody = SLT;
+	i->pmlif_fbody = SLF;
+	S = (union pml_tree *)i;
+}
+
+stmt(S) ::= RETURN expr(E).  {
+	struct pml_return *r = (struct pml_return *)pmlt_alloc(PMLTT_RETURN);
+	r->pmlret_expr = E;
+	S = (union pml_tree *)r;
+}
+
+stmt(S) ::= PRINT STRING(TV). {
+	struct pml_print *p = (struct pml_print *)pmlt_alloc(PMLTT_PRINT);
+	p->pmlp_fmt = TV.u.raw.data;
+	S = (union pml_tree *)p;
+}
+
+stmt(S) ::= PRINT STRING(TV) COMMA exprlist(EL). {
+	struct pml_print *p = (struct pml_print *)pmlt_alloc(PMLTT_PRINT);
+	p->pmlp_fmt = TV.u.raw.data;
+	p->pmlp_args = EL;
+	S = (union pml_tree *)p;
+}
+
 
 pktact ::= DROP.
 pktact ::= DROP ID.
