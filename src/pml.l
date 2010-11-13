@@ -32,7 +32,13 @@ dnum		0|[1-9][0-9]*
 
 #.*\n
 
-\"{sch}*\"		{return copy_string(yyscanner, yytext, PMLTOK_STRING);}
+\"{sch}*\"		{
+	return copy_string(yyscanner, yytext, PMLTOK_STRING);
+}
+
+`{sch}*`		{
+	return copy_string(yyscanner, yytext, PMLTOK_REGEX);
+}
 
 {xnum}	|
 {onum}	|
@@ -41,7 +47,9 @@ dnum		0|[1-9][0-9]*
 	return PMLTOK_NUM; 
 }
 
-\\x{xb}+		{return copy_string(yyscanner, yytext, PMLTOK_BYTESTR);}
+\\x{xb}+		{
+	return copy_string(yyscanner, yytext, PMLTOK_BYTESTR);
+}
 
 {ipb}\.{ipb}\.{ipb}\.{ipb} { 
 	parse_ipv4_addr(yyscanner, yytext);
@@ -61,21 +69,11 @@ dnum		0|[1-9][0-9]*
 "not"		{ return PMLTOK_NOT; }
 "and"		{ return PMLTOK_AND; }
 "or"		{ return PMLTOK_OR; }
-"nlz"		{ return PMLTOK_NLZ; }
-"pop"		{ return PMLTOK_POP; }
 "while"		{ return PMLTOK_WHILE; }
 "if"		{ return PMLTOK_IF; }
 "else"		{ return PMLTOK_ELSE; }
 "return"	{ return PMLTOK_RETURN; }
-"drop"		{ return PMLTOK_DROP; }
-"insert"	{ return PMLTOK_INSERT; }
-"cut"		{ return PMLTOK_CUT; }
-"dup"		{ return PMLTOK_DUP; }
-"fixlen"	{ return PMLTOK_FIXLEN; }
-"fixcsum"	{ return PMLTOK_FIXCSUM; }
-"fixdlt"	{ return PMLTOK_FIXDLT; }
-"enqueue"	{ return PMLTOK_ENQUEUE; }
-"print"		{ return PMLTOK_PRINT; }
+"var"		{ return PMLTOK_VAR; }
 
 "=="		{ return PMLTOK_EQ; }
 "!="		{ return PMLTOK_NEQ; }
@@ -83,24 +81,27 @@ dnum		0|[1-9][0-9]*
 ">"		{ return PMLTOK_GT; }
 "<="		{ return PMLTOK_LEQ; }
 ">="		{ return PMLTOK_GEQ; }
-"=/"		{ return PMLTOK_MASKEQ; }
-"!/"		{ return PMLTOK_MASKNE; }
-"=~"		{ return PMLTOK_REX; }
-"!~"		{ return PMLTOK_NOTREX; }
+"<-"		{ return PMLTOK_SLT; }
+">-"		{ return PMLTOK_SGT; }
+"<=-"		{ return PMLTOK_SLEQ; }
+">=-"		{ return PMLTOK_SGEQ; }
+
+"=~"		{ return PMLTOK_MATCH; }
+"!~"		{ return PMLTOK_NOMATCH; }
 
 "+"		{ return PMLTOK_PLUS; }
 "-"		{ return PMLTOK_MINUS; }
 "*"		{ return PMLTOK_TIMES; }
 "/"		{ return PMLTOK_DIV; }
 "%"		{ return PMLTOK_MOD; }
-"&"		{ return PMLTOK_BAND; }
+"&"		{ return PMLTOK_AMP; }
 "|"		{ return PMLTOK_BOR; }
+"^"		{ return PMLTOK_BXOR; }
 "~"		{ return PMLTOK_BINV; }
 "<<"		{ return PMLTOK_SHL; }
 ">>"		{ return PMLTOK_SHR; }
-">>a"		{ return PMLTOK_SHRA; }
+">>-"		{ return PMLTOK_SHRA; }
 "."		{ return PMLTOK_DOT; }
-":"		{ return PMLTOK_COLON; }
 "="		{ return PMLTOK_ASSIGN; }
 
 "{"		{ return PMLTOK_LBRACE; }
@@ -113,7 +114,9 @@ dnum		0|[1-9][0-9]*
 "-?"		{ return PMLTOK_PPEND; }
 ","		{ return PMLTOK_COMMA; }
 
-[a-zA-Z_][a-zA-Z0-9_]*	{ return PMLTOK_ID; }
+[a-zA-Z_][a-zA-Z0-9_]*	{ 
+	return copy_string(yyscanner, yytext, PMLTOK_ID);
+}
 
 {ws}		/* skip ws */
 
@@ -229,61 +232,64 @@ static int copy_string(yyscan_t scanner, const char *text, int tok)
 }
 
 
-const char *strs[] = { 
+static const char *strs[] = { 
   "EOF",
+  "PRED",
   "ID",
-  "STRING",
+  "LPAREN",
+  "RPAREN",
+  "FUNC",
+  "LBRACE",
+  "RBRACE",
+  "COMMA",
+  "VAR",
+  "SEMICOLON",
+  "LBRACKET",
   "NUM",
+  "RBRACKET",
+  "ASSIGN",
+  "WHILE",
+  "IF",
+  "ELSE",
+  "RETURN",
+  "PRINT",
+  "STRING",
+  "PPBEGIN",
+  "PPEND",
+  "OR",
+  "AND",
   "BYTESTR",
+  "DIV",
   "IPV4ADDR",
   "IPV6ADDR",
   "ETHADDR",
-  
-  "NOT",
-  "AND",
-  "OR",
-  "NLZ",
-  "POP",
-  "WHILE",
-  "IF",
-
+  "REGEX",
+  "MATCH",
+  "NOMATCH",
   "EQ",
   "NEQ",
   "LT",
   "GT",
   "LEQ",
   "GEQ",
-  "MEQ",
   "SLT",
   "SGT",
   "SLEQ",
   "SGEQ",
-  "REX",
-  
+  "BOR",
+  "BXOR",
+  "AMP",
   "PLUS",
   "MINUS",
   "TIMES",
-  "DIV",
   "MOD",
-  "BAND",
-  "BOR",
-  "BINV",
   "SHL",
   "SHR",
   "SHRA",
+  "NOT",
+  "BINV",
+  "IPADDR",
   "DOT",
-  "COLON",
-  "ASSIGN",
-  
-  "LBRACE",
-  "RBRACE",
-  "LPAREN",
-  "RPAREN",
-  "LBRACKET",
-  "RBRACKET",
-  "PPBEGIN",
-  "PPEND",
-  "COMMA",
 };
 
 

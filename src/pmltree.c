@@ -92,39 +92,36 @@ union pml_tree *pmlt_alloc(int pmltt)
 			p->pmlv_sval = 0;
 			p->pmlv_swidth = 4;
 		} else if (pmltt == PMLTT_BYTESTR) {
-			p->pmlv_byteval.data = NULL;
-			p->pmlv_byteval.len = 0;
+			pml_bytestr_set_static(&p->pmlv_byteval, NULL, 0);
 		} else if (pmltt == PMLTT_MASKVAL) {
-			p->pmlv_mval.data = NULL;
-			p->pmlv_mval.len = 0;
-			p->pmlv_mmask.data = NULL;
-			p->pmlv_mmask.len = 0;
+			pml_bytestr_set_static(&p->pmlv_mval, NULL, 0);
+			pml_bytestr_set_static(&p->pmlv_mmask, NULL, 0);
 		} else {
 			p->pmlv_varref = NULL;
 		}
 		return (union pml_tree *)p;
 	} break;
 
-	case PMLTT_BINOP:{
-		struct pml_binop *p;
+	case PMLTT_VAR:{
+		struct pml_variable *p;
 		if ((p = calloc(1, sizeof(*p))) == NULL)
 			return NULL;
-		p->pmlb_type = pmltt;
-		l_init(&p->pmlb_ln);
-		p->pmlb_op = 0;
-		p->pmlb_left = NULL;
-		p->pmlb_right = NULL;
-		return (union pml_tree *)p;
+		p->pmlvar_type = pmltt;
+		l_init(&p->pmlvar_ln);
+		p->pmlvar_name = NULL;
+		p->pmlvar_init = NULL;
 	} break;
 
-	case PMLTT_UNOP:{
-		struct pml_unop *p;
+	case PMLTT_UNOP:
+	case PMLTT_BINOP:{
+		struct pml_op *p;
 		if ((p = calloc(1, sizeof(*p))) == NULL)
 			return NULL;
-		p->pmlu_type = pmltt;
-		l_init(&p->pmlu_ln);
-		p->pmlu_op = 0;
-		p->pmlu_expr = NULL;
+		p->pmlo_type = pmltt;
+		l_init(&p->pmlo_ln);
+		p->pmlo_op = 0;
+		p->pmlo_arg1 = NULL;
+		p->pmlo_arg2 = NULL;
 		return (union pml_tree *)p;
 	} break;
 
@@ -162,6 +159,8 @@ union pml_tree *pmlt_alloc(int pmltt)
 		return (union pml_tree *)p;
 	} break;
 
+	case PMLTT_NAME:
+	case PMLTT_OFFSETOF:
 	case PMLTT_LOCATOR:{
 		struct pml_locator *p;
 		if ((p = calloc(1, sizeof(*p))) == NULL)
@@ -169,22 +168,9 @@ union pml_tree *pmlt_alloc(int pmltt)
 		p->pmlloc_type = pmltt;
 		l_init(&p->pmlloc_ln);
 		p->pmlloc_name = NULL;
-		p->pmlloc_off = 0;
-		p->pmlloc_len = 0;
-		return (union pml_tree *)p;
-	} break;
-
-	case PMLTT_PKTACT:{
-		struct pml_pkt_action *p;
-		if ((p = calloc(1, sizeof(*p))) == NULL)
-			return NULL;
-		p->pmlpa_type = pmltt;
-		l_init(&p->pmlpa_ln);
-		p->pmlpa_action = 0;
-		p->pmlpa_pkt = NULL;
-		p->pmlpa_name = NULL;
-		p->pmlpa_off = NULL;
-		p->pmlpa_amount = NULL;
+		p->pmlloc_pkt = NULL;
+		p->pmlloc_off = NULL;
+		p->pmlloc_len = NULL;
 		return (union pml_tree *)p;
 	} break;
 
@@ -230,7 +216,8 @@ union pml_tree *pmlt_alloc(int pmltt)
 		return (union pml_tree *)p;
 	} break;
 
-	case PMLTT_FUNCTION:{
+	case PMLTT_FUNCTION:
+	case PMLTT_PREDICATE:{
 		struct pml_function *p;
 		if (((p = calloc(1, sizeof(*p))) == NULL) ||
 		    (vtab_init(&p->pmlf_vars) < 0))
@@ -238,7 +225,7 @@ union pml_tree *pmlt_alloc(int pmltt)
 		p->pmlf_type = pmltt;
 		l_init(&p->pmlf_ln);
 		p->pmlf_name = NULL;
-		p->pmlf_nparams = 0;
+		p->pmlf_arity = 0;
 		p->pmlf_pnames = NULL;
 		return (union pml_tree *)p;
 	} break;
@@ -254,9 +241,8 @@ union pml_tree *pmlt_alloc(int pmltt)
 		return (union pml_tree *)p;
 	} break;
 
-	default:
-		return NULL;
 	}
+	return NULL;
 }
 
 
@@ -272,24 +258,30 @@ void pmlt_free(union pml_tree *tree)
 
 	case PMLTT_BYTESTR:{
 		struct pml_value *p = &tree->value;
-		free(p->pmlv_byteval.data);
+		pml_bytestr_free(&p->pmlv_byteval);
 	} break;
+
+	case PMLTT_VAR:{
+		struct pml_variable *p = &tree->variable;
+		free(p->pmlvar_name);
+		pmlt_free((union pml_tree *)p->pmlvar_init);
+	}
 
 	case PMLTT_MASKVAL:{
 		struct pml_value *p = &tree->value;
-		free(p->pmlv_mval.data);
-		free(p->pmlv_mmask.data);
+		pml_bytestr_free(&p->pmlv_mval);
+		pml_bytestr_free(&p->pmlv_mmask);
 	} break;
 
 	case PMLTT_BINOP:{
-		struct pml_binop *p = &tree->binop;
-		pmlt_free((union pml_tree *)p->pmlb_left);
-		pmlt_free((union pml_tree *)p->pmlb_right);
+		struct pml_op *p = &tree->op;
+		pmlt_free((union pml_tree *)p->pmlo_arg1);
+		pmlt_free((union pml_tree *)p->pmlo_arg2);
 	} break;
 
 	case PMLTT_UNOP:{
-		struct pml_unop *p = &tree->unop;
-		pmlt_free((union pml_tree *)p->pmlu_expr);
+		struct pml_op *p = &tree->op;
+		pmlt_free((union pml_tree *)p->pmlo_arg1);
 	} break;
 
 	case PMLTT_FUNCALL:{
@@ -310,17 +302,14 @@ void pmlt_free(union pml_tree *tree)
 		pmlt_free((union pml_tree *)p->pmlw_body);
 	} break;
 
+	case PMLTT_NAME:
+	case PMLTT_OFFSETOF:
 	case PMLTT_LOCATOR:{
 		struct pml_locator *p = &tree->locator;
 		free(p->pmlloc_name);
-	} break;
-
-	case PMLTT_PKTACT:{
-		struct pml_pkt_action *p = &tree->pktact;
-		free(p->pmlpa_name);
-		pmlt_free((union pml_tree *)p->pmlpa_pkt);
-		pmlt_free((union pml_tree *)p->pmlpa_off);
-		pmlt_free((union pml_tree *)p->pmlpa_amount);
+		pmlt_free((union pml_tree *)p->pmlloc_pkt);
+		pmlt_free((union pml_tree *)p->pmlloc_off);
+		pmlt_free((union pml_tree *)p->pmlloc_len);
 	} break;
 
 	case PMLTT_SETACT:{
@@ -347,11 +336,12 @@ void pmlt_free(union pml_tree *tree)
 			pmlt_free((union pml_tree *)l_to_node(l));
 	} break;
 
-	case PMLTT_FUNCTION:{
+	case PMLTT_FUNCTION:
+	case PMLTT_PREDICATE:{
 		struct pml_function *p = &tree->function;
 		uint i;
 		if (p->pmlf_pnames != NULL) {
-			for (i = 0; i < p->pmlf_nparams; ++i)
+			for (i = 0; i < p->pmlf_arity; ++i)
 				free(p->pmlf_pnames[i]);
 			free(p->pmlf_pnames);
 		}
@@ -369,4 +359,82 @@ void pmlt_free(union pml_tree *tree)
 	}
 
 	free(tree);
+}
+
+
+union pml_expr_u *pml_binop_alloc(int op, union pml_expr_u *left, 
+		                  union pml_expr_u *right)
+{
+	struct pml_op *o = (struct pml_op *)pmlt_alloc(PMLTT_BINOP);
+	o->pmlo_op = op;
+	o->pmlo_arg1 = left;
+	o->pmlo_arg2 = right;
+	return (union pml_expr_u *)o;
+}
+
+
+union pml_expr_u *pml_unop_alloc(int op, union pml_expr_u *ex)
+{
+	struct pml_op *o = (struct pml_op *)pmlt_alloc(PMLTT_UNOP);
+	o->pmlo_op = op;
+	o->pmlo_arg1 = ex;
+	return (union pml_expr_u *)o;
+}
+
+
+struct pml_variable *pml_var_alloc(char *name, int width, 
+		                   struct pml_value *init)
+{
+	struct pml_variable *v = (struct pml_variable *)
+		pmlt_alloc(PMLTT_VAR);
+	v->pmlvar_name = name;
+	v->pmlvar_init = init;
+	return v;
+}
+
+
+void pml_bytestr_set_static(struct pml_bytestr *b, void *data, size_t len)
+{
+	abort_unless(b);
+	abort_unless((len == 0) || (data != NULL));
+	abort_unless(len <= PML_BYTESTR_MAX_STATIC);
+	b->pmlbs_is_dynamic = 0;
+	b->pmlbs_data = b->pmlbs_sbytes;
+	b->pmlbs_len = len;
+	memcpy(b->pmlbs_sbytes, data, len);
+}
+
+
+void pml_bytestr_set_dynamic(struct pml_bytestr *b, void *data, size_t len)
+{
+	abort_unless(b);
+	abort_unless(len > 0);
+        abort_unless(data != NULL);
+	b->pmlbs_is_dynamic = 1;
+	b->pmlbs_data = data;
+	b->pmlbs_len = len;
+}
+
+
+void pml_bytestr_free(struct pml_bytestr *b)
+{
+	abort_unless(b);
+	if (b->pmlbs_is_dynamic) {
+		free(b->pmlbs_data);
+		pml_bytestr_set_static(b, NULL, 0);
+	}
+}
+
+
+struct pml_function *pml_ast_lookup_func(struct pml_ast *ast, char *name)
+{
+	/* TODO */
+	return NULL;
+}
+
+
+int pml_locator_extend_name(struct pml_locator *l, char *name, size_t len)
+{
+	/* TODO */
+	return 0;
 }

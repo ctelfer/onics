@@ -1,49 +1,140 @@
 /*
+
+
+# Comment 
+
 ?- tcp.sport == tcp.ports.http -?
 
-?- ip.saddr == 127.0.0.0/24 -?
+# Match operator is =~, inverse is !~
+# Takes field on one side, pattern other
+# Patterns include:
+#   IP[v6] w/ mask, bytestring w/ mask, eth addr w/ mask,
+#   regex, numeric range
+#
+?- ip.saddr =~ 127.0.0.0/24 -?          # IP w/mask
+?- eth.saddr !~ c0:2a:f9:00:00:00/ff:ff:ff:f0:00:00 -?  # eth addr
+?- not (pkt.data =~ "hello world!") -?  # ascii string match
+?- not (pkt.data !~ \xa5a6a7a8a9aaabac) -?  # byte string match 
+?- pkt.data =~ `hello +world!` -?       # regex
+?- ipv6.daddr =~ ff80:abcd::/8 -?	# ipv6 w/mask
+?- tcp.dport !~ tcp.ports.reserved -?   # numeric range
+?- udp.sport !~ [0..1023] -?		# numeric range
+?- tcp[2:10] =~ \xABCDEF0123DEADBEEF01/FEEDA110FFFFFFFFAB -? # bytes w/ mask
 
+# Short circuiting boolean ops are supported of course
 ?- eth && ip6 && pkt.len > ip6.len + 40 + 14 -?
 
-?- pop(tcp.flags) == 2 -?
+?- pop(tcp.flags == 2) -?
 
 ?- nlz(ip6.flowid) == 4 -?
 
-?- eth.saddr =/ c0:2a:f9:00:00:00/ff:ff:ff:f0:00:00 -?
-?- eth.saddr !/ c0:2a:f9:00:00:00/ff:ff:ff:f0:00:00 -?  
+?- tcp[2:2] == 1628 -?
 
-?- not (pkt.data =~ "hello +world!") -?
-?- not (pkt.data !~ "hello +world!") -?
+# second IP header in the 
+?- ip[1][3:1] == 65 -?
 
-?- tcp.dport == tcp.ports.reserved -?
+# compares as 64-bit integer
+?- eth.saddr == 5 -? 
 
-?- uint(tcp[2:2]) == 1628 -?
+# compares first 8 bytes as 64-bit integer
+# probably not intended 
+?- ipv6.saddr == 5 -? 
 
-?- tcp[2:10] == \xABCDEF0123DEADBEEF01/FEEDA110FFFFFFFFAB -?
+# A predicate is pure function that calls only other predicates
+# and is not recursive (neither directly or indirectly.
+# The reason is that predicates are shorthand mainly for matching and
+# need to be able to be used in a matchonly program with only forward
+# branches.
+pred ishttp() ( tcp && (tcp.sport == 80 || tcp.dport == 80) )
 
-?- ip:1[3:1] == "a" -?
+# A function can be recursive, have local variables and it has
+# a series of statements enclosed in parentheses.
+# All variable declarations must come before statements.
+func incr(v) {
+	var x;
 
+	x = v + 1;
+	return x;
+}
+var Count;
 
-?- eth.saddr == 5 -? # error
+# Patterns can call predicates.  (for shorthand)
+?- ishttp() -? { Count = incr(Count); }
+
 */
 
 
 /* 
-  Actions:
 
-  Drop
-  Insert space
-  Cut space
-  Duplicate
-  Push header
-  Fix lengths
-  Fix checksum
-  Fix dlt
-  Enqueue packet
-  Set field/variable
-  Fun call 
-  Print
-  Return
+  Variables -- local all variables are 32 bit numbers (for now); will add more
+               types later.  (8, 16, 32, 64-bit signed and unsigned, plus 
+               bytestrings)
+  Local variables are referred to by name
+  
+
+  Abstractions:
+   - PRID == protocol ID, identifies a parsable protocol
+   - PKID == packet ID, identifies one of the 16 packets in the working set
+   - FLD == field, a unit of data that has meaning within a protocol
+            There are 2 data types of fields:
+	      - bit fields - width <= 32 bits and do not start at byte offsets
+	      - byte string - Starts at a byte offset, and can have any width.
+	            data within the field can be interpreted in any desired
+		    way.
+		    * byte strings of 8 or less bytes can be operated on as
+		      numeric values.
+
+	    There are 3 special field access characteristics
+	      - Required -- cannot be unset  (e.g. start offset)
+	      - Derived position -- cannot be unset and offset does not move 
+	          with an 'insert' or 'cut' unless the offset(s) it depends
+		  upon also move.
+	      - Derived value -- cannot be set or unset, field is not present
+	          in the data explicitly, but derived from offsets or other
+		  fields in the data.
+
+  Notation:
+   a			-- Variable name (global or local) or proto name
+   $<protoname>		-- Protocol ID 
+   a.b.c.d		-- Field for packet 0
+   @<pkt>:a.b.c.d	-- Field for packet <pkt>
+   &<field>		-- Byte offset for a field <byte string or integer>
+
+
+  Intrinsic Functions:
+
+   - Drop
+   - Fix dlt
+   - Insert space
+   - Cut space
+   - Duplicate
+   - Push header inner or outer
+   - Pop header inner or outer
+   - Update header
+   - Fix lengths
+   - Fix checksum
+   - Enqueue packet
+   - Dequeue packet
+   - Send packet queue
+   - (Un)Set layer
+   - pop(ulation count)
+   - nlz (number of leading zeroes)
+   - signext (sign extend a value)
+
+  Statements: 
+   - Any expression (including function calls)
+   - if then else
+   - while
+   - Set field/variable
+   - Print
+   - Return
+
+
+  Example:
+	insert(10, &tcp + 20); #insert 10 bytes of data 20-bytes after the TCP section star
+	insert(4, &net + 20, 20);
+	cut(10, &ip + ip.hl * 4);
+	fixcsum();
 
   if () { 
   }
@@ -82,6 +173,21 @@
 %type decl { union pml_tree * }
 %destructor decl { pmlt_free($$); }
 
+%type fundecl { struct pml_function * }
+%destructor fundecl { pmlt_free($$); }
+
+%type preddecl { struct pml_function * }
+%destructor preddecl { pmlt_free($$); }
+
+%type lvar { struct pml_variable * }
+%destructor lvar { pmlt_free($$); }
+
+%type gvar { struct pml_variable * }
+%destructor gvar { pmlt_free($$); }
+
+%type lvardecls { struct pml_list * }
+%destructor lvardecls { pmlt_free($$); }
+
 %type rule { struct pml_rule * }
 %destructor rule { pmlt_free($$); }
 
@@ -100,17 +206,11 @@
 %type stmts { struct pml_list * }
 %destructor stmts { pmlt_free($$); }
 
-%type pktact { struct pml_pkt_action * }
-%destructor pktact { pmlt_free($$); }
-
 %type var { struct pml_locator * }
 %destructor var { pmlt_free($$); }
 
 %type exprlist { struct pml_list * }
 %destructor exprlist { pmlt_free($$); }
-
-%type pktoff { struct pml_locator * }
-%destructor pktoff { pmlt_free($$); }
 
 %type locator { struct pml_locator * }
 %destructor locator { pmlt_free($$); }
@@ -120,48 +220,55 @@
 
 %type type { int }
 
-%type orexpr { struct pml_binop * } 
+%type orexpr { union pml_expr_u * } 
 %destructor orexpr { pmlt_free($$); }
 
-%type andexpr { struct pml_binop * } 
+%type andexpr { union pml_expr_u * } 
 %destructor andexpr { pmlt_free($$); }
 
-%type cmpexpr { struct pml_binop * } 
+%type cmpexpr { union pml_expr_u * } 
 %destructor cmpexpr { pmlt_free($$); }
 
 %type maskop { int }
 %type cmpop  { int }
 
-%type borexpr { struct pml_binop * } 
+%type borexpr { union pml_expr_u * } 
 %destructor borexpr { pmlt_free($$); }
 
-%type bxorexpr { struct pml_binop * } 
+%type bxorexpr { union pml_expr_u * } 
 %destructor bxorexpr { pmlt_free($$); }
 
-%type bandexpr { struct pml_binop * } 
+%type bandexpr { union pml_expr_u * } 
 %destructor bandexpr { pmlt_free($$); }
 
-%type addexpr { struct pml_binop * } 
+%type addexpr { union pml_expr_u * } 
 %destructor addexpr { pmlt_free($$); }
 
-%type mulexpr { struct pml_binop * } 
+%type mulexpr { union pml_expr_u * } 
 %destructor mulexpr { pmlt_free($$); }
 
-%type shiftexpr { struct pml_binop * } 
+%type shiftexpr { union pml_expr_u * } 
 %destructor shiftexpr { pmlt_free($$); }
 
 %type shiftop { int }
 
-%type uexpr { struct pml_unop * } 
+%type uexpr { union pml_expr_u * } 
 %destructor uexpr { pmlt_free($$); }
 
-%type valexpr { struct pml_value * } 
+%type pexpr { union pml_expr_u * } 
+%destructor pexpr { pmlt_free($$); }
+
+%type valexpr { union pml_expr_u * } 
 %destructor valexpr { pmlt_free($$); }
 
-%type intrinsic { int }
+%type value { union pml_value_u * } 
+%destructor value { pmlt_free($$); }
 
-%type field { union pml_field_u * } 
-%destructor field { pmlt_free($$); }
+%type funcall { struct pml_funcall * } 
+%destructor funcall { pmlt_free($$); }
+
+%type numval { struct pml_value * }
+%destructor numval { pmlt_free($$); }
 
 %token_type { struct pml_lex_val }
 %token_destructor { 
@@ -173,47 +280,67 @@
 
 /* ----- Grammar ----- */
 
-prog ::= decllist.
+prog ::= decllist. /* nothing to do */
 
 /* Declarations */
-decllist ::= decllist decl(A). { 
-	struct pml_node *n = A->pml_node;
-	if (n->pmln_type == PMLTT_FUNCION) {
-		/* TODO */
-	} else if (n->pmln_type == PMLTT_VARREF) {
-		/* TODO */
-	} else {
-		abort_unless(0);
-	}
-}
+decllist ::= decllist decl. /* nothing to do: resolved below. */
 
 decllist ::= decllist rule(A). {
 	l_ins(&ast->pmla_rules.prev, &A->pml_node->pmln_ln);
 }
 
-decllist ::= .
+decllist ::= . /* nothing to do */
 
+decl ::= fundecl. { /* TODO */ }
+decl ::= preddecl. { /* TODO */ }
+decl ::= gvar. { /* TODO */ }
+
+/* TODO */
+preddecl ::= PRED ID LPAREN idlist RPAREN LPAREN expr RPAREN.
+
+/* TODO */
+fundecl ::= FUNC ID LPAREN idlist RPAREN LBRACE lvardecls stmts RBRACE.
+idlist ::= .
+idlist ::= someids.
+someids ::= ID.
+someids ::= someids COMMA ID.
+
+
+lvar(L) ::= VAR ID(I) SEMICOLON. { L = pmlvar_alloc(I.u.raw.data, 4, NULL); }
+gvar(G) ::= lvar(L). { G = L; }
+gvar(G) ::= VAR ID(I) LBRACKET NUM(N) RBRACKET. {
+	G = pmlvar_alloc(I.u.raw.data, N.u.num, NULL);
+}
+gvar(G) ::= lvar(L) ASSIGN numval(V). {
+	L->pmlvar_init = V;
+	G = L;
+}
+gvar(G) ::= VAR ID(I) LBRACKET NUM(N) RBRACKET ASSIGN value(VAL). {
+	G = pmlvar_alloc(I.u.raw.data, N.u.num, VAL);
+}
+
+lvardecls(L) ::= . {
+	L = (struct pml_list *)pmlt_alloc(PMLTT_LIST);
+}
+lvardecls(L1) ::= lvardecls(L0) lvar(V).  {
+	/* TODO: search for duplicates */
+	l_ins(&L0->pmll_list.prev, &V->pmlvar_ln);
+	L1 = L0;
+}
 
 /* Rules */
-rule(R) ::= pktpat(P) stmt(S). {
-	struct pml_list *l = (struct pml_list *)pmlt_alloc(PMLTT_LIST);
-	R = (struct pml_rule *)pmlt_alloc(PMLTT_RULE);
-	l_ins(&l->pmll_list, &S->pmlt_node->pmln_ln);
-	R->pmlr_pattern = P;
-	R->pmlr_stmts = l;
-}
 rule(R) ::= pktpat(P) stmtlist(SL). {
 	R = (struct pml_rule *)pmlt_alloc(PMLTT_RULE);
 	R->pmlr_pattern = P;
 	R->pmlr_stmts = SL;
 }
 
+
 /* Statements */
 stmtlist(SL) ::= LBRACE stmts(SS) RBRACE. { SL = SS; }
 
-stmts(SS) ::= stmt(S) SEMICOLON. {
+stmts(SS) ::= . {
 	struct pml_list *l = (struct pml_list *)pmlt_alloc(PMLTT_LIST);
-	l_ins(&l->pmll_list, &S->pmlt_node->pmln_ln);
 	SS = l;
 }
 stmts(SSO) ::= stmts(SSI) stmt(S) SEMICOLON. {
@@ -223,8 +350,6 @@ stmts(SSO) ::= stmts(SSI) stmt(S) SEMICOLON. {
 
 
 /* Specific types of statements */
-stmt(S) ::= pktact(PA). { S = (union pml_tree *)PA; }
-
 stmt(S) ::= var(V) ASSIGN expr(E). {
 	struct pml_set_action *a = 
 		(struct plm_set_action *)pmlt_alloc(PMLTT_SETACT);
@@ -274,128 +399,246 @@ stmt(S) ::= PRINT STRING(TV) COMMA exprlist(EL). {
 	S = (union pml_tree *)p;
 }
 
+pktpat(PP) ::= PPBEGIN expr(E) PPEND. { PP = E; }
 
-pktact ::= DROP.
-pktact ::= DROP ID.
-pktact ::= INSERT pktoff expr.
-pktact ::= CUT pktoff expr.
-pktact ::= DUP NUM.
-pktact ::= DUP ID NUM.
-pktact ::= FIXLEN.
-pktact ::= FIXLEN locator.
-pktact ::= FIXCSUM locator.
-pktact ::= FIXDLT locator.
-pktact ::= ENQUEUE ID.
+expr(E) ::= orexpr(OE). { E = OE; }
 
+orexpr(E) ::= orexpr(LHS) OR andexpr(RHS). {
+	E = pml_binop_alloc(PMLOP_OR, LHS, RHS); 
+}
+orexpr(E) ::= andexpr(AE). { E = AE; }
 
-decl ::= funcdecl.
-decl ::= vardecl.
+andexpr(E) ::= andexpr(LHS) AND cmpexpr(RHS). {
+	E = pml_binop_alloc(PMLOP_AND, LHS, RHS); 
+}
+andexpr(E) ::= cmpexpr(CE). { E = CE; }
 
-funcdecl ::= DEF ID LPAREN idlist RPAREN LBRACE vardecls stmts RBRACE.
-idlist ::= .
-idlist ::= someids.
-someids ::= ID.
-someids ::= someids COMMA ID.
+cmpexpr(E) ::= borexpr(LHS) cmpop(OP) borexpr(RHS). {
+	E = pml_binop_alloc(OP, LHS, RHS); 
+}
+cmpexpr(E) ::= borexpr(LHS) matchop(OP) BYTESTR(T1) DIV BYTESTR(T2). {
+	struct pml_value *v = (struct pml_value *)pmlt_alloc(PMLTT_MASKVAL);
+	pml_bytestr_set_dynamic(&v->pmlv_mval, T1.u.raw.data, T1.u.raw.len);
+	pml_bytestr_set_dynamic(&v->pmlv_mmval, T2.u.raw.data, T2.u.raw.len);
+	E = pml_binop_alloc(OP, LHS, (union pml_expr *)v); 
+}
+cmpexpr(E) ::= borexpr(LHS) matchop(OP) IPV4ADDR(A) DIV NUM(L). {
+	struct pml_value *v = (struct pml_value *)pmlt_alloc(PMLTT_MASKVAL);
+	uchar mask[4] = { 0 };
+	int i, rem;
 
-vardecl ::= type ID SEMICOLON.
-vardecl ::= type ID LBRACKET NUM RBRACKET.
-vardecls ::= .
-vardecls ::= vardecls vardecl.
+	pml_bytestr_set_static(&v->pmlv_mval, A.u.v4addr, 4);
 
-pktpat ::= PPBEGIN expr PPEND.
+	if (L.u.num > 32) {
+		/* TODO: error handling */
+	}
+	i = 0;
+	rem = L.u.num;
+	while (rem > 8) {
+		mask[i++] = 0xff;
+		rem -= 8;
+	}
+	mask[i] = 0xFF - ((1 << (8 - rem)) - 1);
 
-expr ::= orexpr.
+	pml_bytestr_set_static(&v->pmlv_mmval, mask, 4);
 
-orexpr ::= orexpr OR andexpr.
-orexpr ::= andexpr.
+	E = pml_binop_alloc(OP, LHS, (union pml_expr *)v); 
+}
+cmpexpr(E) ::= borexpr(LHS) matchop(OP) IPV4ADDR(A1) DIV IPV4ADDR(A2). {
+	struct pml_value *v = (struct pml_value *)pmlt_alloc(PMLTT_MASKVAL);
+	pml_bytestr_set_static(&v->pmlv_mval, A1.u.v4addr, 4);
+	pml_bytestr_set_static(&v->pmlv_mmval, A2.u.v4addr, 4);
+	E = pml_binop_alloc(OP, LHS, (union pml_expr *)v); 
+}
+cmpexpr(E) ::= borexpr(LHS) matchop(OP) IPV6ADDR(A) DIV NUM(L). {
+	struct pml_value *v = (struct pml_value *)pmlt_alloc(PMLTT_MASKVAL);
+	uchar mask[16] = { 0 };
+	int i, rem;
 
-andexpr ::= andexpr AND cmpexpr.
-andexpr ::= cmpexpr.
+	pml_bytestr_set_static(&v->pmlv_mval, A.u.v6addr, 16);
 
-cmpexpr ::= BYTESTR REX STRING.
-cmpexpr ::= BYTESTR NOTREX STRING.
-cmpexpr ::= borexpr cmpop borexpr.
-cmpexpr ::= borexpr maskop BYTESTR DIV BYTESTR.
-cmpexpr ::= borexpr maskop IPV4ADDR DIV NUM.
-cmpexpr ::= borexpr maskop IPV6ADDR DIV NUM.
-cmpexpr ::= borexpr maskop ETHADDR DIV ETHADDR.
-cmpexpr ::= borexpr.
+	if (L.u.num > 128) {
+		/* TODO: error handling */
+	}
+	i = 0;
+	rem = L.u.num;
+	while (rem > 8) {
+		mask[i++] = 0xff;
+		rem -= 8;
+	}
+	mask[i] = 0xFF - ((1 << (8 - rem)) - 1);
 
-maskop ::= MASKEQ.
-maskop ::= MASKNE.
+	pml_bytestr_set_static(&v->pmlv_mmval, mask, 16);
 
-cmpop ::= EQ.
-cmpop ::= NEQ.
-cmpop ::= LT.
-cmpop ::= GT.
-cmpop ::= LEQ.
-cmpop ::= GEQ.
+	E = pml_binop_alloc(OP, LHS, (union pml_expr *)v); 
+}
+cmpexpr(E) ::= borexpr(LHS) matchop(OP) IPV6ADDR(A1) DIV IPV6ADDR(A2). {
+	struct pml_value *v = (struct pml_value *)pmlt_alloc(PMLTT_MASKVAL);
+	pml_bytestr_set_static(&v->pmlv_mval, A1.u.v6addr, 16);
+	pml_bytestr_set_static(&v->pmlv_mmval, A2.u.v6addr, 16);
+	E = pml_binop_alloc(OP, LHS, (union pml_expr *)v); 
+}
+cmpexpr(E) ::= borexpr(LHS) matchop(OP) ETHADDR(E1) DIV ETHADDR(E2). {
+	struct pml_value *v = (struct pml_value *)pmlt_alloc(PMLTT_MASKVAL);
+	pml_bytestr_set_static(&v->pmlv_mval, E1.u.ethaddr, 6);
+	pml_bytestr_set_static(&v->pmlv_mmval, E2.u.ethaddr, 6);
+	E = pml_binop_alloc(OP, LHS, (union pml_expr *)v); 
+}
+cmpexpr(E) ::= borexpr(LHS) matchop(OP) REGEX(R). {
+	struct pml_value *v = (struct pml_value *)pmlt_alloc(PMLTT_BYTESTR);
+	/* TODO: differentiate between bytestr and regular expression */
+	pml_bytestr_set_dynamic(&v->pmlv_mval, R.u.raw.data, R.u.raw.len);
+	E = pml_binop_alloc(OP, LHS, (union pml_expr *)v); 
+}
+cmpexpr(E) ::= borexpr(LHS). { E = LHS; }
 
-borexpr ::= borexpr BOR bxorexpr.
-borexpr ::= bxorexpr.
+matchop(OP) ::= MATCH. { OP = PMLOP_MATCH; }
+matchop(OP) ::= NOMATCH. { OP = PMLOP_NOTMATCH; }
 
-bxorexpr ::= bxorexpr BXOR bandexpr.
-bxorexpr ::= bandexpr.
+cmpop(OP) ::= EQ. { OP = PMLOP_EQ; }
+cmpop(OP) ::= NEQ. { OP = PMLOP_NEQ; }
+cmpop(OP) ::= LT. { OP = PMLOP_LT; }
+cmpop(OP) ::= GT. { OP = PMLOP_GT; }
+cmpop(OP) ::= LEQ. { OP = PMLOP_LEQ; }
+cmpop(OP) ::= GEQ. { OP = PMLOP_GEQ; }
+cmpop(OP) ::= SLT. { OP = PMLOP_SLT; }
+cmpop(OP) ::= SGT. { OP = PMLOP_SGT; }
+cmpop(OP) ::= SLEQ. { OP = PMLOP_SLEQ; }
+cmpop(OP) ::= SGEQ. { OP = PMLOP_SGEQ; }
 
-bandexpr ::= bandexpr BAND addexpr.
-bandexpr ::= addexpr.
+borexpr(E) ::= borexpr(LHS) BOR bxorexpr(RHS). {
+	E = pml_binop_alloc(PMLOP_BOR, LHS, RHS); 
+}
+borexpr(E) ::= bxorexpr(BX). { E = BX; }
 
-addexpr ::= addexpr PLUS mulexpr.
-addexpr ::= addexpr MINUS mulexpr.
-addexpr ::= mulexpr.
+bxorexpr(E) ::= bxorexpr BXOR bandexpr(RHS). {
+	E = pml_binop_alloc(PLMOP_BXOR, LHS, RHS); 
+}
+bxorexpr(E) ::= bandexpr(BA). { E = BA; }
 
-mulexpr ::= mulexpr TIMES shiftexpr.
-mulexpr ::= mulexpr DIV shiftexpr.
-mulexpr ::= mulexpr MOD shiftexpr.
-mulexpr ::= shiftexpr.
+bandexpr(E) ::= bandexpr(LHS) AMP addexpr(RHS). {
+	E = pml_binop_alloc(PMLOP_BAND, LHS, RHS); 
+}
+bandexpr(E) ::= addexpr(A). { E = A; }
 
-shiftexpr ::= shiftexpr shiftop uexpr.
-shiftexpr ::= uexpr.
+addexpr(E) ::= addexpr(LHS) PLUS mulexpr(RHS). {
+	E = pml_binop_alloc(PMLOP_PLUS, LHS, RHS); 
+}
+addexpr(E) ::= addexpr(LHS) MINUS mulexpr(RHS). {
+	E = pml_binop_alloc(PMLOP_MINUS, LHS, RHS); 
+}
+addexpr(E) ::= mulexpr(M). { E = M; }
 
-shiftop ::= SHL.
-shiftop ::= SHR.
-shiftop ::= SHRA.
+mulexpr(E) ::= mulexpr(LHS) TIMES shiftexpr(RHS). {
+	E = pml_binop_alloc(PMLOP_TIMES, LHS, RHS); 
+}
+mulexpr(E) ::= mulexpr(LHS) DIV shiftexpr(RHS). {
+	E = pml_binop_alloc(PMLOP_DIV, LHS, RHS); 
+}
+mulexpr(E) ::= mulexpr(LHS) MOD shiftexpr(RHS). {
+	E = pml_binop_alloc(PMLOP_MOD, LHS, RHS); 
+}
+mulexpr(E) ::= shiftexpr(S). { E = S; }
 
-uexpr ::= NOT valexpr.
-uexpr ::= BINV valexpr.
-uexpr ::= MINUS valexpr.
-uexpr ::= valexpr.
+shiftexpr(E) ::= shiftexpr(LHS) shiftop(OP) uexpr(RHS). {
+	E = pml_binop_alloc(OP, LHS, RHS); 
+}
+shiftexpr(E) ::= uexpr(U). { E = U; }
 
-valexpr ::= LPAREN expr RPAREN.
-valexpr ::= intrinsic LPAREN expr RPAREN.
-valexpr ::= funcall.
-valexpr ::= field.
+shiftop(OP) ::= SHL. { OP = PMLOP_SHL; }
+shiftop(OP) ::= SHR. { OP = PMLOP_SHR; }
+shiftop(OP) ::= SHRA. { OP = PMLOP_SRA; }
 
-intrinsic ::= POP.
-intrinsic ::= NLZ.
-intrinsic ::= type.
+uexpr(E) ::= NOT pexpr(PE). { E = pml_unop_alloc(PMLOP_NOT, PE); }
+uexpr(E) ::= BINV pexpr(PE). { E = pml_unop_alloc(PMLOP_BINV, PE); }
+uexpr(E) ::= MINUS pexpr(PE). { E = pml_unop_alloc(PMLOP_NEG, PE); }
+uexpr(E) ::= pexpr(PE). { E = PE; }
 
-type ::= UINT8.
-type ::= INT8.
-type ::= UINT16.
-type ::= INT16.
-type ::= UINT32.
-type ::= INT32.
+pexpr(PE) ::= LPAREN expr(E) RPAREN. { PE = E; }
+pexpr(PE) ::= funcall(FC). { PE = (union pml_expr_u *)FC; }
+pexpr(PE) ::= value(V). { PE = (union pml_expr_u *)V; }
 
-funcall ::= ID LPAREN exprlist RPAREN.
-funcall ::= ID LPAREN RPAREN.
+funcall(F) ::= ID(N) LPAREN exprlist(A) RPAREN. { 
+	struct pml_function *f;
+	char *name = N.u.raw.data;
+	f = pml_ast_lookup_func(ast, name); /* TODO */
+	if (f == NULL)
+		ast->error = 1;
+	free(name);
+	F = (struct pml_funcall *)pml_alloc(PMLTT_FUNCALL);
+	F->pmlfc_func = f;
+	F->pmlfc_args = A;
+}
+funcall(F) ::= ID(N) LPAREN RPAREN. { 
+	struct pml_function *f;
+	char *name = N.u.raw.data;
+	f = pml_ast_lookup_func(ast, name); /* TODO */
+	if (f == NULL)
+		ast->error = 1;
+	free(name);
+	F = (struct pml_funcall *)pml_alloc(PMLTT_FUNCALL);
+	F->pmlfc_func = f;
+	F->pmlfc_args = (struct pml_list *)pmlt_alloc(PMLTT_LIST);
+}
+exprlist(EL1) ::= exprlist(EL0) COMMA expr(E). { 
+	l_ins(&EL0->pmll_ln, &E->node->pmln_ln);
+	EL1 = EL0;
+}
+exprlist(EL) ::= expr(E). { 
+	struct pml_list *l = (struct pml_list *)pmlt_alloc(PMLTT_LIST);
+	l_ins(&l->pmll_ln, &E->node->pmln_ln);
+	EL = l;
+}
 
-exprlist ::= exprlist COMMA expr.
-exprlist ::= expr.
+value(V) ::= var(VAR). { V = (union pml_expr_u *)VAR; }
+value(V) ::= AMP locator(VAR). { V = (union pml_expr_u *)VAR; }
+value(V) ::= BYTESTR(I). {
+	V = (struct pml_value *)pmlt_alloc(PMLTT_BYTESTR);
+	pml_bytestr_set_dynamic(&V->pmlv_byteval, I.u.raw.data, I.u.raw.len);
+}
+value(V) ::= IPADDR(I). {
+	V = (struct pml_value *)pmlt_alloc(PMLTT_BYTESTR);
+	pml_bytestr_set_static(&V->pmlv_byteval, I.u.v4addr, 4);
+}
+value(V) ::= IPV6ADDR(I). {
+	V = (struct pml_value *)pmlt_alloc(PMLTT_BYTESTR);
+	pml_bytestr_set_static(&V->pmlv_byteval, I.u.v6addr, 16);
+}
+value(V) ::= ETHADDR(I). {
+	V = (struct pml_value *)pmlt_alloc(PMLTT_BYTESTR);
+	pml_bytestr_set_static(&V->pmlv_byteval, I.u.ethaddr, 6);
+}
+value(V) ::= numval(N). { V = N; }
+value(V) ::= STRING(I). {
+	V = (struct pml_value *)pmlt_alloc(PMLTT_BYTESTR);
+	pml_bytestr_set_dynamic(&V->pmlv_byteval, I.u.raw.data, I.u.raw.len);
+}
 
-field ::= var.
-field ::= BYTESTR.
-field ::= IPADDR.
-field ::= IPV6ADDR.
-field ::= NUM.
-field ::= STRING.
+var(V) ::= locator(L). { V = L; }
+var(V) ::= locator(N) LBRACKET borexpr(PK) COMMA borexpr(O) COMMA borexpr 
+	   RBRACKET(L). {
+	N->pmlloc_pkt = PK;
+	N->pmlloc_off = O;
+	N->pmlloc_len = L;
+	V = N;
+}
+var(V) ::= locator(N) LBRACKET borexpr(O) COMMA borexpr(L) RBRACKET. {
+	N->pmlloc_off = O;
+	N->pmlloc_len = L;
+	V = N;
+}
 
-var ::= locator.
-var ::= locator LBRACKET borexpr COLON borexpr RBRACKET.
+locator(L1) ::= locator(L0) DOT ID(TOK). {
+	pml_loc_extend_name(L0, TOK.u.raw.data, TOK.u.raw.len); /* TODO */
+	L0 = L1;
+}
+locator(L) ::= ID(TOK). { 
+	L = pmlt_alloc(PMLTT_LOCATION);
+	L->pmlloc_name = TOK.u.raw.data;
+}
 
-locator ::= locator DOT ID.
-locator ::= ID.
-
-pktoff ::= locator.
-pktoff ::= locator LBRACKET borexpr RBRACKET.
-
+numval(N) ::= NUM(TOK). {
+	N = (struct pml_value *)pmlt_alloc(PMLTT_SCALAR);
+	N->pmlv_sval = TOK.u.num;
+	N->pmlv_swidth = 4;
+}
