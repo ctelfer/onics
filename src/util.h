@@ -15,22 +15,22 @@
 uint16_t ones_sum(void *p, size_t len, uint16_t val);
 
 /*
- * Extract 'bitlen' bits from a position of 'bitoff' bits from p.
+ * Extract 'len' bits from a position of 'off' bits from p.
  * Assumes extracts in network byte order.
  *
- * 'bitoff' and 'bitlen' are in bits
- * 'offset' treats bytes as "big endian"
+ * 'off' and 'len' are in bits.  'off' treats bytes as "big endian" for
+ * purposes of the address of bits.
  * The result is shifted so the last bit in the string is in the 1s position
  * of the return value.  'bitlen' must be <= sizeof(long) * CHAR_BIT
  *
  * Example use:  to extract the traffic class from an IPv6 header:
- *   uint8_t tclass = bitfield((byte_t *)v6p, 4, 8);
+ *   uint8_t tclass = getbits((byte_t *)v6p, 4, 8);
  * Example use: to extract the flow label from an IPv6 header:
- *   uint32_t flowlabel = bitfield((byte_t *)v6p, 12, 20);
+ *   uint32_t flowlabel = getbits((byte_t *)v6p, 12, 20);
  *   
  */
-ulong getbitfield(const byte_t * p, size_t bitoff, size_t bitlen);
-void setbitfield(byte_t * p, size_t bitoff, size_t bitlen, size_t val);
+ulong getbits(const byte_t * p, size_t off, size_t len);
+void setbits(byte_t * p, size_t off, size_t len, ulong val);
 
 /* return 1 if bit #n is set in p */
 int getbit(const byte_t * p, size_t n);
