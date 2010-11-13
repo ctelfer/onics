@@ -110,19 +110,19 @@ int main(int argc, char *argv[])
 	  (bf =
 	   (struct ns_field *)ns_name_lookup(NULL, "tcp.syn", NSTYPE_FIELD)));
 	printf("tcp.syn %s set\n",
-	       getbitfield(tcphdr, bf->off, bf->size) ? "is" : "is not");
+	       getbits(tcphdr, bf->off, bf->size) ? "is" : "is not");
 
 	E(!
 	  (bf =
 	   (struct ns_field *)ns_name_lookup(NULL, "tcp.ack", NSTYPE_FIELD)));
 	printf("tcp.ack %s set\n",
-	       getbitfield(tcphdr, bf->off, bf->size) ? "is" : "is not");
+	       getbits(tcphdr, bf->off, bf->size) ? "is" : "is not");
 
 	E(!
 	  (bf =
 	   (struct ns_field *)ns_name_lookup(NULL, "tcp.psh", NSTYPE_FIELD)));
 	printf("tcp.psh %s set\n",
-	       getbitfield(tcphdr, bf->off, bf->size) ? "is" : "is not");
+	       getbits(tcphdr, bf->off, bf->size) ? "is" : "is not");
 
 
 	E(!(e = ns_name_lookup(NULL, "tcp.sport", NSTYPE_FIELD)));

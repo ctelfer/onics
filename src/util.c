@@ -51,7 +51,7 @@ uint16_t ones_sum(void *p, size_t len, uint16_t val)
  * 11111000  -(0x100 >> 5) == -0x08 == 0xff...f8
  *
  */
-ulong getbitfield(const byte_t * p, size_t bitoff, size_t bitlen)
+ulong getbits(const byte_t * p, size_t bitoff, size_t bitlen)
 {
 	ulong v;
 	int n;
@@ -94,7 +94,7 @@ ulong getbitfield(const byte_t * p, size_t bitoff, size_t bitlen)
  *
  */
 
-void setbitfield(byte_t * p, size_t bitoff, size_t bitlen, ulong val)
+void setbits(byte_t * p, size_t bitoff, size_t bitlen, ulong val)
 {
 	int exlen;
 	unsigned char m;
