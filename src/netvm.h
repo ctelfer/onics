@@ -113,10 +113,14 @@ enum {
 	NETVM_OC_PRPPUSH,	/* [pdesc|I] "push" prp of ptype in packet pkn */
 				/*   to innermost header */
 	NETVM_OC_PRPPOP,	/* [pkn|I] pop the top prp off of packet pkn */
-	NETVM_OC_PRPUP,		/* [pdesc|I] update the fields in the prp */
 	NETVM_OC_FIXDLT,	/* [pkn|I] set dltype from PPT_ of 2nd prp */
-	NETVM_OC_FIXLEN,	/* [pkn|I] fix length fields in the packet */
-	NETVM_OC_FIXCKSUM,	/* [pkn|I] fix checksum fields in the packet */
+	NETVM_OC_PRPUP,		/* [pdesc|I] update the fields in the prp */
+	NETVM_OC_FIXLEN,	/* [pdesc|I] fix length fields in the packet */
+				/*   If pdesc refers to the base parse, fix */
+				/*   all lengths that are in a layer */
+	NETVM_OC_FIXCKSUM,	/* [pdesc|I] fix checksum fields in the packet */
+				/*   If pdesc refers to the base parse, fix */
+				/*   all checksums that are in a layer */
 	NETVM_OC_PKTINS,	/* [len,pdesc|I] insert len bytes @ pd.offset */
 	NETVM_OC_PKTCUT,	/* [len,pdesc|I] cut len bytes @ pd.offset */
 	NETVM_OC_PRPADJ,	/* [amt,pdesc|I] adjust offset 'field' by */

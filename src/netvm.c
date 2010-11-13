@@ -26,6 +26,29 @@
 		    (((uint32_t)(v) >> 8) & 0xFF00ul)      | \
 		    (((uint32_t)(v) >> 24) & 0xFFul) )
 
+/* Pull a packet descriptor from the stack or from the current instruction */
+static void get_pd(struct netvm *vm, struct netvm_prp_desc *pd)
+{
+	struct netvm_inst *inst = &vm->inst[vm->pc];
+	uint32_t val;
+	if (IMMED(inst)) {
+		val = inst->val;
+		pd->pktnum = 0;
+		pd->idx = 0;
+		pd->ptype = (val >> NETVM_IPD_PPT_OFF) & NETVM_IPD_PPT_MASK;
+		pd->field = (val >> NETVM_IPD_FLD_OFF) & NETVM_IPD_FLD_MASK;
+		pd->offset = (val >> NETVM_IPD_OFF_OFF) & NETVM_IPD_OFF_MASK;
+	} else {
+		S_POP(vm, val);
+		pd->ptype = (val >> NETVM_PD_PPT_OFF) & NETVM_PD_PPT_MASK;
+		pd->pktnum = (val >> NETVM_PD_PKT_OFF) & NETVM_PD_PKT_MASK;
+		pd->idx = (val >> NETVM_PD_IDX_OFF) & NETVM_PD_IDX_MASK;
+		pd->field = (val >> NETVM_PD_FLD_OFF) & NETVM_PD_FLD_MASK;
+		S_POP(vm, pd->offset);
+	}
+}
+
+
 /* 
  * find header based on packet number, header type, and index.  So (3,8,1) 
  * means find the 2nd (0-based counting) TCP (PPT_TCP == 8) header in the 4th
@@ -36,11 +59,22 @@ static struct prparse *find_header(struct netvm *vm, struct netvm_prp_desc *pd)
 	struct pktbuf *pkb;
 	struct prparse *prp;
 	int n = 0;
+
+	get_pd(vm, pd);
+	if (vm->error)
+		return NULL;
+
 	if (pd->pktnum >= NETVM_MAXPKTS)
-		return NULL;
-	pkb = vm->packets[pd->pktnum];
-	if (!pkb)
-		return NULL;
+		VMERRRET(vm, NETVM_ERR_PKTNUM, NULL);
+
+	if (!(pkb = vm->packets[pd->pktnum]))
+		VMERRRET(vm, NETVM_ERR_NOPKT, NULL);
+
+	if (PPT_IS_PCLASS(pd->ptype)) {
+		uint lidx = PPT_TO_LIDX(pd->ptype);
+		return pkb->pkb_layers[lidx];
+	}
+
 	prp = &pkb->pkb_prp;
 	do {
 		if ((pd->ptype == PPT_ANY) || (pd->ptype == prp->type)) {
@@ -84,6 +118,8 @@ static void ni_dup(struct netvm *vm)
 {
 	struct netvm_inst *inst = &vm->inst[vm->pc];
 	uint32_t val;
+
+	/* TODO: recheck boundaries for this and SWAP */
 	if (inst->flags & NETVM_IF_NEGBPOFF) {
 		FATAL(vm, NETVM_ERR_STKUNDF, vm->bp <= inst->val);
 		val = vm->stack[vm->bp - inst->val - 1];
@@ -103,6 +139,8 @@ static void ni_swap(struct netvm *vm)
 {
 	struct netvm_inst *inst = &vm->inst[vm->pc];
 	uint32_t tmp = (inst->width > inst->val) ? inst->width : inst->val;
+
+	/* TODO: recheck boundaries for this and DUP */
 	FATAL(vm, NETVM_ERR_STKUNDF, !S_HAS(vm, tmp + 1));
 	if (inst->flags & NETVM_IF_BPOFF) {
 		tmp = vm->stack[vm->bp + 1 + inst->width];
@@ -217,65 +255,35 @@ static void ni_stmem(struct netvm *vm)
 }
 
 
-static void get_pd(struct netvm *vm, struct netvm_inst *inst,
-		   struct netvm_prp_desc *pd)
-{
-	uint32_t val;
-	if (IMMED(inst)) {
-		val = inst->val;
-		pd->pktnum = 0;
-		pd->idx = 0;
-		pd->ptype = (val >> NETVM_IPD_PPT_OFF) & NETVM_IPD_PPT_MASK;
-		pd->field = (val >> NETVM_IPD_FLD_OFF) & NETVM_IPD_FLD_MASK;
-		pd->offset = (val >> NETVM_IPD_OFF_OFF) & NETVM_IPD_OFF_MASK;
-	} else {
-		S_POP(vm, val);
-		pd->ptype = (val >> NETVM_PD_PPT_OFF) & NETVM_PD_PPT_MASK;
-		pd->pktnum = (val >> NETVM_PD_PKT_OFF) & NETVM_PD_PKT_MASK;
-		pd->idx = (val >> NETVM_PD_IDX_OFF) & NETVM_PD_IDX_MASK;
-		pd->field = (val >> NETVM_PD_FLD_OFF) & NETVM_PD_FLD_MASK;
-		S_POP(vm, pd->offset);
-	}
-}
-
-
 static void get_prp_info(struct netvm *vm, struct netvm_inst *inst,
-			 struct netvm_prp_desc *pd, uint32_t * addr,
+			 struct netvm_prp_desc *pd, uint32_t *addr,
 			 struct prparse **prpp)
 {
 	int width;
 	struct prparse *prp;
-	struct pktbuf *pkb;
 	uint oidx;
 	uint32_t off;
 
-	get_pd(vm, inst, pd);
+	prp = find_header(vm, pd);
 	if (vm->error)
 		return;
-	width = inst->width;
-	FATAL(vm, NETVM_ERR_IOVFL, (pd->offset + width < pd->offset));
-
-	if (PPT_IS_PCLASS(pd->ptype)) {
-		uint lidx = PPT_TO_LIDX(pd->ptype);
-		FATAL(vm, NETVM_ERR_PKTNUM, (pd->pktnum >= NETVM_MAXPKTS));
-		FATAL(vm, NETVM_ERR_NOPKT, !(pkb = vm->packets[pd->pktnum]));
-		prp = pkb->pkb_layers[lidx];
-	} else {
-		FATAL(vm, NETVM_ERR_PRPFLD, !NETVM_ISPRPOFF(pd->field));
-		prp = find_header(vm, pd);
-	}
 	FATAL(vm, NETVM_ERR_NOPRP, prp == NULL);
+	FATAL(vm, NETVM_ERR_PRPFLD, !NETVM_ISPRPOFF(pd->field));
 
 	oidx = pd->field - NETVM_PRP_OFF_BASE;
 	if ((pd->field < NETVM_PRP_OFF_BASE) || (pd->field == NETVM_PRP_EOFF) ||
 	    (oidx >= prp->noff))
 		VMERR(vm, NETVM_ERR_PRPFLD);
 	FATAL(vm, NETVM_ERR_PKTADDR, prp->offs[oidx] < 0);
-	off = prp->offs[oidx] + pd->offset;
-	FATAL(vm, NETVM_ERR_PKTADDR, off < prp_soff(prp));
-	FATAL(vm, NETVM_ERR_PKTADDR, off + width < off);
-	FATAL(vm, NETVM_ERR_PKTADDR, off + width > prp_eoff(prp));
-	*addr = off;
+	if (addr) {
+		width = inst->width;
+		FATAL(vm, NETVM_ERR_IOVFL, (pd->offset + width < pd->offset));
+		off = prp->offs[oidx] + pd->offset;
+		FATAL(vm, NETVM_ERR_PKTADDR, off < prp_soff(prp));
+		FATAL(vm, NETVM_ERR_PKTADDR, off + width < off);
+		FATAL(vm, NETVM_ERR_PKTADDR, off + width > prp_eoff(prp));
+		*addr = off;
+	}
 	*prpp = prp;
 }
 
@@ -350,25 +358,16 @@ static void ni_ldpexst(struct netvm *vm)
 
 static void ni_ldprpf(struct netvm *vm)
 {
-	struct netvm_inst *inst = &vm->inst[vm->pc];
 	struct netvm_prp_desc pd0;
 	struct prparse *prp;
 	uint32_t oidx;
 	long off;
 	uint32_t vmoff;
 
-	get_pd(vm, inst, &pd0);
+	prp = find_header(vm, &pd0);
 	if (vm->error)
 		return;
-	if (PPT_IS_PCLASS(pd0.ptype)) {
-		uint lidx = PPT_TO_LIDX(pd0.ptype);
-		FATAL(vm, NETVM_ERR_PKTNUM, (pd0.pktnum >= NETVM_MAXPKTS));
-		FATAL(vm, NETVM_ERR_NOPKT, !vm->packets[pd0.pktnum]);
-		prp = vm->packets[pd0.pktnum]->pkb_layers[lidx];
-		/* Special case to make it easy to check for layer headers */
-	} else {
-		prp = find_header(vm, &pd0);
-	}
+
 	if (!prp) {
 		if (pd0.field == NETVM_PRP_TYPE) {
 			S_PUSH(vm, PPT_NONE);
@@ -650,21 +649,13 @@ static void ni_numop(struct netvm *vm)
 
 static void ni_hasprp(struct netvm *vm)
 {
-	struct netvm_inst *inst = &vm->inst[vm->pc];
 	struct netvm_prp_desc pd0;
 	uint32_t val;
-	struct pktbuf *pkb;
-	get_pd(vm, inst, &pd0);
+
+	val = find_header(vm, &pd0) != NULL;
 	if (vm->error)
 		return;
-	if (PPT_IS_PCLASS(pd0.ptype)) {
-		uint lidx = PPT_TO_LIDX(pd0.ptype);
-		FATAL(vm, NETVM_ERR_PKTNUM, (pd0.pktnum >= NETVM_MAXPKTS));
-		FATAL(vm, NETVM_ERR_NOPKT, !(pkb = vm->packets[pd0.pktnum]));
-		val = pkb->pkb_layers[lidx] != NULL;
-	} else {
-		val = find_header(vm, &pd0) != NULL;
-	}
+
 	S_PUSH(vm, val);
 }
 
@@ -869,12 +860,13 @@ static void ni_pktswap(struct netvm *vm)
 
 static void ni_pktnew(struct netvm *vm)
 {
-	struct netvm_inst *inst = &vm->inst[vm->pc];
 	struct netvm_prp_desc pd0;
 	struct pktbuf *pnew;
-	get_pd(vm, inst, &pd0);
+
+	get_pd(vm, &pd0);
 	if (vm->error)
 		return;
+
 	FATAL(vm, NETVM_ERR_PKTNUM, pd0.pktnum >= NETVM_MAXPKTS);
 	/* NOTE: ptype must be a PKDL_* value, not a PPT_* value */
 	pnew = pkb_create(pd0.offset);
@@ -931,10 +923,11 @@ static void ni_setlayer(struct netvm *vm)
 	struct netvm_inst *inst = &vm->inst[vm->pc];
 	struct netvm_prp_desc pd0;
 	struct prparse *prp;
-	get_pd(vm, inst, &pd0);
+
+	prp = find_header(vm, &pd0);
 	if (vm->error)
 		return;
-	prp = find_header(vm, &pd0);
+
 	FATAL(vm, NETVM_ERR_NOPRP, prp == NULL);
 	pkb_set_layer(vm->packets[pd0.pktnum], prp, inst->width);
 }
@@ -961,7 +954,8 @@ static void ni_prppush(struct netvm *vm)
 	struct netvm_inst *inst = &vm->inst[vm->pc];
 	struct netvm_prp_desc pd0;
 	struct pktbuf *pkb;
-	get_pd(vm, inst, &pd0);
+
+	get_pd(vm, &pd0);
 	if (vm->error)
 		return;
 	FATAL(vm, NETVM_ERR_PKTNUM, (pd0.pktnum >= NETVM_MAXPKTS));
@@ -994,13 +988,13 @@ static void ni_prppop(struct netvm *vm)
 
 static void ni_prpup(struct netvm *vm)
 {
-	struct netvm_inst *inst = &vm->inst[vm->pc];
 	struct netvm_prp_desc pd0;
 	struct prparse *prp;
-	get_pd(vm, inst, &pd0);
+
+	prp = find_header(vm, &pd0);
 	if (vm->error)
 		return;
-	prp = find_header(vm, &pd0);
+
 	FATAL(vm, NETVM_ERR_NOPRP, prp == NULL);
 	prp_update(prp);
 }
@@ -1011,6 +1005,7 @@ static void ni_fixdlt(struct netvm *vm)
 	struct netvm_inst *inst = &vm->inst[vm->pc];
 	uint32_t pktnum;
 	struct pktbuf *pkb;
+
 	if (IMMED(inst)) {
 		pktnum = inst->val;
 	} else {
@@ -1024,51 +1019,65 @@ static void ni_fixdlt(struct netvm *vm)
 
 static void ni_fixlen(struct netvm *vm)
 {
-	struct netvm_inst *inst = &vm->inst[vm->pc];
-	uint32_t pktnum;
+	struct netvm_prp_desc pd0;
 	struct pktbuf *pkb;
-	if (IMMED(inst)) {
-		pktnum = inst->val;
+	struct prparse *prp;
+
+	prp = find_header(vm, &pd0);
+	if (vm->error)
+		return;
+
+	FATAL(vm, NETVM_ERR_NOPRP, prp == NULL);
+
+	if (prp_list_head(prp)) {
+	        abort_unless(pd0.pktnum < NETVM_MAXPKTS);
+		pkb = vm->packets[pd0.pktnum];
+		abort_unless(pkb);
+		if (pkb->pkb_layers[PKB_LAYER_XPORT])
+			FATAL(vm, NETVM_ERR_FIXLEN,
+			      prp_fix_len(pkb->pkb_layers[PKB_LAYER_XPORT]) < 0);
+		if (pkb->pkb_layers[PKB_LAYER_NET])
+			FATAL(vm, NETVM_ERR_FIXLEN,
+			      prp_fix_len(pkb->pkb_layers[PKB_LAYER_NET]) < 0);
+		if (pkb->pkb_layers[PKB_LAYER_DL])
+			FATAL(vm, NETVM_ERR_FIXLEN,
+			      prp_fix_len(pkb->pkb_layers[PKB_LAYER_DL]) < 0);
 	} else {
-		S_POP(vm, pktnum);
+		abort_unless(prp);
+		FATAL(vm, NETVM_ERR_FIXLEN, prp_fix_len(prp) < 0);
 	}
-	/* TODO: allow more precise selection of which lengths to fix */
-	FATAL(vm, NETVM_ERR_PKTNUM, (pktnum >= NETVM_MAXPKTS));
-	FATAL(vm, NETVM_ERR_NOPKT, !(pkb = vm->packets[pktnum]));
-	if (pkb->pkb_layers[PKB_LAYER_XPORT])
-		FATAL(vm, NETVM_ERR_FIXLEN,
-		      prp_fix_len(pkb->pkb_layers[PKB_LAYER_XPORT]) < 0);
-	if (pkb->pkb_layers[PKB_LAYER_NET])
-		FATAL(vm, NETVM_ERR_FIXLEN,
-		      prp_fix_len(pkb->pkb_layers[PKB_LAYER_NET]) < 0);
-	if (pkb->pkb_layers[PKB_LAYER_DL])
-		FATAL(vm, NETVM_ERR_FIXLEN,
-		      prp_fix_len(pkb->pkb_layers[PKB_LAYER_DL]) < 0);
 }
 
 
 static void ni_fixcksum(struct netvm *vm)
 {
-	struct netvm_inst *inst = &vm->inst[vm->pc];
-	uint32_t pktnum;
+	struct netvm_prp_desc pd0;
 	struct pktbuf *pkb;
-	if (IMMED(inst)) {
-		pktnum = inst->val;
+	struct prparse *prp;
+
+	prp = find_header(vm, &pd0);
+	if (vm->error)
+		return;
+
+	FATAL(vm, NETVM_ERR_NOPRP, prp == NULL);
+
+	if (prp_list_head(prp)) {
+	        abort_unless(pd0.pktnum < NETVM_MAXPKTS);
+		pkb = vm->packets[pd0.pktnum];
+		abort_unless(pkb);
+		if (pkb->pkb_layers[PKB_LAYER_XPORT])
+			FATAL(vm, NETVM_ERR_CKSUM,
+			      prp_fix_cksum(pkb->pkb_layers[PKB_LAYER_XPORT]) < 0);
+		if (pkb->pkb_layers[PKB_LAYER_NET])
+			FATAL(vm, NETVM_ERR_CKSUM,
+			      prp_fix_cksum(pkb->pkb_layers[PKB_LAYER_NET]) < 0);
+		if (pkb->pkb_layers[PKB_LAYER_DL])
+			FATAL(vm, NETVM_ERR_CKSUM,
+			      prp_fix_cksum(pkb->pkb_layers[PKB_LAYER_DL]) < 0);
 	} else {
-		S_POP(vm, pktnum);
+		abort_unless(prp);
+		FATAL(vm, NETVM_ERR_CKSUM, prp_fix_cksum(prp) < 0);
 	}
-	/* TODO: allow more precise selection of which checksums to fix */
-	FATAL(vm, NETVM_ERR_PKTNUM, (pktnum >= NETVM_MAXPKTS));
-	FATAL(vm, NETVM_ERR_NOPKT, !(pkb = vm->packets[pktnum]));
-	if (pkb->pkb_layers[PKB_LAYER_XPORT])
-		FATAL(vm, NETVM_ERR_CKSUM,
-		      prp_fix_cksum(pkb->pkb_layers[PKB_LAYER_XPORT]) < 0);
-	if (pkb->pkb_layers[PKB_LAYER_NET])
-		FATAL(vm, NETVM_ERR_CKSUM,
-		      prp_fix_cksum(pkb->pkb_layers[PKB_LAYER_NET]) < 0);
-	if (pkb->pkb_layers[PKB_LAYER_DL])
-		FATAL(vm, NETVM_ERR_CKSUM,
-		      prp_fix_cksum(pkb->pkb_layers[PKB_LAYER_DL]) < 0);
 }
 
 
@@ -1079,7 +1088,8 @@ static void ni_prpins(struct netvm *vm)
 	struct pktbuf *pkb;
 	uint32_t len;
 	int moveup;
-	get_pd(vm, inst, &pd0);
+
+	get_pd(vm, &pd0);
 	if (vm->error)
 		return;
 	moveup = inst->flags & NETVM_IF_MOVEUP;
@@ -1098,7 +1108,8 @@ static void ni_prpcut(struct netvm *vm)
 	struct pktbuf *pkb;
 	uint32_t len;
 	int moveup;
-	get_pd(vm, inst, &pd0);
+
+	get_pd(vm, &pd0);
 	if (vm->error)
 		return;
 	moveup = inst->flags & NETVM_IF_MOVEUP;
@@ -1112,7 +1123,6 @@ static void ni_prpcut(struct netvm *vm)
 
 static void ni_prpadj(struct netvm *vm)
 {
-	struct netvm_inst *inst = &vm->inst[vm->pc];
 	struct netvm_prp_desc pd0;
 	struct prparse *prp;
 	uint32_t val;
@@ -1120,10 +1130,10 @@ static void ni_prpadj(struct netvm *vm)
 	long amt;
 	int rv;
 
-	get_pd(vm, inst, &pd0);
+	prp = find_header(vm, &pd0);
 	if (vm->error)
 		return;
-	prp = find_header(vm, &pd0);
+
 	FATAL(vm, NETVM_ERR_NOPRP, prp == NULL);
 	S_POP(vm, val);
 	amt = (long)(int32_t) val;
@@ -1202,8 +1212,8 @@ netvm_op g_netvm_ops[NETVM_OC_MAX + 1] = {
 	ni_clrlayer,
 	ni_prppush,
 	ni_prppop,
-	ni_prpup,
 	ni_fixdlt,
+	ni_prpup,
 	ni_fixlen,
 	ni_fixcksum,
 	ni_prpins,

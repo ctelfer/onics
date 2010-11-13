@@ -13,6 +13,8 @@ static int dbgabrt()
 #define CPOP(inst) (((inst)->flags >> 8) & 0xFF)
 
 #define VMERR(__vm, __e) do { __vm->error = __e; dbgabrt(); return; } while (0)
+#define VMERRRET(__vm, __e, __r) \
+	do { __vm->error = __e; dbgabrt(); return __r; } while (0)
 
 #define FATAL(__vm, __e, __cond) \
   if (__cond) { __vm->error = __e; dbgabrt(); return; }

@@ -59,7 +59,8 @@ struct netvm_inst vm_prog_isudp[] = {
 };
 
 struct netvm_inst vm_prog_fixcksum[] = {
-	{NETVM_OC_FIXCKSUM, 0, NETVM_IF_IMMED, 0}
+	{NETVM_OC_FIXCKSUM, 0, NETVM_IF_IMMED, 
+	 NETVM_IPDESC(PPT_NONE, 0, 0)}
 };
 
 struct netvm_inst vm_prog_toggledf[] = {
@@ -74,7 +75,8 @@ struct netvm_inst vm_prog_toggledf[] = {
 	/*4 */ {NETVM_OC_XOR, 0, NETVM_IF_IMMED, IPH_DFMASK},
 	/*5 */ {NETVM_OC_STPKT, 2, NETVM_IF_IMMED,
 		NETVM_IPDESC(PPT_IPV4, NETVM_PRP_SOFF, 6)},
-	/*6 */ {NETVM_OC_FIXCKSUM, 0, NETVM_IF_IMMED, 0}
+	/*6 */ {NETVM_OC_FIXCKSUM, 0, NETVM_IF_IMMED, 
+	        NETVM_IPDESC(PPT_IPV4, 0, 0)}
 };
 
 
