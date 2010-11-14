@@ -19,10 +19,10 @@
 					/* RRANGE types */
 
 struct ns_element {
-	int nstype;		/* NST_* */
-	int id;
-	char *name;
-	struct ns_namespace *parent;
+	int			nstype;	/* NST_* */
+	int			id;
+	char *			name;
+	struct ns_namespace *	parent;
 };
 
 /* 
@@ -35,12 +35,12 @@ struct ns_element {
  * for uniqueness)
  */
 struct ns_namespace {
-	int nstype;		/* always NST_NS */
-	int id;
-	char *name;
-	struct ns_namespace *parent;
-	struct rbtree *nametab;
-	struct rbtree *idtab;
+	int			nstype;	/* always NST_NS */
+	int			id;
+	char *			name;
+	struct ns_namespace *	parent;
+	struct rbtree *		nametab;
+	struct rbtree *		idtab;
 };
 
 
@@ -49,63 +49,63 @@ struct ns_namespace {
  * (e.g. a protocol header). 
  */
 struct ns_field {
-	int nstype;		/* always NST_FIELD */
-	int id;
-	char *name;
-	struct ns_namespace *parent;
-	int inbits;
-	size_t off;
-	size_t size;
+	int			nstype;	/* always NST_FIELD */
+	int			id;
+	char *			name;
+	struct ns_namespace *	parent;
+	int			inbits;
+	size_t			off;
+	size_t			size;
 };
 
 
 struct ns_rrange {
-	struct raw *low;
-	struct raw *high;
+	struct raw *		low;
+	struct raw *		high;
 };
 
 
 struct ns_srange {
-	unsigned long low;
-	unsigned long high;
+	unsigned long		low;
+	unsigned long		high;
 };
 
 
 struct ns_scalar {
-	int nstype;		/* NST_SCALAR */
-	int id;
-	const char *name;
-	struct ns_namespace *parent;
-	unsigned long value;
+	int			nstype;	/* NST_SCALAR */
+	int			id;
+	const char *		name;
+	struct ns_namespace *	parent;
+	unsigned long		value;
 };
 
 
 struct ns_rawval {
-	int nstype;		/* NST_RAW */
-	int id;
-	const char *name;
-	struct ns_namespace *parent;
-	struct raw *value;
+	int			nstype;	/* NST_RAW */
+	int			id;
+	const char *		name;
+	struct ns_namespace *	parent;
+	struct raw *		value;
 };
 
 
 struct ns_masked {
-	int nstype;		/* NST_MASKED */
-	int id;
-	const char *name;
-	struct ns_namespace *parent;
-	struct raw *value;
-	struct raw *mask;
+	int			nstype;	/* NST_MASKED */
+	int			id;
+	const char *		name;
+	struct ns_namespace *	parent;
+	struct raw *		value;
+	struct raw *		mask;
 };
 
 
 struct ns_ranges {
-	int nstype;		/* NST_SRANGE | NST_RRANGE */
-	int id;
-	const char *name;
-	struct ns_namespace *parent;
-	size_t len;
-	struct clist *ranges;
+	int			nstype;	/* NST_SRANGE | NST_RRANGE */
+	int			id;
+	const char *		name;
+	struct ns_namespace *	parent;
+	size_t			len;
+	struct clist *		ranges;
 };
 
 
