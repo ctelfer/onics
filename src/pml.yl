@@ -685,12 +685,12 @@ funcall(F) ::= ID(N) LPAREN RPAREN. {
 	F->pmlfc_args = (struct pml_list *)pmlt_alloc(PMLTT_LIST);
 }
 exprlist(EL1) ::= exprlist(EL0) COMMA expr(E). { 
-	l_ins(&EL0->pmll_ln, &E->node->pmln_ln);
+	l_ins(&EL0->pmll_list, &E->node->pmln_ln);
 	EL1 = EL0;
 }
 exprlist(EL) ::= expr(E). { 
 	struct pml_list *l = (struct pml_list *)pmlt_alloc(PMLTT_LIST);
-	l_ins(&l->pmll_ln, &E->node->pmln_ln);
+	l_ins(&l->pmll_list, &E->node->pmln_ln);
 	EL = l;
 }
 

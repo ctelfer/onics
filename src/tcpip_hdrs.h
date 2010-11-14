@@ -5,19 +5,19 @@
 
 /* -- Address Type Structures -- */
 struct ethaddr {
-	uint8_t bytes[6];
+	uint8_t			bytes[6];
 };
 
 struct ipv6addr {
-	uint8_t bytes[16];
+	uint8_t			bytes[16];
 };
 
 
 /* -- Ethernet definitions -- */
 struct eth2h {
-	struct ethaddr dst;
-	struct ethaddr src;
-	uint16_t ethtype;
+	struct ethaddr		dst;
+	struct ethaddr		src;
+	uint16_t		ethtype;
 };
 #define ETHTYPE_IP              0x0800
 #define ETHTYPE_IPV6            0x86DD
@@ -27,11 +27,11 @@ struct eth2h {
 
 /* -- ARP definitions -- */
 struct arph {
-	uint16_t hwfmt;		/* ARPT_* */
-	uint16_t prfmt;		/* ETHTYPE_IP */
-	uint8_t hwlen;
-	uint8_t prlen;		/* 4 */
-	uint16_t op;		/* ARPOP_* */
+	uint16_t		hwfmt;		/* ARPT_* */
+	uint16_t		prfmt;		/* ETHTYPE_IP */
+	uint8_t			hwlen;
+	uint8_t			prlen;		/* 4 */
+	uint16_t		op;		/* ARPOP_* */
 };
 #define ARPOP_REQUEST           1	/* RFC 826 */
 #define ARPOP_REPLY             2	/* RFC 826,1868 */
@@ -82,26 +82,26 @@ struct arph {
 #define ARPT_PUREIP             35
 
 struct eth_arph {
-	struct arph header;	/* { 1, 0x800, 6, 4, (1|2) } */
-	uint8_t sndhwaddr[6];
-	uint8_t sndpraddr[4];
-	uint8_t trghwaddr[6];
-	uint8_t trgpraddr[4];
+	struct arph		header;	/* { 1, 0x800, 6, 4, (1|2) } */
+	uint8_t			sndhwaddr[6];
+	uint8_t			sndpraddr[4];
+	uint8_t			trghwaddr[6];
+	uint8_t			trgpraddr[4];
 };
 
 
 /* -- IP (v4) definitions -- */
 struct ipv4h {
-	uint8_t vhl;
-	uint8_t diffsrv;
-	uint16_t len;
-	uint16_t id;
-	uint16_t fragoff;
-	uint8_t ttl;
-	uint8_t proto;
-	uint16_t cksum;
-	uint32_t saddr;
-	uint32_t daddr;
+	uint8_t			vhl;
+	uint8_t			diffsrv;
+	uint16_t		len;
+	uint16_t		id;
+	uint16_t		fragoff;
+	uint8_t			ttl;
+	uint8_t			proto;
+	uint16_t		cksum;
+	uint32_t		saddr;
+	uint32_t		daddr;
 };
 #define IPH_VERSION(iph)        ((iph).vhl >> 4)
 #define IPH_HLEN(iph)           (((iph).vhl & 0xf) << 2)
@@ -285,15 +285,15 @@ struct ipv4h {
 
 /* -- TCP definitions -- */
 struct tcph {
-	uint16_t sport;
-	uint16_t dport;
-	uint32_t seqn;
-	uint32_t ackn;
-	uint8_t doff;
-	uint8_t flags;
-	uint16_t win;
-	uint16_t cksum;
-	uint16_t urgp;
+	uint16_t		sport;
+	uint16_t		dport;
+	uint32_t		seqn;
+	uint32_t		ackn;
+	uint8_t			doff;
+	uint8_t			flags;
+	uint16_t		win;
+	uint16_t		cksum;
+	uint16_t		urgp;
 };
 #define TCPH_HLEN(tcph)         (((tcph).doff >> 2) & ~3)
 #define TCPH_ECNN(tcph)         ((tcph).doff & 1)
@@ -308,8 +308,8 @@ struct tcph {
 
 
 struct tcpopth {
-	uint8_t kind;
-	uint8_t len;
+	uint8_t			kind;
+	uint8_t			len;
 };
 #define TCPOPT_EOP              0	/* length == 1 */
 #define TCPOPT_NOP              1	/* length == 1 */
@@ -327,39 +327,39 @@ struct tcpopth {
 
 /* -- UDP definitions -- */
 struct udph {
-	uint16_t sport;
-	uint16_t dport;
-	uint16_t len;
-	uint16_t cksum;
+	uint16_t		sport;
+	uint16_t		dport;
+	uint16_t		len;
+	uint16_t		cksum;
 };
 
 
 
 /* -- pseudo headers for TCP and UDP -- */
 struct pseudoh {
-	uint32_t saddr;
-	uint32_t daddr;
-	uint8_t zero;
-	uint8_t proto;
-	uint16_t totlen;	/* length starting with transport header */
+	uint32_t		saddr;
+	uint32_t		daddr;
+	uint8_t			zero;
+	uint8_t			proto;
+	uint16_t		totlen;	/* length starting with transport header */
 };
 
 
 struct pseudo6h {
-	struct ipv6addr saddr;
-	struct ipv6addr daddr;
-	uint32_t totlen;
-	uint16_t zero1;
-	uint8_t zero2;
-	uint8_t proto;
+	struct ipv6addr		saddr;
+	struct ipv6addr		daddr;
+	uint32_t		totlen;
+	uint16_t		zero1;
+	uint8_t			zero2;
+	uint8_t			proto;
 };
 
 
 /* -- ICMP definitions -- */
 struct icmph {
-	uint8_t type;
-	uint8_t code;
-	uint16_t cksum;
+	uint8_t			type;
+	uint8_t			code;
+	uint16_t		cksum;
 	union {
 		/* ICMPT_ECHO_*, ICMPT_TS_*, ICMPT_INFO_* */
 		struct {
@@ -423,12 +423,12 @@ struct icmph {
 
 /* -- IPv6 definitions -- */
 struct ipv6h {
-	uint32_t prtcfl;
-	uint16_t len;
-	uint8_t nxthdr;
-	uint8_t hoplim;
-	struct ipv6addr saddr;
-	struct ipv6addr daddr;
+	uint32_t		prtcfl;
+	uint16_t		len;
+	uint8_t			nxthdr;
+	uint8_t			hoplim;
+	struct ipv6addr		saddr;
+	struct ipv6addr		daddr;
 };
 /* Assumes network byte order */
 #define IPV6H_PVERSION(ipv6hp)  (*(byte_t *)(ipv6hp) >> 4)
@@ -438,10 +438,10 @@ struct ipv6h {
 
 /* -- ICMPv6 definitions -- */
 struct icmp6h {
-	uint8_t type;
-	uint8_t code;
-	uint16_t cksum;
-	uint8_t data[4];
+	uint8_t			type;
+	uint8_t			code;
+	uint16_t		cksum;
+	uint8_t			data[4];
 };
 #define ICMP6T_DEST_UNREACH     1
 #define ICMP6T_PKT_TOO_BIG      2

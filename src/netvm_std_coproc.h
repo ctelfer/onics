@@ -22,9 +22,9 @@
  */
 
 struct netvm_xpktcp_tagdesc {
-	uint16_t	index;
-	uint8_t		type;
-	uint8_t		pktnum;
+	uint16_t		index;
+	uint8_t			type;
+	uint8_t			pktnum;
 };
 
 enum {
@@ -40,9 +40,9 @@ enum {
 
 
 struct netvm_xpkt_cp {
-	struct netvm_coproc coproc;
-	netvm_cpop ops[NETVM_CPOC_NUMXPKT];
-	byte_t tag[XPKT_TAG_MAXW * 4];
+	struct netvm_coproc 	coproc;
+	netvm_cpop		ops[NETVM_CPOC_NUMXPKT];
+	byte_t			tag[XPKT_TAG_MAXW * 4];
 };
 
 
@@ -68,9 +68,9 @@ enum {
 #define NETVM_OPNUMV(strw, numw)  ((uint32_t)((strw)<<16|(numw)))
 
 struct netvm_outport_cp {
-	struct netvm_coproc coproc;
-	netvm_cpop ops[NETVM_CPOC_NUMPR];
-	struct emitter *outport;
+	struct netvm_coproc	coproc;
+	netvm_cpop		ops[NETVM_CPOC_NUMPR];
+	struct emitter *	outport;
 };
 
 void init_outport_cp(struct netvm_outport_cp *cp, struct emitter *em);
@@ -91,10 +91,10 @@ enum {
 
 
 struct netvm_pktq_cp {
-	struct netvm_coproc coproc;
-	netvm_cpop ops[NETVM_CPOC_NUMPQ];
-	struct list *queues;
-	uint32_t nqueues;
+	struct netvm_coproc	coproc;
+	netvm_cpop		ops[NETVM_CPOC_NUMPQ];
+	struct list *		queues;
+	uint32_t		nqueues;
 };
 
 int init_pktq_cp(struct netvm_pktq_cp *cp, uint32_t nqueues);
@@ -117,12 +117,12 @@ enum {
 #define NETVM_REXPV(nmatch, pktnum)  ((uint32_t)((nmatch)<<16|(pktnum)))
 
 struct netvm_rex_cp {
-	struct netvm_coproc coproc;
-	netvm_cpop ops[NETVM_CPOC_NUMREX];
-	struct rex_pat **rexes;
-	uint32_t nrexes;
-	uint32_t ralen;
-	struct memmgr *rexmm;
+	struct netvm_coproc	coproc;
+	netvm_cpop		ops[NETVM_CPOC_NUMREX];
+	struct rex_pat **	rexes;
+	uint32_t		nrexes;
+	uint32_t		ralen;
+	struct memmgr *		rexmm;
 };
 
 int init_rex_cp(struct netvm_rex_cp *cp, struct memmgr *rexmm);
@@ -154,10 +154,10 @@ enum {
 };
 
 struct netvm_std_coproc {
-	struct netvm_xpkt_cp xpkt;
-	struct netvm_outport_cp outport;
-	struct netvm_pktq_cp pktq;
-	struct netvm_rex_cp rex;
+	struct netvm_xpkt_cp	xpkt;
+	struct netvm_outport_cp	outport;
+	struct netvm_pktq_cp	pktq;
+	struct netvm_rex_cp	rex;
 };
 
 int init_netvm_std_coproc(struct netvm *vm, struct netvm_std_coproc *cps);
