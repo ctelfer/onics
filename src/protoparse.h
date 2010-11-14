@@ -80,14 +80,15 @@ create semantics -- set
 struct prparse;
 
 struct proto_parser_ops {
-	struct prparse *(*parse) (struct prparse * pprp, uint * nextppt);
-	struct prparse *(*create) (byte_t * buf, long off, long len,
-				   long hlen, long plen, int mode);
+	struct prparse *	(*parse)(struct prparse * pprp, uint *nextppt);
+
+	struct prparse *	(*create)(byte_t * buf, long off, long len,
+					  long hlen, long plen, int mode);
 };
 
 struct proto_parser {
-	unsigned int type;
-	unsigned int valid;
+	unsigned int		type;
+	unsigned int		valid;
 	struct proto_parser_ops *ops;
 };
 
@@ -103,11 +104,11 @@ int pp_unregister(uint type);
 
 
 struct prparse_ops {
-	void (*update) (struct prparse * prp);
-	int (*fixlen) (struct prparse * prp);
-	int (*fixcksum) (struct prparse * prp);
-	struct prparse *(*copy) (struct prparse *, byte_t * buffer);
-	void (*free) (struct prparse * prp);
+	void			(*update)(struct prparse * prp);
+	int			(*fixlen)(struct prparse * prp);
+	int			(*fixcksum)(struct prparse * prp);
+	struct prparse *	(*copy)(struct prparse *, byte_t * buffer);
+	void			(*free)(struct prparse * prp);
 };
 
 
@@ -150,14 +151,14 @@ struct prparse_ops {
 
 
 struct prparse {
-	uint type;
-	uint error;
-	struct prparse_ops *ops;
-	struct list node;
-	struct prparse *region;
-	byte_t *data;
-	uint noff;
-	long offs[PRP_OI_MIN_NUM];
+	uint			type;
+	uint			error;
+	struct prparse_ops *	ops;
+	struct list		node;
+	struct prparse *	region;
+	byte_t *		data;
+	uint			noff;
+	long			offs[PRP_OI_MIN_NUM];
 };
 #define prp_soff(prp) ((prp)->offs[PRP_OI_SOFF])
 #define prp_poff(prp) ((prp)->offs[PRP_OI_POFF])

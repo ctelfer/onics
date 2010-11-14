@@ -239,19 +239,19 @@ enum {
  */
 
 struct netvm_prp_desc {
-	uint8_t pktnum;		/* which packet entry */
-	uint8_t idx;		/* 0 == 1st prp, 1 == 2nd prp,... */
-	uint8_t field;		/* NETVM_PRP_* or prp field id */
-	uint16_t ptype;		/* PPT_*;  PPT_NONE == absolute idx */
-	uint32_t offset;	/* offset into packet for LD/STPKT */
-	/* or proto field index for PRFLD */
+	uint8_t			pktnum;	/* which packet entry */
+	uint8_t			idx;	/* 0 == 1st prp, 1 == 2nd prp,... */
+	uint8_t			field;	/* NETVM_PRP_* or prp field id */
+	uint16_t		ptype;	/* PPT_*;  PPT_NONE == absolute idx */
+	uint32_t		offset;	/* offset into packet for LD/STPKT */
+					/* or proto field index for PRFLD */
 };
 
 struct netvm_inst {
-	uint8_t opcode;		/* NETVM_OC_* */
-	uint8_t width;		/* 1, 2, 4 or 8 for most operations */
-	uint16_t flags;		/* NETVM_IF_* */
-	uint32_t val;		/* Varies with instruction */
+	uint8_t			opcode;	/* NETVM_OC_* */
+	uint8_t			width;	/* 1, 2, 4 or 8 for most operations */
+	uint16_t		flags;	/* NETVM_IF_* */
+	uint32_t		val;	/* Varies with instruction */
 };
 
 /* 
@@ -291,12 +291,17 @@ typedef void (*netvm_cpop)(struct netvm *vm, struct netvm_coproc *cpc, int cpi);
  *
  */
 struct netvm_coproc {
-	uint32_t type;
-	uint numops;
-	netvm_cpop *ops;
-	int (*regi)(struct netvm_coproc * coproc, struct netvm * vm, int cpi);
-	void (*reset)(struct netvm_coproc * coproc);
-	int (*validate)(struct netvm_inst * inst, struct netvm * vm);
+	uint32_t		type;
+	uint			numops;
+	netvm_cpop *		ops;
+
+	int			(*regi)(struct netvm_coproc * coproc, 
+			        	struct netvm * vm, int cpi);
+
+	void			(*reset)(struct netvm_coproc * coproc);
+
+	int			(*validate)(struct netvm_inst * inst,
+					    struct netvm * vm);
 };
 
 #define NETVM_MAXCOPROC 8
@@ -304,26 +309,26 @@ struct netvm_coproc {
 #define NETVM_CPT_NONE  ((uint32_t)0)
 
 struct netvm {
-	struct netvm_inst *inst;
-	uint32_t ninst;
-	uint32_t pc;
+	struct netvm_inst *	inst;
+	uint32_t		ninst;
+	uint32_t		pc;
 
-	uint32_t *stack;
-	uint32_t stksz;
-	uint32_t sp;
-	uint32_t bp;
+	uint32_t *		stack;
+	uint32_t		stksz;
+	uint32_t		sp;
+	uint32_t		bp;
 
-	byte_t *mem;
-	uint32_t memsz;
-	uint32_t rosegoff;
+	byte_t *		mem;
+	uint32_t		memsz;
+	uint32_t		rosegoff;
 
-	struct pktbuf *packets[NETVM_MAXPKTS];
+	struct pktbuf *		packets[NETVM_MAXPKTS];
 
-	struct netvm_coproc *coprocs[NETVM_MAXCOPROC];
+	struct netvm_coproc *	coprocs[NETVM_MAXCOPROC];
 
-	int matchonly;
-	int running;
-	int error;
+	int			matchonly;
+	int			running;
+	int			error;
 };
 
 
