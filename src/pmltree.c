@@ -6,73 +6,184 @@
 #include <cat/aux.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdarg.h>
 
 #define l_to_node(p) container(p, struct pml_node, pmln_ln)
 #define SYMTABSIZE    256
 
 
-static struct hashsys vartab_sys = {
+static struct hashsys symtab_sys = {
 	cmp_str, ht_shash, NULL
 };
 
 
-static int vtab_init(struct htab *ht)
+static int symtab_init(struct htab *ht)
 {
 	struct list *bins;
 	if ((bins = malloc(SYMTABSIZE * sizeof(struct list))) == NULL)
 		return -1;
-	ht_init(ht, bins, SYMTABSIZE, &vartab_sys);
+	ht_init(ht, bins, SYMTABSIZE, &symtab_sys);
 	return 0;
 }
 
 
-static struct pml_variable *vtab_lkup(struct htab *ht, const char *s,
-				      int *create)
+static struct pml_function *ftab_lkup(struct htab *ht, const char *s)
 {
 	uint h;
 	struct hnode *hn;
-	struct pml_variable *p = NULL;
+
 	abort_unless(ht && s);
-
-	if ((hn = ht_lkup(ht, (void *)s, &h)) != NULL) {
-		if (create != NULL)
-			*create = 0;
-	} else if (create != NULL) {
-		p = calloc(1, sizeof(*p));
-		if (p == NULL) {
-			*create = 0;
-			return NULL;
-		}
-		hn = &p->pmlvar_hn;
-		if ((p->pmlvar_name = strdup(s)) == NULL) {
-			free(p);
-			*create = 0;
-			return NULL;
-		}
-		ht_ninit(hn, p->pmlvar_name, p, h);
-		ht_ins(ht, hn);
-	}
-
-	return p;
+	if ((hn = ht_lkup(ht, (void *)s, &h)) == NULL)
+		return NULL;
+	return container(hn, struct pml_function, pmlf_hn);
 }
 
 
-static void freevar(void *var, void *ctx)
+static int ftab_add(struct htab *ht, struct pml_function *func) 
 {
-	struct pml_variable *p = var;
-	ht_rem(&p->pmlvar_hn);
-	free(p->pmlvar_name);
-	free(p);
+	uint h;
+	struct hnode *hn;
+
+	if (ht_lkup(ht, func->pmlf_name, &h) != NULL)
+		return -1;
+	hn = &func->pmlf_hn;
+	ht_ninit(hn, func->pmlf_name, func, h);
+	ht_ins(ht, hn);
+
+	return 0;
 }
 
 
-void vtab_destroy(struct htab *ht)
+static struct pml_variable *vtab_lkup(struct htab *ht, const char *s)
+{
+	uint h;
+	struct hnode *hn;
+
+	abort_unless(ht && s);
+	if ((hn = ht_lkup(ht, (void *)s, &h)) == NULL)
+		return NULL;
+	return container(hn, struct pml_variable, pmlvar_hn);
+}
+
+
+static int vtab_add(struct htab *ht, struct pml_variable *var) 
+{
+	uint h;
+	struct hnode *hn;
+
+	if (ht_lkup(ht, var->pmlvar_name, &h) != NULL)
+		return -1;
+	hn = &var->pmlvar_hn;
+	ht_ninit(hn, var->pmlvar_name, var, h);
+	ht_ins(ht, hn);
+
+	return 0;
+}
+
+
+static void freesym(void *nodep, void *ctx)
+{
+	struct pml_node *node = nodep;
+	if (node->pmln_type == PMLTT_VAR) {
+		struct pml_variable *p = nodep;
+		ht_rem(&p->pmlvar_hn);
+		l_rem(&p->pmlvar_ln);
+	} else if (node->pmln_type == PMLTT_FUNCTION) {
+		struct pml_function *p = nodep;
+		ht_rem(&p->pmlf_hn);
+		l_rem(&p->pmlf_ln);
+	} else {
+		abort_unless(0);
+	}
+	pmlt_free((union pml_tree *)node);
+}
+
+
+static void symtab_destroy(struct htab *ht)
 {
 	if (ht->tab == NULL)
 		return;
-	ht_apply(ht, freevar, NULL);
+	ht_apply(ht, freesym, NULL);
 	free(ht->tab);
 	ht->tab = NULL;
+}
+
+
+static void freerule(void *rulep, void *ctx)
+{
+	struct pml_rule *r = rulep;
+	l_rem(&r->pmlr_ln);
+	pmlt_free((union pml_tree *)r);
+}
+
+
+void pml_ast_init(struct pml_ast *ast)
+{
+	ast->pmla_error = 0;
+	ast->pmla_line = 0;
+	symtab_init(&ast->pmla_gvars);
+	symtab_init(&ast->pmla_funcs);
+	l_init(&ast->pmla_rules);
+	ast->pmla_err_fp = stderr;
+}
+
+
+void pml_ast_clear(struct pml_ast *ast)
+{
+	ast->pmla_error = 0;
+	ast->pmla_line = 0;
+	symtab_destroy(&ast->pmla_gvars);
+	symtab_destroy(&ast->pmla_funcs);
+	l_apply(&ast->pmla_rules, freerule, NULL);
+	l_init(&ast->pmla_rules);
+	ast->pmla_err_fp = NULL;
+}
+
+
+void pml_ast_err(struct pml_ast *ast, const char *fmt, ...)
+{
+	va_list ap;
+
+	va_start(ap, fmt);
+	if (ast->pmla_err_fp != NULL)
+		vfprintf(ast->pmla_err_fp, fmt, ap);
+	va_end(ap);
+}
+
+
+struct pml_function *pml_ast_lookup_func(struct pml_ast *ast, char *name)
+{
+	return ftab_lkup(&ast->pmla_funcs, name);
+}
+
+
+int pml_ast_add_func(struct pml_ast *ast, struct pml_function *func)
+{
+	return ftab_add(&ast->pmla_funcs, func);
+}
+
+
+struct pml_variable *pml_ast_lookup_var(struct pml_ast *ast, char *name)
+{
+	return vtab_lkup(&ast->pmla_gvars, name);
+}
+
+
+int pml_ast_add_var(struct pml_ast *ast, struct pml_variable *var)
+{
+	return vtab_add(&ast->pmla_gvars, var);
+}
+
+
+struct pml_variable *pml_func_lookup_var(struct pml_function *func, char *name)
+{
+	return vtab_lkup(&func->pmlf_vars, name);
+}
+
+
+int pml_func_add_var(struct pml_function *func, struct pml_variable *var)
+{
+	return vtab_add(&func->pmlf_vars, var);
 }
 
 
@@ -220,13 +331,14 @@ union pml_tree *pmlt_alloc(int pmltt)
 	case PMLTT_PREDICATE:{
 		struct pml_function *p;
 		if (((p = calloc(1, sizeof(*p))) == NULL) ||
-		    (vtab_init(&p->pmlf_vars) < 0))
+		    (symtab_init(&p->pmlf_vars) < 0))
 			return NULL;
 		p->pmlf_type = pmltt;
 		l_init(&p->pmlf_ln);
 		p->pmlf_name = NULL;
 		p->pmlf_arity = 0;
-		p->pmlf_pnames = NULL;
+		p->pmlf_prmlist = NULL;
+		p->pmlf_varlist = NULL;
 		return (union pml_tree *)p;
 	} break;
 
@@ -339,13 +451,12 @@ void pmlt_free(union pml_tree *tree)
 	case PMLTT_FUNCTION:
 	case PMLTT_PREDICATE:{
 		struct pml_function *p = &tree->function;
-		uint i;
-		if (p->pmlf_pnames != NULL) {
-			for (i = 0; i < p->pmlf_arity; ++i)
-				free(p->pmlf_pnames[i]);
-			free(p->pmlf_pnames);
-		}
-		vtab_destroy(&p->pmlf_vars);
+		free(p->pmlf_name);
+		p->pmlf_name = NULL;
+		symtab_destroy(&p->pmlf_vars);
+		pmlt_free((union pml_tree *)p->pmlf_prmlist);
+		pmlt_free((union pml_tree *)p->pmlf_varlist);
+		pmlt_free(p->pmlf_body);
 	} break;
 
 	case PMLTT_RULE:{
@@ -426,15 +537,27 @@ void pml_bytestr_free(struct pml_bytestr *b)
 }
 
 
-struct pml_function *pml_ast_lookup_func(struct pml_ast *ast, char *name)
+int pml_locator_extend_name(struct pml_locator *l, char *name, size_t elen)
 {
-	/* TODO */
-	return NULL;
-}
+	size_t olen, len;
+	char *newname;
 
+	olen = len = strlen(l->pmlloc_name);
+	if (len + 2 < len)
+		return -1;
+	len += 2;
+	if (((size_t)0-1) - len < elen)
+		return -1;
+	len += elen;
 
-int pml_locator_extend_name(struct pml_locator *l, char *name, size_t len)
-{
-	/* TODO */
+	newname = realloc(l->pmlloc_name, len);
+	if (newname == NULL)
+		return -1;
+
+	newname[olen] = '.';
+	memcpy(newname + olen + 1, name, elen);
+	newname[len-1] = '\0';
+	l->pmlloc_name = newname;
+
 	return 0;
 }

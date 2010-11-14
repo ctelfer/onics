@@ -6,6 +6,7 @@
 #define __pmltree_h
 #include <cat/list.h>
 #include <cat/hash.h>
+#include <stdio.h>
 
 struct pml_ast {
 	int pmla_error;
@@ -13,6 +14,7 @@ struct pml_ast {
 	struct htab pmla_gvars;
 	struct htab pmla_funcs;
 	struct list pmla_rules;
+	FILE *pmla_err_fp;
 };
 
 
@@ -45,6 +47,8 @@ enum {
 	PMLOP_AND,
 	PMLOP_MATCH,
 	PMLOP_NOTMATCH,
+	PMLOP_REXMATCH,
+	PMLOP_NOTREXMATCH,
 	PMLOP_EQ,
 	PMLOP_NEQ,
 	PMLOP_LT,
@@ -208,11 +212,13 @@ struct pml_variable {
 struct pml_function {
 	int pmlf_type;
 	struct list pmlf_ln;
+	struct hnode pmlf_hn;
 	char *pmlf_name;
-	char **pmlf_pnames;
 	uint pmlf_arity;
 	struct htab pmlf_vars;
-	struct pml_list *pmlf_body;
+	struct pml_list *pmlf_prmlist;
+	struct pml_list *pmlf_varlist;
+	union pml_tree *pmlf_body;  /* expr for pred, list for func */
 };
 
 
@@ -255,7 +261,17 @@ union pml_tree {
 union pml_tree *pmlt_alloc(int pmltt);
 void pmlt_free(union pml_tree *tree);
 
-/* convenience */
+void pml_ast_init(struct pml_ast *ast);
+void pml_ast_clear(struct pml_ast *ast);
+void pml_ast_err(struct pml_ast *ast, const char *fmt, ...);
+struct pml_function *pml_ast_lookup_func(struct pml_ast *ast, char *name);
+int pml_ast_add_func(struct pml_ast *ast, struct pml_function *func);
+struct pml_variable *pml_ast_lookup_var(struct pml_ast *ast, char *name);
+int pml_ast_add_var(struct pml_ast *ast, struct pml_variable *var);
+
+struct pml_variable *pml_func_lookup_var(struct pml_function *func, char *name);
+int pml_func_add_var(struct pml_function *func, struct pml_variable *var);
+
 union pml_expr_u *pml_binop_alloc(int op, union pml_expr_u *left, 
 		                  union pml_expr_u *right);
 union pml_expr_u *pml_unop_alloc(int op, union pml_expr_u *ex);
