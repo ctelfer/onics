@@ -6,6 +6,7 @@
 #define FMT32   ""
 /* #define FMT32   "l" *//* use this one for 16-bit machines */
 
+/* #define NETTOOLS_INLINE  *//* use this for ANSI-C 89 compilers */
 #define NETTOOLS_INLINE inline
 
 #endif /* __pkttools_config_h */
