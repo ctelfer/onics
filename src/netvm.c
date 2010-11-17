@@ -641,6 +641,7 @@ static void ni_numop(struct netvm *vm)
 		out = (int32_t) v1 >= (int32_t) v2;
 		break;
 	default:
+		out = 0;
 		abort_unless(0);
 	}
 	S_PUSH(vm, out);

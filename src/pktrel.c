@@ -78,7 +78,7 @@ int main(int argc, char *argv[])
 {
 	int rv;
 	struct pktbuf *p;
-	struct cat_time cur, next, diff;
+	struct cat_time cur = { 0, 0 }, next, diff;
 	struct xpkt_tag_ts *ts;
 
 	pkb_init(1);

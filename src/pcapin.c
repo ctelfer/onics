@@ -42,7 +42,7 @@ void parse_args(int argc, char *argv[])
 {
 	char ebuf[PCAP_ERRBUF_SIZE];
 	int rv, usefile = 1, promisc = 0;
-	const char *pktsrc;
+	const char *pktsrc = NULL;
 	struct clopt *opt;
 
 	optparse_reset(&g_oparse, argc, argv);

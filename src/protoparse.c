@@ -274,7 +274,7 @@ int prp_push(unsigned ppidx, struct prparse *pprp, int mode)
 {
 	const struct proto_parser *pp;
 	long off, len, plen, hlen;
-	struct prparse *prp, *next;
+	struct prparse *prp, *next = NULL;
 
 	pp = pp_lookup(ppidx);
 	if (!pp || !pprp) {
@@ -293,10 +293,11 @@ int prp_push(unsigned ppidx, struct prparse *pprp, int mode)
 			errno = EINVAL;
 			return -1;
 		}
-		t = prp_soff(prp_next(pprp));
+		next = prp_next(pprp);
+		t = prp_soff(next);
 		hlen = t - off;
 		off = t;
-		plen = prp_totlen(prp_next(pprp));
+		plen = prp_totlen(next);
 	} else if (mode == PPCF_WRAPFILL) {
 		next = prp_next(pprp);
 		/* ensure list is non-empty and both prev and next are in the */
@@ -312,11 +313,11 @@ int prp_push(unsigned ppidx, struct prparse *pprp, int mode)
 		return -1;
 	}
 
-	prp = (*pp->ops->create) (pprp->data, off, len, hlen, plen, mode);
+	prp = (*pp->ops->create)(pprp->data, off, len, hlen, plen, mode);
 	if (prp == NULL)
 		return -1;
 	prp->region = pprp;
-	if (mode == PPCF_WRAP || mode == PPCF_WRAPFILL)
+	if (next != NULL)
 		next->region = prp;
 
 	l_ins(&pprp->node, &prp->node);

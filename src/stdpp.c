@@ -801,6 +801,7 @@ static struct prparse *icmp_parse(struct prparse *pprp, uint * nextppt)
 		prp_poff(prp) = prp_soff(prp) + 8;
 		prp->error |= PPERR_LENGTH;
 		prp->error |= PPERR_CKSUM;
+		goto done;
 	} else {
 		prp_poff(prp) = prp_soff(prp) + 8;
 		icmp = prp_header(prp, struct icmph);
@@ -817,7 +818,7 @@ static struct prparse *icmp_parse(struct prparse *pprp, uint * nextppt)
 		*nextppt = PPT_IPV4;
 	}
 
- done:
+done:
 	return prp;
 }
 
@@ -846,9 +847,8 @@ static struct prparse *icmp_create(byte_t * start, long off, long len,
 		if ((hlen != 8) || (len != hlen + plen))
 			return NULL;
 	}
-	prp =
-	    crtprp(sizeof(struct prparse), PPT_ICMP, start, off, hlen, plen, 0,
-		   &icmp_prparse_ops, 0);
+	prp = crtprp(sizeof(struct prparse), PPT_ICMP, start, off, hlen, plen, 
+	             0, &icmp_prparse_ops, 0);
 	if (prp) {
 		icmp = prp_header(prp, struct icmph);
 		memset(icmp, 0, sizeof(*icmp));
