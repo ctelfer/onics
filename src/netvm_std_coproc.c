@@ -102,9 +102,9 @@ void xpktcp_rdtag(struct netvm *vm, struct netvm_coproc *cp, int cpi)
 	FATAL(vm, NETVM_ERR_NOPKT, !(pkb = vm->packets[td.pktnum]));
 	xth = pkb_find_tag(pkb, td.type, td.index);
 	FATAL(vm, NETVM_ERR_BADCPOP, (xth == NULL));
-	memcpy(xcp->tag, xth, xth->xth_nwords * 4);
+	memcpy(xcp->tag, xth, xth->nwords * 4);
 	/* The tag must be in packed form for the VM */
-	xpkt_pack_tags((uint32_t *)xcp->tag, xth->xth_nwords * 4);
+	xpkt_pack_tags((uint32_t *)xcp->tag, xth->nwords * 4);
 }
 
 
@@ -484,7 +484,7 @@ static void pktq_reset(struct netvm_coproc *ncp)
 	for (i = 0; i < cp->nqueues; ++i) {
 		struct list *l;
 		while ((l = l_deq(&cp->queues[i])))
-			pkb_free(container(l, struct pktbuf, pkb_entry));
+			pkb_free(container(l, struct pktbuf, entry));
 	}
 }
 
@@ -531,13 +531,13 @@ static void nci_qop(struct netvm *vm, struct netvm_coproc *ncp, int cpi)
 
 	if (CPOP(inst) == NETVM_CPOC_ENQ) {
 		FATAL(vm, NETVM_ERR_NOPKT, !(pkb = vm->packets[pktnum]));
-		l_enq(&cp->queues[qnum], &pkb->pkb_entry);
+		l_enq(&cp->queues[qnum], &pkb->entry);
 		vm->packets[pktnum] = NULL;
 	} else {
 		if ((l = l_deq(&cp->queues[qnum]))) {
 			pkb_free(vm->packets[pktnum]);
 			vm->packets[pktnum] =
-			    container(l, struct pktbuf, pkb_entry);
+			    container(l, struct pktbuf, entry);
 		}
 	}
 }
@@ -679,7 +679,7 @@ static void nci_rexp(struct netvm *vm, struct netvm_coproc *ncp, int cpi)
 	S_POP(vm, len);
 	S_POP(vm, poff);
 	FATAL(vm, NETVM_ERR_IOVFL, (len + poff < len));
-	prp = &pkb->pkb_prp;
+	prp = &pkb->prp;
 	FATAL(vm, NETVM_ERR_PKTADDR,
 	      (poff < prp_soff(prp)) || (poff + len > prp_totlen(prp)));
 	r.data = prp->data + poff;

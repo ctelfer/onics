@@ -72,10 +72,10 @@ static struct prparse *find_header(struct netvm *vm, struct netvm_prp_desc *pd)
 
 	if (PPT_IS_PCLASS(pd->ptype)) {
 		uint lidx = PPT_TO_LIDX(pd->ptype);
-		return pkb->pkb_layers[lidx];
+		return pkb->layers[lidx];
 	}
 
-	prp = &pkb->pkb_prp;
+	prp = &pkb->prp;
 	do {
 		if ((pd->ptype == PPT_ANY) || (pd->ptype == prp->type)) {
 			if (n == pd->idx)
@@ -448,7 +448,7 @@ static void ni_blkpmv(struct netvm *vm)
 	S_POP(vm, maddr);
 	S_POP(vm, poff);
 	FATAL(vm, NETVM_ERR_IOVFL, (len + maddr < len) || (len + poff < len));
-	prp = &pkb->pkb_prp;
+	prp = &pkb->prp;
 	FATAL(vm, NETVM_ERR_PKTADDR,
 	      (poff < prp_poff(prp)) || (poff + len > prp_totlen(prp)));
 	FATAL(vm, NETVM_ERR_MEMADDR, !vm->mem || (maddr + len > vm->memsz));
@@ -1033,15 +1033,15 @@ static void ni_fixlen(struct netvm *vm)
 	        abort_unless(pd0.pktnum < NETVM_MAXPKTS);
 		pkb = vm->packets[pd0.pktnum];
 		abort_unless(pkb);
-		if (pkb->pkb_layers[PKB_LAYER_XPORT])
+		if (pkb->layers[PKB_LAYER_XPORT])
 			FATAL(vm, NETVM_ERR_FIXLEN,
-			      prp_fix_len(pkb->pkb_layers[PKB_LAYER_XPORT]) < 0);
-		if (pkb->pkb_layers[PKB_LAYER_NET])
+			      prp_fix_len(pkb->layers[PKB_LAYER_XPORT]) < 0);
+		if (pkb->layers[PKB_LAYER_NET])
 			FATAL(vm, NETVM_ERR_FIXLEN,
-			      prp_fix_len(pkb->pkb_layers[PKB_LAYER_NET]) < 0);
-		if (pkb->pkb_layers[PKB_LAYER_DL])
+			      prp_fix_len(pkb->layers[PKB_LAYER_NET]) < 0);
+		if (pkb->layers[PKB_LAYER_DL])
 			FATAL(vm, NETVM_ERR_FIXLEN,
-			      prp_fix_len(pkb->pkb_layers[PKB_LAYER_DL]) < 0);
+			      prp_fix_len(pkb->layers[PKB_LAYER_DL]) < 0);
 	} else {
 		abort_unless(prp);
 		FATAL(vm, NETVM_ERR_FIXLEN, prp_fix_len(prp) < 0);
@@ -1065,15 +1065,15 @@ static void ni_fixcksum(struct netvm *vm)
 	        abort_unless(pd0.pktnum < NETVM_MAXPKTS);
 		pkb = vm->packets[pd0.pktnum];
 		abort_unless(pkb);
-		if (pkb->pkb_layers[PKB_LAYER_XPORT])
+		if (pkb->layers[PKB_LAYER_XPORT])
 			FATAL(vm, NETVM_ERR_CKSUM,
-			      prp_fix_cksum(pkb->pkb_layers[PKB_LAYER_XPORT]) < 0);
-		if (pkb->pkb_layers[PKB_LAYER_NET])
+			      prp_fix_cksum(pkb->layers[PKB_LAYER_XPORT]) < 0);
+		if (pkb->layers[PKB_LAYER_NET])
 			FATAL(vm, NETVM_ERR_CKSUM,
-			      prp_fix_cksum(pkb->pkb_layers[PKB_LAYER_NET]) < 0);
-		if (pkb->pkb_layers[PKB_LAYER_DL])
+			      prp_fix_cksum(pkb->layers[PKB_LAYER_NET]) < 0);
+		if (pkb->layers[PKB_LAYER_DL])
 			FATAL(vm, NETVM_ERR_CKSUM,
-			      prp_fix_cksum(pkb->pkb_layers[PKB_LAYER_DL]) < 0);
+			      prp_fix_cksum(pkb->layers[PKB_LAYER_DL]) < 0);
 	} else {
 		abort_unless(prp);
 		FATAL(vm, NETVM_ERR_CKSUM, prp_fix_cksum(prp) < 0);
@@ -1097,7 +1097,7 @@ static void ni_prpins(struct netvm *vm)
 	FATAL(vm, NETVM_ERR_NOPKT, !(pkb = vm->packets[pd0.pktnum]));
 	S_POP(vm, len);
 	FATAL(vm, NETVM_ERR_PKTINS,
-	      prp_insert(&pkb->pkb_prp, pd0.offset, len, moveup) < 0);
+	      prp_insert(&pkb->prp, pd0.offset, len, moveup) < 0);
 }
 
 
@@ -1117,7 +1117,7 @@ static void ni_prpcut(struct netvm *vm)
 	FATAL(vm, NETVM_ERR_NOPKT, !(pkb = vm->packets[pd0.pktnum]));
 	S_POP(vm, len);
 	FATAL(vm, NETVM_ERR_PKTCUT,
-	      prp_cut(&pkb->pkb_prp, pd0.offset, len, moveup) < 0);
+	      prp_cut(&pkb->prp, pd0.offset, len, moveup) < 0);
 }
 
 
@@ -1366,7 +1366,7 @@ struct pktbuf *netvm_clrpkt(struct netvm *vm, int slot, int keeppkb)
 		if (keeppkb) {
 			/* adjust header and trailer slack space and copy    */
 			/* back to packet buffer metadata before returning.  */
-			prp_adj_unused(&pkb->pkb_prp);
+			prp_adj_unused(&pkb->prp);
 		} else {
 			pkb_free(pkb);
 			pkb = NULL;

@@ -21,15 +21,15 @@ enum {
 #define PKB_F_PARSED	0x2
 
 struct pktbuf {
-	struct list 	pkb_entry;
-	byte_t *	pkb_buf;
-	long		pkb_bsize;
-	struct xpkt *	pkb_xpkt;
-	long		pkb_xsize;
-	struct prparse  pkb_prp;
-	struct prparse *pkb_layers[PKB_LAYER_NUM];
-	long		pkb_xhlen;
-	ushort		pkb_flags;
+	struct list 	entry;
+	byte_t *	buf;
+	long		bufsize;
+	struct xpkt *	xpkt;
+	long		xsize;
+	long		xhlen; /* cached when packed */
+	struct prparse  prp;
+	struct prparse *layers[PKB_LAYER_NUM];
+	ushort		flags;
 };
 
 /* initialize the packet buffer subsystem */
@@ -62,6 +62,7 @@ void pkb_set_off(struct pktbuf *pkb, long off);
 void pkb_set_len(struct pktbuf *pkb, long off);
 
 /* Set the offset field in the packet buffer */
+/* Cannot be called for a packed packet. */
 void pkb_set_dltype(struct pktbuf *pkb, uint16_t dltype);
 
 /* Get the data pointer for the packet buffer */

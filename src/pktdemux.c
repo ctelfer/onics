@@ -85,8 +85,8 @@ int main(int argc, char *argv[])
 		fd = 1;
 		xif = (struct xpkt_tag_iface *)
 			pkb_find_tag(p, XPKT_TAG_OUTIFACE, 0);
-		if ((xif != NULL) && (xif->xpt_if_iface + 3 < MAX_FDS))
-			fd = xif->xpt_if_iface + 3;
+		if ((xif != NULL) && (xif->iface + 3 < MAX_FDS))
+			fd = xif->iface + 3;
 
 		if (!bset_test(g_fdseen, fd)) {
 			bset_set(g_fdseen, fd);

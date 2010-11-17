@@ -89,12 +89,12 @@ int readpkt(void *arg, struct callback *cb)
 	if (xifp) {
 		/* there's an existing tag:  so modify it */
 		if (ioe->fd >= 3) {
-			xifp->xpt_if_iface = ioe->fd - 3;
+			xifp->iface = ioe->fd - 3;
 		} else {
 			/* these should always succeed */
 			n = pkb_find_tag_idx(p, (struct xpkt_tag_hdr *)xifp);
 			abort_unless(n >= 0);
-			rv = pkb_del_tag(p, xifp->xpt_if_hdr.xth_type, n);
+			rv = pkb_del_tag(p, xifp->type, n);
 			abort_unless(rv == 0);
 		}
 	} else {

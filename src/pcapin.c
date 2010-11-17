@@ -133,18 +133,18 @@ int main(int argc, char *argv[])
 	abort_unless(ts);
 
 	while ((packet = (byte_t *) pcap_next(g_pcap, &pcapph)) != NULL) {
-		ts->xpt_ts_sec = pcapph.ts.tv_sec;
-		ts->xpt_ts_nsec = pcapph.ts.tv_usec * 1000;
+		ts->sec = pcapph.ts.tv_sec;
+		ts->nsec = pcapph.ts.tv_usec * 1000;
 
 		pkb_set_len(p, pcapph.caplen);
 
 		if (pcapph.len != pcapph.caplen) {
 			xpkt_tag_si_init(&si, pcapph.len);
-			rv = pkb_add_tag(p, &si.xpt_si_hdr);
+			rv = pkb_add_tag(p, (struct xpkt_tag_hdr *)&si);
 			abort_unless(rv == 0);
 		}
 
-		memcpy(p->pkb_buf, packet, pcapph.caplen);
+		memcpy(p->buf, packet, pcapph.caplen);
 		rv = pkb_pack(p);
 		abort_unless(rv == 0);
 		if (pkb_fd_write(1, p) < 0)

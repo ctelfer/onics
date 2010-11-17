@@ -21,32 +21,29 @@
 #define XPKT_TAG_MINW	1
 #define XPKT_TAG_MAXW	255
 struct xpkthdr {
-	uint32_t xh_len;
-	uint16_t xh_dltype;
-	uint16_t xh_tlen;
-};
-
-
-struct xpkt_tag_hdr {
-	byte_t xth_type;
-	byte_t xth_nwords;
-	uint16_t xth_xhword;
+	uint32_t		len;
+	uint16_t		dltype;
+	uint16_t		tlen;
 };
 
 
 struct xpkt {
-	struct xpkthdr hdr;
-	uint32_t xpkt_tags[1];
+	struct xpkthdr		hdr;
+	uint32_t		tags[1];
 };
-#define xpkt_len hdr.xh_len
-#define xpkt_dltype hdr.xh_dltype
-#define xpkt_tlen hdr.xh_tlen
+
+
+struct xpkt_tag_hdr {
+	byte_t			type;
+	byte_t			nwords;
+	uint16_t		xhword;
+};
 
 
 static NETTOOLS_INLINE uint32_t xpkt_doff(struct xpkt *x)
 {
 	abort_unless(x);
-	return XPKT_HLEN + x->xpkt_tlen * 4;
+	return XPKT_HLEN + x->hdr.tlen * 4;
 }
 
 
@@ -54,7 +51,7 @@ static NETTOOLS_INLINE uint32_t xpkt_doff(struct xpkt *x)
 static NETTOOLS_INLINE void *xpkt_data(struct xpkt *x)
 {
 	abort_unless(x);
-	return (byte_t *)x->xpkt_tags + xpkt_doff(x);
+	return (byte_t *)x->tags + xpkt_doff(x);
 }
 
 
@@ -64,8 +61,8 @@ static NETTOOLS_INLINE uint32_t xpkt_data_len(struct xpkt *x)
 	uint32_t doff;
 	abort_unless(x);
 	doff = xpkt_doff(x);
-	abort_unless(doff <= x->xpkt_len);
-	return x->xpkt_len - doff;
+	abort_unless(doff <= x->hdr.len);
+	return x->hdr.len - doff;
 }
 
 
@@ -198,7 +195,9 @@ int xpkt_del_tag(struct xpkt *x, byte_t tag, int idx, int pulldown);
 
 #define XPKT_TAG_NOP_NWORDS		1
 struct xpkt_tag_nop {
-	struct xpkt_tag_hdr xpt_nop_hdr; /* 0, 1, zero */
+	byte_t			type;	/* 0 */
+	byte_t			nwords; /* 1 */
+	uint16_t		zero;	/* 0 */
 };
 
 void xpkt_tag_nop_init(struct xpkt_tag_nop *t);
@@ -206,9 +205,11 @@ void xpkt_tag_nop_init(struct xpkt_tag_nop *t);
 
 #define XPKT_TAG_TIMESTAMP_NWORDS	3
 struct xpkt_tag_ts {
-	struct xpkt_tag_hdr xpt_ts_hdr; /* 1, 3, zero */
-	uint32_t xpt_ts_sec;
-	uint32_t xpt_ts_nsec;
+	byte_t			type;	/* 1 */
+	byte_t			nwords; /* 3 */
+	uint16_t		zero;	/* 0 */
+	uint32_t		sec;
+	uint32_t		nsec;
 };
 
 void xpkt_tag_ts_init(struct xpkt_tag_ts *t, uint32_t sec, uint32_t nsec);
@@ -216,8 +217,10 @@ void xpkt_tag_ts_init(struct xpkt_tag_ts *t, uint32_t sec, uint32_t nsec);
 
 #define XPKT_TAG_SNAPINFO_NWORDS	2
 struct xpkt_tag_snapinfo {
-	struct xpkt_tag_hdr xpt_si_hdr; /* 2, 2, zero */
-	uint32_t xpt_si_wire_len;
+	byte_t			type;	/* 2 */
+	byte_t			nwords; /* 2 */
+	uint16_t		zero;	/* 0 */
+	uint32_t		wirelen;
 };
 
 void xpkt_tag_si_init(struct xpkt_tag_snapinfo *t, uint32_t wirelen);
@@ -226,9 +229,10 @@ void xpkt_tag_si_init(struct xpkt_tag_snapinfo *t, uint32_t wirelen);
 #define XPKT_TAG_INIFACE_NWORDS		1
 #define XPKT_TAG_OUTIFACE_NWORDS	1
 struct xpkt_tag_iface {
-	struct xpkt_tag_hdr xpt_if_hdr; /* 3|4, 1, iface */
+	byte_t			type;	/* 3|4 */
+	byte_t			nwords; /* 1 */
+	uint16_t		iface;
 };
-#define xpt_if_iface	xpt_if_hdr.xth_xhword
 
 void xpkt_tag_iif_init(struct xpkt_tag_iface *t, uint16_t iface);
 void xpkt_tag_oif_init(struct xpkt_tag_iface *t, uint16_t iface);
@@ -236,8 +240,10 @@ void xpkt_tag_oif_init(struct xpkt_tag_iface *t, uint16_t iface);
 
 #define XPKT_TAG_FLOW_NWORDS		3
 struct xpkt_tag_flowid {
-	struct xpkt_tag_hdr xpt_fl_hdr; /* 5, 3, zero */
-	uint64_t xpt_fl_id;
+	byte_t			type;	/* 5 */
+	byte_t			nwords; /* 3 */
+	uint16_t		zero;	/* 0 */
+	uint64_t		flowid;
 };
 
 void xpkt_tag_flowid_init(struct xpkt_tag_flowid *t, uint64_t id);
@@ -245,8 +251,10 @@ void xpkt_tag_flowid_init(struct xpkt_tag_flowid *t, uint64_t id);
 
 #define XPKT_TAG_CLASS_NWORDS		3
 struct xpkt_tag_class {
-	struct xpkt_tag_hdr xpt_cl_hdr; /* 6, 3, zero */
-	uint64_t xpt_cl_tag;
+	byte_t			type;	/* 6 */
+	byte_t			nwords; /* 3 */
+	uint16_t		zero;	/* 0 */
+	uint64_t		tag;
 };
 
 void xpkt_tag_class_init(struct xpkt_tag_class *t, uint64_t tag);
@@ -254,21 +262,23 @@ void xpkt_tag_class_init(struct xpkt_tag_class *t, uint64_t tag);
 
 #define XPKT_TAG_PARSEINFO_NWORDS	3
 struct xpkt_tag_parseinfo {
-	struct xpkt_tag_hdr xpt_pi_hdr; /* 8, 3, proto */
-	uint32_t xpt_pi_off;
-	uint32_t xpt_pi_len;
+	byte_t			type;	/* 6 */
+	byte_t			nwords; /* 3 */
+	uint16_t		proto;
+	uint32_t		off;
+	uint32_t		len;
 };
-#define xpt_pi_proto	xpt_pi_hdr.xth_xhword
 
 void xpkt_tag_pi_init(struct xpkt_tag_parseinfo *t, uint16_t proto,
 		      uint32_t off, uint32_t len);
 
 
 struct xpkt_tag_appinfo {
-	struct xpkt_tag_hdr xpt_ai_hdr; /* 128, 1-255, subtype? */
-	byte_t xpt_ai_data[254 * 4];
+	byte_t			type;	/* 6 */
+	byte_t			nwords; /* 3 */
+	uint16_t		subtype;
+	byte_t			data[254 * 4];
 };
-#define xpt_ai_subtype	xpt_ai_hdr.xth_xhword
 
 /* nw is the number of words of data in the tag */
 /* if nw == 0, then p must not be null and nw must be <= 254 */

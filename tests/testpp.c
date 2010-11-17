@@ -50,7 +50,7 @@ int main(int argc, char *argv[])
 			printf("Unknown data type for packet %u\n", npkt);
 			continue;
 		}
-		prp = &p->pkb_prp;
+		prp = &p->prp;
 		for (nprp = 1, t = prp_next(prp); !prp_list_end(t);
 		     t = prp_next(t), ++nprp) {
 			printf("%4u:\tHeader %u -- %s\n", npkt, nprp,

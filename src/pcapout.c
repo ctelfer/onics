@@ -68,8 +68,8 @@ void setmeta(struct pcap_pkthdr *ph, struct pktbuf *p)
 
 	ts = (struct xpkt_tag_ts *)pkb_find_tag(p, XPKT_TAG_TIMESTAMP, 0);
 	if (ts) {
-		ph->ts.tv_sec = ts->xpt_ts_sec;
-		ph->ts.tv_usec = ts->xpt_ts_nsec / 1000;
+		ph->ts.tv_sec = ts->sec;
+		ph->ts.tv_usec = ts->nsec / 1000;
 	} else {
 		ph->ts.tv_sec = 0;
 		ph->ts.tv_usec = 0;
@@ -77,7 +77,7 @@ void setmeta(struct pcap_pkthdr *ph, struct pktbuf *p)
 
 	si = (struct xpkt_tag_snapinfo *) pkb_find_tag(p, XPKT_TAG_SNAPINFO, 0);
 	if (si)
-		ph->len = si->xpt_si_wire_len;
+		ph->len = si->wirelen;
 	else
 		ph->len = pkb_get_len(p);
 }

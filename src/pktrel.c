@@ -92,7 +92,7 @@ int main(int argc, char *argv[])
 	while ((rv = pkb_fd_read(0, &p)) > 0) {
 		ts = (struct xpkt_tag_ts *)pkb_find_tag(p, XPKT_TAG_TIMESTAMP, 0);
 		if (ts) {
-			tm_lset(&next, ts->xpt_ts_sec, ts->xpt_ts_nsec);
+			tm_lset(&next, ts->sec, ts->nsec);
 		} else {
 			/* free all packets that lack timestamp fields */
 			pkb_free(p);

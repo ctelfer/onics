@@ -58,5 +58,5 @@ pml.h: pml.yl ../lemon/lemon
 clean:
 	rm -f ${TARGETS}
 	rm -f *.o
-	rm -f lex.pml.c pml.c pml.h
+	rm -f lex.pml.c pml.c pml.h pml.out
 
