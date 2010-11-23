@@ -7,7 +7,7 @@
 #include <cat/str.h>
 #include "pktbuf.h"
 #include "protoparse.h"
-#include "stdpp.h"
+#include "stdproto.h"
 #include "tcpip_hdrs.h"
 #include "netvm.h"
 #include "netvm_std_coproc.h"
@@ -575,7 +575,7 @@ int main(int argc, char *argv[])
 
 	parse_options(argc, argv);
 
-	register_std_proto_parsers();
+	register_std_proto();
 	pkb_init(1);
 
 	prog = &vm_progs[prognum];

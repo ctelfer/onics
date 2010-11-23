@@ -28,7 +28,7 @@ uint16_t ones_sum_h(void *p, uint16_t len, uint16_t val)
 }
 
 
-uint16_t ones_sum(void *p, size_t len, uint16_t val)
+uint16_t ones_sum(void *p, ulong len, uint16_t val)
 {
 	uint16_t sum = val;
 	while (len > 65534) {
@@ -51,12 +51,12 @@ uint16_t ones_sum(void *p, size_t len, uint16_t val)
  * 11111000  -(0x100 >> 5) == -0x08 == 0xff...f8
  *
  */
-ulong getbits(const byte_t * p, size_t bitoff, size_t bitlen)
+ulong getbits(const byte_t * p, ulong bitoff, uint bitlen)
 {
 	ulong v;
 	int n;
 
-	abort_unless(p && bitlen <= sizeof(ulong) << 3);
+	abort_unless(p && bitlen <= sizeof(ulong) * 8);
 
 	/* get to the correct start byte */
 	p += bitoff >> 3;
@@ -94,7 +94,7 @@ ulong getbits(const byte_t * p, size_t bitoff, size_t bitlen)
  *
  */
 
-void setbits(byte_t * p, size_t bitoff, size_t bitlen, ulong val)
+void setbits(byte_t * p, ulong bitoff, uint bitlen, ulong val)
 {
 	int exlen;
 	unsigned char m;
@@ -133,7 +133,7 @@ void setbits(byte_t * p, size_t bitoff, size_t bitlen, ulong val)
 }
 
 
-int getbit(const byte_t * p, size_t n)
+int getbit(const byte_t * p, ulong n)
 {
 	abort_unless(p);
 	p += n >> 3;
@@ -141,7 +141,7 @@ int getbit(const byte_t * p, size_t n)
 }
 
 
-void setbit(byte_t * p, size_t n, int v)
+void setbit(byte_t * p, ulong n, int v)
 {
 	abort_unless(p);
 	p += n >> 3;

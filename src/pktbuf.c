@@ -6,7 +6,7 @@
 #include <cat/io.h>
 #include "pktbuf.h"
 #include "dltypes.h"
-#include "stdpp.h"
+#include "stdproto.h"
 
 const size_t pkb_xpkt_pool_size = 1024 - sizeof(cat_pcpad_t);
 #define PKB_MAX_DATA_LEN  (65536 + 2048 - sizeof(cat_pcpad_t))

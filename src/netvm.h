@@ -1,7 +1,7 @@
 #ifndef __netvm_h
 #define __netvm_h
 #include "tcpip_hdrs.h"
-#include "stdpp.h"
+#include "stdproto.h"
 #include "pktbuf.h"
 
 struct netvm;			/* forward declaration */

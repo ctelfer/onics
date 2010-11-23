@@ -1,13 +1,13 @@
-#ifndef __stdpp_h
-#define __stdpp_h
+#ifndef __stdproto_h
+#define __stdproto_h
 #include "protoparse.h"
 #include "tcpip_hdrs.h"
 #include "dltypes.h"
 
 
 /* Register all the standard protocol parsers. */
-int register_std_proto_parsers();
-void unregister_std_proto_parsers();
+int register_std_proto();
+void unregister_std_proto();
 
 #define PPT_RAWDATA		PPT_BUILD(PPT_PF_DLT, DLT_NONE)
 #define PPT_ETHERNET2		PPT_BUILD(PPT_PF_DLT, DLT_ETHERNET2)
@@ -39,4 +39,4 @@ void unregister_std_proto_parsers();
 #define PRP_TCPFLD_TSTAMP	(PRP_OI_EXTRA + 4)
 #define PRP_TCPFLD_MD5		(PRP_OI_EXTRA + 5)
 
-#endif /* __stdpp_h */
+#endif /* __stdproto_h */

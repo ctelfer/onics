@@ -9,7 +9,7 @@ OPTS=-g -Wall
 LIBS=-L${CATLIB_ROOT}/lib -lcat_dbg -lpcap
 DEFS=
 BINDIR=../bin
-LIBOBJS= xpkt.o namespace.o netvm.o netvm_rt.o pktbuf.o stdpp.o \
+LIBOBJS= xpkt.o ns.o netvm.o netvm_rt.o pktbuf.o stdproto.o \
 	 protoparse.o util.o lex.pml.o pmltree.o netvm_std_coproc.o
 
 TARGETS=${BINDIR}/pcapin \

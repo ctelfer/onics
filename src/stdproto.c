@@ -1,14 +1,13 @@
 #include "config.h"
 #include "protoparse.h"
 #include "tcpip_hdrs.h"
-#include "stdpp.h"
+#include "stdproto.h"
 #include "util.h"
+#include "ns.h"
 #include <cat/emalloc.h>
 #include <cat/pack.h>
 #include <string.h>
 #include <stdlib.h>
-
-/* TODO: adapt to new protocol parse API */
 
 extern struct prparse_ops eth_prparse_ops;
 extern struct prparse_ops arp_prparse_ops;
@@ -174,6 +173,7 @@ static struct prparse *default_copy(struct prparse *oprp, byte_t * buffer)
 
 
 /* -- ops for Ethernet type -- */
+/* TODO: add vlan parsing */
 static struct prparse *eth_parse(struct prparse *pprp, uint * nextppt)
 {
 	struct prparse *prp;
@@ -256,7 +256,7 @@ static void eth_update(struct prparse *prp)
 
 
 /* -- ops for ARP type -- */
-static byte_t ethiparpstr[6] = { 0, 1, 8, 0, 6, 4 };
+static byte_t ethiparpstr[6] = {0, 1, 8, 0, 6, 4 };
 
 static struct prparse *arp_parse(struct prparse *pprp, uint * nextppt)
 {
@@ -1311,7 +1311,418 @@ struct prparse_ops tcp_prparse_ops = {
 };
 
 
-int register_std_proto_parsers()
+
+
+/* --------- Namespaces ---------- */
+
+#define STDPROTO_NS_ELEN	64
+#define STDPROTO_NS_SUB_ELEN	16
+/* TODO add option fields */
+/* TODO: add vlan fields*/
+
+extern struct ns_elem *stdproto_eth2_ns_elems[STDPROTO_NS_ELEN];
+static struct ns_namespace eth2_ns = 
+	NS_NAMESPACE_I("eth", NULL, PPT_ETHERNET2, stdproto_eth2_ns_elems);
+
+static struct ns_pktfld eth2_ns_dst =
+	NS_BYTEFIELD_I("dst", &eth2_ns, PPT_ETHERNET2, 0, 6);
+static struct ns_pktfld eth2_ns_src =
+	NS_BYTEFIELD_I("src", &eth2_ns, PPT_ETHERNET2, 6, 6);
+static struct ns_pktfld eth2_ns_ethtype =
+	NS_BYTEFIELD_I("ethtype", &eth2_ns, PPT_ETHERNET2, 12, 2);
+static struct ns_pktfld eth2_ns_payload =
+	NS_BYTEFIELD_IDX_I("payload", &eth2_ns, PPT_TCP, 0, 0, PRP_OI_POFF);
+
+struct ns_elem *stdproto_eth2_ns_elems[STDPROTO_NS_ELEN] = {
+	(struct ns_elem *)&eth2_ns_dst, (struct ns_elem *)&eth2_ns_src,
+	(struct ns_elem *)&eth2_ns_ethtype, (struct ns_elem *)&eth2_ns_payload
+};
+
+
+extern struct ns_elem *stdproto_arp_ns_elems[STDPROTO_NS_ELEN];
+static struct ns_namespace arp_ns = 
+	NS_NAMESPACE_I("arp", NULL, PPT_ARP, stdproto_arp_ns_elems);
+
+static struct ns_pktfld arp_ns_hwfmt =
+	NS_BYTEFIELD_I("hwfmt", &arp_ns, PPT_ARP, 0, 2);
+static struct ns_pktfld arp_ns_prfmt =
+	NS_BYTEFIELD_I("prfmt", &arp_ns, PPT_ARP, 2, 2);
+static struct ns_pktfld arp_ns_hwlen =
+	NS_BYTEFIELD_I("hwlen", &arp_ns, PPT_ARP, 4, 1);
+static struct ns_pktfld arp_ns_prlen =
+	NS_BYTEFIELD_I("prlen", &arp_ns, PPT_ARP, 5, 1);
+static struct ns_pktfld arp_ns_op =
+	NS_BYTEFIELD_I("op", &arp_ns, PPT_ARP, 6, 2);
+static struct ns_pktfld arp_ns_sndhwaddr =
+	NS_BYTEFIELD_IDX_I("sndhwaddr", &arp_ns, PPT_ARP, 8, 6, 
+			   PRP_ARPFLD_ETHARP);
+static struct ns_pktfld arp_ns_sndpraddr =
+	NS_BYTEFIELD_IDX_I("sndpraddr", &arp_ns, PPT_ARP, 14, 4, 
+			   PRP_ARPFLD_ETHARP);
+static struct ns_pktfld arp_ns_trghwaddr =
+	NS_BYTEFIELD_IDX_I("trghwaddr", &arp_ns, PPT_ARP, 18, 6, 
+			   PRP_ARPFLD_ETHARP);
+static struct ns_pktfld arp_ns_trgpraddr =
+	NS_BYTEFIELD_IDX_I("trgpraddr", &arp_ns, PPT_ARP, 24, 4, 
+			   PRP_ARPFLD_ETHARP);
+
+struct ns_elem *stdproto_arp_ns_elems[STDPROTO_NS_ELEN] = {
+	(struct ns_elem *)&arp_ns_hwfmt, (struct ns_elem *)&arp_ns_prfmt, 
+	(struct ns_elem *)&arp_ns_hwlen, (struct ns_elem *)&arp_ns_prlen, 
+	(struct ns_elem *)&arp_ns_op,
+	(struct ns_elem *)&arp_ns_sndhwaddr, 
+	(struct ns_elem *)&arp_ns_sndpraddr, 
+	(struct ns_elem *)&arp_ns_trghwaddr, 
+	(struct ns_elem *)&arp_ns_trgpraddr,
+};
+
+
+extern struct ns_elem *stdproto_ipv4_ns_elems[STDPROTO_NS_ELEN];
+static struct ns_namespace ipv4_ns = 
+	NS_NAMESPACE_I("ip", NULL, PPT_IPV4, stdproto_ipv4_ns_elems);
+
+static struct ns_pktfld ipv4_ns_vers =
+	NS_BITFIELD_I("vers", &ipv4_ns, PPT_IPV4, 0, 0, 4);
+static struct ns_pktfld ipv4_ns_hlen =
+	NS_BITFIELD_I("hlen", &ipv4_ns, PPT_IPV4, 0, 4, 4);
+static struct ns_pktfld ipv4_ns_diffsrv =
+	NS_BITFIELD_I("diffsrv", &ipv4_ns, PPT_IPV4, 1, 0, 6);
+static struct ns_pktfld ipv4_ns_ecn =
+	NS_BITFIELD_I("ecn", &ipv4_ns, PPT_IPV4, 1, 6, 2);
+static struct ns_pktfld ipv4_ns_len =
+	NS_BYTEFIELD_I("len", &ipv4_ns, PPT_IPV4, 2, 2);
+static struct ns_pktfld ipv4_ns_id =
+	NS_BYTEFIELD_I("id", &ipv4_ns, PPT_IPV4, 4, 2);
+static struct ns_pktfld ipv4_ns_rf =
+	NS_BITFIELD_I("rf", &ipv4_ns, PPT_IPV4, 6, 0, 1);
+static struct ns_pktfld ipv4_ns_df =
+	NS_BITFIELD_I("df", &ipv4_ns, PPT_IPV4, 6, 1, 1);
+static struct ns_pktfld ipv4_ns_mf =
+	NS_BITFIELD_I("mf", &ipv4_ns, PPT_IPV4, 6, 2, 1);
+static struct ns_pktfld ipv4_ns_fragoff =
+	NS_BITFIELD_I("fragoff", &ipv4_ns, PPT_IPV4, 6, 3, 13);
+static struct ns_pktfld ipv4_ns_ttl =
+	NS_BYTEFIELD_I("ttl", &ipv4_ns, PPT_IPV4, 8, 1);
+static struct ns_pktfld ipv4_ns_proto =
+	NS_BYTEFIELD_I("proto", &ipv4_ns, PPT_IPV4, 9, 1);
+static struct ns_pktfld ipv4_ns_cksum =
+	NS_BYTEFIELD_I("cksum", &ipv4_ns, PPT_IPV4, 10, 2);
+static struct ns_pktfld ipv4_ns_saddr =
+	NS_BYTEFIELD_I("saddr", &ipv4_ns, PPT_IPV4, 12, 4);
+static struct ns_pktfld ipv4_ns_daddr =
+	NS_BYTEFIELD_I("daddr", &ipv4_ns, PPT_IPV4, 16, 4);
+static struct ns_pktfld ipv4_ns_opt =
+	NS_BYTEFIELD_I("opt", &ipv4_ns, PPT_IPV4, 20, 0);
+static struct ns_pktfld ipv4_ns_payload =
+	NS_BYTEFIELD_IDX_I("payload", &ipv4_ns, PPT_IPV4, 0, 0, PRP_OI_POFF);
+
+struct ns_elem *stdproto_ipv4_ns_elems[STDPROTO_NS_ELEN] = {
+	(struct ns_elem *)&ipv4_ns_vers, (struct ns_elem *)&ipv4_ns_hlen,
+	(struct ns_elem *)&ipv4_ns_diffsrv, (struct ns_elem *)&ipv4_ns_ecn,
+	(struct ns_elem *)&ipv4_ns_len, (struct ns_elem *)&ipv4_ns_id, 
+	(struct ns_elem *)&ipv4_ns_rf, (struct ns_elem *)&ipv4_ns_df,
+	(struct ns_elem *)&ipv4_ns_mf, (struct ns_elem *)&ipv4_ns_fragoff,
+	(struct ns_elem *)&ipv4_ns_ttl, (struct ns_elem *)&ipv4_ns_proto,
+	(struct ns_elem *)&ipv4_ns_cksum, (struct ns_elem *)&ipv4_ns_saddr,
+	(struct ns_elem *)&ipv4_ns_daddr, (struct ns_elem *)&ipv4_ns_opt,
+	(struct ns_elem *)&ipv4_ns_payload
+};
+
+
+extern struct ns_elem *stdproto_ipv6_ns_elems[STDPROTO_NS_ELEN];
+static struct ns_namespace ipv6_ns = 
+	NS_NAMESPACE_I("ip6", NULL, PPT_IPV6, stdproto_ipv6_ns_elems);
+
+static struct ns_pktfld ipv6_ns_vers =
+	NS_BITFIELD_I("vers", &ipv6_ns, PPT_IPV6, 0, 0, 4);
+static struct ns_pktfld ipv6_ns_class =
+	NS_BITFIELD_I("class", &ipv6_ns, PPT_IPV6, 0, 4, 8);
+static struct ns_pktfld ipv6_ns_flowid =
+	NS_BITFIELD_I("flowid", &ipv6_ns, PPT_IPV6, 0, 12, 20);
+static struct ns_pktfld ipv6_ns_len =
+	NS_BYTEFIELD_I("len", &ipv6_ns, PPT_IPV6, 4, 2);
+static struct ns_pktfld ipv6_ns_nxthdr =
+	NS_BYTEFIELD_I("nxthdr", &ipv6_ns, PPT_IPV6, 6, 1);
+static struct ns_pktfld ipv6_ns_hoplim =
+	NS_BYTEFIELD_I("hoplim", &ipv6_ns, PPT_IPV6, 7, 1);
+static struct ns_pktfld ipv6_ns_saddr =
+	NS_BYTEFIELD_I("saddr", &ipv6_ns, PPT_IPV6, 8, 16);
+static struct ns_pktfld ipv6_ns_daddr =
+	NS_BYTEFIELD_I("daddr", &ipv6_ns, PPT_IPV6, 24, 16);
+static struct ns_pktfld ipv6_ns_exth =
+	NS_BYTEFIELD_I("exth", &ipv6_ns, PPT_IPV4, 20, 0);
+static struct ns_pktfld ipv6_ns_payload =
+	NS_BYTEFIELD_IDX_I("payload", &ipv6_ns, PPT_IPV6, 0, 0, PRP_OI_POFF);
+
+struct ns_elem *stdproto_ipv6_ns_elems[STDPROTO_NS_ELEN] = {
+	(struct ns_elem *)&ipv6_ns_vers, (struct ns_elem *)&ipv6_ns_class,
+	(struct ns_elem *)&ipv6_ns_flowid, (struct ns_elem *)&ipv6_ns_len,
+	(struct ns_elem *)&ipv6_ns_nxthdr, (struct ns_elem *)&ipv6_ns_hoplim,
+	(struct ns_elem *)&ipv6_ns_saddr, (struct ns_elem *)&ipv6_ns_daddr,
+	(struct ns_elem *)&ipv6_ns_exth, (struct ns_elem *)&ipv6_ns_payload
+};
+
+
+extern struct ns_elem *stdproto_icmp_ns_elems[STDPROTO_NS_ELEN];
+static struct ns_namespace icmp_ns = 
+	NS_NAMESPACE_I("icmp", NULL, PPT_ICMP, stdproto_icmp_ns_elems);
+
+static struct ns_pktfld icmp_ns_type =
+	NS_BYTEFIELD_I("type", &icmp_ns, PPT_ICMP, 0, 1);
+static struct ns_pktfld icmp_ns_code =
+	NS_BYTEFIELD_I("code", &icmp_ns, PPT_ICMP, 1, 1);
+static struct ns_pktfld icmp_ns_cksum =
+	NS_BYTEFIELD_I("cksum", &icmp_ns, PPT_ICMP, 2, 2);
+static struct ns_pktfld icmp_ns_id =
+	NS_BYTEFIELD_I("id", &icmp_ns, PPT_ICMP, 4, 2);
+static struct ns_pktfld icmp_ns_seq =
+	NS_BYTEFIELD_I("seq", &icmp_ns, PPT_ICMP, 6, 2);
+static struct ns_pktfld icmp_ns_mtu =
+	NS_BYTEFIELD_I("mtu", &icmp_ns, PPT_ICMP, 6, 2);
+static struct ns_pktfld icmp_ns_ptr =
+	NS_BYTEFIELD_I("ptr", &icmp_ns, PPT_ICMP, 4, 1);
+static struct ns_pktfld icmp_ns_gateway =
+	NS_BYTEFIELD_I("gw", &icmp_ns, PPT_ICMP, 4, 4);
+static struct ns_pktfld icmp_ns_unused =
+	NS_BYTEFIELD_I("unused", &icmp_ns, PPT_ICMP, 4, 4);
+static struct ns_pktfld icmp_ns_payload =
+	NS_BYTEFIELD_IDX_I("payload", &icmp_ns, PPT_ICMP, 0, 0, PRP_OI_POFF);
+
+struct ns_elem *stdproto_icmp_ns_elems[STDPROTO_NS_ELEN] = {
+	(struct ns_elem *)&icmp_ns_type, (struct ns_elem *)&icmp_ns_code,
+	(struct ns_elem *)&icmp_ns_cksum, (struct ns_elem *)&icmp_ns_id,
+	(struct ns_elem *)&icmp_ns_seq, (struct ns_elem *)&icmp_ns_mtu,
+	(struct ns_elem *)&icmp_ns_ptr, (struct ns_elem *)&icmp_ns_gateway,
+	(struct ns_elem *)&icmp_ns_unused, (struct ns_elem *)&icmp_ns_payload
+};
+
+
+extern struct ns_elem *stdproto_icmp6_ns_elems[STDPROTO_NS_ELEN];
+static struct ns_namespace icmp6_ns = 
+	NS_NAMESPACE_I("icmp6", NULL, PPT_ICMP6, stdproto_icmp6_ns_elems);
+
+static struct ns_pktfld icmp6_ns_type =
+	NS_BYTEFIELD_I("type", &icmp6_ns, PPT_ICMP6, 0, 1);
+static struct ns_pktfld icmp6_ns_code =
+	NS_BYTEFIELD_I("code", &icmp6_ns, PPT_ICMP6, 1, 1);
+static struct ns_pktfld icmp6_ns_cksum =
+	NS_BYTEFIELD_I("cksum", &icmp6_ns, PPT_ICMP6, 2, 2);
+static struct ns_pktfld icmp6_ns_hdata =
+	NS_BYTEFIELD_I("hdata", &icmp6_ns, PPT_ICMP6, 4, 4);
+static struct ns_pktfld icmp6_ns_payload =
+	NS_BYTEFIELD_IDX_I("payload", &icmp6_ns, PPT_ICMP6, 0, 0, PRP_OI_POFF);
+
+struct ns_elem *stdproto_icmp6_ns_elems[STDPROTO_NS_ELEN] = {
+	(struct ns_elem *)&icmp6_ns_type, (struct ns_elem *)&icmp6_ns_code, 
+	(struct ns_elem *)&icmp6_ns_cksum, (struct ns_elem *)&icmp6_ns_hdata,
+	(struct ns_elem *)&icmp6_ns_payload
+};
+
+
+extern struct ns_elem *stdproto_udp_ns_elems[STDPROTO_NS_ELEN];
+static struct ns_namespace udp_ns = 
+	NS_NAMESPACE_I("udp", NULL, PPT_UDP, stdproto_udp_ns_elems);
+
+static struct ns_pktfld udp_ns_sport =
+	NS_BYTEFIELD_I("sport", &udp_ns, PPT_UDP, 0, 2);
+static struct ns_pktfld udp_ns_dport =
+	NS_BYTEFIELD_I("dport", &udp_ns, PPT_UDP, 2, 2);
+static struct ns_pktfld udp_ns_len =
+	NS_BYTEFIELD_I("len", &udp_ns, PPT_UDP, 4, 2);
+static struct ns_pktfld udp_ns_cksum =
+	NS_BYTEFIELD_I("cksum", &udp_ns, PPT_UDP, 6, 2);
+static struct ns_pktfld udp_ns_payload =
+	NS_BYTEFIELD_IDX_I("payload", &udp_ns, PPT_UDP, 0, 0, PRP_OI_POFF);
+
+struct ns_elem *stdproto_udp_ns_elems[STDPROTO_NS_ELEN] = {
+	(struct ns_elem *)&udp_ns_sport, (struct ns_elem *)&udp_ns_dport, 
+	(struct ns_elem *)&udp_ns_len, (struct ns_elem *)&udp_ns_cksum,
+	(struct ns_elem *)&udp_ns_payload
+};
+
+
+extern struct ns_elem *stdproto_tcp_ns_elems[STDPROTO_NS_ELEN];
+static struct ns_namespace tcp_ns = 
+	NS_NAMESPACE_I("tcp", NULL, PPT_TCP, stdproto_tcp_ns_elems);
+
+static struct ns_pktfld tcp_ns_sport =
+	NS_BYTEFIELD_I("sport", &tcp_ns, PPT_TCP, 0, 2);
+static struct ns_pktfld tcp_ns_dport =
+	NS_BYTEFIELD_I("dport", &tcp_ns, PPT_TCP, 2, 2);
+static struct ns_pktfld tcp_ns_seqn =
+	NS_BYTEFIELD_I("seqn", &tcp_ns, PPT_TCP, 4, 4);
+static struct ns_pktfld tcp_ns_ackn =
+	NS_BYTEFIELD_I("ackn", &tcp_ns, PPT_TCP, 8, 4);
+static struct ns_pktfld tcp_ns_doff =
+	NS_BITFIELD_I("doff", &tcp_ns, PPT_TCP, 12, 0, 4);
+static struct ns_pktfld tcp_ns_resv =
+	NS_BITFIELD_I("resv", &tcp_ns, PPT_TCP, 12, 4, 3);
+static struct ns_pktfld tcp_ns_nsum =
+	NS_BITFIELD_I("nsum", &tcp_ns, PPT_TCP, 12, 7, 1);
+static struct ns_pktfld tcp_ns_ece =
+	NS_BITFIELD_I("ece", &tcp_ns, PPT_TCP, 13, 0, 1);
+static struct ns_pktfld tcp_ns_cwr =
+	NS_BITFIELD_I("cwr", &tcp_ns, PPT_TCP, 13, 1, 1);
+static struct ns_pktfld tcp_ns_urg =
+	NS_BITFIELD_I("urg", &tcp_ns, PPT_TCP, 13, 2, 1);
+static struct ns_pktfld tcp_ns_ack =
+	NS_BITFIELD_I("ack", &tcp_ns, PPT_TCP, 13, 3, 1);
+static struct ns_pktfld tcp_ns_psh =
+	NS_BITFIELD_I("psh", &tcp_ns, PPT_TCP, 13, 4, 1);
+static struct ns_pktfld tcp_ns_rst =
+	NS_BITFIELD_I("rst", &tcp_ns, PPT_TCP, 13, 5, 1);
+static struct ns_pktfld tcp_ns_syn =
+	NS_BITFIELD_I("syn", &tcp_ns, PPT_TCP, 13, 6, 1);
+static struct ns_pktfld tcp_ns_fin =
+	NS_BITFIELD_I("fin", &tcp_ns, PPT_TCP, 13, 7, 1);
+static struct ns_pktfld tcp_ns_win =
+	NS_BYTEFIELD_I("win", &tcp_ns, PPT_TCP, 14, 2);
+static struct ns_pktfld tcp_ns_cksum =
+	NS_BYTEFIELD_I("cksum", &tcp_ns, PPT_TCP, 16, 2);
+static struct ns_pktfld tcp_ns_urgp =
+	NS_BYTEFIELD_I("urgp", &tcp_ns, PPT_TCP, 18, 2);
+static struct ns_pktfld tcp_ns_opt =
+	NS_BYTEFIELD_I("opt", &tcp_ns, PPT_TCP, 20, 0);
+static struct ns_pktfld tcp_ns_payload =
+	NS_BYTEFIELD_IDX_I("payload", &tcp_ns, PPT_TCP, 0, 0, PRP_OI_POFF);
+
+/* option forward declarations */
+extern struct ns_elem *stdproto_tcp_mss_ns_elems[STDPROTO_NS_SUB_ELEN];
+extern struct ns_elem *stdproto_tcp_wscale_ns_elems[STDPROTO_NS_SUB_ELEN];
+extern struct ns_elem *stdproto_tcp_sackok_ns_elems[STDPROTO_NS_SUB_ELEN];
+extern struct ns_elem *stdproto_tcp_sack_ns_elems[STDPROTO_NS_SUB_ELEN];
+extern struct ns_elem *stdproto_tcp_ts_ns_elems[STDPROTO_NS_SUB_ELEN];
+extern struct ns_elem *stdproto_tcp_md5_ns_elems[STDPROTO_NS_SUB_ELEN];
+
+/* TCP MSS Option */
+static struct ns_namespace tcp_mss_ns = 
+	NS_NAMESPACE_IDX_I("mss", &tcp_ns, PPT_TCP, PRP_TCPFLD_MSS,
+			   stdproto_tcp_mss_ns_elems);
+static struct ns_pktfld tcp_mss_kind =
+	NS_BYTEFIELD_IDX_I("kind", &tcp_mss_ns, PPT_TCP, 0, 1, PRP_TCPFLD_MSS);
+static struct ns_pktfld tcp_mss_len =
+	NS_BYTEFIELD_IDX_I("len", &tcp_mss_ns, PPT_TCP, 1, 1, PRP_TCPFLD_MSS);
+static struct ns_pktfld tcp_mss_mss =
+	NS_BYTEFIELD_IDX_I("mss", &tcp_mss_ns, PPT_TCP, 2, 2, PRP_TCPFLD_MSS);
+struct ns_elem *stdproto_tcp_mss_ns_elems[STDPROTO_NS_SUB_ELEN] = {
+	(struct ns_elem *)&tcp_mss_kind, (struct ns_elem *)&tcp_mss_len,
+	(struct ns_elem *)&tcp_mss_mss,
+};
+
+/* TCP Window Scale Option */
+static struct ns_namespace tcp_wscale_ns = 
+	NS_NAMESPACE_IDX_I("wscale", &tcp_ns, PPT_TCP, PRP_TCPFLD_WSCALE,
+			   stdproto_tcp_wscale_ns_elems);
+static struct ns_pktfld tcp_wscale_kind =
+	NS_BYTEFIELD_IDX_I("kind", &tcp_wscale_ns, PPT_TCP, 0, 1, 
+			   PRP_TCPFLD_WSCALE);
+static struct ns_pktfld tcp_wscale_len =
+	NS_BYTEFIELD_IDX_I("len", &tcp_wscale_ns, PPT_TCP, 1, 1, 
+			   PRP_TCPFLD_WSCALE);
+static struct ns_pktfld tcp_wscale_scale =
+	NS_BYTEFIELD_IDX_I("scale", &tcp_wscale_ns, PPT_TCP, 2, 2,
+			   PRP_TCPFLD_WSCALE);
+struct ns_elem *stdproto_tcp_wscale_ns_elems[STDPROTO_NS_SUB_ELEN] = {
+	(struct ns_elem *)&tcp_wscale_kind, (struct ns_elem *)&tcp_wscale_len,
+	(struct ns_elem *)&tcp_wscale_scale,
+};
+
+/* TCP Selective Acknowledgement Permitted Option */
+static struct ns_namespace tcp_sackok_ns = 
+	NS_NAMESPACE_IDX_I("sackok", &tcp_ns, PPT_TCP, PRP_TCPFLD_SACKOK,
+			   stdproto_tcp_sackok_ns_elems);
+static struct ns_pktfld tcp_sackok_kind =
+	NS_BYTEFIELD_IDX_I("kind", &tcp_sackok_ns, PPT_TCP, 0, 1, 
+			   PRP_TCPFLD_SACKOK);
+static struct ns_pktfld tcp_sackok_len =
+	NS_BYTEFIELD_IDX_I("len", &tcp_sackok_ns, PPT_TCP, 1, 1, 
+			   PRP_TCPFLD_SACKOK);
+struct ns_elem *stdproto_tcp_sackok_ns_elems[STDPROTO_NS_SUB_ELEN] = {
+	(struct ns_elem *)&tcp_sackok_kind, (struct ns_elem *)&tcp_sackok_len,
+};
+
+/* TCP Selective Acknowledgement Option */
+static struct ns_namespace tcp_sack_ns = 
+	NS_NAMESPACE_IDX_I("sack", &tcp_ns, PPT_TCP, PRP_TCPFLD_SACK,
+			   stdproto_tcp_sack_ns_elems);
+static struct ns_pktfld tcp_sack_kind =
+	NS_BYTEFIELD_IDX_I("kind", &tcp_sack_ns, PPT_TCP, 0, 1, 
+			   PRP_TCPFLD_SACK);
+static struct ns_pktfld tcp_sack_len =
+	NS_BYTEFIELD_IDX_I("len", &tcp_sack_ns, PPT_TCP, 1, 1, 
+			   PRP_TCPFLD_SACK);
+static struct ns_pktfld tcp_sack_blocks =
+	NS_BYTEFIELD_IDX_I("blocks", &tcp_sack_ns, PPT_TCP, 2, 0, 
+			   PRP_TCPFLD_SACK);
+struct ns_elem *stdproto_tcp_sack_ns_elems[STDPROTO_NS_SUB_ELEN] = {
+	(struct ns_elem *)&tcp_sack_kind, (struct ns_elem *)&tcp_sack_len,
+	(struct ns_elem *)&tcp_sack_blocks,
+};
+
+
+/* TCP Timestamp Option */
+static struct ns_namespace tcp_ts_ns = 
+	NS_NAMESPACE_IDX_I("ts", &tcp_ns, PPT_TCP, PRP_TCPFLD_TSTAMP,
+			   stdproto_tcp_ts_ns_elems);
+static struct ns_pktfld tcp_ts_kind =
+	NS_BYTEFIELD_IDX_I("kind", &tcp_ts_ns, PPT_TCP, 0, 1, 
+			   PRP_TCPFLD_TSTAMP);
+static struct ns_pktfld tcp_ts_len =
+	NS_BYTEFIELD_IDX_I("len", &tcp_ts_ns, PPT_TCP, 1, 1, 
+			   PRP_TCPFLD_TSTAMP);
+static struct ns_pktfld tcp_ts_val =
+	NS_BYTEFIELD_IDX_I("val", &tcp_ts_ns, PPT_TCP, 2, 4, 
+			   PRP_TCPFLD_TSTAMP);
+static struct ns_pktfld tcp_ts_echo =
+	NS_BYTEFIELD_IDX_I("echo", &tcp_ts_ns, PPT_TCP, 6, 4, 
+			   PRP_TCPFLD_TSTAMP);
+struct ns_elem *stdproto_tcp_ts_ns_elems[STDPROTO_NS_SUB_ELEN] = {
+	(struct ns_elem *)&tcp_ts_kind, (struct ns_elem *)&tcp_ts_len,
+	(struct ns_elem *)&tcp_ts_val, (struct ns_elem *)&tcp_ts_echo,
+};
+
+
+/* TCP MD5 Signature Option */
+static struct ns_namespace tcp_md5_ns = 
+	NS_NAMESPACE_IDX_I("md5", &tcp_ns, PPT_TCP, PRP_TCPFLD_MD5,
+			   stdproto_tcp_md5_ns_elems);
+static struct ns_pktfld tcp_md5_kind =
+	NS_BYTEFIELD_IDX_I("kind", &tcp_md5_ns, PPT_TCP, 0, 1, 
+			   PRP_TCPFLD_MD5);
+static struct ns_pktfld tcp_md5_len =
+	NS_BYTEFIELD_IDX_I("len", &tcp_md5_ns, PPT_TCP, 1, 1, 
+			   PRP_TCPFLD_MD5);
+static struct ns_pktfld tcp_md5_sig =
+	NS_BYTEFIELD_IDX_I("sig", &tcp_md5_ns, PPT_TCP, 2, 16, 
+			   PRP_TCPFLD_MD5);
+struct ns_elem *stdproto_tcp_md5_ns_elems[STDPROTO_NS_SUB_ELEN] = {
+	(struct ns_elem *)&tcp_md5_kind, (struct ns_elem *)&tcp_md5_len,
+	(struct ns_elem *)&tcp_md5_sig,
+};
+
+struct ns_elem *stdproto_tcp_ns_elems[STDPROTO_NS_ELEN] = {
+	(struct ns_elem *)&tcp_ns_sport, (struct ns_elem *)&tcp_ns_dport,
+	(struct ns_elem *)&tcp_ns_seqn, (struct ns_elem *)&tcp_ns_ackn,
+	(struct ns_elem *)&tcp_ns_doff, (struct ns_elem *)&tcp_ns_resv,
+	(struct ns_elem *)&tcp_ns_nsum, (struct ns_elem *)&tcp_ns_ece,
+	(struct ns_elem *)&tcp_ns_cwr, (struct ns_elem *)&tcp_ns_urg,
+	(struct ns_elem *)&tcp_ns_ack, (struct ns_elem *)&tcp_ns_psh,
+	(struct ns_elem *)&tcp_ns_rst, (struct ns_elem *)&tcp_ns_syn,
+	(struct ns_elem *)&tcp_ns_fin, (struct ns_elem *)&tcp_ns_win,
+	(struct ns_elem *)&tcp_ns_cksum, (struct ns_elem *)&tcp_ns_urgp,
+	(struct ns_elem *)&tcp_ns_opt, (struct ns_elem *)&tcp_ns_payload,
+
+	/* Options */
+	(struct ns_elem *)&tcp_mss_ns,
+	(struct ns_elem *)&tcp_wscale_ns,
+	(struct ns_elem *)&tcp_sackok_ns,
+	(struct ns_elem *)&tcp_sack_ns,
+	(struct ns_elem *)&tcp_ts_ns,
+	(struct ns_elem *)&tcp_md5_ns,
+};
+
+
+int register_std_proto()
 {
 	if (pp_register(PPT_ETHERNET2, &eth_proto_parser_ops) < 0)
 		goto fail;
@@ -1319,7 +1730,7 @@ int register_std_proto_parsers()
 		goto fail;
 	if (pp_register(PPT_IPV4, &ipv4_proto_parser_ops) < 0)
 		goto fail;
-	if (pp_register(PPT_IPV6, &ipv4_proto_parser_ops) < 0)
+	if (pp_register(PPT_IPV6, &ipv6_proto_parser_ops) < 0)
 		goto fail;
 	if (pp_register(PPT_ICMP, &icmp_proto_parser_ops) < 0)
 		goto fail;
@@ -1329,14 +1740,32 @@ int register_std_proto_parsers()
 		goto fail;
 	if (pp_register(PPT_TCP, &tcp_proto_parser_ops) < 0)
 		goto fail;
+
+	if (ns_add_elem(NULL, (struct ns_elem *)&eth2_ns) < 0)
+		goto fail;
+	if (ns_add_elem(NULL, (struct ns_elem *)&arp_ns) < 0)
+		goto fail;
+	if (ns_add_elem(NULL, (struct ns_elem *)&ipv4_ns) < 0)
+		goto fail;
+	if (ns_add_elem(NULL, (struct ns_elem *)&ipv6_ns) < 0)
+		goto fail;
+	if (ns_add_elem(NULL, (struct ns_elem *)&icmp_ns) < 0)
+		goto fail;
+	if (ns_add_elem(NULL, (struct ns_elem *)&icmp6_ns) < 0)
+		goto fail;
+	if (ns_add_elem(NULL, (struct ns_elem *)&udp_ns) < 0)
+		goto fail;
+	if (ns_add_elem(NULL, (struct ns_elem *)&tcp_ns) < 0)
+		goto fail;
+
 	return 0;
 fail:
-	unregister_std_proto_parsers();
+	unregister_std_proto();
 	return -1;
 }
 
 
-void unregister_std_proto_parsers()
+void unregister_std_proto()
 {
 	pp_unregister(PPT_ETHERNET2);
 	pp_unregister(PPT_ARP);
@@ -1346,4 +1775,13 @@ void unregister_std_proto_parsers()
 	pp_unregister(PPT_ICMP6);
 	pp_unregister(PPT_UDP);
 	pp_unregister(PPT_TCP);
+
+	ns_rem_elem((struct ns_elem *)&eth2_ns);
+	ns_rem_elem((struct ns_elem *)&arp_ns);
+	ns_rem_elem((struct ns_elem *)&ipv4_ns);
+	ns_rem_elem((struct ns_elem *)&ipv6_ns);
+	ns_rem_elem((struct ns_elem *)&icmp_ns);
+	ns_rem_elem((struct ns_elem *)&icmp6_ns);
+	ns_rem_elem((struct ns_elem *)&udp_ns);
+	ns_rem_elem((struct ns_elem *)&tcp_ns);
 }

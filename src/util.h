@@ -12,7 +12,7 @@
  * were computed by first performing appropriate byte swapping when
  * reading the 16-bit values.  
  */
-uint16_t ones_sum(void *p, size_t len, uint16_t val);
+uint16_t ones_sum(void *p, ulong len, uint16_t val);
 
 /*
  * Extract 'len' bits from a position of 'off' bits from p.
@@ -29,12 +29,12 @@ uint16_t ones_sum(void *p, size_t len, uint16_t val);
  *   uint32_t flowlabel = getbits((byte_t *)v6p, 12, 20);
  *   
  */
-ulong getbits(const byte_t * p, size_t off, size_t len);
-void setbits(byte_t * p, size_t off, size_t len, ulong val);
+ulong getbits(const byte_t * p, ulong off, uint len);
+void setbits(byte_t * p, ulong off, uint len, ulong val);
 
 /* return 1 if bit #n is set in p */
-int getbit(const byte_t * p, size_t n);
+int getbit(const byte_t * p, ulong n);
 /* set bit n in p, if v or clr bit n in p if !v */
-void setbit(byte_t * p, size_t n, int v);
+void setbit(byte_t * p, ulong n, int v);
 
 #endif /* __util_h */

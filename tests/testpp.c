@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include "pktbuf.h"
 #include "protoparse.h"
-#include "stdpp.h"
+#include "stdproto.h"
 #include "tcpip_hdrs.h"
 
 const char *pnames(uint ppt)
@@ -39,7 +39,7 @@ int main(int argc, char *argv[])
 	unsigned npkt = 0;
 	unsigned nprp = 0;
 
-	register_std_proto_parsers();
+	register_std_proto();
 	pkb_init(1);
 
 	while (pkb_file_read(stdin, &p) > 0) {
