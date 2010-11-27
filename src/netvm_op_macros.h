@@ -7,12 +7,9 @@ static int dbgabrt()
 	return 1;
 }
 
-#define IMMED(inst) ((inst)->flags & NETVM_IF_IMMED)
-#define CPIMMED(inst) ((inst)->flags & NETVM_IF_CPIMMED)
-#define ISSIGNED(inst) ((inst)->flags & NETVM_IF_SIGNED)
-#define CPOP(inst) (((inst)->flags >> 8) & 0xFF)
+#define VMERR(__vm, __e) \
+	do { __vm->error = __e; dbgabrt(); return; } while (0)
 
-#define VMERR(__vm, __e) do { __vm->error = __e; dbgabrt(); return; } while (0)
 #define VMERRRET(__vm, __e, __r) \
 	do { __vm->error = __e; dbgabrt(); return __r; } while (0)
 

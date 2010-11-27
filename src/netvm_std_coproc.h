@@ -28,12 +28,12 @@ struct netvm_xpktcp_tagdesc {
 };
 
 enum {
-	NETVM_CPOC_HASTAG,	/* mo, val == tagdesc */
-	NETVM_CPOC_RDTAG,	/* mo, val == tagdesc */
+	NETVM_CPOC_HASTAG,	/* (MO) val == tagdesc */
+	NETVM_CPOC_RDTAG,	/* (MO) val == tagdesc */
 	NETVM_CPOC_ADDTAG,	/* val == tagdesc */
 	NETVM_CPOC_DELTAG,	/* val == tagdesc */
-	NETVM_CPOC_LDTAG,	/* [addr] mo, val == width */
-	NETVM_CPOC_STTAG,	/* [vaddr,v] val == width */
+	NETVM_CPOC_LDTAG,	/* (MO) [addr] z == width, w = swap bytes */
+	NETVM_CPOC_STTAG,	/* [addr,v] z == width */
 
 	NETVM_CPOC_NUMXPKT,
 };
@@ -53,14 +53,17 @@ void fini_xpkt_cp(struct netvm_xpkt_cp *cp);
 /* --------- Output Port Coprocessor --------- */
 
 enum {
-	NETVM_CPOC_PRBIN,/* [v|V] print v in binary: val == min string width */
-	NETVM_CPOC_PROCT,/* [v|V] print v in octal: val == min string width */
-	NETVM_CPOC_PRDEC,/* [v|VS] print v in decimal: val == min str width */
-	NETVM_CPOC_PRHEX,/* [v|V] print v in hex: val == min string width */
+			 /* For PRBIN, PROCT, PRDEC, PRHEX, z == byte width */
+	NETVM_CPOC_PRBIN,/* [v] print v in binary: w == min string width */
+	NETVM_CPOC_PROCT,/* [v] print v in octal: w == min string width */
+	NETVM_CPOC_PRDEC,/* [v] print v in decimal: w == min str width */
+			 /*     signed if z. */
+	NETVM_CPOC_PRHEX,/* [v] print v in hex: w == min string width */
 	NETVM_CPOC_PRIP, /* [v] print IP address (network byte order) */
-	NETVM_CPOC_PRETH,/* [v] print ethernet address (network byte order) */
-	NETVM_CPOC_PRIPV6,/* [vhi,vlo] print IPv6 addr (network byte order) */
-	NETVM_CPOC_PRSTR,/* [addr,len|I] print len bytes from addr in mem */
+	NETVM_CPOC_PRETH,/* [vhi, vlo] print ethernet addr (network byte order) */
+	                 /*     vhi has only 2 MSB of address */
+	NETVM_CPOC_PRIPV6,/* [v0,v1,v2,v3] print IPv6 addr (network byte order) */
+	NETVM_CPOC_PRSTR,/* [addr,len] print len bytes from addr in mem */
 
 	NETVM_CPOC_NUMPR
 };
@@ -82,9 +85,9 @@ void fini_outport_cp(struct netvm_outport_cp *cp);
 /* --------- Packet Queue Coprocessor --------- */
 
 enum {
-	NETVM_CPOC_QEMPTY,	/* [qnum|I] return whether a queue is empty */
-	NETVM_CPOC_ENQ,		/* [qnum,pktnum|I] enqueue onto queue qnum */
-	NETVM_CPOC_DEQ,		/* [qnum,pktnum|I] dequeue from queue qnum */
+	NETVM_CPOC_QEMPTY,	/* [qnum] return whether a queue is empty */
+	NETVM_CPOC_ENQ,		/* [qnum, pktnum] enqueue onto queue qnum */
+	NETVM_CPOC_DEQ,		/* [qnum, pktnum] dequeue from queue qnum */
 
 	NETVM_CPOC_NUMPQ,
 };
@@ -106,10 +109,8 @@ void fini_pktq_cp(struct netvm_pktq_cp *cp);
 
 /* for *REX, width == # of submatches to push */
 enum {
-	NETVM_CPOC_REXP,	/* [pa,len,rxidx,(pktnum,nmatch)|I]:regex */
-				/*      on packet data */
-	NETVM_CPOC_REXM,	/* [addr,len,rxidx, nmatch|I]: regex on */
-				/*      memory data */
+	NETVM_CPOC_REX,		/* [addr,len,rxidx]: z is the memory seg */
+				/* w is the number of matches to push */
 	NETVM_CPOC_NUMREX,
 };
 
@@ -125,7 +126,7 @@ struct netvm_rex_cp {
 	struct memmgr *		rexmm;
 };
 
-int init_rex_cp(struct netvm_rex_cp *cp, struct memmgr *rexmm);
+int init_rex_cp(struct netvm_rex_cp *cp, struct memmgr *rexmm, uint nrex);
 void set_rexmm_cp(struct netvm_rex_cp *cp, struct memmgr *rexmm);
 int add_rex_cp(struct netvm_rex_cp *cp, struct rex_pat *rex);
 void fini_rex_cp(struct netvm_rex_cp *cp);
@@ -137,6 +138,7 @@ void fini_rex_cp(struct netvm_rex_cp *cp);
 */
 
 /*
+ * TODO:
  * RESOLVE - resolve names to addresses or visa versa (mem to mem)
  *
  * If we do this, should it be synchronous or asynchronous?  See below.
