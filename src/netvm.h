@@ -57,7 +57,7 @@ enum {
 	NETVM_OC_LDP,		/* [pdesc] load from packet (pdesc on stack) */
 	NETVM_OC_LDPI,		/* load from packet (use packed pdesc format) */
 	NETVM_OC_PFE,		/* [pdesc] push 1 if field exists 0 otherwise */
-	NETVM_OC_PFEI		/* same as PFE but use packed pdesc */
+	NETVM_OC_PFEI,		/* same as PFE but use packed pdesc */
 	NETVM_OC_LDPF,		/* [pdesc] load field from proto parse */
 	NETVM_OC_LDPFI,		/* load field from proto parse (packed pdesc) */
 
@@ -169,6 +169,7 @@ enum {
 	NETVM_OC_PKPPSH,	/* [pdesc] "push" prp of ptype in packet pkn */
 				/*   to inner header if !x or outer if x */
 	NETVM_OC_PKPPOP,	/* [pkn] pop the top prp off of packet pkn */
+	                        /*   if x then pop from front else innermost */
 
 	NETVM_OC_PKDEL,		/* [pkn] delete packet */
 	NETVM_OC_PKDELI,	/* delete packet 'x' */
@@ -176,14 +177,14 @@ enum {
 	NETVM_OC_PKFXDI,	/* set dltype of pkt 'x' from PPT_ of 2nd prp */
 	NETVM_OC_PKPUP,		/* [pdesc] update parse fields (packed pdesc) */
 	NETVM_OC_PKPUPI,	/* update the parse fields (stack pdesc) */
-	NETVM_OC_PKFL,		/* [pdesc] fix length fields in the packet */
+	NETVM_OC_PKFXL,		/* [pdesc] fix length fields in the packet */
 				/*   If pdesc refers to the base parse, fix */
 				/*   all lengths that are in a layer */
-	NETVM_OC_PKFLI,		/* fix length fields in packet (packed pdesc) */
-	NETVM_OC_PKFC,		/* [pdesc] fix checksum fields in the packet */
+	NETVM_OC_PKFXLI,	/* fix length fields in packet (packed pdesc) */
+	NETVM_OC_PKFXC,		/* [pdesc] fix checksum fields in the packet */
 				/*   If pdesc refers to the base parse, fix */
 				/*   all checksums that are in a layer */
-	NETVM_OC_PKFCI,		/* fix checksums in the packet (packed pdesc) */
+	NETVM_OC_PKFXCI,	/* fix checksums in the packet (packed pdesc) */
 
 	NETVM_OC_PKINS,		/* [len,pdesc] insert len bytes @ pd.offset */
 				/*   move new bytes down if x or up if !x */
@@ -192,7 +193,7 @@ enum {
 	NETVM_OC_PKADJ,		/* [amt,pdesc] adjust offset 'field' by */
 	                        /*   amt (signed) bytes in parse */
 
-	NETVM_OC_MAX = NETVM_OC_PRPADJ
+	NETVM_OC_MAX = NETVM_OC_PKADJ
 /* 
 * Still to consider:
 *

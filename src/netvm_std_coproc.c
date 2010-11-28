@@ -34,7 +34,7 @@ static void xpktcp_reset(struct netvm_coproc *cp)
 
 static int xpktcp_validate(struct netvm_inst *inst, struct netvm *vm)
 {
-	if (inst->y >= NETVM_CPOC_LDTAG) && (inst->y <= NETVM_CPOC_STTAG) {
+	if ((inst->y >= NETVM_CPOC_LDTAG) && (inst->y <= NETVM_CPOC_STTAG)) {
 		int width = (int8_t)inst->z;
 		switch(width) {
 		case  1: case  2: case  4:
@@ -215,16 +215,18 @@ void xpktcp_ldtag(struct netvm *vm, struct netvm_coproc *cp, int cpi)
 
 void xpktcp_sttag(struct netvm *vm, struct netvm_coproc *cp, int cpi)
 {
+	struct netvm_xpkt_cp *xcp = container(cp, struct netvm_xpkt_cp, coproc);
 	struct netvm_inst *inst = &vm->inst[vm->pc];
 	uint32_t addr;
 	uint32_t val;
 	byte_t *p;
+	int width = (int8_t)inst->z;
 
 	S_POP(vm, addr);
 	S_POP(vm, val);
 	p = xcp->tag + addr;
 
-	switch (inst->z) {
+	switch (width) {
 	case -1:
 	case 1:
 		FATAL(vm, NETVM_ERR_MEMADDR, addr >= XPKT_TAG_MAXW * 4);
@@ -422,7 +424,6 @@ static void nci_prstr(struct netvm *vm, struct netvm_coproc *ncp, int cpi)
 {
 	struct netvm_outport_cp *cp =
 	    container(ncp, struct netvm_outport_cp, coproc);
-	struct netvm_inst *inst = &vm->inst[vm->pc];
 	uint32_t addr, len;
 	abort_unless(cp->outport);
 	S_POP(vm, len);
@@ -503,7 +504,6 @@ static int pktq_validate(struct netvm_inst *inst, struct netvm *vm)
 static void nci_qempty(struct netvm *vm, struct netvm_coproc *ncp, int cpi)
 {
 	struct netvm_pktq_cp *cp = container(ncp, struct netvm_pktq_cp, coproc);
-	struct netvm_inst *inst = &vm->inst[vm->pc];
 	uint32_t qnum;
 
 	S_POP(vm, qnum);
@@ -623,7 +623,6 @@ static int rex_validate(struct netvm_inst *inst, struct netvm *vm)
 static void rexmatch(struct netvm *vm, struct rex_pat *pat, struct raw *loc,
 		     int32_t nm)
 {
-	struct netvm_inst *inst = &vm->inst[vm->pc];
 	struct rex_match_loc m[NETVM_MAXREXMATCH];
 	int rv, i;
 	rv = rex_match(pat, loc, m, nm);
@@ -707,7 +706,7 @@ int init_rex_cp(struct netvm_rex_cp *cp, struct memmgr *rexmm, uint nrex)
 	cp->coproc.reset = &rex_reset;
 	cp->coproc.validate = &rex_validate;
 	opp = cp->ops;
-	opp[NETVM_CPOC_REXP] = nci_rexp;
+	opp[NETVM_CPOC_REX] = nci_rex;
 	cp->rexes = ra;
 	memset(ra, 0, sizeof(struct rex_pat *) * nrex);
 	cp->nrexes = 0;

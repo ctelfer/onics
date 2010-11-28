@@ -336,10 +336,7 @@ int nprg_link(struct netvm_program *prog, struct netvm *vm)
 				a = cln_data(cln, uint32_t);
 				abort_unless(a < prog->ninst);
 				inst = prog->inst + a;
-				if (inst->opcode == NETVM_OC_CPOP)
-					inst->width = j;
-				else
-					inst->val = j;
+				inst->x = j;
 			}
 		}
 	}
@@ -353,13 +350,13 @@ int nprg_link(struct netvm_program *prog, struct netvm *vm)
 			label = ht_get_dptr(prog->labels, iptch->symname);
 			if (label == NULL)
 				return -1;
-			inst->val = label->addr;
+			inst->w = label->addr;
 		} else {
 			abort_unless(iptch->type == NETVM_IPTYPE_VAR);
 			var = ht_get_dptr(prog->vars, iptch->symname);
 			if (var == NULL)
 				return -1;
-			inst->val = var->addr;
+			inst->w = var->addr;
 		}
 	}
 
