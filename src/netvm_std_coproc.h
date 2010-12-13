@@ -33,7 +33,7 @@ enum {
 	NETVM_CPOC_ADDTAG,	/* val == tagdesc */
 	NETVM_CPOC_DELTAG,	/* val == tagdesc */
 	NETVM_CPOC_LDTAG,	/* (MO) [addr] z == width, w = swap bytes */
-	NETVM_CPOC_STTAG,	/* [addr,v] z == width */
+	NETVM_CPOC_STTAG,	/* [addr,v] z == width, w = swap bytes */
 
 	NETVM_CPOC_NUMXPKT,
 };
@@ -64,11 +64,11 @@ enum {
 	                 /*     vhi has only 2 MSB of address */
 	NETVM_CPOC_PRIPV6,/* [v0,v1,v2,v3] print IPv6 addr (network byte order) */
 	NETVM_CPOC_PRSTR,/* [addr,len] print len bytes from addr in mem */
+	NETVM_CPOC_PRSTRI,/* print 'z' bytes from address 'w' in mem */
 
 	NETVM_CPOC_NUMPR
 };
 
-#define NETVM_OPNUMV(strw, numw)  ((uint32_t)((strw)<<16|(numw)))
 
 struct netvm_outport_cp {
 	struct netvm_coproc	coproc;
@@ -97,11 +97,11 @@ struct netvm_pktq_cp {
 	struct netvm_coproc	coproc;
 	netvm_cpop		ops[NETVM_CPOC_NUMPQ];
 	struct list *		queues;
-	uint32_t		nqueues;
+	uint			nqueues;
 };
 
-int init_pktq_cp(struct netvm_pktq_cp *cp, uint32_t nqueues);
-int set_pktq_num(struct netvm_pktq_cp *cp, uint32_t nqueues);
+int init_pktq_cp(struct netvm_pktq_cp *cp, uint nqueues);
+int set_pktq_num(struct netvm_pktq_cp *cp, uint nqueues);
 void fini_pktq_cp(struct netvm_pktq_cp *cp);
 
 
@@ -115,14 +115,13 @@ enum {
 };
 
 #define NETVM_MAXREXMATCH 16
-#define NETVM_REXPV(nmatch, pktnum)  ((uint32_t)((nmatch)<<16|(pktnum)))
 
 struct netvm_rex_cp {
 	struct netvm_coproc	coproc;
 	netvm_cpop		ops[NETVM_CPOC_NUMREX];
 	struct rex_pat **	rexes;
-	uint32_t		nrexes;
-	uint32_t		ralen;
+	uint			nrexes;
+	uint			ralen;
 	struct memmgr *		rexmm;
 };
 

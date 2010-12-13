@@ -7,14 +7,6 @@
 #include "netvm_op_macros.h"
 #include "pktbuf.h"
 
-#define swap16(v) ( (((uint16_t)(v) << 8) & 0xFF00) | \
-		    (((uint16_t)(v) >> 8) & 0xFF) )
-#define swap32(v) ( (((uint32_t)(v) << 24) & 0xFF000000ul) | \
-		    (((uint32_t)(v) << 8) & 0xFF0000ul)    | \
-		    (((uint32_t)(v) >> 8) & 0xFF00ul)      | \
-		    (((uint32_t)(v) >> 24) & 0xFFul) )
-
-
 /* --------- Xpkt Coprocessor --------- */
 
 static int xpktcp_register(struct netvm_coproc *cp, struct netvm *vm, int cpid)
@@ -35,13 +27,11 @@ static void xpktcp_reset(struct netvm_coproc *cp)
 static int xpktcp_validate(struct netvm_inst *inst, struct netvm *vm)
 {
 	if ((inst->y >= NETVM_CPOC_LDTAG) && (inst->y <= NETVM_CPOC_STTAG)) {
-		int width = (int8_t)inst->z;
-		switch(width) {
-		case  1: case  2: case  4:
-		case -1: case -2: case -4:
-			break;
-		default:
+		if (!netvm_valid_width(inst->z))
 			return -1;
+		if (inst->w != 0) {
+			if ((inst->z != 2) && (inst->z != 4) && (inst->z != 8))
+				return -1;
 		}
 	}
 
@@ -56,7 +46,7 @@ static int xpktcp_validate(struct netvm_inst *inst, struct netvm *vm)
 }
 
 
-static void xtagdesc(struct netvm_xpktcp_tagdesc *td, uint32_t val)
+static void xtagdesc(struct netvm_xpktcp_tagdesc *td, uint64_t val)
 {
 	td->index = val >> 16;
 	td->type = (val >> 8) & 0xFF;
@@ -69,7 +59,7 @@ void xpktcp_hastag(struct netvm *vm, struct netvm_coproc *cp, int cpi)
 	struct netvm_inst *inst = &vm->inst[vm->pc];
 	struct netvm_xpktcp_tagdesc td;
 	struct pktbuf *pkb;
-	uint32_t n;
+	uint64_t n;
 
 	if (inst->op == NETVM_OC_CPOPI) {
 		n = inst->w;
@@ -92,7 +82,7 @@ void xpktcp_rdtag(struct netvm *vm, struct netvm_coproc *cp, int cpi)
 	struct netvm_xpktcp_tagdesc td;
 	struct pktbuf *pkb;
 	struct xpkt_tag_hdr *xth;
-	uint32_t n;
+	uint64_t n;
 
 	if (inst->op == NETVM_OC_CPOPI) {
 		n = inst->w;
@@ -116,7 +106,7 @@ void xpktcp_addtag(struct netvm *vm, struct netvm_coproc *cp, int cpi)
 	struct netvm_inst *inst = &vm->inst[vm->pc];
 	struct netvm_xpktcp_tagdesc td;
 	struct pktbuf *pkb;
-	uint32_t n;
+	uint64_t n;
 	int rv;
 
 	if (inst->op == NETVM_OC_CPOPI) {
@@ -144,7 +134,7 @@ void xpktcp_deltag(struct netvm *vm, struct netvm_coproc *cp, int cpi)
 	struct netvm_inst *inst = &vm->inst[vm->pc];
 	struct netvm_xpktcp_tagdesc td;
 	struct pktbuf *pkb;
-	uint32_t n;
+	uint64_t n;
 	int rv;
 
 	if (inst->op == NETVM_OC_CPOPI) {
@@ -164,52 +154,29 @@ void xpktcp_ldtag(struct netvm *vm, struct netvm_coproc *cp, int cpi)
 {
 	struct netvm_xpkt_cp *xcp = container(cp, struct netvm_xpkt_cp, coproc);
 	struct netvm_inst *inst = &vm->inst[vm->pc];
-	uint32_t addr;
-	uint32_t val;
+	uint64_t addr;
+	uint64_t val;
 	int width;
-	byte_t *p;
 
 	S_POP(vm, addr);
 
-	width = (int8_t)(inst->z);
-
-	switch (width) {
-	case -1:
-	case 1:
-		FATAL(vm, NETVM_ERR_MEMADDR, addr >= XPKT_TAG_MAXW * 4);
-		val = *(byte_t *)(xcp->tag + addr);
-		if (width < 0)
-			val |= -(val & 0x80);
-		break;
-	case -2:
-	case 2:
-		FATAL(vm, NETVM_ERR_MEMADDR, addr > XPKT_TAG_MAXW * 4 - 2);
-		p = xcp->tag + addr;
-		val = *p++ << 8;
-		val |= *p;
-		if (inst->w)
-			val = swap16(val);
-		if (width < 0)
-			val |= -(val & 0x8000);
-		break;
-	case -4:
-	case 4:
-		FATAL(vm, NETVM_ERR_MEMADDR, addr > XPKT_TAG_MAXW * 4 - 4);
-		p = xcp->tag + addr;
-		val = *p++ << 24;
-		val |= *p++ << 16;
-		val |= *p++ << 8;
-		val |= *p;
-		if (inst->w)
-			val = swap32(val);
-		if (width < 0)
-			val |= -(val & 0x80000000);
-		break;
-	default:
-		abort_unless(0);	/* should be checked at validation */
-		VMERR(vm, NETVM_ERR_WIDTH);
+	width = inst->z;
+	FATAL(vm, NETVM_ERR_MEMADDR, addr > XPKT_TAG_MAXW * 4 - (width & 0x7F));
+	netvm_p2stk(vm, (byte_t *)(xcp->tag + addr), width);
+	if (!vm->error && inst->w != 0) {
+		val = S_GET(vm, 0);
+		switch(width & 0x7F) {
+		case 2: val = swap16(val);
+			break;
+		case 4: val = swap32(val);
+			break;
+		case 8: val = swap64(val);
+			break;
+		default:
+			VMERR(vm, NETVM_ERR_WIDTH);
+		}
+		S_SET(vm, 0, val);
 	}
-	S_PUSH(vm, val);
 }
 
 
@@ -217,39 +184,30 @@ void xpktcp_sttag(struct netvm *vm, struct netvm_coproc *cp, int cpi)
 {
 	struct netvm_xpkt_cp *xcp = container(cp, struct netvm_xpkt_cp, coproc);
 	struct netvm_inst *inst = &vm->inst[vm->pc];
-	uint32_t addr;
-	uint32_t val;
+	uint64_t addr;
+	uint64_t val;
+	int width = inst->z;
 	byte_t *p;
-	int width = (int8_t)inst->z;
 
 	S_POP(vm, addr);
 	S_POP(vm, val);
 	p = xcp->tag + addr;
+	FATAL(vm, NETVM_ERR_MEMADDR, addr > XPKT_TAG_MAXW * 4 - (width & 0x7F));
 
-	switch (width) {
-	case -1:
-	case 1:
-		FATAL(vm, NETVM_ERR_MEMADDR, addr >= XPKT_TAG_MAXW * 4);
-		*p = val;
-		break;
-	case -2:
-	case 2:
-		FATAL(vm, NETVM_ERR_MEMADDR, addr > XPKT_TAG_MAXW * 4 - 2);
-		*p++ = (val >> 8) & 0xFF;
-		*p = val & 0xFF;
-		break;
-	case -4:
-	case 4:
-		FATAL(vm, NETVM_ERR_MEMADDR, addr > XPKT_TAG_MAXW * 4 - 4);
-		*p++ = (val >> 24) & 0xFF;
-		*p++ = (val >> 16) & 0xFF;
-		*p++ = (val >> 8) & 0xFF;
-		*p = val & 0xFF;
-		break;
-	default:
-		abort_unless(0);	/* should be checked at validation */
-		VMERR(vm, NETVM_ERR_WIDTH);
+	if (inst->w != 0) {
+		switch(width & 0x7F) {
+		case 2: val = swap16(val);
+			break;
+		case 4: val = swap32(val);
+			break;
+		case 8: val = swap64(val);
+			break;
+		default:
+			VMERR(vm, NETVM_ERR_WIDTH);
+		}
 	}
+
+	netvm_stk2p(vm, (byte_t *)xcp->tag + addr, val, width);
 }
 
 
@@ -312,14 +270,14 @@ static void nci_prnum(struct netvm *vm, struct netvm_coproc *ncp, int cpi)
 	    container(ncp, struct netvm_outport_cp, coproc);
 	struct netvm_inst *inst = &vm->inst[vm->pc];
 	char fmtbuf[12];
-	uint32_t val;
+	uint64_t val;
 	int width, nb;
 
 	abort_unless(cp->outport);	/* guaranteed by netvm_init() */
 	abort_unless(inst->w <= 64);
 
-	width = (int8_t)inst->z;
-	nb = (width < 0) ? -width : width;
+	width = inst->z;
+	nb = width & 0x7F;
 
 	switch (inst->y) {
 	case NETVM_CPOC_PRBIN:
@@ -336,12 +294,12 @@ static void nci_prnum(struct netvm *vm, struct netvm_coproc *ncp, int cpi)
 		break;
 	case NETVM_CPOC_PRDEC:
 		if (inst->w) {
-			if (width < 0)
+			if (width & 0x80)
 				sprintf(fmtbuf, "%%0%d" FMT32 "d", inst->w);
 			else
 				sprintf(fmtbuf, "%%0%d" FMT32 "u", inst->w);
 		} else {
-			if (width < 0)
+			if (width & 0x80)
 				sprintf(fmtbuf, "%%" FMT32 "d");
 			else
 				sprintf(fmtbuf, "%%" FMT32 "u");
@@ -360,13 +318,13 @@ static void nci_prnum(struct netvm *vm, struct netvm_coproc *ncp, int cpi)
 	S_POP(vm, val);
 
 	/* mask out all irrelevant bits */
-	if (nb < 4)
+	if (nb < 8)
 		val &= ~((1 << (nb * 8)) - 1);
 
 	/* sign extend the result if we are printing a signed decimal */
-	if ((width < 0) && (inst->y == NETVM_CPOC_PRDEC))
+	if ((width & 0x80) && (inst->y == NETVM_CPOC_PRDEC))
 		val |= -(val & (1 << (nb * 8 - 1)));
-	emit_format(cp->outport, fmtbuf, val);
+	emit_format(cp->outport, fmtbuf, (uint)val);
 }
 
 
@@ -374,11 +332,11 @@ static void nci_prip(struct netvm *vm, struct netvm_coproc *ncp, int cpi)
 {
 	struct netvm_outport_cp *cp =
 	    container(ncp, struct netvm_outport_cp, coproc);
-	uint32_t v;
+	uint64_t val;
 	abort_unless(cp->outport);
-	S_POP(vm, v);
-	emit_format(cp->outport, "%u.%u.%u.%u", (v >> 24) & 0xFF, 
-		    (v >> 16) & 0xFF, (v >> 8) & 0xFF, v & 0xFF);
+	S_POP(vm, val);
+	emit_format(cp->outport, "%u.%u.%u.%u", (val >> 24) & 0xFF, 
+		    (val >> 16) & 0xFF, (val >> 8) & 0xFF, val & 0xFF);
 }
 
 
@@ -386,13 +344,12 @@ static void nci_preth(struct netvm *vm, struct netvm_coproc *ncp, int cpi)
 {
 	struct netvm_outport_cp *cp =
 	    container(ncp, struct netvm_outport_cp, coproc);
-	uint32_t v1, v2;
+	uint64_t val;
 	abort_unless(cp->outport);
-	S_POP(vm, v1);
-	S_POP(vm, v2);
+	S_POP(vm, val);
 	emit_format(cp->outport, "%02x:%02x:%02x:%02x:%02x:%02x",
-	            (v1 >> 8) & 0xFF, (v1 & 0xFF), (v2 >> 24) & 0xFF, 
-		    (v2 >> 16) & 0xFF, (v2 >> 8) & 0xFF, v2 & 0xFF);
+	            (val >> 40) & 0xFF, (val >> 32) & 0xFF, (val >> 24) & 0xFF,
+		    (val >> 16) & 0xFF, (val >> 8) & 0xFF, val & 0xFF);
 }
 
 
@@ -400,23 +357,21 @@ static void nci_pripv6(struct netvm *vm, struct netvm_coproc *ncp, int cpi)
 {
 	struct netvm_outport_cp *cp =
 	    container(ncp, struct netvm_outport_cp, coproc);
-	uint32_t v1, v2, v3, v4;
+	uint64_t v1, v2;
 	abort_unless(cp->outport);
-	S_POP(vm, v1);
 	S_POP(vm, v2);
-	S_POP(vm, v3);
-	S_POP(vm, v4);
+	S_POP(vm, v1);
 	emit_format(cp->outport,
 		    "%02x%02x:%02x%02x:%02x%02x:%02x%02x:"
 		    "%02x%02x:%02x%02x:%02x%02x:%02x%02x",
+		    (v1 >> 56) & 0xFF, (v1 >> 48) & 0xFF, 
+		    (v1 >> 40) & 0xFF, (v1 >> 32) & 0xFF, 
 		    (v1 >> 24) & 0xFF, (v1 >> 16) & 0xFF, 
 		    (v1 >> 8) & 0xFF, v1  & 0xFF, 
+		    (v2 >> 56) & 0xFF, (v2 >> 48) & 0xFF, 
+		    (v2 >> 40) & 0xFF, (v2 >> 32) & 0xFF, 
 		    (v2 >> 24) & 0xFF, (v2 >> 16) & 0xFF, 
-		    (v2 >> 8) & 0xFF, v2  & 0xFF, 
-		    (v3 >> 24) & 0xFF, (v3 >> 16) & 0xFF, 
-		    (v3 >> 8) & 0xFF, v3  & 0xFF, 
-		    (v4 >> 24) & 0xFF, (v4 >> 16) & 0xFF, 
-		    (v4 >> 8) & 0xFF, v4  & 0xFF);
+		    (v2 >> 8) & 0xFF, v2  & 0xFF);
 }
 
 
@@ -424,10 +379,17 @@ static void nci_prstr(struct netvm *vm, struct netvm_coproc *ncp, int cpi)
 {
 	struct netvm_outport_cp *cp =
 	    container(ncp, struct netvm_outport_cp, coproc);
-	uint32_t addr, len;
+	struct netvm_inst *inst = &vm->inst[vm->pc];
+	uint64_t addr, len;
 	abort_unless(cp->outport);
-	S_POP(vm, len);
-	S_POP(vm, addr);
+	if (inst->y == NETVM_CPOC_PRSTR) {
+		S_POP(vm, len);
+		S_POP(vm, addr);
+	} else {
+		abort_unless(inst->y == NETVM_CPOC_PRSTRI);
+		len = inst->z;
+		addr = inst->w;
+	}
 	FATAL(vm, NETVM_ERR_IOVFL, addr + len < addr);
 	FATAL(vm, NETVM_ERR_MEMADDR, !vm->mem || !vm->memsz || addr >= vm->memsz
 	      || addr + len > vm->memsz);
@@ -453,6 +415,7 @@ void init_outport_cp(struct netvm_outport_cp *cp, struct emitter *em)
 	opp[NETVM_CPOC_PRETH] = nci_preth;
 	opp[NETVM_CPOC_PRIPV6] = nci_pripv6;
 	opp[NETVM_CPOC_PRSTR] = nci_prstr;
+	opp[NETVM_CPOC_PRSTRI] = nci_prstr;
 }
 
 
@@ -504,7 +467,7 @@ static int pktq_validate(struct netvm_inst *inst, struct netvm *vm)
 static void nci_qempty(struct netvm *vm, struct netvm_coproc *ncp, int cpi)
 {
 	struct netvm_pktq_cp *cp = container(ncp, struct netvm_pktq_cp, coproc);
-	uint32_t qnum;
+	uint64_t qnum;
 
 	S_POP(vm, qnum);
 	FATAL(vm, NETVM_ERR_BADCPOP, qnum >= cp->nqueues);
@@ -516,7 +479,7 @@ static void nci_qop(struct netvm *vm, struct netvm_coproc *ncp, int cpi)
 {
 	struct netvm_pktq_cp *cp = container(ncp, struct netvm_pktq_cp, coproc);
 	struct netvm_inst *inst = &vm->inst[vm->pc];
-	uint32_t pktnum, qnum;
+	uint64_t pktnum, qnum;
 	struct pktbuf *pkb;
 	struct list *l;
 
@@ -538,7 +501,7 @@ static void nci_qop(struct netvm *vm, struct netvm_coproc *ncp, int cpi)
 }
 
 
-int init_pktq_cp(struct netvm_pktq_cp *cp, uint32_t nqueues)
+int init_pktq_cp(struct netvm_pktq_cp *cp, uint nqueues)
 {
 	netvm_cpop *opp;
 	abort_unless(cp);
@@ -562,10 +525,11 @@ int init_pktq_cp(struct netvm_pktq_cp *cp, uint32_t nqueues)
 }
 
 
-int set_pktq_num(struct netvm_pktq_cp *cp, uint32_t nqueues)
+int set_pktq_num(struct netvm_pktq_cp *cp, uint nqueues)
 {
 	struct list *queues = NULL;
-	uint32_t i;
+	uint i;
+
 	abort_unless(cp);
 
 	if (nqueues > 0) {
@@ -647,9 +611,8 @@ static void nci_rex(struct netvm *vm, struct netvm_coproc *ncp, int cpi)
 {
 	struct netvm_rex_cp *cp = container(ncp, struct netvm_rex_cp, coproc);
 	struct netvm_inst *inst = &vm->inst[vm->pc];
-	uint32_t pktnum, addr, len, ridx;
-	struct pktbuf *pkb;
-	struct prparse *prp;
+	uint64_t addr, len, ridx;
+	byte_t *p;
 	struct raw r;
 
 	S_POP(vm, ridx);
@@ -660,33 +623,12 @@ static void nci_rex(struct netvm *vm, struct netvm_coproc *ncp, int cpi)
 
 	FATAL(vm, NETVM_ERR_BADCPOP, (inst->w > NETVM_MAXREXMATCH));
 
-	if (inst->z >= NETVM_SEG_PKT0) {
-		pktnum = inst->z - NETVM_SEG_PKT0;
-		FATAL(vm, NETVM_ERR_PKTNUM, (pktnum >= NETVM_MAXPKTS));
-		FATAL(vm, NETVM_ERR_NOPKT, !(pkb = vm->packets[pktnum]));
-		prp = &pkb->prp;
-		FATAL(vm, NETVM_ERR_PKTADDR,
-		      (addr < prp_poff(prp)) || (addr + len > prp_plen(prp)));
+	netvm_get_seg_ptr(vm, inst->z, addr, 0, len, &p);
+	if (vm->error)
+		return;
 
-		r.data = pkb->buf + addr;
-		r.len = len;
-	} else {
-		FATAL(vm, NETVM_ERR_NOMEM, vm->mem == NULL);
-		FATAL(vm, NETVM_ERR_MEMADDR, inst->z > NETVM_SEG_ROMEM);
-
-		if (inst->z == NETVM_SEG_ROMEM) {
-			FATAL(vm, NETVM_ERR_IOVFL, 
-			      (len + addr + vm->rosegoff < vm->rosegoff));
-			FATAL(vm, NETVM_ERR_MEMADDR, 
-			      (addr + len + vm->rosegoff > vm->memsz));
-			r.data = vm->mem + addr + vm->rosegoff;
-		} else {
-			FATAL(vm, NETVM_ERR_MEMADDR, (addr + len > vm->memsz));
-			r.data = vm->mem + addr;
-		}
-		r.len = len;
-	}
-
+	r.data = p;
+	r.len = len;
 	rexmatch(vm, cp->rexes[ridx], &r, inst->w);
 }
 
@@ -729,7 +671,7 @@ int add_rex_cp(struct netvm_rex_cp *cp, struct rex_pat *rex)
 
 	if (cp->nrexes == cp->ralen) {
 		struct rex_pat **ra;
-		uint32_t nralen = cp->ralen << 1;
+		uint nralen = cp->ralen << 1;
 		if (nralen < cp->ralen)
 			return -1;
 		ra = realloc(cp->rexes, nralen * sizeof(struct rex_pat *));
@@ -747,7 +689,7 @@ int add_rex_cp(struct netvm_rex_cp *cp, struct rex_pat *rex)
 
 void fini_rex_cp(struct netvm_rex_cp *cp)
 {
-	uint32_t i;
+	uint i;
 	struct memmgr *mm;
 	if ((mm = cp->rexmm) != NULL)
 		for (i = 0; i < cp->nrexes; ++i)

@@ -7,8 +7,8 @@
 
 static struct proto_parser *_pp_lookup(uint type);
 static struct prparse *none_parse(struct prparse *pprp, uint * nextppt);
-static struct prparse *none_create(byte_t * start, long off, long len,
-				   long hlen, long plen, int mode);
+static struct prparse *none_create(byte_t * start, ulong off, ulong len,
+				   ulong hlen, ulong plen, int mode);
 
 static struct proto_parser_ops none_proto_parser_ops = {
 	none_parse,
@@ -137,8 +137,8 @@ static struct prparse *none_parse(struct prparse *pprp, uint * nextppt)
 }
 
 
-static void none_init(struct prparse *prp, byte_t *buf, long off, long len,
-		       long hlen, long plen)
+static void none_init(struct prparse *prp, byte_t *buf, ulong off, ulong len,
+		       ulong hlen, ulong plen)
 {
 	prp->type = PPT_NONE;
 	prp->error = 0;
@@ -151,15 +151,17 @@ static void none_init(struct prparse *prp, byte_t *buf, long off, long len,
 	prp_eoff(prp) = prp_soff(prp) + len;
 	prp_poff(prp) = prp_soff(prp) + hlen;
 	prp_toff(prp) = prp_poff(prp) + plen;
+
+	abort_unless(prp_soff(prp) <= prp_poff(prp));
+	abort_unless(prp_poff(prp) <= prp_toff(prp));
+	abort_unless(prp_toff(prp) <= prp_eoff(prp));
 }
 
 
-static struct prparse *none_create(byte_t * start, long off, long len,
-				   long hlen, long plen, int mode)
+static struct prparse *none_create(byte_t * start, ulong off, ulong len,
+				   ulong hlen, ulong plen, int mode)
 {
 	struct prparse *prp;
-
-	abort_unless(off >= 0 && len >= 0 && hlen >= 0 && plen >= 0);
 
 	if (mode != PPCF_FILL)
 		return NULL;
@@ -227,7 +229,7 @@ int prp_region_empty(struct prparse *reg)
 }
 
 
-void prp_init_parse(struct prparse *base, byte_t *buf, long len)
+void prp_init_parse(struct prparse *base, byte_t *buf, ulong len)
 {
 	abort_unless(base && buf && (len >= 0));
 	none_init(base, buf, 0, len, 0, 0);
@@ -273,7 +275,7 @@ int prp_parse_packet(struct prparse *base, uint ippt)
 int prp_push(unsigned ppidx, struct prparse *pprp, int mode)
 {
 	const struct proto_parser *pp;
-	long off, len, plen, hlen;
+	ulong off, len, plen, hlen;
 	struct prparse *prp, *next = NULL;
 
 	pp = pp_lookup(ppidx);
@@ -288,7 +290,7 @@ int prp_push(unsigned ppidx, struct prparse *pprp, int mode)
 		hlen = 0;
 		plen = 0;
 	} else if (mode == PPCF_WRAP) {
-		long t;
+		ulong t;
 		if (prp_region_empty(pprp)) {
 			errno = EINVAL;
 			return -1;
@@ -492,9 +494,16 @@ int prp_fix_len(struct prparse *prp)
 }
 
 
-static void ubounds(struct prparse *reg, long *low, long *high)
+/* 
+ * Find the lowest lower bound in the contained region and the 
+ * highest upper bound contained in the region.  If there are
+ * no contained region it returns high = region starting offset
+ * and low = region ending offset.  So one can test for this
+ * condition by checking on return whether low >= high.
+ */
+static void ubounds(struct prparse *reg, ulong *low, ulong *high)
 {
-	long uend = 0;
+	ulong uend = 0;
 	struct prparse *prp;
 
 	abort_unless(reg && low && high);
@@ -512,64 +521,82 @@ static void ubounds(struct prparse *reg, long *low, long *high)
 				uend = prp_eoff(prp);
 		abort_unless(*low <= uend);
 		*high = uend;
-		abort_unless(*low >= 0 && *high >= 0);
 	}
 }
 
 
-int prp_insert(struct prparse *prp, long off, long len, int moveup)
+int prp_insert(struct prparse *prp, ulong off, ulong len, int moveup)
 {
 	byte_t *op, *np;
-	long mlen;
-	long low, high;
+	ulong mlen;
 	uint i;
 
-	if (prp == NULL || off < 0 || len < 0) {
+	if (prp == NULL) {
 		errno = EINVAL;
 		return -1;
 	}
+	if (off > prp_totlen(prp)) {
+		errno = EINVAL;
+		return -1;
+	}
+	off += prp_soff(prp); /* make offset relative to parse header */
+
 	/* get the root region */
 	while (prp->region != NULL)
 		prp = prp->region;
-	/* find the lower and upper use boundaries */
-	ubounds(prp, &low, &high);
-	abort_unless(low >= 0 && high >= 0);
-	if (low >= high)	/* only happens on empty region */
-		return 0;
-	if ((off < low) || (off > high) ||
-	    (moveup && (len > (prp_eoff(prp) - high))) ||
-	    (!moveup && (len > (low - prp_soff(prp))))) {
-		errno = EINVAL;
-		return -1;
-	}
 
-	/* move the data */
-	if (prp->data != NULL) {
-		if (moveup) {
+	if (moveup) {
+		if (off > prp_toff(prp))
+			return 0;
+		if (len > prp_tlen(prp)) {
+			errno = EINVAL;
+			return -1;
+		}
+
+		if (prp->data != NULL) {
 			op = prp->data + off;
 			np = op + len;
-			mlen = prp_totlen(prp) - off;
-		} else {
-			op = prp->data + prp_soff(prp);
-			np = op - len;
-			mlen = off;
+			mlen = prp_toff(prp) - off;
+			memmove(np, op, mlen);
+			memset(op, 0x5A, len);
 		}
-		memmove(np, op, mlen);
-		memset(op, 0x5F, len);
-	}
 
-	/* adjust all the offsets that should change */
-	for (prp = prp_next(prp); !prp_list_end(prp); prp = prp_next(prp)) {
-		if (moveup) {
-			for (i = 0; i < prp->noff; ++i)
-				if ((prp->offs[i] != PRP_OFF_INVALID)
-				    && (prp->offs[i] >= off))
+		prp_toff(prp) += len;
+
+		for (prp = prp_next(prp); 
+		     !prp_list_end(prp); 
+		     prp = prp_next(prp)) {
+			for (i = 0; i < prp->noff; ++i) {
+				if ((prp->offs[i] != PRP_OFF_INVALID) &&
+				    (prp->offs[i] >= off))
 					prp->offs[i] += len;
-		} else {
-			for (i = 0; i < prp->noff; ++i)
-				if ((prp->offs[i] != PRP_OFF_INVALID)
-				    && (prp->offs[i] < off))
+			}
+		}
+	} else {
+		if (off <= prp_poff(prp))
+			return 0;
+		if (len > prp_hlen(prp)) {
+			errno = EINVAL;
+			return -1;
+		}
+
+		if (prp->data != NULL) {
+			op = prp->data + prp_poff(prp);
+			np = op - len;
+			mlen = off - prp_poff(prp);
+			memmove(np, op, mlen);
+			memset(op, 0x4B, len);
+		}
+
+		prp_poff(prp) -= len;
+		for (prp = prp_next(prp); 
+		     !prp_list_end(prp); 
+		     prp = prp_next(prp)) {
+			for (i = 0; i < prp->noff; ++i) {
+				if ((prp->offs[i] != PRP_OFF_INVALID) &&
+				    (prp->offs[i] < off))
 					prp->offs[i] -= len;
+			}
 		}
 	}
 
@@ -577,56 +604,77 @@ int prp_insert(struct prparse *prp, long off, long len, int moveup)
 }
 
 
-int prp_cut(struct prparse *prp, long off, long len, int moveup)
+int prp_cut(struct prparse *prp, ulong off, ulong len, int moveup)
 {
 	byte_t *op, *np;
-	long mlen;
+	ulong mlen;
 	uint i;
 
-	if (prp == NULL || off < 0 || len < 0) {
+	if (prp == NULL) {
 		errno = EINVAL;
 		return -1;
 	}
+	if (off > prp_totlen(prp)) {
+		errno = EINVAL;
+		return -1;
+	}
+	off += prp_soff(prp);	/* make offset relative to parse */
+
 	/* get the root region */
 	while (prp->region != NULL)
 		prp = prp->region;
-	if ((off < prp_soff(prp)) || (off > prp_eoff(prp)) ||
-	    (len < prp_eoff(prp) - off)) {
+
+	if ((off < prp_soff(prp)) || (off >= prp_eoff(prp)) ||
+	    (len > prp_eoff(prp) - off)) {
 		errno = EINVAL;
 		return -1;
 	}
 
-	if (prp->data != NULL) {
-		if (moveup) {
-			op = prp->data + prp_soff(prp);
-			np = op + len;
-			mlen = off - prp_soff(prp);
-		} else {
+	if (moveup) {
+		if (prp->data != NULL) {
+			op = prp->data + prp_poff(prp);
+			mlen = off - prp_poff(prp);
+			np = prp->data + off + len - mlen;
+			memmove(np, op, mlen);
+			memset(op, 0x3C, len);
+		}
+
+		prp_poff(prp) += len;
+		for (prp = prp_next(prp);
+		     !prp_list_end(prp); 
+		     prp = prp_next(prp)) {
+			for (i = 0; i < prp->noff; ++i) {
+				if ((prp->offs[i] != PRP_OFF_INVALID)
+				    && (prp->offs[i] < off + len)) {
+					if (prp->offs[i] < off)
+						prp->offs[i] += len;
+					else
+						prp->offs[i] = off + len;
+				}
+			}
+		}
+	} else {
+		if (prp->data != NULL) {
 			np = prp->data + off;
 			op = np + len;
-			mlen = (prp_eoff(prp) - off) - len;
+			mlen = prp_toff(prp) - off - len;
+			memmove(np, op, mlen);
+			memset(np + mlen, 0x2D, len);
 		}
-		memmove(np, op, mlen);
-		if (moveup)
-			memset(op, 0x6e, len);
-		else
-			memset(np + mlen, 0x6e, len);
-	}
 
-	/* adjust all the offsets that should change */
-	if (moveup)
-		off += len;
-	for (prp = prp_next(prp); !prp_list_end(prp); prp = prp_next(prp)) {
-		if (moveup) {
-			for (i = 0; i < prp->noff; ++i)
+		prp_toff(prp) -= len;
+		for (prp = prp_next(prp);
+		     !prp_list_end(prp); 
+		     prp = prp_next(prp)) {
+			for (i = 0; i < prp->noff; ++i) {
 				if ((prp->offs[i] != PRP_OFF_INVALID)
-				    && (prp->offs[i] < off))
-					prp->offs[i] += len;
-		} else {
-			for (i = 0; i < prp->noff; ++i)
-				if ((prp->offs[i] != PRP_OFF_INVALID)
-				    && (prp->offs[i] >= off))
-					prp->offs[i] -= len;
+				    && (prp->offs[i] >= off)) {
+					if (prp->offs[i] >= off + len)
+						prp->offs[i] -= len;
+					else
+						prp->offs[i] = off;
+				}
+			}
 		}
 	}
 
@@ -641,14 +689,14 @@ int prp_adj_off(struct prparse *prp, uint oid, long amt)
 	long newoff, blo, bhi;
 
 
-	if (!prp || (oid >= prp->noff) || (-amt == amt)) {
+	if (!prp || (oid >= prp->noff)) {
 		errno = EINVAL;
 		return -1;
 	}
 
 	reg = prp->region;
 
-	newoff = prp->offs[oid] + amt;
+	newoff = prp->offs[oid] + (ulong)amt;
 
 	switch (oid) {
 	case PRP_OI_SOFF:
@@ -736,9 +784,8 @@ int prp_adj_plen(struct prparse *prp, long amt)
 
 int prp_adj_unused(struct prparse *reg)
 {
-	long ustart, uend;
+	ulong ustart, uend;
 
-	/* malformed parse if the region isn't of type PRP_NONE */
 	if (!reg) {
 		errno = EINVAL;
 		return -1;

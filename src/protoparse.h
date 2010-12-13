@@ -82,8 +82,8 @@ struct prparse;
 struct proto_parser_ops {
 	struct prparse *	(*parse)(struct prparse * pprp, uint *nextppt);
 
-	struct prparse *	(*create)(byte_t * buf, long off, long len,
-					  long hlen, long plen, int mode);
+	struct prparse *	(*create)(byte_t * buf, ulong off, ulong len,
+					  ulong hlen, ulong plen, int mode);
 };
 
 struct proto_parser {
@@ -147,7 +147,7 @@ struct prparse_ops {
 #define PRP_OI_EOFF 3
 #define PRP_OI_MIN_NUM 4
 #define PRP_OI_EXTRA PRP_OI_MIN_NUM
-#define PRP_OFF_INVALID ((long)-1)
+#define PRP_OFF_INVALID ((ulong)-1)
 
 
 struct prparse {
@@ -158,7 +158,7 @@ struct prparse {
 	struct prparse *	region;
 	byte_t *		data;
 	uint			noff;
-	long			offs[PRP_OI_MIN_NUM];
+	ulong			offs[PRP_OI_MIN_NUM];
 };
 #define prp_soff(prp) ((prp)->offs[PRP_OI_SOFF])
 #define prp_poff(prp) ((prp)->offs[PRP_OI_POFF])
@@ -234,7 +234,7 @@ int prp_push(unsigned ppidx, struct prparse *prp, int mode);
 
 /* Initializes a fresh parse of PPT_NONE.  This can be used to create the */
 /* base for a full parse. */
-void prp_init_parse(struct prparse *base, byte_t *buf, long len);
+void prp_init_parse(struct prparse *base, byte_t *buf, ulong len);
 
 /* Given an initialized protocol parse header for a buffer (PPT_NONE) and */
 /* an initial protocol parse type, parse the packet and add to the list */
@@ -277,10 +277,10 @@ int prp_fix_len(struct prparse *prp);
 
 /* insert and delete data from the parse (and packet) */
 /* NOTE: when inserting on the boundary between a payload and header or */
-/* a payload and trailer, prp_splice() always favors inserting into the */
+/* a payload and trailer, prp_insert() always favors inserting into the */
 /* payload section.  You can use prp_adj_* to correct this later as needed. */
-int prp_insert(struct prparse *prp, long off, long len, int moveup);
-int prp_cut(struct prparse *prp, long off, long len, int moveup);
+int prp_insert(struct prparse *prp, ulong off, ulong len, int moveup);
+int prp_cut(struct prparse *prp, ulong off, ulong len, int moveup);
 
 /* expand or contract header/trailer within the encapsulating space */
 /* Note that the point adjustments can't overrun their adjacent boundaries. */
