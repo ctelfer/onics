@@ -277,7 +277,7 @@ static void ni_ldpf(struct netvm *vm)
 		return;
 
 	if (!prp) {
-		S_PUSH(vm, PRP_OFF_INVALID);
+		S_PUSH(vm, NETVM_PF_INVALID);
 		return;
 	}
 
@@ -310,7 +310,7 @@ static void ni_ldpf(struct netvm *vm)
 		if (off != PRP_OFF_INVALID)
 			vmoff = off + pd0.offset;
 		else
-			vmoff = PRP_OFF_INVALID;
+			vmoff = NETVM_PF_INVALID;
 		S_PUSH(vm, vmoff);
 	}
 }

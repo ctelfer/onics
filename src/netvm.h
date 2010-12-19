@@ -103,6 +103,7 @@ enum {
 };
 
 #define NETVM_ISPRPOFF(f)	((f) >= NETVM_PRP_OFF_BASE)
+#define NETVM_PF_INVALID	0xFFFFFFFF
 
 
 /* 
