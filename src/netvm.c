@@ -242,9 +242,9 @@ static void ni_pfe(struct netvm *vm)
 	struct netvm_inst *inst = &vm->inst[vm->pc];
 	struct netvm_prp_desc pd0;
 	struct prparse *prp;
-	uint64_t val;
+	uint64_t val = 0;
 
-	prp = netvm_find_header(vm, &pd0, inst->op == NETVM_OC_PFEI);
+	prp = netvm_find_header(vm, &pd0, inst->op == NETVM_OC_PFE);
 	if (vm->error) {
 		if (vm->error == NETVM_ERR_NOPKT) {
 			/* unlike other operations that use netvm_find_header, */
@@ -256,8 +256,15 @@ static void ni_pfe(struct netvm *vm)
 		return;
 	}
 
-	val = (pd0.field < prp->noff) &&
-	      (prp->offs[pd0.field] != PRP_OFF_INVALID);
+	if (prp) {
+		if (pd0.field < NETVM_PRP_OFF_BASE) {
+			val = 1;
+		} else {
+			uint field = pd0.field - NETVM_PRP_OFF_BASE;
+			val = (field < prp->noff) &&
+			      (prp->offs[field] != PRP_OFF_INVALID);
+		}
+	}
 
 	S_PUSH(vm, val);
 }
@@ -272,7 +279,7 @@ static void ni_ldpf(struct netvm *vm)
 	long off;
 	uint64_t vmoff;
 
-	prp = netvm_find_header(vm, &pd0, (inst->op == NETVM_OC_LDPFI));
+	prp = netvm_find_header(vm, &pd0, (inst->op == NETVM_OC_LDPF));
 	if (vm->error)
 		return;
 
@@ -352,7 +359,7 @@ void netvm_get_mem_ptr(struct netvm *vm, uint8_t seg, uint64_t addr, int iswr,
 	abort_unless(vm->memsz >= 8);
 	if (seg == NETVM_SEG_RWMEM) {
 		FATAL(vm, NETVM_ERR_MEMADDR, addr > vm->memsz);
-		FATAL(vm, NETVM_ERR_MEMADDR, vm->memsz - addr > len);
+		FATAL(vm, NETVM_ERR_MEMADDR, len > vm->memsz - addr);
 		*p = vm->mem + addr;
 	} else {
 		uint seglen;
@@ -411,7 +418,7 @@ static void ni_ld(struct netvm *vm)
 		netvm_get_mem_ptr(vm, inst->y, addr, 0, width & 0x7F, &p);
 	} else {
 		/* in a packet */
-		netvm_get_prp_ptr(vm, inst, (inst->op == NETVM_OC_LDI), width,
+		netvm_get_prp_ptr(vm, inst, (inst->op == NETVM_OC_LD), width,
 				  &p);
 	}
 
@@ -532,7 +539,7 @@ static void ni_mskcmp(struct netvm *vm)
 static void ni_unop(struct netvm *vm)
 {
 	struct netvm_inst *inst = &vm->inst[vm->pc];
-	uint64_t val, out;
+	uint64_t val;
 
 	S_POP(vm, val);
 
@@ -563,13 +570,13 @@ static void ni_unop(struct netvm *vm)
 		val = val | -(val & (1 << (inst->x * 8 - 1)));
 		}
 	default:
-		out = 0;
+		val = 0;
 		abort_unless(0);
 	}
 
 	/* All unary operations pop their operands from stack. */
 	/* So no need to check for stack bounds. */
-	S_PUSH_NOCK(vm, out);
+	S_PUSH_NOCK(vm, val);
 }
 
 
@@ -887,7 +894,7 @@ static void ni_st(struct netvm *vm)
 		}
 		netvm_get_mem_ptr(vm, inst->y, addr, 1, width & 0x7F, &p);
 	} else {
-		netvm_get_prp_ptr(vm, inst, (inst->op == NETVM_OC_STI), width,
+		netvm_get_prp_ptr(vm, inst, (inst->op == NETVM_OC_ST), width,
 				  &p);
 	}
 
@@ -1071,7 +1078,7 @@ static void ni_pkpup(struct netvm *vm)
 	struct netvm_prp_desc pd0;
 	struct prparse *prp;
 
-	prp = netvm_find_header(vm, &pd0, (inst->op == NETVM_OC_PKPUPI));
+	prp = netvm_find_header(vm, &pd0, (inst->op == NETVM_OC_PKPUP));
 	if (vm->error)
 		return;
 	FATAL(vm, NETVM_ERR_NOPRP, prp == NULL);
@@ -1086,7 +1093,7 @@ static void ni_pkfxl(struct netvm *vm)
 	struct pktbuf *pkb;
 	struct prparse *prp;
 
-	prp = netvm_find_header(vm, &pd0, (inst->op == NETVM_OC_PKFXLI));
+	prp = netvm_find_header(vm, &pd0, (inst->op == NETVM_OC_PKFXL));
 	if (vm->error)
 		return;
 
@@ -1119,7 +1126,7 @@ static void ni_pkfxc(struct netvm *vm)
 	struct pktbuf *pkb;
 	struct prparse *prp;
 
-	prp = netvm_find_header(vm, &pd0, (inst->op == NETVM_OC_PKFXCI));
+	prp = netvm_find_header(vm, &pd0, (inst->op == NETVM_OC_PKFXC));
 	if (vm->error)
 		return;
 

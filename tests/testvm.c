@@ -35,12 +35,12 @@ struct meminit {
 
 
 struct netvm_inst vm_prog_istcp[] = {
-	NETVM_PDIOP(PFE, 0, 0, PPT_TCP, 0, NETVM_PRP_SOFF, 0),
+	NETVM_PDIOP(PFEI, 0, 0, PPT_TCP, 0, NETVM_PRP_SOFF, 0),
 };
 
 
 struct netvm_inst vm_prog_tcperr[] = {
-	/*0 */ NETVM_PDIOP(PFE, 0, 0, PPT_TCP, 0, NETVM_PRP_SOFF, 0),
+	/*0 */ NETVM_PDIOP(PFEI, 0, 0, PPT_TCP, 0, NETVM_PRP_SOFF, 0),
 	/*1 */ NETVM_OP(DUP, 0, 0, 0, 0),
 	/*2 */ NETVM_BRIFNOT_F(3),
 	/*3 */ NETVM_PDIOP(LDPFI, 0, 0, PPT_TCP, 0, NETVM_PRP_ERR, 0),
@@ -49,7 +49,7 @@ struct netvm_inst vm_prog_tcperr[] = {
 
 
 struct netvm_inst vm_prog_isudp[] = {
-	NETVM_PDIOP(PFE, 0, 0, PPT_UDP, 0, NETVM_PRP_SOFF, 0),
+	NETVM_PDIOP(PFEI, 0, 0, PPT_UDP, 0, NETVM_PRP_SOFF, 0),
 };
 
 struct netvm_inst vm_prog_fixcksum[] = {
@@ -80,7 +80,7 @@ struct netvm_inst vm_prog_count10[] = {
 	/* top of loop */
 	/*6 */ NETVM_OP(LDI, 4, NETVM_SEG_RWMEM, 0, 0),
 	/*7 */ NETVM_OP(DUP, 0, 0, 0, 0),
-	/*8 */ NETVM_OP(GE, 0, 0, 0, 0),
+	/*8 */ NETVM_OP(GEI, 0, 0, 0, 10),
 	/*9 */ NETVM_BRIF_F(7), /* out of loop */
 	/*10*/ NETVM_OP(PUSH, 0, 0, 0, 64), 
 	/*11*/ NETVM_OP(PUSH, 0, 0, 0, 1), 

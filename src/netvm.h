@@ -283,7 +283,6 @@ enum {
 	NETVM_OC_ANDI,		/* [v] bitwise v and w */
 	NETVM_OC_OR,		/* [v1,v2] bitwise v1 or v2 */
 	NETVM_OC_ORI,		/* [v] bitwise v1 or w */
-	NETVM_OC_ORHI,		/* [v] bitwise v1 or w << 32 */
 	NETVM_OC_XOR,		/* [v1,v2] bitwise v1 exclusive or v2 */
 	NETVM_OC_XORI,		/* [v] bitwise v1 exclusive or w */
 	NETVM_OC_EQ,		/* [v1,v2] v1 equals v2 */
