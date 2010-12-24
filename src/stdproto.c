@@ -210,8 +210,8 @@ static struct prparse *eth_parse(struct prparse *pprp, uint * nextppt)
 }
 
 
-static struct prparse *eth_create(byte_t * start, long off, long len,
-				  long hlen, long plen, int mode)
+static struct prparse *eth_create(byte_t * start, ulong off, ulong len,
+				  ulong hlen, ulong plen, int mode)
 {
 	struct prparse *prp;
 
@@ -311,8 +311,8 @@ static int arp_fixlen(struct prparse *prp)
 }
 
 
-static struct prparse *arp_create(byte_t * start, long off, long len,
-				  long hlen, long plen, int mode)
+static struct prparse *arp_create(byte_t * start, ulong off, ulong len,
+				  ulong hlen, ulong plen, int mode)
 {
 	struct prparse *prp;
 	struct arph *arp;
@@ -395,8 +395,8 @@ static struct prparse *ipv4_parse(struct prparse *pprp, uint * nextppt)
 }
 
 
-static struct prparse *ipv4_create(byte_t * start, long off, long len,
-				   long hlen, long plen, int mode)
+static struct prparse *ipv4_create(byte_t * start, ulong off, ulong len,
+				   ulong hlen, ulong plen, int mode)
 {
 	struct prparse *prp;
 	struct ipv4h *ip;
@@ -562,8 +562,8 @@ static struct prparse *udp_parse(struct prparse *pprp, uint * nextppt)
 }
 
 
-static struct prparse *udp_create(byte_t * start, long off, long len,
-				  long hlen, long plen, int mode)
+static struct prparse *udp_create(byte_t * start, ulong off, ulong len,
+				  ulong hlen, ulong plen, int mode)
 {
 	struct prparse *prp;
 	struct udph *udp;
@@ -683,8 +683,8 @@ static struct prparse *tcp_parse(struct prparse *pprp, uint * nextppt)
 }
 
 
-static struct prparse *tcp_create(byte_t * start, long off, long len,
-				  long hlen, long plen, int mode)
+static struct prparse *tcp_create(byte_t * start, ulong off, ulong len,
+				  ulong hlen, ulong plen, int mode)
 {
 	struct prparse *prp;
 	struct tcph *tcp;
@@ -823,8 +823,8 @@ done:
 }
 
 
-static struct prparse *icmp_create(byte_t * start, long off, long len,
-				   long hlen, long plen, int mode)
+static struct prparse *icmp_create(byte_t * start, ulong off, ulong len,
+				   ulong hlen, ulong plen, int mode)
 {
 	struct prparse *prp;
 	struct icmph *icmp;
@@ -1028,8 +1028,8 @@ static struct prparse *ipv6_parse(struct prparse *pprp, uint * nextppt)
 }
 
 
-static struct prparse *ipv6_create(byte_t * start, long off, long len,
-				   long hlen, long plen, int mode)
+static struct prparse *ipv6_create(byte_t * start, ulong off, ulong len,
+				   ulong hlen, ulong plen, int mode)
 {
 	struct prparse *prp;
 
@@ -1146,8 +1146,8 @@ static struct prparse *icmp6_parse(struct prparse *pprp, uint * nextppt)
 }
 
 
-static struct prparse *icmp6_create(byte_t * start, long off, long len,
-				    long hlen, long plen, int mode)
+static struct prparse *icmp6_create(byte_t * start, ulong off, ulong len,
+				    ulong hlen, ulong plen, int mode)
 {
 	struct prparse *prp;
 	struct icmp6h *icmp6;
