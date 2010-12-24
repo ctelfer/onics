@@ -99,16 +99,31 @@ void netvm_get_prp_ptr(struct netvm *vm, struct netvm_inst *inst, int onstack,
 	uint oidx;
 	uint64_t off;
 
-	prp = netvm_find_header(vm, &pd0, onstack);
-	if (vm->error)
-		return;
-	FATAL(vm, NETVM_ERR_NOPRP, prp == NULL);
-	FATAL(vm, NETVM_ERR_PRPFLD, !NETVM_ISPRPOFF(pd0.field));
+	if (onstack && inst->z != 0) {
+		int pktnum;
+		struct pktbuf *pkb;
 
-	oidx = pd0.field - NETVM_PRP_OFF_BASE;
-	if ((pd0.field < NETVM_PRP_OFF_BASE) || (oidx >= prp->noff))
-		VMERR(vm, NETVM_ERR_PRPFLD);
-	FATAL(vm, NETVM_ERR_PKTADDR, prp->offs[oidx] < 0);
+		/* pd0.pktnum = inst->y & ~NETVM_SEG_ISPKT; */
+		/* pd0.idx = 0; pd0.ptype = PPT_NONE; */
+		/* pd0.field = NETVM_PRP_SOFF; */
+		S_POP(vm, pd0.offset);
+
+		pktnum = inst->y & ~NETVM_SEG_ISPKT;
+		FATAL(vm, NETVM_ERR_PKTNUM, (pktnum >= NETVM_MAXPKTS));
+		FATAL(vm, NETVM_ERR_NOPKT, !(pkb = vm->packets[pktnum]));
+		prp = &pkb->prp;
+		oidx = PRP_OI_SOFF;
+	} else {
+		prp = netvm_find_header(vm, &pd0, onstack);
+		if (vm->error)
+			return;
+		FATAL(vm, NETVM_ERR_NOPRP, prp == NULL);
+		FATAL(vm, NETVM_ERR_PRPFLD, !NETVM_ISPRPOFF(pd0.field));
+		oidx = pd0.field - NETVM_PRP_OFF_BASE;
+		if ((pd0.field < NETVM_PRP_OFF_BASE) || (oidx >= prp->noff))
+			VMERR(vm, NETVM_ERR_PRPFLD);
+		FATAL(vm, NETVM_ERR_PKTADDR, (prp->offs[oidx] == PRP_OFF_INVALID));
+	}
 
 	FATAL(vm, NETVM_ERR_IOVFL, (pd0.offset + width < pd0.offset));
 	off = prp->offs[oidx] + pd0.offset;
@@ -478,7 +493,7 @@ static void ni_pcmp(struct netvm *vm)
 	val = 0;
 	while (len > 8) {
 		if (*p1 != *p2) {
-			val = (*p1 < *p2) ? (0 - (uint32_t) 1) : 1;
+			val = (*p1 < *p2) ? (0 - (uint64_t) 1) : 1;
 			S_PUSH(vm, val);
 			break;
 		}
@@ -490,7 +505,7 @@ static void ni_pcmp(struct netvm *vm)
 		byte_t b1 = *p1 & -(1 << (8 - len));
 		byte_t b2 = *p2 & -(1 << (8 - len));
 		if (b1 != b2)
-			val = (b1 < b2) ? (0 - (uint32_t) 1) : 1;
+			val = (b1 < b2) ? (0 - (uint64_t) 1) : 1;
 	}
 
 	/* We've already popped 3 values from the stack */
@@ -583,7 +598,7 @@ static void ni_unop(struct netvm *vm)
 
 static void binop(struct netvm *vm, int op, uint64_t v1, uint64_t v2)
 {
-	uint32_t out;
+	uint64_t out;
 	int amt;
 
 	switch (op) {
@@ -1428,7 +1443,7 @@ int netvm_validate(struct netvm *vm)
 
 
 /* set the read-only segment offset for the VM */
-int netvm_setrooff(struct netvm *vm, uint32_t rooff)
+int netvm_setrooff(struct netvm *vm, uint rooff)
 {
 	abort_unless(vm);
 	if (rooff > vm->memsz)
@@ -1439,7 +1454,7 @@ int netvm_setrooff(struct netvm *vm, uint32_t rooff)
 
 
 /* set up netvm code */
-int netvm_setcode(struct netvm *vm, struct netvm_inst *inst, uint32_t ni)
+int netvm_setcode(struct netvm *vm, struct netvm_inst *inst, uint ni)
 {
 	abort_unless(vm && inst);
 	vm->inst = inst;
@@ -1566,14 +1581,18 @@ int netvm_run(struct netvm *vm, int maxcycles, uint64_t *rv)
 	vm->error = 0;
 	vm->running = 1;
 
-	if (vm->pc > vm->ninst)
-		vm->error = 1;
-	else if (vm->pc == vm->ninst + 1)
+	if (vm->pc > vm->ninst) {
+		vm->error = NETVM_ERR_INSTADDR;
+		return -1;
+	} else if (vm->pc == vm->ninst + 1) {
 		vm->running = 0;
+	}
 
-	while (vm->running && !vm->error && (maxcycles != 0)) {
+	while (vm->running && (maxcycles != 0)) {
 		inst = &vm->inst[vm->pc];
 		(*g_netvm_ops[inst->op])(vm);
+		if (vm->error)
+			break;
 		++vm->pc;
 		if (vm->pc >= vm->ninst) {
 			vm->running = 0;
@@ -1598,7 +1617,7 @@ int netvm_run(struct netvm *vm, int maxcycles, uint64_t *rv)
 }
 
 
-static const char *val_error_strings[] = {
+static const char *val_error_strings[-(NETVM_ERR_MIN) + 1] = {
 	"ok",
 	"VM not properly initialized",
 	"Invalid opcode",
@@ -1606,11 +1625,12 @@ static const char *val_error_strings[] = {
 	"Invalid branch/jump in matchonly mode",
 	"Invalid layer index",
 	"Invalid width field",
-	"Coprocessor instruction invalid"
+	"Coprocessor instruction invalid",
+	"Coprocessor-specific validation error",
 };
 
 
-static const char *rt_error_strings[] = {
+static const char *rt_error_strings[NETVM_ERR_MAX+1] = {
 	"ok",
 	"unimplemented instruction",
 	"stack overflow",

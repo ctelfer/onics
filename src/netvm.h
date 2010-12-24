@@ -69,6 +69,12 @@ struct netvm_inst {
    (((uint64_t)(fld) & NETVM_PD_FLD_MASK) << NETVM_PD_FLD_OFF)|\
    (((uint64_t)(off) & NETVM_PD_OFF_MASK) << NETVM_PD_OFF_OFF))
 
+#define NETVM_PDESC_HI(pkt, ppt, idx, fld) \
+  ((((uint32_t)(pkt) & NETVM_PD_PKT_MASK) << (NETVM_PD_PKT_OFF - 32))|\
+   (((uint32_t)(ppt) & NETVM_PD_PPT_MASK) << (NETVM_PD_PPT_OFF - 32))|\
+   (((uint32_t)(idx) & NETVM_PD_IDX_MASK) << (NETVM_PD_IDX_OFF - 32))|\
+   (((uint32_t)(fld) & NETVM_PD_FLD_MASK) << (NETVM_PD_FLD_OFF - 32)))
+
 struct netvm_prp_desc {
 	uint8_t			pktnum;	/* which packet entry */
 	uint8_t			idx;	/* 0 == 1st prp, 1 == 2nd prp,... */
@@ -232,11 +238,18 @@ enum {
 	 * For these 2 load operations, x must be in [1,8] or [129,136]
 	 * If x is in [129,136], the result will be sign extended to 64 bits 
 	 * for a value of x-128 bytes.  The 'y' field refers either to a
-	 * memory segment.  If the NETVM_SEG_ISPKT bit is set, the 'y'
-	 * refers to a packet index.  The instruction (LDI) or stack value (LD)
-	 * will be interpreted as a packet descriptor.  Otherwise, 'y'
-	 * refers to a memory segment.  This same convention is used for the
-	 * ST and STI operations below.  Regardless of x or y values, LD/ST
+	 * memory segment.  If the NETVM_SEG_ISPKT bit is set, then the load
+	 * comes from a packet:
+	 *  - if the instruction is LDI, then the instruction encodes a
+	 *    packet descriptor.
+	 *  - if the instruction is LD and 'z' == 0 the next stack value
+	 *    encodes a packet descriptor (including the packet number).
+	 *  - if the instruction is LD and 'z' != 0, then 'y' encodes the
+	 *    packet number and the stack value is a raw packet address.
+	 * Otherwise, 'y' refers to a memory segment and the stack value
+	 * (LD) or 'w' (LDI) encodes an offset from the base of the memory
+	 * segment.  This same convention is used for the ST and STI 
+	 * operations below.  Regardless of x or y values, LD/ST
 	 * always pop one stack value and push one stack value, while 
 	 * LDI/STI always push one stack value.
 	 */
@@ -435,7 +448,8 @@ enum {
 	NETVM_ERR_BADLAYER = -5,
 	NETVM_ERR_BADWIDTH = -6,
 	NETVM_ERR_BADCP = -7,
-	NETVM_ERR_MIN = NETVM_ERR_BADCP,
+	NETVM_ERR_CPERR = -8,
+	NETVM_ERR_MIN = NETVM_ERR_CPERR,
 
 	/* runtime errors */
 	NETVM_ERR_UNIMPL = 1,

@@ -541,7 +541,7 @@ int nvmmrt_execute(struct netvm_mrt *mrt)
 	struct pktbuf *pkb;
 	struct netvm_matchedprog *mprog;
 	int i, rv, send;
-	uint32_t rc;
+	uint64_t rc;
 	struct clist_node *cln;
 
 	abort_unless(mrt);

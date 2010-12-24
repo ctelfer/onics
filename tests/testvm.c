@@ -271,11 +271,11 @@ struct netvm_inst vm_prog_hexdump[] = {
 	/* 2 */ NETVM_OP(ADDI, 0, 0, 0, 1),
 	/* 3 */ NETVM_OP(DUP, 0, 0, 0, 0),
 	/* 4 */ NETVM_OP(STI, 8, NETVM_SEG_RWMEM, 0, HD_PKNADDR),
-	/* 5 */ NETVM_OP(CPOPI, NETVM_CPI_OUTPORT, NETVM_CPOC_PRDEC, 0, 0),
+	/* 5 */ NETVM_OP(CPOPI, NETVM_CPI_OUTPORT, NETVM_CPOC_PRDEC, 8, 0),
 	/* 6 */ NETVM_OP(CPOPI, NETVM_CPI_OUTPORT, NETVM_CPOC_PRSTRI, 
 			 HDS2_SIZE, HDS2_OFFSET),
 	/* 7 */ NETVM_PDIOP(LDPFI, 0, 0, PPT_NONE, 0, NETVM_PRP_PLEN, 0),
-	/* 8 */ NETVM_OP(CPOPI, NETVM_CPI_OUTPORT, NETVM_CPOC_PRDEC, 0, 0),
+	/* 8 */ NETVM_OP(CPOPI, NETVM_CPI_OUTPORT, NETVM_CPOC_PRDEC, 8, 0),
 	/* 9 */ NETVM_OP(CPOPI, NETVM_CPI_OUTPORT, NETVM_CPOC_PRSTRI, 
 			 HDS3_SIZE, HDS3_OFFSET),
 	/*10 */ NETVM_OP(PUSH, 0, 0, 0, 0),
@@ -293,10 +293,11 @@ struct netvm_inst vm_prog_hexdump[] = {
 	/*19 */ NETVM_OP(CPOPI, NETVM_CPI_OUTPORT, NETVM_CPOC_PRSTRI, 
 			 HDS5_SIZE, HDS5_OFFSET),
 	/*20 */ NETVM_OP(LDI, 8, NETVM_SEG_RWMEM, 0, HD_IDX),
-	/*21 */ NETVM_PDIOP(LDPFI, 0, 0, PPT_NONE, 0, NETVM_PRP_POFF, 0),
-	/*22 */ NETVM_OP(ADD, 0, 0, 0, 0),
-	/*23 */ NETVM_OP(LD, 1, NETVM_SEG_ISPKT|0, 0, 0),
-	/*24 */ NETVM_OP(CPOPI, NETVM_CPI_OUTPORT, NETVM_CPOC_PRHEX, 0, 1),
+	/*21 */ NETVM_OP(PUSHHI, 0, 0, 0,
+			 NETVM_PDESC_HI(0, PPT_NONE, 0, NETVM_PRP_POFF)),
+	/*22 */ NETVM_OP(OR, 0, 0, 0, 0),
+	/*23 */ NETVM_OP(LD, 1, NETVM_SEG_ISPKT, 0, 0),
+	/*24 */ NETVM_OP(CPOPI, NETVM_CPI_OUTPORT, NETVM_CPOC_PRHEX, 1, 2),
 
 	/*25 */ NETVM_OP(LDI, 8, NETVM_SEG_RWMEM, 0, HD_IDX),
 	/*26 */ NETVM_OP(ADDI, 0, 0, 0, 1),
@@ -329,8 +330,8 @@ struct netvm_inst vm_prog_maskeq[] = {
 	/* 1 */ NETVM_OP(EQI, 0, 0, 0, NETVM_PF_INVALID),
 	/* 2 */ NETVM_BRIF_F(6), 
 
-	/* Compare 1st _SIZE bytes of pkt 0's net work header*/ 
-	/* 3 */ NETVM_OP(PUSH, 0, 0, 0, 0),
+	/* Compare 1st _SIZE bytes of pkt 0's network header */ 
+	/* 3 */ NETVM_PDIOP(LDPFI, 0, 0, PPT_PCLASS_NET, 0, NETVM_PRP_SOFF, 0),
 	/* 4 */ NETVM_OP(PUSH, 0, 0, 0, MEQ_VAL_ROFF), 
 	/* 5 */ NETVM_OP(PUSH, 0, 0, 0, MEQ_MASK_ROFF), 
 	/* 6 */ NETVM_OP(PUSH, 0, 0, 0, MEQ_MASK_SIZE), 
@@ -431,14 +432,14 @@ void init_memory(struct netvm *vm, struct meminit *mi, size_t nmi)
 }
 
 
-void print_vmret(int vmrv, uint64_t rc)
+void print_vmret(int vmrv, int ec, uint pc, uint64_t rc)
 {
 	if (vmrv == 0) {
 		fprintf(stderr, "VM provided no return value\n");
 	} else if (vmrv == 1) {
-		fprintf(stderr, "VM returned value %x\n", (unsigned)rc);
+		fprintf(stderr, "VM returned value %x\n", (uint)rc);
 	} else if (vmrv == -1) {
-		fprintf(stderr, "VM returned error\n");
+		fprintf(stderr, "VM returned error @%u: %s\n", pc, netvm_estr(ec));
 	} else if (vmrv == -2) {
 		fprintf(stderr, "VM out of cycles\n");
 	} else {
@@ -453,7 +454,7 @@ void run_without_packets(struct netvm *vm, struct meminit *mi, size_t nmi)
 	uint64_t rc;
 	init_memory(vm, mi, nmi);
 	vmrv = netvm_run(vm, -1, &rc);
-	print_vmret(vmrv, rc);
+	print_vmret(vmrv, vm->error, vm->pc, rc);
 }
 
 
@@ -496,7 +497,7 @@ void run_with_packets(struct netvm *vm, int filter, struct meminit *mi,
 		if ((vmrv == 1) && rc)
 			++npass;
 		fprintf(stderr, "Packet %5u: ", npkt);
-		print_vmret(vmrv, rc);
+		print_vmret(vmrv, vm->error, vm->pc, rc);
 
 		if (filter && vmrv >= 0)
 			send_clr_packets(vm, npkt);

@@ -255,10 +255,10 @@ static int outport_validate(struct netvm_inst *inst, struct netvm *vm)
 {
 	if ((inst->y == NETVM_CPOC_PRBIN) || (inst->y == NETVM_CPOC_PROCT) || 
 	    (inst->y == NETVM_CPOC_PRDEC) || (inst->y == NETVM_CPOC_PRHEX)) {
-		if (inst->z != 1 && inst->z != 2 && inst->z != 4)
-			return -1;
+		if (!netvm_valid_width(inst->z))
+			return NETVM_ERR_BADWIDTH;
 		if (inst->w > 64)
-			return -1;
+			return NETVM_ERR_CPERR;
 	}
 	return 0;
 }
@@ -319,7 +319,7 @@ static void nci_prnum(struct netvm *vm, struct netvm_coproc *ncp, int cpi)
 
 	/* mask out all irrelevant bits */
 	if (nb < 8)
-		val &= ~((1 << (nb * 8)) - 1);
+		val &= (1 << (nb * 8)) - 1;
 
 	/* sign extend the result if we are printing a signed decimal */
 	if ((width & 0x80) && (inst->y == NETVM_CPOC_PRDEC))
