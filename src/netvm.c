@@ -766,9 +766,7 @@ static void ni_jmpi(struct netvm *vm)
 
 static void ni_halt(struct netvm *vm)
 {
-	struct netvm_inst *inst = &vm->inst[vm->pc];
 	vm->running = 0;
-	vm->error = inst->w;
 }
 
 
@@ -800,7 +798,7 @@ static void ni_br(struct netvm *vm)
 
 	abort_unless(!vm->matchonly);
 	S_POP(vm, off);
-	FATAL(vm, NETVM_ERR_INSTADDR, (uint64_t)(vm->pc + off + 1) > vm->ninst);
+	FATAL(vm, NETVM_ERR_INSTADDR, (uint64_t)(vm->pc + off) >= vm->ninst);
 	if (inst->op != NETVM_OC_BR) {
 		uint64_t cond;
 		S_POP(vm, cond);
@@ -825,7 +823,7 @@ static void ni_jmp(struct netvm *vm)
 {
 	uint64_t addr;
 	S_POP(vm, addr);
-	FATAL(vm, NETVM_ERR_INSTADDR, addr + 1 > vm->ninst);
+	FATAL(vm, NETVM_ERR_INSTADDR, addr >= vm->ninst);
 	vm->pc = addr;
 }
 
@@ -837,7 +835,7 @@ static void ni_call(struct netvm *vm)
 
 	narg = inst->w;
 	S_POP(vm, addr);
-	FATAL(vm, NETVM_ERR_INSTADDR, addr + 1 > vm->ninst);
+	FATAL(vm, NETVM_ERR_INSTADDR, addr >= vm->ninst);
 	FATAL(vm, NETVM_ERR_STKUNDF, !S_HAS(vm, narg));
 	FATAL(vm, NETVM_ERR_STKOVFL, S_AVAIL(vm) < 2);
 	sslot = vm->sp - narg;
@@ -862,7 +860,7 @@ static void ni_ret(struct netvm *vm)
 	sslot = vm->bp - 2;
 	addr = vm->stack[sslot];
 	bp = vm->stack[sslot + 1];
-	FATAL(vm, NETVM_ERR_INSTADDR, addr + 1 > vm->ninst);
+	FATAL(vm, NETVM_ERR_INSTADDR, addr >= vm->ninst);
 	FATAL(vm, NETVM_ERR_STKOVFL, bp > vm->bp - 2);
 	memmove(vm->stack + sslot, vm->stack + vm->sp - narg,
 		narg * sizeof(vm->stack[0]));
@@ -1581,26 +1579,29 @@ int netvm_run(struct netvm *vm, int maxcycles, uint64_t *rv)
 	vm->error = 0;
 	vm->running = 1;
 
-	if (vm->pc > vm->ninst) {
-		vm->error = NETVM_ERR_INSTADDR;
-		return -1;
-	} else if (vm->pc == vm->ninst + 1) {
-		vm->running = 0;
+	if (vm->pc >= vm->ninst) {
+		if (vm->pc == vm->ninst) { 
+			vm->running = 0;
+		} else {
+			vm->error = NETVM_ERR_INSTADDR;
+			return -1;
+		}
 	}
 
-	while (vm->running && (maxcycles != 0)) {
+	while (vm->running) {
 		inst = &vm->inst[vm->pc];
 		(*g_netvm_ops[inst->op])(vm);
-		if (vm->error)
-			break;
-		++vm->pc;
-		if (vm->pc >= vm->ninst) {
+		if (vm->error == 0) {
+			vm->pc++;
+			if (maxcycles > 0) {
+				if (--maxcycles == 0)
+					vm->running = 0;
+			} else if (vm->pc >= vm->ninst) {
+				vm->running = 0;
+			} 
+		} else {
 			vm->running = 0;
-			if (vm->pc != vm->ninst)
-				vm->error = NETVM_ERR_INSTADDR;
 		}
-		if (maxcycles > 0)
-			--maxcycles;
 	}
 
 	if (maxcycles == 0) {

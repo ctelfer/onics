@@ -327,7 +327,7 @@ enum {
 	NETVM_OC_BNZI,		/* [c] PC += v if c is non-zero (ditto) */
 	NETVM_OC_BZI,		/* [c] PC += v if c is zero (ditto) */
 	NETVM_OC_JMPI,		/* branch to absolute address w */
-	NETVM_OC_HALT,		/* halt program, store 'w' in ret code */
+	NETVM_OC_HALT,		/* halt program */
 	NETVM_OC_MAX_MATCH = NETVM_OC_HALT,
 
 	/* 
