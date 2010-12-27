@@ -319,7 +319,7 @@ static void nci_prnum(struct netvm *vm, struct netvm_coproc *ncp, int cpi)
 
 	/* mask out all irrelevant bits */
 	if (nb < 8)
-		val &= (1 << (nb * 8)) - 1;
+		val &= ((uint64_t)1 << (nb * 8)) - 1;
 
 	/* sign extend the result if we are printing a signed decimal */
 	if ((width & 0x80) && (inst->y == NETVM_CPOC_PRDEC))
