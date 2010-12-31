@@ -59,7 +59,7 @@ struct netvm_inst vm_prog_fixcksum[] = {
 struct netvm_inst vm_prog_toggledf[] = {
 	/*0 */ NETVM_PDIOP(LDPFI, 0, 0, PPT_PCLASS_NET, 0, NETVM_PRP_TYPE, 0),
 	/*1 */ NETVM_OP(NEQI, 0, 0, 0, PPT_IPV4),
-	/*2 */ NETVM_BRIF_F(4), /* end of the program */
+	/*2 */ NETVM_BRIF_F(5), /* end of the program */
 	/* 2 bytes starting 6 bytes from start of first IP hdr of packet 0 */
 	/*3 */ NETVM_PDIOP(LDI, 2, 0, PPT_IPV4, 0, NETVM_PRP_SOFF, 6),
 	/* toggle the DF bit */
@@ -90,7 +90,7 @@ struct netvm_inst vm_prog_count10[] = {
 	/*15*/ NETVM_BR_B(9),
 
 	/* out of loop */
-	/*16*/ NETVM_OP(POP, 0, 0, 0, 0), 
+	/*16*/ NETVM_OP(POP, 0, 0, 0, 1), 
 	/*17*/ NETVM_OP(PUSH, 0, 0, 0, 72), 
 	/*18*/ NETVM_OP(PUSH, 0, 0, 0, 1), 
 	/*19*/ NETVM_OP(CPOPI, NETVM_CPI_OUTPORT, NETVM_CPOC_PRSTR, 0, 0), 
@@ -154,7 +154,7 @@ struct netvm_inst vm_prog_fib[] = {
 	/*10 */ NETVM_OP(LDBPI, 0, 0, 0, 0),
 	/*11 */ NETVM_OP(GTI, 0, 0, 0, 2),
 	/*12 */ NETVM_BRIF_F(4),
-	/*13 */ NETVM_OP(POP, 0, 0, 0, 0),
+	/*13 */ NETVM_OP(POP, 0, 0, 0, 1),
 	/*14 */ NETVM_OP(PUSH, 0, 0, 0, 1),
 	/*15 */ NETVM_OP(RET, 0, 0, 0, 1),
 	/*16 */ NETVM_OP(LDBPI, 0, 0, 0, 0),

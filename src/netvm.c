@@ -142,23 +142,19 @@ static void ni_unimplemented(struct netvm *vm)
 }
 
 
-static void ni_nop(struct netvm *vm)
-{
-	(void)ni_unimplemented;
-}
-
-
 static void ni_pop(struct netvm *vm)
 {
-	uint64_t v;
-	S_POP(vm, v);
+	(void)ni_unimplemented;
+	struct netvm_inst *inst = &vm->inst[vm->pc];
+	FATAL(vm, NETVM_ERR_STKUNDF, !S_HAS(vm, inst->w));
+	vm->sp -= inst->w;
 }
 
 
-static void ni_popbp(struct netvm *vm)
+static void ni_popto(struct netvm *vm)
 {
 	struct netvm_inst *inst = &vm->inst[vm->pc];
-	FATAL(vm, NETVM_ERR_STKOVFL, !S_HAS(vm, inst->w));
+	FATAL(vm, NETVM_ERR_STKUNDF, !S_HAS(vm, inst->w));
 	vm->sp = vm->bp + inst->w;
 }
 
@@ -740,7 +736,7 @@ static void ni_bri(struct netvm *vm)
 	off = sign_extend(off, 32);
 
 	/* should be verified before start */
-	abort_unless(vm->pc + off + 1 <= vm->ninst);
+	abort_unless(vm->pc + off <= vm->ninst);
 
 	if (inst->op != NETVM_OC_BRI) {
 		uint64_t cond;
@@ -750,8 +746,7 @@ static void ni_bri(struct netvm *vm)
 		if (!cond)
 			return;
 	}
-	/* ok to overflow number of instructions by 1: implied halt instruction */
-	vm->pc += off;
+	vm->nxtpc = vm->pc + off;
 }
 
 
@@ -759,8 +754,8 @@ static void ni_jmpi(struct netvm *vm)
 {
 	struct netvm_inst *inst = &vm->inst[vm->pc];
 	/* Should be checked at validation time */
-	abort_unless(inst->w + 1 <= vm->ninst);
-	vm->pc = inst->w;
+	abort_unless(inst->w <= vm->ninst);
+	vm->nxtpc = inst->w;
 }
 
 
@@ -798,7 +793,8 @@ static void ni_br(struct netvm *vm)
 
 	abort_unless(!vm->matchonly);
 	S_POP(vm, off);
-	FATAL(vm, NETVM_ERR_INSTADDR, (uint64_t)(vm->pc + off) >= vm->ninst);
+	/* ok to overflow number of instructions by 1: implied halt */
+	FATAL(vm, NETVM_ERR_INSTADDR, (uint64_t)vm->pc + off > vm->ninst);
 	if (inst->op != NETVM_OC_BR) {
 		uint64_t cond;
 		S_POP(vm, cond);
@@ -807,15 +803,14 @@ static void ni_br(struct netvm *vm)
 		if (!cond)
 			return;
 	}
-	/* ok to overflow number of instructions by 1: implied halt instruction */
-	vm->pc += off;
+	vm->nxtpc = vm->pc + off;
 }
 
 
 static void ni_pushpc(struct netvm *vm)
 {
 	struct netvm_inst *inst = &vm->inst[vm->pc];
-	S_PUSH(vm, (uint64_t)vm->pc + inst->w - 1);
+	S_PUSH(vm, (uint64_t)vm->pc + inst->w);
 }
 
 
@@ -823,8 +818,8 @@ static void ni_jmp(struct netvm *vm)
 {
 	uint64_t addr;
 	S_POP(vm, addr);
-	FATAL(vm, NETVM_ERR_INSTADDR, addr >= vm->ninst);
-	vm->pc = addr;
+	FATAL(vm, NETVM_ERR_INSTADDR, addr > vm->ninst);
+	vm->nxtpc = addr;
 }
 
 
@@ -835,17 +830,17 @@ static void ni_call(struct netvm *vm)
 
 	narg = inst->w;
 	S_POP(vm, addr);
-	FATAL(vm, NETVM_ERR_INSTADDR, addr >= vm->ninst);
+	FATAL(vm, NETVM_ERR_INSTADDR, addr > vm->ninst);
 	FATAL(vm, NETVM_ERR_STKUNDF, !S_HAS(vm, narg));
 	FATAL(vm, NETVM_ERR_STKOVFL, S_AVAIL(vm) < 2);
 	sslot = vm->sp - narg;
 	memmove(vm->stack + sslot + 2, vm->stack + sslot,
 		narg * sizeof(vm->stack[0]));
-	vm->stack[sslot] = vm->pc;
+	vm->stack[sslot] = vm->pc + 1;
 	vm->stack[sslot + 1] = vm->bp;
 	vm->bp = sslot + 2;
 	vm->sp += 2;
-	vm->pc = addr;
+	vm->nxtpc = addr;
 }
 
 
@@ -860,13 +855,22 @@ static void ni_ret(struct netvm *vm)
 	sslot = vm->bp - 2;
 	addr = vm->stack[sslot];
 	bp = vm->stack[sslot + 1];
-	FATAL(vm, NETVM_ERR_INSTADDR, addr >= vm->ninst);
+	FATAL(vm, NETVM_ERR_INSTADDR, addr > vm->ninst);
 	FATAL(vm, NETVM_ERR_STKOVFL, bp > vm->bp - 2);
 	memmove(vm->stack + sslot, vm->stack + vm->sp - narg,
 		narg * sizeof(vm->stack[0]));
 	vm->sp = sslot + narg;
 	vm->bp = bp;
-	vm->pc = addr;
+	vm->nxtpc = addr;
+}
+
+
+static void ni_popbp(struct netvm *vm)
+{
+	uint64_t bp;
+	S_POP(vm, bp);
+	FATAL(vm, NETVM_ERR_STKUNDF, bp > vm->sp);
+	vm->bp = bp;
 }
 
 
@@ -1230,9 +1234,8 @@ static void ni_pkadj(struct netvm *vm)
 
 
 netvm_op g_netvm_ops[NETVM_OC_MAX + 1] = {
-	ni_nop,			/* NOP */
 	ni_pop,			/* POP */
-	ni_popbp,		/* POPBP */
+	ni_popto,		/* POPTO */
 	ni_push,		/* PUSH */
 	ni_pushhi,		/* PUSHHI */
 	ni_zpush,		/* ZPUSH */
@@ -1323,6 +1326,7 @@ netvm_op g_netvm_ops[NETVM_OC_MAX + 1] = {
 	ni_jmp,			/* JMP */
 	ni_call,		/* CALL */
 	ni_ret,			/* RET */
+	ni_popbp,		/* POPBP */
 
 	ni_st,			/* ST */
 	ni_st,			/* STI */
@@ -1396,9 +1400,11 @@ int netvm_validate(struct netvm *vm)
 		    (inst->op == NETVM_OC_BZI) ||
 		    (inst->op == NETVM_OC_JMPI)) {
 			if (inst->op == NETVM_OC_JMPI)
-				newpc = inst->w + 1;
+				newpc = inst->w;
 			else
-				newpc = sign_extend(inst->w, 32) + 1 + i;
+				newpc = sign_extend(inst->w, 32) + i;
+			/* ok to overflow number of instructions by 1 */
+		        /* implied halt instruction */
 			if (newpc > vm->ninst)
 				return NETVM_ERR_BRADDR;
 			if (vm->matchonly && (newpc <= i))
@@ -1552,6 +1558,7 @@ void netvm_restart(struct netvm *vm)
 	abort_unless(vm && vm->stack && vm->rosegoff <= vm->memsz && vm->inst &&
 		     vm->ninst >= 0 && vm->ninst <= MAXINST);
 	vm->pc = 0;
+	vm->nxtpc = 0;
 	vm->sp = 0;
 	vm->bp = 0;
 }
@@ -1589,10 +1596,11 @@ int netvm_run(struct netvm *vm, int maxcycles, uint64_t *rv)
 	}
 
 	while (vm->running) {
+		vm->nxtpc = vm->pc + 1;
 		inst = &vm->inst[vm->pc];
 		(*g_netvm_ops[inst->op])(vm);
 		if (vm->error == 0) {
-			vm->pc++;
+			vm->pc = vm->nxtpc;
 			if (maxcycles > 0) {
 				if (--maxcycles == 0)
 					vm->running = 0;
@@ -1600,6 +1608,8 @@ int netvm_run(struct netvm *vm, int maxcycles, uint64_t *rv)
 				vm->running = 0;
 			} 
 		} else {
+			/* if there was an error do not alter the PC so that */
+			/* the erroneous error can be determined */
 			vm->running = 0;
 		}
 	}

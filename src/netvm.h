@@ -176,6 +176,7 @@ struct netvm {
 	struct netvm_inst *	inst;
 	uint			ninst;
 	uint			pc;
+	uint			nxtpc;
 
 	uint64_t *		stack;
 	uint			stksz;
@@ -214,9 +215,8 @@ struct netvm {
  */
 
 enum {
-	NETVM_OC_NOP,		/* no operation */
-	NETVM_OC_POP,		/* discards top of stack */
-	NETVM_OC_POPBP,		/* discard all but last 'w' in stack frame */
+	NETVM_OC_POP,		/* discards top 'w' entries of stack */
+	NETVM_OC_POPTO,		/* discard all but last 'w' in stack frame */
 	NETVM_OC_PUSH,		/* pushes 'w' onto stack */
 	NETVM_OC_PUSHHI,	/* pushes 'w << 32' onto stack */
 	NETVM_OC_ZPUSH,		/* pushes 'w' 0s onto the stack */
@@ -358,6 +358,8 @@ enum {
 				/*   branch back to bp-2 addr, restoring */
 				/*   bp to bp-1 value.  leave the top 'w' */
 				/*   vals from the stack on the top of stack */
+	NETVM_OC_POPBP,		/* Pop the top of the stack to the BP. */
+				/*   The new value must be <= the new SP */
 
 	/* 
 	 * See NETVM_OC_LD(I) for information on how these instructions are
@@ -423,9 +425,9 @@ enum {
 };
 
 
-#define NETVM_IADDR(w)  ((uint32_t)(w)-1)
-#define NETVM_BRF(w)    ((uint32_t)(w)-1)
-#define NETVM_BRB(w)    ((uint32_t)0-(w)-1)
+#define NETVM_IADDR(w)  ((uint32_t)(w))
+#define NETVM_BRF(w)    ((uint32_t)(w))
+#define NETVM_BRB(w)    (-(uint32_t)(w))
 
 #define NETVM_OP(OPCODE, x, y, z, w)\
 	{ NETVM_OC_##OPCODE, (x), (y), (z), (w) }
