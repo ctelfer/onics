@@ -207,7 +207,8 @@ union pml_tree *pmlt_alloc(int pmltt)
 	case PMLTT_SCALAR:
 	case PMLTT_BYTESTR:
 	case PMLTT_MASKVAL:
-	case PMLTT_VARREF: {
+	case PMLTT_VARREF:
+	case PMLTT_VARADDR: {
 		struct pml_value *p = &tp->value;
 		p->type = pmltt;
 		l_init(&p->ln);
@@ -220,8 +221,9 @@ union pml_tree *pmlt_alloc(int pmltt)
 			pml_bytestr_set_static(&p->u.maskval.val, NULL, 0);
 			pml_bytestr_set_static(&p->u.maskval.mask, NULL, 0);
 		} else {
-			p->u.varref = NULL;
+			p->u.varname = NULL;
 		}
+		p->varref = NULL;
 	} break;
 
 	case PMLTT_VAR: {
@@ -287,7 +289,8 @@ union pml_tree *pmlt_alloc(int pmltt)
 		p->type = pmltt;
 		l_init(&p->ln);
 		p->conv = 0;
-		p->variable = NULL;
+		p->varname = NULL;
+		p->varref = NULL;
 		p->expr = NULL;
 	} break;
 
@@ -354,8 +357,13 @@ void pmlt_free(union pml_tree *tree)
 	} break;
 
 	case PMLTT_SCALAR:
-	case PMLTT_VARREF:
 		break;
+
+	case PMLTT_VARREF: 
+	case PMLTT_VARADDR: {
+		struct pml_value *p = &tree->value;
+		pmlt_free((union pml_tree *)&p->u.varname);
+	} break;
 
 	case PMLTT_BYTESTR: {
 		struct pml_value *p = &tree->value;
@@ -415,7 +423,7 @@ void pmlt_free(union pml_tree *tree)
 
 	case PMLTT_SETACT: {
 		struct pml_set_action *p = &tree->setact;
-		pmlt_free((union pml_tree *)p->variable);
+		pmlt_free((union pml_tree *)p->varname);
 		pmlt_free((union pml_tree *)p->expr);
 	} break;
 

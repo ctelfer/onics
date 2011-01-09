@@ -25,6 +25,7 @@ enum {
 	PMLTT_MASKVAL,
 	PMLTT_VAR,
 	PMLTT_VARREF,
+	PMLTT_VARADDR,
 	PMLTT_BINOP,
 	PMLTT_UNOP,
 	PMLTT_FUNCALL,
@@ -67,6 +68,9 @@ enum {
 	PMLOP_TIMES,
 	PMLOP_DIV,
 	PMLOP_MOD,
+	PMLOP_SHL,
+	PMLOP_SHR,
+	PMLOP_SRA,
 	PMLOP_NOT,
 	PMLOP_BINV,
 	PMLOP_NEG,
@@ -116,8 +120,9 @@ struct pml_value {
 		struct pml_scalar	scalar;
 		struct pml_bytestr	bytestr;
 		struct pml_maskval	maskval;
-		struct pml_variable *	varref;
+		struct pml_locator *	varname;
 	} u;
+	struct pml_variable *	varref;
 };
 
 
@@ -133,7 +138,7 @@ struct pml_op {
 struct pml_funcall {
 	int			type;
 	struct list		ln;
-	struct pml_func *	func;
+	struct pml_function *	func;
 	struct pml_list *	args;	/* expressions */
 };
 
@@ -159,7 +164,8 @@ struct pml_set_action {
 	int			type;
 	struct list		ln;
 	int			conv;	/* byte order conversion */
-	struct pml_locator *	variable;
+	struct pml_locator *	varname;
+	struct pml_variable *	varref;
 	union pml_expr_u *	expr;
 };
 
@@ -225,7 +231,6 @@ union pml_expr_u {
 	struct pml_value	value;
 	struct pml_op		op;
 	struct pml_funcall	funcall;
-	struct pml_locator	locator;
 };
 
 
