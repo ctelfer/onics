@@ -2,6 +2,7 @@
 #include "pmllex.h"
 #include "pml.h"
 #include <cat/err.h>
+#include <cat/str.h>
 
 #define YY_EXTRA_TYPE	struct pml_lex_val
 #define YY_NO_INPUT
@@ -164,52 +165,10 @@ void parse_ipv4_addr(yyscan_t scanner, const char *text)
 int parse_ipv6_addr(yyscan_t scanner, const char *text)
 {
 	struct pml_lex_val v;
-	const char *p = text, *nxt;
-	byte_t prefix[16];
-	byte_t suffix[16];
-	char xdigits[5];
-	int plen = 0, slen = 0, zcomp = 0, n;
-	ushort xpair;
 
 	v.type  = PMLLV_SCALAR;
-	while ( (nxt = strchr(p, ':')) && (nxt != p) ) {
-		if ( plen >= 8 )
-			return -1;
-		memcpy(xdigits, p, nxt - p);
-		xdigits[nxt-p] = '\0';
-		xpair = strtoul(xdigits, 0, 16);
-		prefix[plen*2] = (xpair >> 8) & 0xff;
-		prefix[plen*2+1] = xpair & 0xff;
-		plen += 1;
-		p = nxt + 1;
-	}
-
-	if ( *p != '\0' ) {
-		if ( p == text )
-			p += 2;
-		else 
-			p += 1;
-		zcomp = 1;
-	}
-
-	while ( (nxt = strchr(p, ':')) && (nxt != p) ) {
-		if ( plen + zcomp + slen >= 8 )
-			return -1;
-		memcpy(xdigits, p, nxt - p);
-		xdigits[nxt-p] = '\0';
-		xpair = strtoul(xdigits, 0, 16);
-		suffix[slen*2] = (xpair >> 8) & 0xff;
-		suffix[slen*2+1] = xpair & 0xff;
-		slen += 1;
-		p = nxt + 1;
-	}
-
-	n = plen * 2;
-	memcpy(&v.u.v6addr[0], prefix, n);
-	memset(&v.u.v6addr[n], 0, 16 - (n + slen * 2));
-	n = 16 - slen * 2;
-	memcpy(&v.u.v6addr[n], suffix, slen * 2);
-
+	if ( str_parse_ip6a(&v.u.v6addr, text) < 0 )
+		return -1;
 	pmlset_extra(v, scanner);
 	return PMLTOK_IPV6ADDR;
 }
