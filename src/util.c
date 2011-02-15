@@ -1,4 +1,6 @@
 #include "util.h"
+#include <stdio.h>
+#include <ctype.h>
 
 uint16_t ones_sum_h(void *p, uint16_t len, uint16_t val)
 {
@@ -149,4 +151,33 @@ void setbit(byte_t * p, ulong n, int v)
 		*p |= 0x80 >> (n & 7);
 	else
 		*p &= ~(0x80 >> (n & 7));
+}
+
+
+#define CHOF(x)	(isprint(x) ? (x) : '.')
+void hexdump(FILE *out, ulong addr, byte_t *p, ulong len)
+{
+	int i;
+
+	while (len > 8) { 
+		fprintf(out, "%010lx:    %02x %02x %02x %02x %02x %02x %02x %02x"
+			     "    |%c%c%c%c%c%c%c%c|\n",
+			addr, p[0], p[1], p[2], p[3], p[4], p[5], p[6], p[7],
+			CHOF(p[0]), CHOF(p[1]), CHOF(p[2]), CHOF(p[3]),
+			CHOF(p[4]), CHOF(p[5]), CHOF(p[6]), CHOF(p[7]));
+		p += 8;
+		len -= 8;
+	}
+
+	if (len > 0) {
+		fprintf(out, "%010lx:    ", addr);
+		for (i = 0; i < len; ++i)
+			fprintf(out, "%02x ", p[i]);
+		for (; i < 8; ++i)
+			fprintf(out, "   ");
+		fprintf(out, "   |");
+		for (i = 0; i < len; ++i)
+			fprintf(out, "%c", CHOF(p[i]));
+		fprintf(out, "\n");
+	}
 }
