@@ -1,11 +1,14 @@
 #include "ns.h"
-#include "protoparse.h"
+#include "util.h"
 #include <string.h>
 #include <stdlib.h>
+#include <stdio.h>
 
 static struct ns_elem *rootelem[256] = { 0 };
-static struct ns_namespace rootns =
-	NS_NAMESPACE_I("", NULL, PPT_NONE, rootelem);
+static struct ns_namespace rootns = {
+	NST_NAMESPACE, 0, NULL, "", PPT_NONE, 0, 0, 0, NULL,
+	rootelem, array_length(rootelem)
+};
 
 #define TYPEOK(t) ((t) >= NST_NAMESPACE && (t) <= NST_MASKSTR)
 
@@ -111,3 +114,261 @@ struct ns_elem *ns_lookup(struct ns_namespace *ns, const char *name)
 }
 
 
+static int pf_get_offlen(struct ns_pktfld *pf, struct prparse *prp, 
+		       ulong *off, ulong *len)
+{
+	ulong nb;
+
+	if ((pf->oidx >= prp->noff) || 
+	    (prp->offs[pf->oidx] == PRP_OFF_INVALID))
+		return -1;
+
+	if (NSF_IS_INBITS(pf->flags)) {
+		nb = (NSF_BITOFF(pf->flags) + pf->len + 7) / 8;
+		abort_unless(pf->len <= sizeof(ulong) * 8);
+		*len = pf->len;
+	} else {
+		if (NSF_IS_VARLEN(pf->flags)) {
+			if ((pf->len >= prp->noff) || 
+			    (prp->offs[pf->len] == PRP_OFF_INVALID))
+				return -1;
+			if (prp->offs[pf->len] <= prp->offs[pf->oidx])
+				return -1;
+			nb = prp->offs[pf->len] <= prp->offs[pf->oidx];
+			*len = nb;
+		} else {
+			nb = pf->len;
+			*len = pf->len;
+		} 
+	}
+
+	abort_unless(nb <= prp_totlen(prp));
+
+	if (pf->off > prp_totlen(prp) - nb)
+		return -1;
+
+	*off = prp->offs[pf->oidx] + pf->off;
+
+	return 0;
+}
+
+
+static int ns_get_offlen(struct ns_namespace *ns, struct prparse *prp, 
+		       ulong *off, ulong *len)
+{
+	if ((ns->oidx >= prp->noff) || 
+	    (prp->offs[ns->oidx] == PRP_OFF_INVALID))
+		return -1;
+
+	if (NSF_IS_VARLEN(ns->flags)) {
+		if ((ns->len >= prp->noff) || 
+		    (prp->offs[ns->len] == PRP_OFF_INVALID))
+			return -1;
+		if (prp->offs[ns->len] <= prp->offs[ns->oidx])
+			return -1;
+		*len = prp->offs[ns->len] <= prp->offs[ns->oidx];
+	} else {
+		*len = ns->len;
+	} 
+
+	*off = prp->offs[ns->oidx];
+
+	return 0;
+}
+
+
+int ns_fmt_hdr(struct ns_elem *elem, byte_t *pkt, struct prparse *prp,
+	       struct raw *out)
+{
+	int r;
+	ulong off, len;
+
+	/* XXX Format should take two unsigned long arguments */
+	if (elem->type == NST_NAMESPACE) {
+		struct ns_namespace *ns = (struct ns_namespace *)elem;
+		r = ns_get_offlen(ns, prp, &off, &len);
+		if (r < 0)
+			return r;
+		return snprintf(out->data, out->len, ns->fmtstr, off, len);
+	} else if (elem->type == NST_PKTFLD) {
+		struct ns_pktfld *pf = (struct ns_pktfld *)elem;
+		r = pf_get_offlen(pf, prp, &off, &len);
+		if (r < 0)
+			return r;
+		return snprintf(out->data, out->len, pf->fmtstr, off, len);
+	} else {
+		abort_unless(0);
+	}
+
+	return -1; /* never reached */
+}
+
+
+static int getnum(struct ns_pktfld *pf, byte_t *pkt, struct prparse *prp,
+		  ulong *v)
+{
+	ulong off, len, val;
+
+	abort_unless(pf != NULL && pkt != NULL && prp != NULL && v != NULL);
+
+	abort_unless(prp->type == pf->ppt);
+
+	if (pf_get_offlen(pf, prp, &off, &len) < 0)
+		return -1;
+	pkt += off;
+
+	if (NSF_IS_INBITS(pf->flags)) {
+		*v = getbits(pkt, NSF_BITOFF(pf->flags), len);
+	} else {
+		if (len > sizeof(ulong))
+			return -1;
+		val = 0;
+		do {
+			val = (val << 8) | *pkt++;
+		} while (--len > 0);
+		*v = val;
+	}
+
+	return 0;
+}
+
+
+int ns_fmt_num(struct ns_elem *elem, byte_t *pkt, struct prparse *prp,
+	       struct raw *out)
+{
+	ulong v;
+	struct ns_pktfld *pf;
+
+	if (elem->type != NST_PKTFLD)
+		return -1;
+	pf = (struct ns_pktfld *)elem;
+	if (getnum(pf, pkt, prp, &v) < 0)
+		return -1;
+
+	return snprintf(out->data, out->len, pf->fmtstr, v);
+}
+
+
+int ns_fmt_wlen(struct ns_elem *elem, byte_t *pkt, struct prparse *prp,
+	        struct raw *out)
+{
+	ulong v;
+	struct ns_pktfld *pf;
+
+	if (elem->type != NST_PKTFLD)
+		return -1;
+	pf = (struct ns_pktfld *)elem;
+	if (getnum(pf, pkt, prp, &v) < 0)
+		return -1;
+
+	return snprintf(out->data, out->len, pf->fmtstr, v, v*4);
+}
+
+
+int ns_fmt_ipv4a(struct ns_elem *elem, byte_t *pkt, struct prparse *prp,
+	         struct raw *out)
+{
+	struct ns_pktfld *pf;
+	ulong off, len, val;
+	char buf[20];
+
+	abort_unless(elem != NULL && pkt != NULL && prp != NULL && out != NULL);
+
+	if (elem->type != NST_PKTFLD)
+		return -1;
+	pf = (struct ns_pktfld *)elem;
+
+	abort_unless(prp->type == pf->ppt);
+
+	if (pf_get_offlen(pf, prp, &off, &len) < 0)
+		return -1;
+	pkt += off;
+
+	if (NSF_IS_INBITS(pf->flags)) {
+		if (len != 32)
+			return -1;
+		val = getbits(pkt, NSF_BITOFF(pf->flags), 32);
+		snprintf(buf, sizeof(buf), "%u.%u.%u.%u", 
+			 (uint)(val >> 24) & 0xFF, (uint)(val >> 16) & 0xFF, 
+			 (uint)(val >> 8) & 0xFF, (uint)val & 0xFF);
+
+	} else {
+		if (len != 4)
+			return -1;
+		snprintf(buf, sizeof(buf), "%u.%u.%u.%u",
+			 pkt[0], pkt[1], pkt[2], pkt[3]);
+	}
+
+	/* TODO: check format string for single %s */
+	return snprintf(out->data, out->len, pf->fmtstr, buf);
+}
+
+
+int ns_fmt_ipv6a(struct ns_elem *elem, byte_t *pkt, struct prparse *prp,
+	         struct raw *out)
+{
+	struct ns_pktfld *pf;
+	ulong off, len;
+	char buf[52];
+
+	abort_unless(elem != NULL && pkt != NULL && prp != NULL && out != NULL);
+
+	if (elem->type != NST_PKTFLD)
+		return -1;
+
+	pf = (struct ns_pktfld *)elem;
+
+	abort_unless(prp->type == pf->ppt);
+
+	if (pf_get_offlen(pf, prp, &off, &len) < 0)
+		return -1;
+	pkt += off;
+
+	if (len != 16)
+		return -1;
+
+	snprintf(buf, sizeof(buf), 
+		 "%x:%x:%x:%x:%x:%x:%x:%x",
+		 pkt[0] << 8 | pkt[1], 
+		 pkt[2] << 8 | pkt[3], 
+		 pkt[4] << 8 | pkt[5], 
+		 pkt[6] << 8 | pkt[7], 
+		 pkt[8] << 8 | pkt[9], 
+		 pkt[10] << 8 | pkt[11], 
+		 pkt[12] << 8 | pkt[13], 
+		 pkt[14] << 8 | pkt[15]);
+
+	/* TODO: check format string for single %s */
+	return snprintf(out->data, out->len, pf->fmtstr, buf);
+}
+
+
+int ns_fmt_etha(struct ns_elem *elem, byte_t *pkt, struct prparse *prp,
+	        struct raw *out)
+{
+	struct ns_pktfld *pf;
+	ulong off, len;
+	char buf[20];
+
+	abort_unless(elem != NULL && pkt != NULL && prp != NULL && out != NULL);
+
+	if (elem->type != NST_PKTFLD)
+		return -1;
+
+	pf = (struct ns_pktfld *)elem;
+
+	abort_unless(prp->type == pf->ppt);
+
+	if (pf_get_offlen(pf, prp, &off, &len) < 0)
+		return -1;
+	pkt += off;
+
+	if (len != 6)
+		return -1;
+
+	snprintf(buf, sizeof(buf), "%02x:%02x:%02x:%02x:%02x:%02x",
+		 pkt[0], pkt[1], pkt[2], pkt[3], pkt[4], pkt[5]);
+
+	/* TODO: check format string for single %s */
+	return snprintf(out->data, out->len, pf->fmtstr, buf);
+}

@@ -2,6 +2,7 @@
 #define __NS_H
 
 #include <cat/cat.h>
+#include "protoparse.h"
 
 enum {
 	NST_NAMESPACE,
@@ -12,71 +13,95 @@ enum {
 };
 
 
-struct ns_elem {
-	int			type;
-	struct ns_namespace *	parent;
-	const char *		name;
-	uint			ppt;
+enum {
+	NSF_VARLEN = 0x1,
+	NSF_INBITS = 0x2,
+	NSF_ISSIGNED = 0x4,
+	NSF_BITOFF_SHF = 4,
+	NSF_WIDTH_SHF = 4,
 };
 
+#define NSF_IS_VARLEN(flags) (((flags) & NSF_VARLEN) != 0)
+#define NSF_IS_INBITS(flags) (((flags) & NSF_INBITS) != 0)
+#define NSF_IS_SIGNED(flags) (((flags) & NSF_ISSIGNED) != 0)
+#define NSF_BITOFF(flags) (((flags) >> 4) & 0xF)
+#define NSF_WIDTH(flags) (((flags) >> 4) & 0xF)
+
+
+struct ns_elem {
+	ushort			type;
+	ushort			flags;
+	struct ns_namespace *	parent;
+	const char *		name;
+};
+
+
+typedef int (*ns_format_f)(struct ns_elem *, byte_t *pkt, struct prparse *, 
+		           struct raw *);
 
 struct ns_namespace {
-	int			type;
+	ushort			type;
+	ushort			flags;
 	struct ns_namespace *	parent;
 	const char *		name;
 	uint			ppt;
+	uint			oidx;
+	ulong			len;
+	const char *		fmtstr;
+	ns_format_f		fmt;
 	struct ns_elem **	elems;
-	int			nelem;
-	char			oidx;
-	char			pad[3];
+	uint			nelem;
 };
 
-#define NS_NAMESPACE_I(name, par, ppt, elems)\
-	{ NST_NAMESPACE, (par), (name), (ppt), (elems), array_length(elems), \
-	  0, { 0, 0, 0 } }
+#define NS_NAMESPACE_I(name, par, ppt, desc, elems, nelem)\
+	{ NST_NAMESPACE, (NSF_VARLEN), (par), (name), (ppt), PRP_OI_SOFF, \
+	  PRP_OI_EOFF, (desc), &ns_fmt_hdr, (elems), (nelem) }
 
-#define NS_NAMESPACE_I_EXLEN(name, par, ppt, elems, nelem)\
-	{ NST_NAMESPACE, (par), (name), (ppt), (elems), (nelem), \
-	  0, { 0, 0, 0 } }
+#define NS_NAMESPACE_IDX_I(name, par, ppt, oidx, len, desc, elems, nelem)\
+	{ NST_NAMESPACE, 0, (par), (name), (ppt), (oidx), \
+	  (len), (desc), &ns_fmt_hdr, (elems), (nelem) }
 
-#define NS_NAMESPACE_IDX_I(name, par, ppt, oidx, elems)\
-	{ NST_NAMESPACE, (par), (name), (ppt), (elems), array_length(elems), \
-	  (oidx), { 0, 0, 0 } }
+#define NS_NAMESPACE_VARLEN_I(name, par, ppt, oidx, eidx, desc, elems, nelem)\
+	{ NST_NAMESPACE, (NSF_VARLEN), (par), (name), (ppt), (oidx), \
+	  (eidx), (desc), &ns_fmt_hdr, (elems), (nelem) }
 
-#define NS_NAMESPACE_IDX_I_EXLEN(name, par, ppt, oidx, elems, nelem)\
-	{ NST_NAMESPACE, (par), (name), (ppt), (elems), (nelem), \
-	  (oidx), { 0, 0, 0 } }
 
 struct ns_pktfld {
-	int			type;
+	ushort			type;
+	ushort			flags;
 	struct ns_namespace *	parent;
 	const char *		name;
 	uint			ppt;
-	long			off;		/* in bytes */
-	long			len;		/* in bits or bytes */
-	char			oidx;		/* offset index */
-	char			inbits;		/* len in bits */
-	char			bitoff;		/* counting from MSB if */
-	char			pad;
+	uint			oidx;		/* offset index */
+	ulong			off;		/* in bytes */
+	ulong			len;		/* len in bits or bytes/oidx */
+	const char *		fmtstr;
+	ns_format_f		fmt;
 };
 
-#define NS_BITFIELD_I(name, par, ppt, off, bitoff, len) \
-	{ NST_PKTFLD, (par), (name), (ppt), (off), (len), PRP_OI_SOFF, \
-	  1, (bitoff), 0}
+#define NS_BITFIELD_I(name, par, ppt, off, bitoff, len, desc, fmtf) \
+	{ NST_PKTFLD, (NSF_INBITS | ((bitoff) << NSF_BITOFF_SHF)), \
+	  (par), (name), (ppt), PRP_OI_SOFF, (off), (len), (desc), (fmtf) }
 
-#define NS_BYTEFIELD_I(name, par, ppt, off, len) \
-	{ NST_PKTFLD, (par), (name), (ppt), (off), (len), PRP_OI_SOFF, 0, 0, 0 }
+#define NS_BYTEFIELD_I(name, par, ppt, off, len, desc, fmtf) \
+	{ NST_PKTFLD, 0, \
+	  (par), (name), (ppt), PRP_OI_SOFF, (off), (len), (desc), (fmtf) }
 
-#define NS_BITFIELD_IDX_I(name, par, ppt, off, bitoff, len, oidx) \
-	{ NST_PKTFLD, (par), (name), (ppt), (off), (len), (oidx), 1, \
-	  (bitoff), 0 }
+#define NS_BITFIELD_IDX_I(name, par, ppt, oidx, off, bitoff, len, desc, fmtf) \
+	{ NST_PKTFLD, (NSF_INBITS | ((bitoff) << NSF_BITOFF_SHF)), \
+	  (par), (name), (ppt), (oidx), (off), (len), (desc), (fmtf) }
 
-#define NS_BYTEFIELD_IDX_I(name, par, ppt, off, len, oidx) \
-	{ NST_PKTFLD, (par), (name), (ppt), (off), (len), (oidx), 0, 0, 0 }
+#define NS_BYTEFIELD_IDX_I(name, par, ppt, oidx, off, len, desc, fmtf) \
+	{ NST_PKTFLD, 0, \
+	  (par), (name), (ppt), (oidx), (off), (len), (desc), (fmtf) }
 
+#define NS_BYTEFIELD_VARLEN_I(name, par, ppt, oidx, off, eidx, desc, fmtf) \
+	{ NST_PKTFLD, (NSF_VARLEN), \
+	  (par), (name), (ppt), (oidx), (off), (eidx), (desc), (fmtf) }
 
 struct ns_scalar {
-	int			type;
+	ushort			type;
+	ushort			flags;
 	struct ns_namespace *	parent;
 	const char *		name;
 	uint			ppt;
@@ -104,7 +129,8 @@ struct ns_scalar {
 
 
 struct ns_bytestr {
-	int			type;
+	ushort			type;
+	ushort			flags;
 	struct ns_namespace *	parent;
 	uint			ppt;
 	const char *		name;
@@ -119,7 +145,8 @@ struct ns_bytestr {
 
 
 struct ns_maskstr {
-	int			type;
+	ushort			type;
+	ushort			flags;
 	struct ns_namespace *	parent;
 	const char *		name;
 	uint			ppt;
@@ -138,5 +165,33 @@ struct ns_maskstr {
 int ns_add_elem(struct ns_namespace *ns, struct ns_elem *e);
 void ns_rem_elem(struct ns_elem *e);
 struct ns_elem *ns_lookup(struct ns_namespace *ns, const char *name);
+
+
+
+/* Field format functions */
+
+/* element format must take no parameters */
+int ns_fmt_hdr(struct ns_elem *em, byte_t *pkt, struct prparse *prp,
+	       struct raw *str);
+
+/* element format must take a single unsigned long */
+int ns_fmt_num(struct ns_elem *em, byte_t *pkt, struct prparse *prp,
+	       struct raw *str);
+
+/* element format must contain a two unsigned long parameters*/
+int ns_fmt_wlen(struct ns_elem *em, byte_t *pkt, struct prparse *prp,
+	        struct raw *str);
+
+/* element format must contain a single %s */
+int ns_fmt_ipv4a(struct ns_elem *em, byte_t *pkt, struct prparse *prp,
+	         struct raw *str);
+
+/* element format must contain a single %s */
+int ns_fmt_ipv6a(struct ns_elem *em, byte_t *pkt, struct prparse *prp,
+	         struct raw *str);
+
+/* element format must contain a single %s */
+int ns_fmt_etha(struct ns_elem *em, byte_t *pkt, struct prparse *prp,
+	        struct raw *str);
 
 #endif /* __NS_H */

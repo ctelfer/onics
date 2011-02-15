@@ -36,7 +36,8 @@ void unregister_std_proto();
 #define PRP_TCPFLD_WSCALE	(PRP_OI_EXTRA + 1)
 #define PRP_TCPFLD_SACKOK	(PRP_OI_EXTRA + 2)
 #define PRP_TCPFLD_SACK		(PRP_OI_EXTRA + 3)
-#define PRP_TCPFLD_TSTAMP	(PRP_OI_EXTRA + 4)
-#define PRP_TCPFLD_MD5		(PRP_OI_EXTRA + 5)
+#define PRP_TCPFLD_SACK_END	(PRP_OI_EXTRA + 4)
+#define PRP_TCPFLD_TSTAMP	(PRP_OI_EXTRA + 5)
+#define PRP_TCPFLD_MD5		(PRP_OI_EXTRA + 6)
 
 #endif /* __stdproto_h */
