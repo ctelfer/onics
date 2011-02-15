@@ -53,6 +53,9 @@ struct ns_namespace {
 	uint			nelem;
 };
 
+#define NS_NAMESPACE_ROOT(elem, nelem) \
+	{ NST_NAMESPACE, 0, NULL, "", PPT_NONE, 0, 0, 0, NULL, (elem), (nelem) }
+
 #define NS_NAMESPACE_I(name, par, ppt, desc, elems, nelem)\
 	{ NST_NAMESPACE, (NSF_VARLEN), (par), (name), (ppt), PRP_OI_SOFF, \
 	  PRP_OI_EOFF, (desc), &ns_fmt_hdr, (elems), (nelem) }
@@ -106,26 +109,28 @@ struct ns_scalar {
 	const char *		name;
 	uint			ppt;
 	long			value;
-	char			issigned;
-	char			width;
 };
 
 #define NS_INT8_I(name, par, ppt, val) \
-	{ NST_PKTFLD, (par), (name), (ppt), (val), 1, 1 }
+	{ NST_SCALAR, (NSF_ISSIGNED|(1 << NSF_WIDTH_SHF)),\
+	  (par), (name), (ppt), (val) }
 #define NS_INT16_I(name, par, ppt, val) \
-	{ NST_PKTFLD, (par), (name), (ppt), (val), 1, 2 }
+	{ NST_SCALAR, (NSF_ISSIGNED|(2 << NSF_WIDTH_SHF)),\
+	  (par), (name), (ppt), (val) }
 #define NS_INT32_I(name, par, ppt, val) \
-	{ NST_PKTFLD, (par), (name), (ppt), (val), 1, 4 }
+	{ NST_SCALAR, (NSF_ISSIGNED|(4 << NSF_WIDTH_SHF)),\
+	  (par), (name), (ppt), (val) }
 #define NS_INT64_I(name, par, ppt, val) \
-	{ NST_PKTFLD, (par), (name), (ppt), (val), 1, 8 }
+	{ NST_SCALAR, (NSF_ISSIGNED|(8 << NSF_WIDTH_SHF)),\
+	  (par), (name), (ppt), (val) }
 #define NS_UINT8_I(name, par, ppt, val) \
-	{ NST_PKTFLD, (par), (name), (ppt), ((long)(val)), 0, 1 }
+	{ NST_SCALAR, (1 << NSF_WIDTH_SHF), (par), (name), (ppt), (long)(val) }
 #define NS_UINT16_I(name, par, ppt, val) \
-	{ NST_PKTFLD, (par), (name), (ppt), ((long)(val)), 0, 2 }
+	{ NST_SCALAR, (2 << NSF_WIDTH_SHF), (par), (name), (ppt), (long)(val) }
 #define NS_UINT32_I(name, par, ppt, val) \
-	{ NST_PKTFLD, (par), (name), (ppt), ((long)(val)), 0, 4 }
+	{ NST_SCALAR, (4 << NSF_WIDTH_SHF), (par), (name), (ppt), (long)(val) }
 #define NS_UINT64_I(name, par, ppt, val) \
-	{ NST_PKTFLD, (par), (name), (ppt), ((long)(val)), 0, 8 }
+	{ NST_SCALAR, (8 << NSF_WIDTH_SHF), (par), (name), (ppt), (long)(val) }
 
 
 struct ns_bytestr {

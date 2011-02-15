@@ -5,10 +5,8 @@
 #include <stdio.h>
 
 static struct ns_elem *rootelem[256] = { 0 };
-static struct ns_namespace rootns = {
-	NST_NAMESPACE, 0, NULL, "", PPT_NONE, 0, 0, 0, NULL,
-	rootelem, array_length(rootelem)
-};
+static struct ns_namespace rootns =
+	NS_NAMESPACE_ROOT(rootelem, array_length(rootelem));
 
 #define TYPEOK(t) ((t) >= NST_NAMESPACE && (t) <= NST_MASKSTR)
 
