@@ -23,7 +23,7 @@ enum {
 struct pktbuf {
 	struct list 	entry;
 	byte_t *	buf;
-	long		bufsize;
+	ulong		bufsize;
 	struct xpkt *	xpkt;
 	long		xsize;
 	long		xhlen; /* cached when packed */
@@ -36,7 +36,7 @@ struct pktbuf {
 void pkb_init();
 
 /* Creates a new packet */
-struct pktbuf *pkb_create(long bsize);
+struct pktbuf *pkb_create(ulong bsize);
 
 /* copy an existing packet and all its metadata */
 struct pktbuf *pkb_copy(struct pktbuf *old);
@@ -45,21 +45,21 @@ struct pktbuf *pkb_copy(struct pktbuf *old);
 void pkb_free(struct pktbuf *pkb);
 
 /* Set the offset field in the packet buffer */
-long pkb_get_off(struct pktbuf *pkb);
+ulong pkb_get_off(struct pktbuf *pkb);
 
 /* Set the offset field in the packet buffer */
-long pkb_get_len(struct pktbuf *pkb);
+ulong pkb_get_len(struct pktbuf *pkb);
 
 /* Set the offset field in the packet buffer */
 uint16_t pkb_get_dltype(struct pktbuf *pkb);
 
 /* Set the offset field in the packet buffer */
 /* Cannot be called for a parsed packet. */
-void pkb_set_off(struct pktbuf *pkb, long off);
+void pkb_set_off(struct pktbuf *pkb, ulong off);
 
 /* Set the offset field in the packet buffer */
 /* Cannot be called for a parsed packet. */
-void pkb_set_len(struct pktbuf *pkb, long off);
+void pkb_set_len(struct pktbuf *pkb, ulong len);
 
 /* Set the offset field in the packet buffer */
 /* Cannot be called for a packed packet. */
