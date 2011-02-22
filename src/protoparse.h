@@ -87,8 +87,8 @@ struct proto_parser_ops {
 };
 
 struct proto_parser {
-	unsigned int		type;
-	unsigned int		valid;
+	uint			type;
+	uint			valid;
 	struct proto_parser_ops *ops;
 };
 
@@ -116,7 +116,7 @@ struct prparse_ops {
  Start of 
  Packet Buffer
    |                    Encapsulating Protocol Parse
-   |      par.offs[prp.rlow]                                par.offs[prp.rhi]
+   |     par.poff                                                par.toff
    | ...----+-------------------------------------------------------+----...
    |        |  prp.start   prp.poff             prp.toff  prp.end   |
    | header |      +---------+---------------------+---------+      | trailer
@@ -139,6 +139,21 @@ struct prparse_ops {
    header or trailer offset of a header parse change, the parse may have to be
    moved in the list. 
 */
+
+/*
+   A note for IPv6 and IPsec.  When an IPv6 packet has an ESP or AH header,
+   that header is considered the start of the payload of the v6 packet.  It
+   This is a specific example where the abstraction of encapsulating protocol
+   parses breaks down.  IPsec is, in many ways, its own set of protocols that
+   encapuslate data.  It is convenient to treat them as such.  However, IPv6
+   destination options CAN come after the IPsec headers.  In the case of ESP
+   with encryption, this is not data that we can parse anyways.  Nevertheless
+   this won't always be the case.  Given this kind of "call" on how to
+   interpret the fields, the "payload offset" is, therefore, the first byte
+   of the protocol unit that isn't the purview of the encapsulating protocol.
+   This does NOT always mean that there can't be protocol relevant bytes
+   in the payload section.  But it won't typically be the case.
+ */
 
 
 #define PRP_OI_SOFF 0
@@ -229,7 +244,7 @@ int prp_region_empty(struct prparse *reg);
 /* mode is PPCF_WRAPFILL, then the 'prp' must be a header with free space */
 /* between it and its child (based on the offsets above).  The new header */
 /* will take up exactly the space between parent and child. */
-int prp_push(unsigned ppidx, struct prparse *prp, int mode);
+int prp_push(uint ppidx, struct prparse *prp, int mode);
 
 
 /* Initializes a fresh parse of PPT_NONE.  This can be used to create the */
@@ -266,7 +281,7 @@ void prp_set_packet_buffer(struct prparse *prp, byte_t * buffer);
 
 /* re-parse and update the fields in 'prp'.  (but not its children */
 /* returns error field as a matter of convenience */
-unsigned int prp_update(struct prparse *prp);
+uint prp_update(struct prparse *prp);
 
 /* fix up checksums in the 'prp' protocol header */
 int prp_fix_cksum(struct prparse *prp);

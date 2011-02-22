@@ -78,7 +78,7 @@ void pkb_init(uint num_buf_expected)
 }
 
 
-struct pktbuf *pkb_create(long bufsize)
+struct pktbuf *pkb_create(ulong bufsize)
 {
 	struct pktbuf *pkb; 
 	void *xmp, *dp;
@@ -87,10 +87,6 @@ struct pktbuf *pkb_create(long bufsize)
 	int pl;
 
 	/* calculate the total size of the buffer */
-	if (bufsize < 0) {
-		errno = EINVAL;
-		return NULL;
-	}
 	if (bufsize > PKB_MAX_DATA_LEN) {
 		errno = ENOMEM;
 		return NULL;
@@ -194,14 +190,14 @@ void pkb_free(struct pktbuf *pkb)
 }
 
 
-long pkb_get_off(struct pktbuf *pkb)
+ulong pkb_get_off(struct pktbuf *pkb)
 {
 	abort_unless(pkb);
 	return prp_poff(&pkb->prp);
 }
 
 
-long pkb_get_len(struct pktbuf *pkb)
+ulong pkb_get_len(struct pktbuf *pkb)
 {
 	abort_unless(pkb);
 	return prp_plen(&pkb->prp);
@@ -215,17 +211,16 @@ uint16_t pkb_get_dltype(struct pktbuf *pkb)
 }
 
 
-void pkb_set_off(struct pktbuf *pkb, long off)
+void pkb_set_off(struct pktbuf *pkb, ulong off)
 {
-	long l;
+	ulong l;
 
 	abort_unless(!pkb_is_parsed(pkb));
-	abort_unless(off >= 0);
 
 	l = prp_plen(&pkb->prp);
 
 	/* check for overflow/underflow:  integer then buffer */
-	abort_unless(l + off >= 0);
+	abort_unless(l + off >= off);
 	abort_unless(l + off <= prp_totlen(&pkb->prp));
 
 	prp_poff(&pkb->prp) = off;
@@ -233,17 +228,16 @@ void pkb_set_off(struct pktbuf *pkb, long off)
 }
 
 
-void pkb_set_len(struct pktbuf *pkb, long len)
+void pkb_set_len(struct pktbuf *pkb, ulong len)
 {
-	long l;
+	ulong l;
 
 	abort_unless(!pkb_is_parsed(pkb));
-	abort_unless(len >= 0);
 
 	l = prp_poff(&pkb->prp);
 
 	/* check for overflow/underflow:  integer then buffer */
-	abort_unless(l + len >= 0);
+	abort_unless(l + len >= len);
 	abort_unless(l + len <= prp_totlen(&pkb->prp));
 
 	prp_toff(&pkb->prp) = len + l;
