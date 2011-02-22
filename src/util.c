@@ -1,5 +1,4 @@
 #include "util.h"
-#include <stdio.h>
 #include <ctype.h>
 
 uint16_t ones_sum_h(void *p, uint16_t len, uint16_t val)

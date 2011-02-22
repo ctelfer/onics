@@ -1,6 +1,7 @@
 #ifndef __util_h
 #define __util_h
 #include <cat/cattypes.h>
+#include <stdio.h>
 
 /* 
  * Compute the 1s complement sum of 'len' bytes.  'val' holds the
@@ -36,5 +37,10 @@ void setbits(byte_t * p, ulong off, uint len, ulong val);
 int getbit(const byte_t * p, ulong n);
 /* set bit n in p, if v or clr bit n in p if !v */
 void setbit(byte_t * p, ulong n, int v);
+
+
+/* Dump a hex representation of the given data to out */
+void hexdump(FILE *out, ulong addr, byte_t *p, ulong len);
+
 
 #endif /* __util_h */
