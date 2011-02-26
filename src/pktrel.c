@@ -89,7 +89,7 @@ int main(int argc, char *argv[])
 		sleepfor(tm_dset(&t, g_start_delay));
 	}
 
-	while ((rv = pkb_fd_read(0, &p)) > 0) {
+	while ((rv = pkb_fd_read(&p, 0)) > 0) {
 		ts = (struct xpkt_tag_ts *)pkb_find_tag(p, XPKT_TAG_TIMESTAMP, 0);
 		if (ts) {
 			tm_lset(&next, ts->sec, ts->nsec);
@@ -118,7 +118,7 @@ int main(int argc, char *argv[])
 
 		rv = pkb_pack(p);
 		abort_unless(rv == 0);
-		if (pkb_fd_write(1, p) < 0)
+		if (pkb_fd_write(p, 1) < 0)
 			errsys("Error writing packet %lu", g_npkts);
 		pkb_free(p);
 	}

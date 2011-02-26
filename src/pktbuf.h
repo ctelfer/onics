@@ -17,6 +17,7 @@ enum {
 };
 
 
+#define PKB_MAX_PKTLEN  (65536 + 256)
 #define PKB_F_PACKED	0x1
 #define PKB_F_PARSED	0x2
 
@@ -25,18 +26,21 @@ struct pktbuf {
 	byte_t *	buf;
 	ulong		bufsize;
 	struct xpkt *	xpkt;
-	long		xsize;
-	long		xhlen; /* cached when packed */
+	ulong		xsize;
+	ulong		xhlen; /* cached when packed */
 	struct prparse  prp;
 	struct prparse *layers[PKB_LAYER_NUM];
 	ushort		flags;
 };
 
 /* initialize the packet buffer subsystem */
-void pkb_init();
+void pkb_init(uint num_expected);
 
 /* Creates a new packet */
 struct pktbuf *pkb_create(ulong bsize);
+
+/* Resets a packet buffer to initialized state */
+void pkb_reset(struct pktbuf *pkb);
 
 /* copy an existing packet and all its metadata */
 struct pktbuf *pkb_copy(struct pktbuf *old);
@@ -52,6 +56,9 @@ ulong pkb_get_len(struct pktbuf *pkb);
 
 /* Set the offset field in the packet buffer */
 uint16_t pkb_get_dltype(struct pktbuf *pkb);
+
+/* Get the total size of the buffer */
+ulong pkb_get_bufsize(struct pktbuf *pkb);
 
 /* Set the offset field in the packet buffer */
 /* Cannot be called for a parsed packet. */
@@ -74,7 +81,7 @@ void *pkb_data(struct pktbuf *pkb);
  *      0 on EOF
  *     -1 on error
  */
-int pkb_file_read(FILE *fp, struct pktbuf **pkb);
+int pkb_file_read(struct pktbuf **pkb, FILE *fp);
 
 /* 
  * Read a packet from a file and allocate the buffer for it 
@@ -82,7 +89,7 @@ int pkb_file_read(FILE *fp, struct pktbuf **pkb);
  *      0 on EOF
  *     -1 on error
  */
-int pkb_fd_read(int fd, struct pktbuf **pkb);
+int pkb_fd_read(struct pktbuf **pkb, int fd);
 
 /* 
  * Pack a pktbuf in preparation for transmission 
@@ -101,10 +108,10 @@ void pkb_unpack(struct pktbuf *pkb);
 int pkb_is_packed(struct pktbuf *pkb);
 
 /* Write a packet buffer to a file. Returns 0 on success, -1 on error */
-int pkb_file_write(FILE *fp, struct pktbuf *pkb);
+int pkb_file_write(struct pktbuf *pkb, FILE *fp);
 
 /* Write a packet buffer to a file descriptor. Returns 0 on success, -1 on error */
-int pkb_fd_write(int fd, struct pktbuf *pkb);
+int pkb_fd_write(struct pktbuf *pkb, int fd);
 
 /* Perform protocol parsing for the packet */
 int pkb_parse(struct pktbuf *pkb);

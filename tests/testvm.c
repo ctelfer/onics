@@ -467,7 +467,7 @@ static void send_clr_packets(struct netvm *vm, int npkt)
 		if (p) {
 			if (pkb_pack(p) < 0)
 				err("Error packing packet for writing");
-			if (pkb_file_write(stdout, p) < 0)
+			if (pkb_file_write(p, stdout) < 0)
 				err("Error writing out packet %d", npkt);
 			pkb_free(p);
 		}
@@ -485,7 +485,7 @@ void run_with_packets(struct netvm *vm, int filter, struct meminit *mi,
 	int i;
 	uint64_t rc;
 
-	while (pkb_file_read(stdin, &p) > 0) {
+	while (pkb_file_read(&p, stdin) > 0) {
 		if (pkb_parse(p) < 0)
 			errsys("Error parsing packets");
 		++npkt;

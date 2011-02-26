@@ -78,7 +78,7 @@ int readpkt(void *arg, struct callback *cb)
 	struct xpkt_tag_iface xif;
 	int n;
 
-	if ((rv = pkb_fd_read(ioe->fd, &p)) <= 0) {
+	if ((rv = pkb_fd_read(&p, ioe->fd)) <= 0) {
 		if (rv < 0)
 			logsys(1, "Error reading from fd %d\n", ioe->fd);
 		ue_io_del(ioe);
@@ -110,7 +110,7 @@ int readpkt(void *arg, struct callback *cb)
 
 	rv = pkb_pack(p);
 	abort_unless(rv == 0);
-	if (pkb_fd_write(1, p) < 0)
+	if (pkb_fd_write(p, 1) < 0)
 		errsys("Error writing packet %lu\n", g_npkts);
 	pkb_free(p);
 

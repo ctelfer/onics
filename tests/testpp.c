@@ -42,7 +42,7 @@ int main(int argc, char *argv[])
 	register_std_proto();
 	pkb_init(1);
 
-	while (pkb_file_read(stdin, &p) > 0) {
+	while (pkb_file_read(&p, stdin) > 0) {
 		if (pkb_parse(p) < 0)
 			errsys("Error parsing packet");
 		++npkt;

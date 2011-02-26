@@ -82,8 +82,6 @@ struct pktbuf *pkb_create(ulong bufsize)
 {
 	struct pktbuf *pkb; 
 	void *xmp, *dp;
-	int i;
-	struct xpkthdr *xh;
 	int pl;
 
 	/* calculate the total size of the buffer */
@@ -118,18 +116,30 @@ struct pktbuf *pkb_create(ulong bufsize)
 	pkb->bufsize = bufsize;
 	pkb->xpkt = xmp;
 	pkb->xsize = pkb_xpkt_pool_size;
-	pkb->xhlen = 0;
+	pkb_reset(pkb);
 
-	prp_init_parse(&pkb->prp, dp, bufsize);
+	return pkb;
+}
+
+
+void pkb_reset(struct pktbuf *pkb)
+{
+	int i;
+	struct xpkthdr *xh;
+
+	abort_unless(pkb);
+
+	pkb->xhlen = 0;
+	pkb->flags = 0;
+
+	prp_init_parse(&pkb->prp, pkb->buf, pkb->bufsize);
 	for (i = 0; i < PKB_LAYER_NUM; ++i)
 		pkb->layers[i] = NULL;
 
-	xh = (struct xpkthdr *)xmp;
+	xh = &pkb->xpkt->hdr;
 	xh->len = XPKT_HLEN;
 	xh->dltype = DLT_NONE;
 	xh->tlen = 0;
-
-	return pkb;
 }
 
 
@@ -204,6 +214,13 @@ ulong pkb_get_len(struct pktbuf *pkb)
 }
 
 
+ulong pkb_get_bufsize(struct pktbuf *pkb)
+{
+	abort_unless(pkb);
+	return prp_eoff(&pkb->prp);
+}
+
+
 uint16_t pkb_get_dltype(struct pktbuf *pkb)
 {
 	abort_unless(pkb && pkb->xpkt);
@@ -261,7 +278,7 @@ void *pkb_data(struct pktbuf *pkb)
 
 #define HPADMIN		192
 #define TPADMIN		192
-int pkb_file_read(FILE *fp, struct pktbuf **pkbp)
+int pkb_file_read(struct pktbuf **pkbp, FILE *fp)
 {
 	struct xpkthdr xh;
 	int errval;
@@ -331,7 +348,7 @@ err_have_buf:
 }
 
 
-int pkb_fd_read(int fd, struct pktbuf **pkbp)
+int pkb_fd_read(struct pktbuf **pkbp, int fd)
 {
 	struct xpkthdr xh;
 	int errval;
@@ -460,7 +477,7 @@ int pkb_is_packed(struct pktbuf *pkb)
 }
 
 
-int pkb_file_write(FILE *fp, struct pktbuf *pkb)
+int pkb_file_write(struct pktbuf *pkb, FILE *fp)
 {
 	size_t nw;
 	long doff, dlen;
@@ -486,7 +503,7 @@ int pkb_file_write(FILE *fp, struct pktbuf *pkb)
 }
 
 
-int pkb_fd_write(int fd, struct pktbuf *pkb)
+int pkb_fd_write(struct pktbuf *pkb, int fd)
 {
 	ssize_t nw;
 	long doff, dlen;
@@ -708,7 +725,8 @@ int pkb_find_tag_idx(struct pktbuf *pkb, struct xpkt_tag_hdr *xth)
 
 int pkb_add_tag(struct pktbuf *pkb, struct xpkt_tag_hdr *xth)
 {
-	long mlen;
+	ulong mlen;
+
 	abort_unless(pkb && xth);
 	if ((pkb->flags & PKB_F_PACKED))
 		return -1; 

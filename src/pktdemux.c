@@ -80,7 +80,7 @@ int main(int argc, char *argv[])
 
 	pkb_init(1);
 
-	while ((rv = pkb_fd_read(0, &p)) > 0) {
+	while ((rv = pkb_fd_read(&p, 0)) > 0) {
 		++g_npkts;
 		fd = 1;
 		xif = (struct xpkt_tag_iface *)
@@ -96,7 +96,7 @@ int main(int argc, char *argv[])
 		if (bset_test(g_fdok, fd)) {
 			rv = pkb_pack(p);
 			abort_unless(rv == 0);
-			if (pkb_fd_write(fd, p) < 0)
+			if (pkb_fd_write(p, fd) < 0)
 				errsys("Error writing packet %lu to %u\n",
 				       g_npkts, fd);
 		}

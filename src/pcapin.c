@@ -147,7 +147,7 @@ int main(int argc, char *argv[])
 		memcpy(p->buf, packet, pcapph.caplen);
 		rv = pkb_pack(p);
 		abort_unless(rv == 0);
-		if (pkb_fd_write(1, p) < 0)
+		if (pkb_fd_write(p, 1) < 0)
 			errsys("pkb_fd_write: ");
 		pkb_unpack(p);
 

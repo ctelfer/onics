@@ -75,7 +75,7 @@ void setmeta(struct pcap_pkthdr *ph, struct pktbuf *p)
 		ph->ts.tv_usec = 0;
 	}
 
-	si = (struct xpkt_tag_snapinfo *) pkb_find_tag(p, XPKT_TAG_SNAPINFO, 0);
+	si = (struct xpkt_tag_snapinfo *)pkb_find_tag(p, XPKT_TAG_SNAPINFO, 0);
 	if (si)
 		ph->len = si->wirelen;
 	else
@@ -97,7 +97,7 @@ int main(int argc, char *argv[])
 
 	pkb_init(1);
 
-	if ((rv = pkb_file_read(g_file, &p)) <= 0) {
+	if ((rv = pkb_file_read(&p, g_file)) <= 0) {
 		if (rv == 0)
 			return 0;
 		if (rv < 0)
@@ -144,7 +144,7 @@ int main(int argc, char *argv[])
 		}
 		pkb_free(p);
 		++pktnum;
-	} while ((rv = pkb_file_read(g_file, &p)) > 0);
+	} while ((rv = pkb_file_read(&p, g_file)) > 0);
 
 	if (rv < 0)
 		errsys("pkb_file_read: ");

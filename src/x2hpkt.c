@@ -1,9 +1,8 @@
 #include <stdio.h>
 #include <ctype.h>
 #include <limits.h>
-#include <cat/err.h>
 #include <cat/optparse.h>
-#include <cat/stduse.h>
+#include <cat/err.h>
 #include "util.h"
 #include "pktbuf.h"
 #include "ns.h"
@@ -19,7 +18,6 @@ byte_t *g_p;
 
 struct clopt g_optarr[] = {
 	CLOPT_INIT(CLOPT_NOARG, 'x', "--keep-xhdr", "keep xpkt hdr in dump"),
-	CLOPT_INIT(CLOPT_STRING, 'f', "--file", "file to read from"),
 	CLOPT_INIT(CLOPT_NOARG, 'h', "--help", "print help")
 };
 
@@ -57,10 +55,8 @@ void parse_options()
 	}
 	if (rv < 0)
 		usage(g_oparser.errbuf);
-	if (rv < g_oparser.argc)
-		usage("Extra arguments present");
-	if (pktfile != NULL) {
-		if ((g_file = fopen(pktfile, "r")) == NULL)
+	if (rv < g_oparser.argc) {
+		if ((g_file = fopen(g_oparser.argv[rv], "r")) == NULL)
 			errsys("fopen: ");
 	} else {
 		g_file = stdin;
@@ -70,7 +66,7 @@ void parse_options()
 
 void printsep()
 {
-	printf("###\n");
+	printf("#####\n");
 }
 
 
@@ -78,7 +74,8 @@ void print_unparsed(ulong soff, ulong eoff, const char *pfx)
 {
 	if (soff < eoff) {
 		printf("%s Data -- %lu bytes [%lu, %lu]\n", pfx, 
-		       eoff - soff, soff, eoff);
+		       eoff - soff, soff - g_pbase + g_ioff, 
+		       eoff - g_pbase + g_ioff);
 		hexdump(stdout, soff - g_pbase + g_ioff, g_p + soff, 
 			eoff - soff);
 	}
@@ -219,6 +216,7 @@ ulong walk_parse(struct prparse *from, struct prparse *region, ulong off)
 void dump_to_hex_packet(struct pktbuf *pkb)
 {
 	struct prparse *prp;
+	int rv;
 
 	g_len = pkb_get_len(pkb);
 	g_p = pkb->buf;
@@ -232,12 +230,15 @@ void dump_to_hex_packet(struct pktbuf *pkb)
 		printsep();
 		printf("# Packet %lu -- %lu bytes\n", g_pktnum, g_len + g_ioff);
 		printsep();
-		printf("# X-Packet Header %lu bytes\n", g_ioff);
+		printf("# eX-Packet Header %lu bytes\n", g_ioff);
 		printsep();
 
 		/* TODO: write up parsing for tags */
+
+		if ((rv = pkb_pack(pkb)) < 0)
+			err("Error packing packet %lu: %d\n", g_pktnum, rv);
 		hexdump(stdout, 0, (byte_t *)xp, g_ioff);
-		printsep();
+		pkb_unpack(pkb);
 	} else {
 		g_ioff = 0;
 		printsep();
@@ -262,7 +263,7 @@ int main(int argc, char *argv[])
 
 	pkb_init(1);
 
-	while ((rv = pkb_file_read(g_file, &pkb)) > 0) {
+	while ((rv = pkb_file_read(&pkb, g_file)) > 0) {
 		++g_pktnum;
 		pkb_parse(pkb);
 		dump_to_hex_packet(pkb);
