@@ -1410,7 +1410,7 @@ static struct ns_pktfld ipv4_ns_ecn =
 		"ECN:                  %lx", &ns_fmt_num);
 static struct ns_pktfld ipv4_ns_len =
 	NS_BYTEFIELD_I("len", &ipv4_ns, PPT_IPV4, 2, 2,
-		"Total Length:         %lx bytes", &ns_fmt_num);
+		"Total Length:         %lu bytes", &ns_fmt_num);
 static struct ns_pktfld ipv4_ns_id =
 	NS_BYTEFIELD_I("id", &ipv4_ns, PPT_IPV4, 4, 2,
 		"Identifier:           %lx", &ns_fmt_num);
@@ -1808,7 +1808,7 @@ struct ns_elem *stdproto_tcp_ns_elems[STDPROTO_NS_ELEN] = {
 	(struct ns_elem *)&tcp_ns_sport, (struct ns_elem *)&tcp_ns_dport,
 	(struct ns_elem *)&tcp_ns_seqn, (struct ns_elem *)&tcp_ns_ackn,
 	(struct ns_elem *)&tcp_ns_doff, (struct ns_elem *)&tcp_ns_resv,
-	(struct ns_elem *)&tcp_ns_ece, (struct ns_elem *)&tcp_ns_cwr, 
+	(struct ns_elem *)&tcp_ns_cwr, (struct ns_elem *)&tcp_ns_ece, 
 	(struct ns_elem *)&tcp_ns_urg, (struct ns_elem *)&tcp_ns_ack, 
 	(struct ns_elem *)&tcp_ns_psh, (struct ns_elem *)&tcp_ns_rst, 
 	(struct ns_elem *)&tcp_ns_syn, (struct ns_elem *)&tcp_ns_fin, 

@@ -18,7 +18,8 @@ TARGETS=${BINDIR}/pcapin \
 	${BINDIR}/pcapout \
 	${BINDIR}/pktdemux \
 	${BINDIR}/pktmux \
-	${BINDIR}/pktrel
+	${BINDIR}/pktrel \
+	${BINDIR}/x2hpkt
 
 all: ${LIBOBJS} ${TARGETS}
 
@@ -40,6 +41,15 @@ ${BINDIR}/pktdemux: pktdemux.o pktbuf.o xpkt.o protoparse.o
 
 ${BINDIR}/pktrel: pktrel.o pktbuf.o xpkt.o protoparse.o
 	${CC} -o ../bin/pktrel pktrel.o pktbuf.o xpkt.o protoparse.o \
+		${DEFS} ${OPTS} ${INCS} ${LIBS}
+
+${BINDIR}/x2hpkt: x2hpkt.o pktbuf.o xpkt.o protoparse.o stdproto.o util.o ns.o
+	${CC} -o ../bin/x2hpkt x2hpkt.o pktbuf.o xpkt.o protoparse.o stdproto.o\
+		util.o ns.o \
+		${DEFS} ${OPTS} ${INCS} ${LIBS}
+
+${BINDIR}/h2xpkt: h2xpkt.o pktbuf.o xpkt.o protoparse.o stdproto.o
+	${CC} -o ../bin/h2xpkt h2xpkt.o pktbuf.o xpkt.o protoparse.o stdproto.o\
 		${DEFS} ${OPTS} ${INCS} ${LIBS}
 
 .c.o: $<

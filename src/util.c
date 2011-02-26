@@ -64,7 +64,7 @@ ulong getbits(const byte_t * p, ulong bitoff, uint bitlen)
 	bitoff &= 7;
 
 	/* extract header from first byte */
-	v = *p & RIGHTMASK(bitoff);
+	v = *p++ & RIGHTMASK(bitoff);
 	n = bitoff + bitlen;
 	if (n < 8) {
 		v &= LEFTMASK(n);
@@ -157,26 +157,33 @@ void setbit(byte_t * p, ulong n, int v)
 void hexdump(FILE *out, ulong addr, byte_t *p, ulong len)
 {
 	int i;
+	ulong aoff = 0;
 
-	while (len > 8) { 
-		fprintf(out, "%010lx:    %02x %02x %02x %02x %02x %02x %02x %02x"
-			     "    |%c%c%c%c%c%c%c%c|\n",
-			addr, p[0], p[1], p[2], p[3], p[4], p[5], p[6], p[7],
+	while (len > 16) { 
+		fprintf(out, "    %06lx:  "
+			     "%02x %02x %02x %02x %02x %02x %02x %02x "
+			     "%02x %02x %02x %02x %02x %02x %02x %02x  "
+			     "|%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c|\n", addr+aoff,
+			p[0], p[1], p[2], p[3], p[4], p[5], p[6], p[7],
+			p[8], p[9], p[10], p[11], p[12], p[13], p[14], p[15],
 			CHOF(p[0]), CHOF(p[1]), CHOF(p[2]), CHOF(p[3]),
-			CHOF(p[4]), CHOF(p[5]), CHOF(p[6]), CHOF(p[7]));
-		p += 8;
-		len -= 8;
+			CHOF(p[4]), CHOF(p[5]), CHOF(p[6]), CHOF(p[7]),
+			CHOF(p[8]), CHOF(p[9]), CHOF(p[10]), CHOF(p[11]),
+			CHOF(p[12]), CHOF(p[13]), CHOF(p[14]), CHOF(p[15]));
+		p += 16;
+		len -= 16;
+		aoff += 16;
 	}
 
 	if (len > 0) {
-		fprintf(out, "%010lx:    ", addr);
+		fprintf(out, "    %06lx:  ", addr + aoff);
 		for (i = 0; i < len; ++i)
 			fprintf(out, "%02x ", p[i]);
-		for (; i < 8; ++i)
+		for (; i < 16; ++i)
 			fprintf(out, "   ");
-		fprintf(out, "   |");
+		fprintf(out, " |");
 		for (i = 0; i < len; ++i)
 			fprintf(out, "%c", CHOF(p[i]));
-		fprintf(out, "\n");
+		fprintf(out, "|\n");
 	}
 }

@@ -136,7 +136,7 @@ void pkb_popprp(struct pktbuf *pkb, int fromfront);
 /* Obtain the xpkt for a packet buffer to manipulate the tags.  */
 /* This will return NULL if the packet buffer is packed.  */
 /* Also, one must NOT modify the xpkt header fields (directly). */
-struct xpkt *pkb_get_xkpt(struct pktbuf *pkb);
+struct xpkt *pkb_get_xpkt(struct pktbuf *pkb);
 
 /* Iterate to the next tag in the packet buffer */
 struct xpkt_tag_hdr *pkb_next_tag(struct pktbuf *pkb, struct xpkt_tag_hdr *t);

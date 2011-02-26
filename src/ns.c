@@ -112,6 +112,28 @@ struct ns_elem *ns_lookup(struct ns_namespace *ns, const char *name)
 }
 
 
+struct ns_namespace *ns_lookup_by_type(struct ns_namespace *ns, uint ppt)
+{
+	struct ns_elem **elem = NULL, **end;
+
+	if (!ns)
+		ns = &rootns;
+
+	elem = ns->elems;
+	for (elem = ns->elems, end = elem + ns->nelem ; elem < end; ++elem) {
+		if (*elem == NULL)
+			break;
+		if ((*elem)->type == NST_NAMESPACE) {
+			ns = (struct ns_namespace *)*elem;
+			if (ns->ppt == ppt)
+				return ns;
+		}
+	}
+
+	return NULL;
+}
+
+
 static int pf_get_offlen(struct ns_pktfld *pf, struct prparse *prp, 
 		       ulong *off, ulong *len)
 {
@@ -164,7 +186,7 @@ static int ns_get_offlen(struct ns_namespace *ns, struct prparse *prp,
 			return -1;
 		if (prp->offs[ns->len] <= prp->offs[ns->oidx])
 			return -1;
-		*len = prp->offs[ns->len] <= prp->offs[ns->oidx];
+		*len = prp->offs[ns->len] - prp->offs[ns->oidx];
 	} else {
 		*len = ns->len;
 	} 

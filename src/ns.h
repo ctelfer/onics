@@ -170,6 +170,7 @@ struct ns_maskstr {
 int ns_add_elem(struct ns_namespace *ns, struct ns_elem *e);
 void ns_rem_elem(struct ns_elem *e);
 struct ns_elem *ns_lookup(struct ns_namespace *ns, const char *name);
+struct ns_namespace *ns_lookup_by_type(struct ns_namespace *ns, uint ppt);
 
 
 
