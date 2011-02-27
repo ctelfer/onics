@@ -15,9 +15,11 @@ ulong g_ioff;
 ulong g_pbase;
 ulong g_len;
 byte_t *g_p;
+int g_do_flush = 0;
 
 struct clopt g_optarr[] = {
 	CLOPT_INIT(CLOPT_NOARG, 'x', "--keep-xhdr", "keep xpkt hdr in dump"),
+	CLOPT_INIT(CLOPT_NOARG, 'f', "--flush-out", "Flush output per packet"),
 	CLOPT_INIT(CLOPT_NOARG, 'h', "--help", "print help")
 };
 
@@ -40,14 +42,13 @@ void parse_options()
 {
 	int rv;
 	struct clopt *opt;
-	const char *pktfile = NULL;
 	while (!(rv = optparse_next(&g_oparser, &opt))) {
 		switch (opt->ch) {
 		case 'x':
 			g_keep_xhdr = 1;
 			break;
 		case 'f':
-			pktfile = opt->val.str_val;
+			g_do_flush = 1;
 			break;
 		case 'h':
 			usage(NULL);
@@ -249,6 +250,8 @@ void dump_to_hex_packet(struct pktbuf *pkb)
 	walk_parse(prp, prp, prp_poff(prp));
 
 	printf("\n\n");
+	if (g_do_flush)
+		fflush(stdout);
 }
 
 
