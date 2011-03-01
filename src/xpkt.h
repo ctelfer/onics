@@ -10,12 +10,11 @@
 
 /*
  * Format:  
- *  - packet_len(4) 		- must be >= tag len + offset(dltype) + 8
+ *  - packet_len(4) 		- must be >= tag len * 4 + 8
  *  - dltype(2)			- one of dltype.h: not INVALID
- *  - tag_len(2)		- 0 - 65532.  Must be multiple of 4.
- *  - tags(tag_len)
- *  - dltype offset padding	- depends on dltype but should be in 0-7
- *  - payload(packet_len - tag_len - offset(dltype) - 8)
+ *  - tag_len(2)		- 0 - 65535.  number of tag 4-byte words
+ *  - tags(tag_len * 4)
+ *  - payload(packet_len - tag_len - 8)
  */
 #define XPKT_HLEN	8
 #define XPKT_TAG_MINW	1
