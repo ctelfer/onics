@@ -22,6 +22,7 @@ struct eth2h {
 #define ETHTYPE_IP              0x0800
 #define ETHTYPE_IPV6            0x86DD
 #define ETHTYPE_ARP             0x0806
+#define ETHTYPE_VLAN            0x8100
 #define ETHHLEN                 14
 
 
@@ -267,14 +268,16 @@ struct ipv4h {
 #define IPOPTC_DBG              0x2
 #define IPOPTC_RES2             0x3
 
-#define IPOPT_OPTION(ipoptp)    ((*(byte_t*)ipoptp) & 0x1F)
+#define IPOPT_CODE(ipoptp)	((*(byte_t*)ipoptp) & 0x1F)
 #define IPOPT_EOP               0	/* end of options */
 #define IPOPT_NOP               1	/* no op */
-#define IPOPT_LSR               3	/* loose source route */
-#define IPOPT_TS                4	/* timestamp */
+#define IPOPT_SEC               130	/* security tag */
+#define IPOPT_LSR               131	/* loose source route */
+#define IPOPT_TS                68	/* timestamp */
 #define IPOPT_RR                7	/* record route */
-#define IPOPT_SID               9	/* stream ID */
-#define IPOPT_SSR               10	/* strict source route */
+#define IPOPT_SID               136	/* stream ID */
+#define IPOPT_SSR               137	/* strict source route */
+#define IPOPT_RA		148	/* router alert */
 
 #define IP_CLASSA(addrp)        ((*(byte_t*) & 0x80) == 0x0)
 #define IP_CLASSB(addrp)        ((*(byte_t*) & 0xC0) == 0x80)
