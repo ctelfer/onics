@@ -19,28 +19,34 @@ extern struct prparse_ops udp_prparse_ops;
 extern struct prparse_ops tcp_prparse_ops;
 
 
-struct ipv6_parse {
+struct eth_parse {
 	struct prparse prp;
-	uint8_t nexth;
-	long jlenoff;
+	ulong xfields[PRP_ETH_NXFIELDS];
 };
 
 
 struct arp_parse {
 	struct prparse prp;
-	long xfields[PRP_ARP_NXFIELDS];
+	ulong xfields[PRP_ARP_NXFIELDS];
 };
 
 
 struct ip_parse {
 	struct prparse prp;
-	long xfields[PRP_IP_NXFIELDS];
+	ulong xfields[PRP_IP_NXFIELDS];
+};
+
+
+struct ipv6_parse {
+	struct prparse prp;
+	uint8_t nexth;
+	ulong jlenoff;
 };
 
 
 struct tcp_parse {
 	struct prparse prp;
-	long xfields[PRP_TCP_NXFIELDS];
+	ulong xfields[PRP_TCP_NXFIELDS];
 };
 
 
@@ -173,25 +179,31 @@ static struct prparse *default_copy(struct prparse *oprp, byte_t * buffer)
 
 
 /* -- ops for Ethernet type -- */
-/* TODO: add vlan parsing */
 static struct prparse *eth_parse(struct prparse *pprp, uint * nextppt)
 {
 	struct prparse *prp;
 	ushort etype;
-	struct eth2h *eh;
+	byte_t *p;
+	ulong poff;
+	uint vidx;
 
 	abort_unless(pprp && nextppt);
 
-	prp = newprp(sizeof(*prp), PPT_ETHERNET2, pprp, &eth_prparse_ops, 0);
+	prp = newprp(sizeof(struct eth_parse), PPT_ETHERNET2, pprp, 
+		     &eth_prparse_ops, PRP_ETH_NXFIELDS);
 	if (!prp)
 		return NULL;
 	if (prp_totlen(prp) < ETHHLEN) {
 		prp->error = PPERR_TOOSMALL;
 		*nextppt = PPT_INVALID;
-	} else {
-		prp_poff(prp) = prp_soff(prp) + ETHHLEN;
-		eh = prp_header(prp, struct eth2h);
-		unpack(&eh->ethtype, 2, "h", &etype);
+		return prp;
+	}
+
+	poff = prp_soff(prp) + ETHHLEN;
+	p = prp_header(prp, byte_t) + ETHHLEN - 2;
+	vidx = PRP_ETHFLD_VLAN0;
+	do {
+		unpack(p, 2, "h", &etype);
 		switch (etype) {
 		case ETHTYPE_IP:
 			*nextppt = PPT_IPV4;
@@ -202,10 +214,27 @@ static struct prparse *eth_parse(struct prparse *pprp, uint * nextppt)
 		case ETHTYPE_ARP:
 			*nextppt = PPT_ARP;
 			break;
+		case ETHTYPE_VLAN:
+			if (prp_totlen(prp) <  (poff - prp_soff(prp) + 4)) {
+				prp->error = PPERR_TOOSMALL;
+				*nextppt = PPT_INVALID;
+				return prp;
+			}
+			if (vidx < (PRP_OI_EXTRA + PRP_ETH_NXFIELDS)) {
+				prp->offs[vidx] = poff;
+				vidx += 1;
+			}
+			p += 4;
+			poff += 4;
+			break;
 		default:
 			*nextppt = PPT_INVALID;
 		}
-	}
+	} while (etype == ETHTYPE_VLAN);
+
+	prp_poff(prp) = poff;
+	prp->offs[PRP_ETHFLD_ETYPE] = poff - 2;
+
 	return prp;
 }
 
@@ -246,12 +275,45 @@ static struct prparse *eth_create(byte_t * start, ulong off, ulong len,
 
 static void eth_update(struct prparse *prp)
 {
+	ulong poff;
+	ushort etype;
+	byte_t *p;
+	uint vidx;
+
+	prp->error = 0;
+	resetxfields(prp);
+
 	if (prp_totlen(prp) < ETHHLEN) {
 		prp->error |= PPERR_TOOSMALL;
 		return;
 	}
-	if (prp_hlen(prp) != ETHHLEN)
+	if (prp_hlen(prp) < ETHHLEN) {
 		prp->error |= PPERR_HLEN;
+		return;
+	}
+
+	poff = prp_soff(prp) + ETHHLEN;
+	p = prp_header(prp, byte_t) + ETHHLEN - 2;
+	vidx = PRP_ETHFLD_VLAN0;
+	do {
+		unpack(p, 2, "h", &etype);
+		if (etype == ETHTYPE_VLAN) {
+			if (prp_totlen(prp) <  (poff - prp_soff(prp) + 4)) {
+				prp->error = PPERR_TOOSMALL;
+				return;
+			}
+			if (vidx < (PRP_OI_EXTRA + PRP_ETH_NXFIELDS)) {
+				prp->offs[vidx] = poff;
+				vidx += 1;
+			}
+			p += 4;
+			poff += 4;
+			break;
+		}
+	} while (etype == ETHTYPE_VLAN);
+
+	prp_poff(prp) = poff;
+	prp->offs[PRP_ETHFLD_ETYPE] = poff - 2;
 }
 
 
@@ -287,6 +349,9 @@ static struct prparse *arp_parse(struct prparse *pprp, uint * nextppt)
 
 static void arp_update(struct prparse *prp)
 {
+	prp->error = 0;
+	resetxfields(prp);
+
 	if (prp_totlen(prp) < 8) {
 		prp->error |= PPERR_TOOSMALL;
 		return;
@@ -340,8 +405,88 @@ static struct prparse *arp_copy(struct prparse *oprp, byte_t * buffer)
 	return simple_copy(oprp, sizeof(struct arp_parse), buffer);
 }
 
+
 /* -- ops for IPV4 type -- */
-static struct prparse *ipv4_parse(struct prparse *pprp, uint * nextppt)
+static int ipv4_parse_opt(struct prparse *prp, byte_t *op, size_t olen)
+{
+	byte_t *osave = op;
+	uint oc;
+	uint oidx;
+	uint t;
+	ulong ooff = prp_soff(prp) + 20;
+
+	while (olen > 0) {
+		/* check for type 1 options first */
+		oc = *op;
+		if (oc == IPOPT_EOP) {
+			return 0;
+		} else if (oc == IPOPT_NOP) {
+			olen -= 1;
+			++op;
+			continue;
+		} else if ((olen < 2) || (olen < op[1])) {
+			goto err;
+		}
+
+		/* check type 2 options */
+		switch(oc) {
+		case IPOPT_RR:
+		case IPOPT_LSR:
+		case IPOPT_SSR:
+			if ((op[1] < 7) || ((op[1] & 3) != 3)) {
+				prp->error |= PPERR_OPTERR;
+				return -1;
+			}
+			if (oc == IPOPT_RR) {
+				oidx = PRP_IPFLD_RR;
+			} else if (oc == IPOPT_LSR) {
+				oidx = PRP_IPFLD_LSR;
+			} else {
+				oidx = PRP_IPFLD_SRR;
+			}
+			if (prp->offs[oidx] != PRP_OFF_INVALID)
+				goto err;
+			prp->offs[oidx] = ooff + (op - osave);
+			break;
+		case IPOPT_TS:
+			if ((prp->offs[PRP_IPFLD_TS] != PRP_OFF_INVALID) ||
+			    (op[1] < 4) || (op[1] > 40))
+				goto err;
+			t = (op[3] & 0xF);
+			if ((t != 0) && (t != 1) && (t != 3))
+				goto err;
+			if (((t == 0) && ((op[2] % 4) != 1)) ||
+			    ((t != 0) && ((op[2] % 8) != 5)))
+				goto err;
+			prp->offs[PRP_IPFLD_TS] = ooff + (op - osave);
+			break;
+		case IPOPT_SID:
+			if (op[1] != 4)
+				goto err;
+		case IPOPT_SEC:
+			if (op[1] < 3)
+				goto err;
+			break;
+		case IPOPT_RA:
+			if ((prp->offs[PRP_IPFLD_RA] != PRP_OFF_INVALID) ||
+			    (op[1] != 4))
+				goto err;
+			prp->offs[PRP_IPFLD_RA] = ooff + (op - osave);
+			break;
+		}
+
+		olen -= op[1];
+		op += op[1];
+	}
+
+	return 0;
+err:
+	prp->error |= PPERR_OPTERR;
+	return -1;
+}
+
+
+static struct prparse *ipv4_parse(struct prparse *pprp, uint *nextppt)
 {
 	struct prparse *prp;
 	struct ipv4h *ip;
@@ -349,7 +494,6 @@ static struct prparse *ipv4_parse(struct prparse *pprp, uint * nextppt)
 	ushort iplen;
 	uint16_t sum;
 
-	/* TODO: change size when we add provisions for option parsing */
 	prp = newprp(sizeof(struct ip_parse), PPT_IPV4, pprp, &ipv4_prparse_ops,
 		     PRP_IP_NXFIELDS);
 	if (!prp)
@@ -369,10 +513,8 @@ static struct prparse *ipv4_parse(struct prparse *pprp, uint * nextppt)
 			prp->error |= PPERR_INVALID;
 		prp_poff(prp) = prp_soff(prp) + hlen;
 		unpack(&ip->len, 2, "h", &iplen);
-		if (iplen > prp_totlen(prp))
+		if (iplen != prp_totlen(prp))
 			prp->error |= PPERR_LENGTH;
-		else if (iplen < prp_totlen(prp))
-			prp_toff(prp) = prp_soff(prp) + iplen;
 		sum = ~ones_sum(ip, hlen, 0);
 		if (sum != 0) {
 			prp->error |= PPERR_CKSUM;
@@ -386,7 +528,8 @@ static struct prparse *ipv4_parse(struct prparse *pprp, uint * nextppt)
 				prp->error |= PPERR_INVALID;
 		}
 		if (hlen > 20) {
-			/* TODO: parse IP options */
+			if (ipv4_parse_opt(prp, (byte_t*)(ip+1), hlen-20) < 0)
+				return prp;
 		}
 		*nextppt = PPT_BUILD(PPT_PF_INET, ip->proto);
 	}
@@ -429,7 +572,12 @@ static struct prparse *ipv4_create(byte_t * start, ulong off, ulong len,
 		memset(ip, 0, prp_hlen(prp));
 		ip->vhl = 0x40 | (hlen >> 2);
 		ip->len = hton16(prp_totlen(prp));
-		/* TODO: fill options with noops if header > 20? */
+		if (hlen > 20) {
+			byte_t *p = (byte_t *)(ip + 1);
+			byte_t *end = p + hlen - 20;
+			while (p < end)
+				*p++ = IPOPT_NOP;
+		}
 	}
 	return prp;
 }
@@ -437,16 +585,36 @@ static struct prparse *ipv4_create(byte_t * start, ulong off, ulong len,
 
 static void ipv4_update(struct prparse *prp)
 {
+	ushort iplen;
+	struct ipv4h *ip;
+	ulong tlen;
+
+	prp->error = 0;
 	resetxfields(prp);
-	if (prp_totlen(prp) < 20) {
+	ip = prp_header(prp, struct ipv4h);
+
+	if (IPH_VERSION(*ip) != 4)
+		prp->error |= PPERR_INVALID;
+
+	tlen = prp_totlen(prp);
+	if (tlen < 20) {
 		prp->error |= PPERR_TOOSMALL;
 		return;
 	}
-	if (prp_hlen(prp) < 20) {
+	if ((IPH_HLEN(*ip) < 20) || (IPH_HLEN(*ip) != prp_hlen(prp))) {
 		prp->error |= PPERR_HLEN;
 		return;
 	}
-	/* TODO: parse options */
+	unpack(&ip->len, 2, "h", &iplen);
+	if (tlen != iplen) {
+		prp->error |= PPERR_LENGTH;
+		return;
+	}
+	if (prp_hlen(prp) > 20) {
+		if (ipv4_parse_opt(prp, (byte_t *)(ip+1), prp_hlen(prp)-20)) {
+			return;
+		}
+	}
 }
 
 
@@ -602,12 +770,18 @@ static struct prparse *udp_create(byte_t * start, ulong off, ulong len,
 
 static void udp_update(struct prparse *prp)
 {
+	ushort ulen;
 	if (prp_totlen(prp) < 8) {
 		prp->error = PPERR_TOOSMALL;
 		return;
 	}
 	if (prp_hlen(prp) < 8) {
 		prp->error = PPERR_HLEN;
+		return;
+	}
+	unpack(&prp_header(prp, struct udph)->len, 2, "h", &ulen);
+	if (prp_totlen(prp) < ulen) {
+		prp->error = PPERR_LENGTH;
 		return;
 	}
 }
@@ -620,7 +794,7 @@ static int udp_fixlen(struct prparse *prp)
 	if (prp_plen(prp) > 65527)
 		return -1;
 	pack(&prp_header(prp, struct udph)->len, 2, "h",
-	     (ushort) prp_totlen(prp));
+	     (ushort)prp_totlen(prp));
 	return 0;
 }
 
@@ -640,7 +814,83 @@ static int udp_fixcksum(struct prparse *prp)
 
 
 /* -- TCP functions -- */
-static struct prparse *tcp_parse(struct prparse *pprp, uint * nextppt)
+static int tcp_parse_opt(struct prparse *prp, byte_t *op, size_t olen)
+{
+	byte_t *osave = op;
+	uint oc;
+	ulong ooff = prp_soff(prp) + 20;
+	struct tcph *tcp;
+
+	tcp = prp_header(prp, struct tcph);
+
+	while (olen > 0) {
+		/* Check for type 1 options first */
+		oc = *op;
+		if (oc == TCPOPT_EOP) {
+			return 0;
+		} else if (oc == TCPOPT_NOP) {
+			olen -= 1;
+			++op;
+			continue;
+		} else if ((olen < 2) || (olen < op[1])) {
+			goto err;
+		}
+
+		/* Check type 2 options */
+		switch(oc) {
+		case TCPOPT_MSS:
+			if ((op[1] != 4) || ((tcp->flags & TCPF_SYN) == 0) ||
+			    (prp->offs[PRP_TCPFLD_MSS] != PRP_OFF_INVALID))
+				goto err;
+			prp->offs[PRP_TCPFLD_MSS] = ooff + (op - osave);
+			break;
+		case TCPOPT_WSCALE:
+			if ((op[1] != 3) || ((tcp->flags & TCPF_SYN) == 0) ||
+			    (prp->offs[PRP_TCPFLD_WSCALE] != PRP_OFF_INVALID) ||
+			    (op[2] > 14))
+				goto err;
+			prp->offs[PRP_TCPFLD_WSCALE] = ooff + (op - osave);
+			break;
+		case TCPOPT_SACKOK:
+			if ((op[1] != 2) || ((tcp->flags & TCPF_SYN) == 0) ||
+			    (prp->offs[PRP_TCPFLD_SACKOK] != PRP_OFF_INVALID))
+				goto err;
+			prp->offs[PRP_TCPFLD_SACKOK] = ooff + (op - osave);
+			break;
+		case TCPOPT_SACK:
+			if ((op[1] < 10) || (((op[1] - 2) & 7) != 0) ||
+			    (prp->offs[PRP_TCPFLD_SACK] != PRP_OFF_INVALID))
+				goto err;
+			prp->offs[PRP_TCPFLD_SACK] = ooff + (op - osave);
+			prp->offs[PRP_TCPFLD_SACK_END] = 
+				prp->offs[PRP_TCPFLD_SACK] + op[1];
+			break;
+		case TCPOPT_TSTAMP:
+			if ((op[1] != 10) ||
+			    (prp->offs[PRP_TCPFLD_TSTAMP] != PRP_OFF_INVALID))
+				goto err;
+			prp->offs[PRP_TCPFLD_TSTAMP] = ooff + (op - osave);
+			break;
+		case TCPOPT_MD5:
+			if ((op[1] != 18) ||
+			    (prp->offs[PRP_TCPFLD_MD5] != PRP_OFF_INVALID))
+				goto err;
+			prp->offs[PRP_TCPFLD_MD5] = ooff + (op - osave);
+			break;
+		}
+
+		olen -= op[1];
+		op += op[1];
+	}
+
+	return 0;
+err:
+	prp->error |= PPERR_OPTERR;
+	return -1;
+}
+
+
+static struct prparse *tcp_parse(struct prparse *pprp, uint *nextppt)
 {
 	struct prparse *prp;
 	struct tcph *tcp;
@@ -675,7 +925,8 @@ static struct prparse *tcp_parse(struct prparse *pprp, uint * nextppt)
 		if (pseudo_cksum(prp, IPPROT_TCP) != 0)
 			prp->error |= PPERR_CKSUM;
 		if (hlen > 20) {
-			/* TODO: parse TCP options */
+			if (tcp_parse_opt(prp, (byte_t*)(tcp+1), hlen-20) < 0)
+				return prp;
 		}
 	}
 	return prp;
@@ -722,16 +973,26 @@ static struct prparse *tcp_create(byte_t * start, ulong off, ulong len,
 
 static void tcp_update(struct prparse *prp)
 {
+	struct tcph *tcp;
+	uint hlen;
+
+	prp->error = 0;
 	resetxfields(prp);
+	tcp = prp_header(prp, struct tcph);
+	hlen = TCPH_HLEN(*tcp);
+
 	if (prp_totlen(prp) < 20) {
 		prp->error = PPERR_TOOSMALL;
 		return;
 	}
-	if (prp_hlen(prp) < 20) {
+	if ((prp_hlen(prp) < 20) || (prp_hlen(prp) != hlen)) {
 		prp->error = PPERR_HLEN;
 		return;
 	}
-	/* TODO: parse options */
+	if (hlen > 20) {
+		if (tcp_parse_opt(prp, (byte_t*)(tcp+1), hlen-20) < 0)
+			return;
+	}
 }
 
 
@@ -858,6 +1119,9 @@ static struct prparse *icmp_create(byte_t * start, ulong off, ulong len,
 
 static void icmp_update(struct prparse *prp)
 {
+	prp->error = 0;
+	resetxfields(prp);
+
 	if (prp_totlen(prp) < 8) {
 		prp->error = PPERR_TOOSMALL;
 		return;
@@ -979,11 +1243,10 @@ static struct prparse *ipv6_parse(struct prparse *pprp, uint * nextppt)
 	struct ipv6_parse *ip6prp;
 	struct ipv6h *ip6;
 	ushort paylen;
-	long tlen;
+	ulong tlen;
 
-	prp =
-	    newprp(sizeof(struct ipv6_parse), PPT_IPV6, pprp, &ipv6_prparse_ops,
-		   0);
+	prp = newprp(sizeof(struct ipv6_parse), PPT_IPV6, pprp,
+		     &ipv6_prparse_ops, 0);
 	ip6prp = (struct ipv6_parse *)prp;
 	if (!prp)
 		return NULL;
@@ -1004,8 +1267,9 @@ static struct prparse *ipv6_parse(struct prparse *pprp, uint * nextppt)
 	}
 
 	unpack(&ip6->len, 2, "h", &paylen);
-	if (tlen < (uint32_t) paylen + 40) {
+	if (tlen < (uint32_t)paylen + 40) {
 		prp->error |= PPERR_LENGTH;
+		goto done;
 	}
 
 	/* sets hlen */
@@ -1017,12 +1281,12 @@ static struct prparse *ipv6_parse(struct prparse *pprp, uint * nextppt)
 		unpack(prp_payload(prp) + ip6prp->jlenoff, 4, "w", &jlen);
 		if ((jlen != prp_totlen(prp) - 40) || (jlen < 65536))
 			prp->error |= PPERR_LENGTH;
-	} else if (tlen > (uint32_t) paylen + 40) {
+	} else if (tlen > (uint32_t)paylen + 40) {
 		prp_toff(prp) = prp_soff(prp) + 40 + paylen;
 	}
 	*nextppt = PPT_BUILD(PPT_PF_INET, ip6prp->nexth);
 
- done:
+done:
 	return prp;
 }
 
@@ -1053,9 +1317,8 @@ static struct prparse *ipv6_create(byte_t * start, ulong off, ulong len,
 		if ((hlen != 40) || (plen > 65535) || (hlen + plen != len))
 			return NULL;
 	}
-	prp =
-	    crtprp(sizeof(struct ipv6_parse), PPT_IPV6, start, off, hlen, plen,
-		   0, &ipv6_prparse_ops, 0);
+	prp = crtprp(sizeof(struct ipv6_parse), PPT_IPV6, start, off, hlen, 
+		     plen, 0, &ipv6_prparse_ops, 0);
 	if (prp) {
 		struct ipv6_parse *ip6prp = (struct ipv6_parse *)prp;
 		struct ipv6h *ip6 = prp_header(prp, struct ipv6h);
@@ -1071,7 +1334,21 @@ static struct prparse *ipv6_create(byte_t * start, ulong off, ulong len,
 
 static void ipv6_update(struct prparse *prp)
 {
-	if (prp_totlen(prp) < 40) {
+	struct ipv6_parse *ip6prp;
+	ushort paylen;
+	ulong tlen;
+	struct ipv6h *ip6;
+
+	prp->error = 0;
+	resetxfields(prp);
+	ip6prp = (struct ipv6_parse *)prp;
+	ip6 = prp_header(prp, struct ipv6h);
+
+	if (IPV6H_PVERSION(ip6) != 6)
+		prp->error |= PPERR_INVALID;
+
+	tlen = prp_totlen(prp);
+	if (tlen < 40) {
 		prp->error = PPERR_TOOSMALL;
 		return;
 	}
@@ -1079,7 +1356,21 @@ static void ipv6_update(struct prparse *prp)
 		prp->error = PPERR_HLEN;
 		return;
 	}
-	/* TODO: parse options */
+	unpack(&ip6->len, 2, "h", &paylen);
+	if (tlen < (uint32_t)paylen + 40) {
+		prp->error |= PPERR_LENGTH;
+		return;
+	}
+
+	if (parse_ipv6_opt(ip6prp, ip6, tlen - 40) < 0)
+		return;
+
+	if ((paylen == 0) && (ip6prp->jlenoff > 0)) {
+		unsigned long jlen;
+		unpack(prp_payload(prp) + ip6prp->jlenoff, 4, "w", &jlen);
+		if ((jlen != prp_totlen(prp) - 40) || (jlen < 65536))
+			prp->error |= PPERR_LENGTH;
+	}
 }
 
 
@@ -1181,6 +1472,9 @@ static struct prparse *icmp6_create(byte_t * start, ulong off, ulong len,
 
 static void icmp6_update(struct prparse *prp)
 {
+	prp->error = 0;
+	resetxfields(prp);
+
 	if (prp_totlen(prp) < 8) {
 		prp->error = PPERR_TOOSMALL;
 		return;
@@ -1316,9 +1610,8 @@ struct prparse_ops tcp_prparse_ops = {
 
 #define STDPROTO_NS_ELEN	64
 #define STDPROTO_NS_SUB_ELEN	16
-/* TODO add option fields */
-/* TODO: add vlan fields*/
 
+/* Ethernet Namespace */
 extern struct ns_elem *stdproto_eth2_ns_elems[STDPROTO_NS_ELEN];
 static struct ns_namespace eth2_ns = 
 	NS_NAMESPACE_I("eth", NULL, PPT_ETHERNET2,
@@ -1332,15 +1625,75 @@ static struct ns_pktfld eth2_ns_src =
 	NS_BYTEFIELD_I("src", &eth2_ns, PPT_ETHERNET2, 6, 6,
 		       "Source Address:      %s", &ns_fmt_etha);
 static struct ns_pktfld eth2_ns_ethtype =
-	NS_BYTEFIELD_I("ethtype", &eth2_ns, PPT_ETHERNET2, 12, 2,
+	NS_BYTEFIELD_IDX_I("ethtype", &eth2_ns, PPT_ETHERNET2, 
+			PRP_ETHFLD_ETYPE, 0, 2,
 		       "Ethernet Type:       %04x", &ns_fmt_num);
+
+extern struct ns_elem *stdproto_eth2_vlan0_ns_elems[STDPROTO_NS_SUB_ELEN];
+extern struct ns_elem *stdproto_eth2_vlan1_ns_elems[STDPROTO_NS_SUB_ELEN];
+
+static struct ns_namespace eth2_vlan0_ns = 
+	NS_NAMESPACE_IDX_I("vlan0", &eth2_ns, PPT_ETHERNET2, 
+		PRP_ETHFLD_VLAN0, 4,
+		"Ethernet VLAN 0 -- Length %lu, Offset %lu",
+		stdproto_eth2_vlan0_ns_elems,
+		array_length(stdproto_eth2_vlan0_ns_elems));
+static struct ns_pktfld eth2_vlan0_tpid =
+	NS_BYTEFIELD_IDX_I("tpid", &eth2_vlan0_ns, PPT_ETHERNET2,
+		PRP_ETHFLD_VLAN0, 0, 2,
+	       "Tag Proto ID:        %04x", &ns_fmt_num);
+static struct ns_pktfld eth2_vlan0_pcp =
+	NS_BITFIELD_IDX_I("pcp", &eth2_vlan0_ns, PPT_ETHERNET2,
+		PRP_ETHFLD_VLAN0, 2, 0, 3,
+	       "Priority Code Point: %u", &ns_fmt_num);
+static struct ns_pktfld eth2_vlan0_cfi =
+	NS_BITFIELD_IDX_I("cfi", &eth2_vlan0_ns, PPT_ETHERNET2,
+		PRP_ETHFLD_VLAN0, 2, 3, 1,
+	       "Canonical Field Ind: %u", &ns_fmt_num);
+static struct ns_pktfld eth2_vlan0_vid =
+	NS_BITFIELD_IDX_I("vid", &eth2_vlan0_ns, PPT_ETHERNET2,
+		PRP_ETHFLD_VLAN0, 2, 4, 12,
+	       "VLAN ID:             %u", &ns_fmt_num);
+struct ns_elem *stdproto_eth2_vlan0_ns_elems[STDPROTO_NS_SUB_ELEN] = {
+	(struct ns_elem *)&eth2_vlan0_tpid, (struct ns_elem *)&eth2_vlan0_pcp, 
+	(struct ns_elem *)&eth2_vlan0_cfi, (struct ns_elem *)&eth2_vlan0_vid, 
+};
+
+static struct ns_namespace eth2_vlan1_ns = 
+	NS_NAMESPACE_IDX_I("vlan1", &eth2_ns, PPT_ETHERNET2, 
+		PRP_ETHFLD_VLAN1, 4,
+		"Ethernet VLAN 1 -- Length %lu, Offset %lu",
+		stdproto_eth2_vlan1_ns_elems,
+		array_length(stdproto_eth2_vlan1_ns_elems));
+static struct ns_pktfld eth2_vlan1_tpid =
+	NS_BYTEFIELD_IDX_I("tpid", &eth2_vlan1_ns, PPT_ETHERNET2,
+		PRP_ETHFLD_VLAN1, 0, 2,
+	       "Tag Proto ID:        %04x", &ns_fmt_num);
+static struct ns_pktfld eth2_vlan1_pcp =
+	NS_BITFIELD_IDX_I("pcp", &eth2_vlan1_ns, PPT_ETHERNET2,
+		PRP_ETHFLD_VLAN1, 2, 0, 3,
+	       "Priority Code Point: %u", &ns_fmt_num);
+static struct ns_pktfld eth2_vlan1_cfi =
+	NS_BITFIELD_IDX_I("cfi", &eth2_vlan1_ns, PPT_ETHERNET2,
+		PRP_ETHFLD_VLAN1, 2, 3, 1,
+	       "Canonical Field Ind: %u", &ns_fmt_num);
+static struct ns_pktfld eth2_vlan1_vid =
+	NS_BITFIELD_IDX_I("vid", &eth2_vlan1_ns, PPT_ETHERNET2,
+		PRP_ETHFLD_VLAN1, 2, 4, 12,
+	       "VLAN ID:             %u", &ns_fmt_num);
+struct ns_elem *stdproto_eth2_vlan1_ns_elems[STDPROTO_NS_SUB_ELEN] = {
+	(struct ns_elem *)&eth2_vlan1_tpid, (struct ns_elem *)&eth2_vlan1_pcp, 
+	(struct ns_elem *)&eth2_vlan1_cfi, (struct ns_elem *)&eth2_vlan1_vid, 
+};
 
 struct ns_elem *stdproto_eth2_ns_elems[STDPROTO_NS_ELEN] = {
 	(struct ns_elem *)&eth2_ns_dst, (struct ns_elem *)&eth2_ns_src,
-	(struct ns_elem *)&eth2_ns_ethtype, 
+	(struct ns_elem *)&eth2_ns_ethtype, (struct ns_elem *)&eth2_vlan0_ns,
+	(struct ns_elem *)&eth2_vlan1_ns,
 };
 
 
+/* ARP Namespace */
 extern struct ns_elem *stdproto_arp_ns_elems[STDPROTO_NS_ELEN];
 static struct ns_namespace arp_ns = 
 	NS_NAMESPACE_I("arp", NULL, PPT_ARP, 
@@ -1702,7 +2055,7 @@ static struct ns_pktfld tcp_wscale_len =
 		"Length:               %lu", &ns_fmt_num);
 static struct ns_pktfld tcp_wscale_scale =
 	NS_BYTEFIELD_IDX_I("scale", &tcp_wscale_ns, PPT_TCP, PRP_TCPFLD_WSCALE,
-		2, 2,
+		2, 1,
 		"Window Scale:         %lu", &ns_fmt_num);
 struct ns_elem *stdproto_tcp_wscale_ns_elems[STDPROTO_NS_SUB_ELEN] = {
 	(struct ns_elem *)&tcp_wscale_kind, (struct ns_elem *)&tcp_wscale_len,

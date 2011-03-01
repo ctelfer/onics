@@ -22,14 +22,20 @@ void unregister_std_proto();
 #define PPT_UDP			PPT_BUILD(PPT_PF_INET, IPPROT_UDP)
 
 
+#define PRP_ETH_NXFIELDS	3
+#define PRP_ETHFLD_ETYPE	(PRP_OI_EXTRA + 0)
+#define PRP_ETHFLD_VLAN0	(PRP_OI_EXTRA + 1)
+#define PRP_ETHFLD_VLAN1	(PRP_OI_EXTRA + 2)
+
 #define PRP_ARP_NXFIELDS	1
 #define PRP_ARPFLD_ETHARP	(PRP_OI_EXTRA + 0)
 
-#define PRP_IP_NXFIELDS		4
+#define PRP_IP_NXFIELDS		5
 #define PRP_IPFLD_LSR		(PRP_OI_EXTRA + 0)
 #define PRP_IPFLD_TS		(PRP_OI_EXTRA + 1)
 #define PRP_IPFLD_RR		(PRP_OI_EXTRA + 2)
 #define PRP_IPFLD_SRR		(PRP_OI_EXTRA + 3)
+#define PRP_IPFLD_RA		(PRP_OI_EXTRA + 4)
 
 #define PRP_TCP_NXFIELDS	6
 #define PRP_TCPFLD_MSS		(PRP_OI_EXTRA + 0)
