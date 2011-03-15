@@ -58,23 +58,23 @@ int main(int argc, char *argv[])
 			if (t->error == 0) {
 				printf("\t\tNo errors\n");
 			} else {
-				if ((t->error & PPERR_TOOSMALL)) {
+				if ((t->error & PRP_ERR_TOOSMALL)) {
 					printf("\t\tPacket too small\n");
 					continue;
 				}
-				if ((t->error & PPERR_HLEN)) {
+				if ((t->error & PRP_ERR_HLEN)) {
 					printf("\t\tHeader length error\n");
 					continue;
 				}
-				if ((t->error & PPERR_LENGTH)) {
+				if ((t->error & PRP_ERR_LENGTH)) {
 					printf("\t\tLength field error\n");
 					continue;
 				}
-				if ((t->error & PPERR_CKSUM))
+				if ((t->error & PRP_ERR_CKSUM))
 					printf("\t\tChecksum error\n");
-				if ((t->error & PPERR_OPTLEN))
+				if ((t->error & PRP_ERR_OPTLEN))
 					printf("\t\tOption length error\n");
-				if ((t->error & PPERR_INVALID))
+				if ((t->error & PRP_ERR_INVALID))
 					printf("\t\tInvalid field combination error\n");
 			}
 

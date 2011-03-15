@@ -1,4 +1,4 @@
-# Makefile for the paptools
+# Makefile for the nettools
 CC=gcc
 CATLIB_ROOT=../../catlib
 INCS=-I${CATLIB_ROOT}/include

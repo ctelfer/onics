@@ -132,7 +132,7 @@ void pkb_reset(struct pktbuf *pkb)
 	pkb->xhlen = 0;
 	pkb->flags = 0;
 
-	prp_init_parse(&pkb->prp, pkb->buf, pkb->bufsize);
+	prp_init_parse(&pkb->prp, pkb->bufsize);
 	for (i = 0; i < PKB_LAYER_NUM; ++i)
 		pkb->layers[i] = NULL;
 
@@ -152,7 +152,7 @@ struct pktbuf *pkb_copy(struct pktbuf *opkb)
 
 	if (!(npkb = pkb_create(opkb->bufsize)))
 		return NULL;
-	if (prp_copy(&npkb->prp, &opkb->prp, npkb->buf) < 0) {
+	if (prp_copy(&npkb->prp, &opkb->prp) < 0) {
 		errval = errno;
 		pkb_free(npkb);
 		errno = errval;
@@ -538,7 +538,7 @@ int pkb_parse(struct pktbuf *pkb)
 		return -1;
 
 	ppt = dlt2ppt(pkb->xpkt->hdr.dltype);
-	if (prp_parse_packet(&pkb->prp, ppt) < 0)
+	if (prp_parse_packet(&pkb->prp, pkb->buf, ppt) < 0)
 		return -1;
 
 	for (prp=prp_next(&pkb->prp); !prp_list_end(prp); prp=prp_next(prp))
@@ -651,7 +651,7 @@ void pkb_fix_dltype(struct pktbuf *pkb)
 
 int pkb_pushprp(struct pktbuf *pkb, int ppt)
 {
-	if (prp_push(ppt, prp_prev(&pkb->prp), PPCF_FILL) < 0)
+	if (prp_add(ppt, prp_prev(&pkb->prp), pkb->buf, PRP_ADD_FILL) < 0)
 		return -1;
 	pkb_set_layer(pkb, prp_prev(&pkb->prp), -1);
 	return 0;
@@ -660,7 +660,7 @@ int pkb_pushprp(struct pktbuf *pkb, int ppt)
 
 int pkb_wrapprp(struct pktbuf *pkb, int ppt)
 {
-	if (prp_push(ppt, &pkb->prp, PPCF_FILL) < 0)
+	if (prp_add(ppt, &pkb->prp, pkb->buf, PRP_ADD_FILL) < 0)
 		return -1;
 	pkb_set_layer(pkb, prp_next(&pkb->prp), -1);
 	return 0;

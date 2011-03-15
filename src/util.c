@@ -95,7 +95,7 @@ ulong getbits(const byte_t * p, ulong bitoff, uint bitlen)
  *
  */
 
-void setbits(byte_t * p, ulong bitoff, uint bitlen, ulong val)
+void setbits(byte_t *p, ulong bitoff, uint bitlen, ulong val)
 {
 	int exlen;
 	unsigned char m;
@@ -134,7 +134,7 @@ void setbits(byte_t * p, ulong bitoff, uint bitlen, ulong val)
 }
 
 
-int getbit(const byte_t * p, ulong n)
+int getbit(const byte_t *p, ulong n)
 {
 	abort_unless(p);
 	p += n >> 3;
@@ -142,7 +142,7 @@ int getbit(const byte_t * p, ulong n)
 }
 
 
-void setbit(byte_t * p, ulong n, int v)
+void setbit(byte_t *p, ulong n, int v)
 {
 	abort_unless(p);
 	p += n >> 3;

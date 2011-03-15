@@ -6,13 +6,14 @@
 
 
 static struct proto_parser *_pp_lookup(uint type);
-static struct prparse *none_parse(struct prparse *pprp, uint * nextppt);
-static struct prparse *none_create(byte_t * start, ulong off, ulong len,
-				   ulong hlen, ulong plen, int mode);
+static struct prparse *none_parse(struct prparse *pprp, byte_t *buf, 
+				  uint *nextppt);
+static struct prparse *none_add(ulong off, ulong len, ulong hlen, ulong plen,
+				byte_t *buf, int mode);
 
 static struct proto_parser_ops none_proto_parser_ops = {
 	none_parse,
-	none_create
+	none_add,
 };
 
 struct proto_parser dlt_proto_parsers[PPT_PER_PF];
@@ -28,7 +29,7 @@ int pp_register(unsigned type, struct proto_parser_ops *ppo)
 {
 	struct proto_parser *pp;
 
-	if ((ppo == NULL) || (ppo->parse == NULL) || (ppo->create == NULL)) {
+	if ((ppo == NULL) || (ppo->parse == NULL) || (ppo->add == NULL)) {
 		errno = EINVAL;
 		return -1;
 	}
@@ -72,9 +73,9 @@ static struct proto_parser *_pp_lookup(uint type)
 }
 
 
-const struct proto_parser *pp_lookup(uint type)
+const struct proto_parser *pp_lookup(uint ppt)
 {
-	const struct proto_parser *pp = _pp_lookup(type);
+	const struct proto_parser *pp = _pp_lookup(ppt);
 	if (pp && !pp->valid)
 		pp = NULL;
 	return pp;
@@ -104,10 +105,10 @@ int pp_unregister(uint type)
 
 /* -- ops for the "NONE" protocol type -- */
 
-static void none_update(struct prparse *prp);
-static int none_fixlen(struct prparse *prp);
-static int none_fixcksum(struct prparse *prp);
-static struct prparse *none_copy(struct prparse *oprp, byte_t * buffer);
+static void none_update(struct prparse *prp, byte_t *buf);
+static int none_fixlen(struct prparse *prp, byte_t *buf);
+static int none_fixcksum(struct prparse *prp, byte_t *buf);
+static struct prparse *none_copy(struct prparse *oprp);
 static void none_free(struct prparse *prp);
 
 static struct prparse_ops none_prparse_ops = {
@@ -119,7 +120,8 @@ static struct prparse_ops none_prparse_ops = {
 };
 
 
-static struct prparse *none_parse(struct prparse *pprp, uint * nextppt)
+static struct prparse *none_parse(struct prparse *pprp, byte_t *buf,
+				  uint *nextppt)
 {
 	struct prparse *prp;
 
@@ -127,8 +129,8 @@ static struct prparse *none_parse(struct prparse *pprp, uint * nextppt)
 	abort_unless(nextppt);
 
 	*nextppt = PPT_INVALID;
-	prp = none_create(pprp->data, prp_poff(pprp), prp_plen(pprp),
-			  0, prp_plen(pprp), PPCF_FILL);
+	prp = none_add(prp_poff(pprp), prp_plen(pprp), 0, prp_plen(pprp), 
+		       buf, PRP_ADD_FILL);
 	if (prp != NULL) {
 		prp->region = pprp;
 		l_ins(&pprp->node, &prp->node);
@@ -137,15 +139,14 @@ static struct prparse *none_parse(struct prparse *pprp, uint * nextppt)
 }
 
 
-static void none_init(struct prparse *prp, byte_t *buf, ulong off, ulong len,
-		       ulong hlen, ulong plen)
+static void none_init(struct prparse *prp, ulong off, ulong len, ulong hlen, 
+		      ulong plen)
 {
 	prp->type = PPT_NONE;
 	prp->error = 0;
 	prp->ops = &none_prparse_ops;
 	l_init(&prp->node);
 	prp->region = NULL;
-	prp->data = buf;
 	prp->noff = PRP_OI_MIN_NUM;
 	prp_soff(prp) = off;
 	prp_eoff(prp) = prp_soff(prp) + len;
@@ -158,45 +159,45 @@ static void none_init(struct prparse *prp, byte_t *buf, ulong off, ulong len,
 }
 
 
-static struct prparse *none_create(byte_t * start, ulong off, ulong len,
-				   ulong hlen, ulong plen, int mode)
+static struct prparse *none_add(ulong off, ulong len, ulong hlen, ulong plen,
+				byte_t *buf, int mode)
 {
 	struct prparse *prp;
 
-	if (mode != PPCF_FILL)
+	if (mode != PRP_ADD_FILL)
 		return NULL;
 
 	prp = malloc(sizeof(*prp));
 	if (!prp)
 		return NULL;
 
-	none_init(prp, start, off, len, hlen, plen);
+	none_init(prp, off, len, hlen, plen);
 
 	return prp;
 }
 
 
-static void none_update(struct prparse *prp)
+static void none_update(struct prparse *prp, byte_t *buf)
 {
 }
 
 
-static int none_fixlen(struct prparse *prp)
+static int none_fixlen(struct prparse *prp, byte_t *buf)
 {
 	return 0;
 }
 
 
-static int none_fixcksum(struct prparse *prp)
+static int none_fixcksum(struct prparse *prp, byte_t *buf)
 {
 	return 0;
 }
 
 
-static struct prparse *none_copy(struct prparse *oprp, byte_t * buffer)
+static struct prparse *none_copy(struct prparse *oprp)
 {
-	return none_create(buffer, prp_soff(oprp), prp_totlen(oprp),
-			   prp_hlen(oprp), prp_plen(oprp), PPCF_FILL);
+	return none_add(prp_soff(oprp), prp_totlen(oprp), prp_hlen(oprp),
+			prp_plen(oprp), NULL, PRP_ADD_FILL);
 }
 
 
@@ -229,14 +230,14 @@ int prp_region_empty(struct prparse *reg)
 }
 
 
-void prp_init_parse(struct prparse *base, byte_t *buf, ulong len)
+void prp_init_parse(struct prparse *base, ulong len)
 {
-	abort_unless(base && buf && (len >= 0));
-	none_init(base, buf, 0, len, 0, 0);
+	abort_unless(base && (len >= 0));
+	none_init(base, 0, len, 0, 0);
 }
 
 
-int prp_parse_packet(struct prparse *base, uint ippt)
+int prp_parse_packet(struct prparse *base, byte_t *buf, uint ippt)
 {
 	struct prparse *prp;
 	const struct proto_parser *pp;
@@ -253,12 +254,12 @@ int prp_parse_packet(struct prparse *base, uint ippt)
 	prp = base;
 	do {
 		nextppt = PPT_INVALID;
-		if (!(prp = (*pp->ops->parse)(prp, &nextppt))) {
+		if (!(prp = (*pp->ops->parse)(prp, buf, &nextppt))) {
 			errval = errno;
 			goto err;
 		}
 		/* don't continue parsing if the lengths are screwed up */
-		if ((prp->error & PPERR_HLENMASK) || !prp_plen(prp))
+		if ((prp->error & PRP_ERR_HLENMASK) || !prp_plen(prp))
 			break;
 		pp = pp_lookup(nextppt);
 	} while (pp);
@@ -272,13 +273,13 @@ int prp_parse_packet(struct prparse *base, uint ippt)
 }
 
 
-int prp_push(unsigned ppidx, struct prparse *pprp, int mode)
+int prp_add(unsigned ppt, struct prparse *pprp, byte_t *buf, int mode)
 {
 	const struct proto_parser *pp;
 	ulong off, len, plen, hlen;
 	struct prparse *prp, *next = NULL;
 
-	pp = pp_lookup(ppidx);
+	pp = pp_lookup(ppt);
 	if (!pp || !pprp) {
 		errno = EINVAL;
 		return -1;
@@ -286,10 +287,10 @@ int prp_push(unsigned ppidx, struct prparse *pprp, int mode)
 
 	off = prp_poff(pprp);
 	len = prp_plen(pprp);
-	if (mode == PPCF_FILL) {
+	if (mode == PRP_ADD_FILL) {
 		hlen = 0;
 		plen = 0;
-	} else if (mode == PPCF_WRAP) {
+	} else if (mode == PRP_ADD_WRAP) {
 		ulong t;
 		if (prp_region_empty(pprp)) {
 			errno = EINVAL;
@@ -300,7 +301,7 @@ int prp_push(unsigned ppidx, struct prparse *pprp, int mode)
 		hlen = t - off;
 		off = t;
 		plen = prp_totlen(next);
-	} else if (mode == PPCF_WRAPFILL) {
+	} else if (mode == PRP_ADD_WRAPFILL) {
 		next = prp_next(pprp);
 		/* ensure list is non-empty and both prev and next are in the */
 		/* same region.  The prev parse must enclose the next parse */
@@ -315,7 +316,7 @@ int prp_push(unsigned ppidx, struct prparse *pprp, int mode)
 		return -1;
 	}
 
-	prp = (*pp->ops->create)(pprp->data, off, len, hlen, plen, mode);
+	prp = (*pp->ops->add)(off, len, hlen, plen, buf, mode);
 	if (prp == NULL)
 		return -1;
 	prp->region = pprp;
@@ -414,24 +415,23 @@ void prp_free_region(struct prparse *prp)
 }
 
 
-int prp_copy(struct prparse *nprp, struct prparse *oprp, byte_t *buffer)
+int prp_copy(struct prparse *nprp, struct prparse *oprp)
 {
 	struct prparse *trav, *last, *aprp, *oreg, *nreg;
 	int errval;
 
-	if (!nprp || !oprp || !buffer || oprp->region != NULL) {
+	if (!nprp || !oprp || oprp->region != NULL) {
 		errno = EINVAL;
 		return -1;
 	}
 
 	*nprp = *oprp;
-	nprp->data = NULL;
 	l_init(&nprp->node);
 
 	for (last = nprp, trav = prp_next(oprp); !prp_list_end(trav);
 	     last = aprp, trav = prp_next(trav)) {
 		abort_unless(oprp->ops && oprp->ops->copy);
-		if (!(aprp = (*trav->ops->copy) (trav, buffer))) {
+		if (!(aprp = (*trav->ops->copy)(trav))) {
 			errval = errno;
 			goto err;
 		}
@@ -463,34 +463,25 @@ err:
 }
 
 
-void prp_set_packet_buffer(struct prparse *prp, byte_t * buffer)
-{
-	while (prp) {
-		prp->data = buffer;
-		prp = prp_next(prp);
-	}
-}
-
-
-unsigned int prp_update(struct prparse *prp)
+uint prp_update(struct prparse *prp, byte_t *buf)
 {
 	abort_unless(prp && prp->ops && prp->ops->update);
-	(*prp->ops->update) (prp);
+	(*prp->ops->update)(prp, buf);
 	return prp->error;
 }
 
 
-int prp_fix_cksum(struct prparse *prp)
+int prp_fix_cksum(struct prparse *prp, byte_t *buf)
 {
 	abort_unless(prp && prp->ops && prp->ops->fixcksum);
-	return (*prp->ops->fixcksum) (prp);
+	return (*prp->ops->fixcksum)(prp, buf);
 }
 
 
-int prp_fix_len(struct prparse *prp)
+int prp_fix_len(struct prparse *prp, byte_t *buf)
 {
 	abort_unless(prp && prp->ops && prp->ops->fixlen);
-	return (*prp->ops->fixlen) (prp);
+	return (*prp->ops->fixlen)(prp, buf);
 }
 
 
@@ -525,7 +516,8 @@ static void ubounds(struct prparse *reg, ulong *low, ulong *high)
 }
 
 
-int prp_insert(struct prparse *prp, ulong off, ulong len, int moveup)
+int prp_insert(struct prparse *prp, byte_t *buf, ulong off, ulong len,
+	       int moveup)
 {
 	byte_t *op, *np;
 	ulong mlen;
@@ -553,8 +545,8 @@ int prp_insert(struct prparse *prp, ulong off, ulong len, int moveup)
 			return -1;
 		}
 
-		if (prp->data != NULL) {
-			op = prp->data + off;
+		if (buf != NULL) {
+			op = buf + off;
 			np = op + len;
 			mlen = prp_toff(prp) - off;
 			memmove(np, op, mlen);
@@ -580,8 +572,8 @@ int prp_insert(struct prparse *prp, ulong off, ulong len, int moveup)
 			return -1;
 		}
 
-		if (prp->data != NULL) {
-			op = prp->data + prp_poff(prp);
+		if (buf != NULL) {
+			op = buf + prp_poff(prp);
 			np = op - len;
 			mlen = off - prp_poff(prp);
 			memmove(np, op, mlen);
@@ -604,7 +596,7 @@ int prp_insert(struct prparse *prp, ulong off, ulong len, int moveup)
 }
 
 
-int prp_cut(struct prparse *prp, ulong off, ulong len, int moveup)
+int prp_cut(struct prparse *prp, byte_t *buf, ulong off, ulong len, int moveup)
 {
 	byte_t *op, *np;
 	ulong mlen;
@@ -631,10 +623,10 @@ int prp_cut(struct prparse *prp, ulong off, ulong len, int moveup)
 	}
 
 	if (moveup) {
-		if (prp->data != NULL) {
-			op = prp->data + prp_poff(prp);
+		if (buf != NULL) {
+			op = buf + prp_poff(prp);
 			mlen = off - prp_poff(prp);
-			np = prp->data + off + len - mlen;
+			np = buf + off + len - mlen;
 			memmove(np, op, mlen);
 			memset(op, 0x3C, len);
 		}
@@ -654,8 +646,8 @@ int prp_cut(struct prparse *prp, ulong off, ulong len, int moveup)
 			}
 		}
 	} else {
-		if (prp->data != NULL) {
-			np = prp->data + off;
+		if (buf != NULL) {
+			np = buf + off;
 			op = np + len;
 			mlen = prp_toff(prp) - off - len;
 			memmove(np, op, mlen);

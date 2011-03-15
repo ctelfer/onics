@@ -98,10 +98,10 @@ void netvm_get_prp_ptr(struct netvm *vm, struct netvm_inst *inst, int onstack,
 	struct prparse *prp;
 	uint oidx;
 	uint64_t off;
+	int pktnum;
+	struct pktbuf *pkb;
 
 	if (onstack && inst->z != 0) {
-		int pktnum;
-		struct pktbuf *pkb;
 
 		/* pd0.pktnum = inst->y & ~NETVM_SEG_ISPKT; */
 		/* pd0.idx = 0; pd0.ptype = PPT_NONE; */
@@ -123,6 +123,7 @@ void netvm_get_prp_ptr(struct netvm *vm, struct netvm_inst *inst, int onstack,
 		if ((pd0.field < NETVM_PRP_OFF_BASE) || (oidx >= prp->noff))
 			VMERR(vm, NETVM_ERR_PRPFLD);
 		FATAL(vm, NETVM_ERR_PKTADDR, (prp->offs[oidx] == PRP_OFF_INVALID));
+		pkb = vm->packets[pd0.pktnum];
 	}
 
 	FATAL(vm, NETVM_ERR_IOVFL, (pd0.offset + width < pd0.offset));
@@ -132,7 +133,7 @@ void netvm_get_prp_ptr(struct netvm *vm, struct netvm_inst *inst, int onstack,
 	FATAL(vm, NETVM_ERR_PKTADDR, off + width > prp_eoff(prp));
 
 	abort_unless(p);
-	*p = prp->data + off;
+	*p = pkb->buf + off;
 }
 
 
@@ -395,7 +396,7 @@ void netvm_get_pkt_ptr(struct netvm *vm, uint8_t pkt, uint64_t addr, int iswr,
 	FATAL(vm, NETVM_ERR_PKTADDR, addr < prp_poff(prp));
 	FATAL(vm, NETVM_ERR_PKTADDR, addr > prp_toff(prp));
 	FATAL(vm, NETVM_ERR_PKTADDR, len > prp_toff(prp) - addr);
-	*p = prp->data + addr;
+	*p = pkb->buf + addr;
 }
 
 
@@ -1094,12 +1095,14 @@ static void ni_pkpup(struct netvm *vm)
 	struct netvm_inst *inst = &vm->inst[vm->pc];
 	struct netvm_prp_desc pd0;
 	struct prparse *prp;
+	struct pktbuf *pkb;
 
 	prp = netvm_find_header(vm, &pd0, (inst->op == NETVM_OC_PKPUP));
 	if (vm->error)
 		return;
 	FATAL(vm, NETVM_ERR_NOPRP, prp == NULL);
-	prp_update(prp);
+	pkb = vm->packets[pd0.pktnum];
+	prp_update(prp, pkb->buf);
 }
 
 
@@ -1122,16 +1125,21 @@ static void ni_pkfxl(struct netvm *vm)
 		abort_unless(pkb);
 		if (pkb->layers[PKB_LAYER_XPORT])
 			FATAL(vm, NETVM_ERR_FIXLEN,
-			      prp_fix_len(pkb->layers[PKB_LAYER_XPORT]) < 0);
+			      prp_fix_len(pkb->layers[PKB_LAYER_XPORT], 
+					  pkb->buf) < 0);
 		if (pkb->layers[PKB_LAYER_NET])
 			FATAL(vm, NETVM_ERR_FIXLEN,
-			      prp_fix_len(pkb->layers[PKB_LAYER_NET]) < 0);
+			      prp_fix_len(pkb->layers[PKB_LAYER_NET],
+					  pkb->buf) < 0);
 		if (pkb->layers[PKB_LAYER_DL])
 			FATAL(vm, NETVM_ERR_FIXLEN,
-			      prp_fix_len(pkb->layers[PKB_LAYER_DL]) < 0);
+			      prp_fix_len(pkb->layers[PKB_LAYER_DL],
+					  pkb->buf) < 0);
 	} else {
 		abort_unless(prp);
-		FATAL(vm, NETVM_ERR_FIXLEN, prp_fix_len(prp) < 0);
+		pkb = vm->packets[pd0.pktnum];
+		abort_unless(pkb);
+		FATAL(vm, NETVM_ERR_FIXLEN, prp_fix_len(prp, pkb->buf) < 0);
 	}
 }
 
@@ -1155,16 +1163,21 @@ static void ni_pkfxc(struct netvm *vm)
 		abort_unless(pkb);
 		if (pkb->layers[PKB_LAYER_XPORT])
 			FATAL(vm, NETVM_ERR_CKSUM,
-			      prp_fix_cksum(pkb->layers[PKB_LAYER_XPORT]) < 0);
+			      prp_fix_cksum(pkb->layers[PKB_LAYER_XPORT],
+					    pkb->buf) < 0);
 		if (pkb->layers[PKB_LAYER_NET])
 			FATAL(vm, NETVM_ERR_CKSUM,
-			      prp_fix_cksum(pkb->layers[PKB_LAYER_NET]) < 0);
+			      prp_fix_cksum(pkb->layers[PKB_LAYER_NET],
+					    pkb->buf) < 0);
 		if (pkb->layers[PKB_LAYER_DL])
 			FATAL(vm, NETVM_ERR_CKSUM,
-			      prp_fix_cksum(pkb->layers[PKB_LAYER_DL]) < 0);
+			      prp_fix_cksum(pkb->layers[PKB_LAYER_DL],
+					    pkb->buf) < 0);
 	} else {
 		abort_unless(prp);
-		FATAL(vm, NETVM_ERR_CKSUM, prp_fix_cksum(prp) < 0);
+		pkb = vm->packets[pd0.pktnum];
+		abort_unless(pkb);
+		FATAL(vm, NETVM_ERR_CKSUM, prp_fix_cksum(prp, pkb->buf) < 0);
 	}
 }
 
@@ -1184,7 +1197,7 @@ static void ni_pkins(struct netvm *vm)
 	S_POP(vm, len);
 	FATAL(vm, NETVM_ERR_PKTINS, (len > (ulong)-1));
 	FATAL(vm, NETVM_ERR_PKTINS,
-	      prp_insert(&pkb->prp, pd0.offset, len, inst->x) < 0);
+	      prp_insert(&pkb->prp, pkb->buf, pd0.offset, len, inst->x) < 0);
 }
 
 
@@ -1203,7 +1216,7 @@ static void ni_pkcut(struct netvm *vm)
 	S_POP(vm, len);
 	FATAL(vm, NETVM_ERR_PKTINS, (len > (ulong)-1));
 	FATAL(vm, NETVM_ERR_PKTCUT,
-	      prp_cut(&pkb->prp, pd0.offset, len, inst->x) < 0);
+	      prp_cut(&pkb->prp, pkb->buf, pd0.offset, len, inst->x) < 0);
 }
 
 
