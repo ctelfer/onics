@@ -1,6 +1,6 @@
 %{
-#include "pmllex.h"
 #include "pml.h"
+#include "pmltree.h"
 #include <cat/err.h>
 #include <cat/str.h>
 

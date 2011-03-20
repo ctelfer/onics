@@ -13,7 +13,8 @@ LIBOBJS= ../src/xpkt.o ../src/namespace.o ../src/ncl.o ../src/netvm.o \
 TARGETS= ${BINDIR}/testpp \
 	${BINDIR}/testvm \
 	${BINDIR}/testns \
-	${BINDIR}/testpmllex 
+	${BINDIR}/testpmllex \
+	${BINDIR}/testpmlparse
 
 all: ${TARGETS}
 
@@ -40,6 +41,12 @@ ${BINDIR}/testns: testns.c ../src/ns.o ../src/util.o ../src/stdproto.o \
 
 ${BINDIR}/testpmllex: testpmllex.c ../src/lex.pml.o
 	${CC} -o ../bin/testpmllex testpmllex.c ../src/lex.pml.o \
+		${DEFS} ${OPTS} ${INCS} ${LIBS}
+
+${BINDIR}/testpmlparse: testpmlparse.c ../src/lex.pml.o ../src/pml.o \
+	../src/pmltree.o
+	${CC} -o ../bin/testpmlparse testpmlparse.c ../src/lex.pml.o \
+		../src/pml.o ../src/pmltree.o \
 		${DEFS} ${OPTS} ${INCS} ${LIBS}
 
 ../src/lex.pml.o: ../src/pml.l

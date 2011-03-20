@@ -4,9 +4,11 @@
  */
 #ifndef __pmltree_h
 #define __pmltree_h
+#include <cat/cat.h>
 #include <cat/list.h>
 #include <cat/hash.h>
 #include <stdio.h>
+#include "pml.h"
 
 struct pml_ast {
 	int			error;
@@ -280,5 +282,49 @@ void pml_bytestr_free(struct pml_bytestr *b);
 struct pml_function *pml_ast_lookup_func(struct pml_ast *ast, char *name);
 
 int pml_locator_extend_name(struct pml_locator *l, char *name, size_t len);
+
+
+/* Lexical analyzer definitions */
+
+#define PMLLV_SCALAR	0
+#define PMLLV_STRING	1
+
+struct pml_lex_val {
+	int type;
+	union {
+		byte_t v6addr[16];
+		byte_t ethaddr[6];
+		unsigned long num;
+		byte_t v4addr[4];
+		struct raw raw;
+	} u;
+};
+
+void pml_lexv_init(struct pml_lex_val *v);
+void pml_lexv_fini(int toknum, struct pml_lex_val *v);
+
+#ifndef THIS_IS_SCANNER
+typedef void *pml_scanner_t;
+int pmllex_init(pml_scanner_t *);
+void pmlset_in(FILE *input, pml_scanner_t);
+int pmllex(pml_scanner_t);
+struct pml_lex_val pmlget_extra(pml_scanner_t);
+void pmlset_extra(struct pml_lex_val v, pml_scanner_t);
+const char *pmlget_text(pml_scanner_t);
+int pmlget_lineno(pml_scanner_t);
+void pmllex_destroy(pml_scanner_t);
+#endif /* THIS_IS_SCANNER */
+
+
+/* Parser interface */
+
+typedef void *pml_parser_t;
+
+pml_parser_t pml_alloc();
+int pml_parse(pml_parser_t p, struct pml_ast *ast, int tok,
+	      struct pml_lex_val xtok);
+void pml_free(pml_parser_t p);
+
+
 
 #endif /* __pmtree_h */

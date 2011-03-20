@@ -551,3 +551,54 @@ int pml_locator_extend_name(struct pml_locator *l, char *name, size_t elen)
 
 	return 0;
 }
+
+
+void pml_lexv_init(struct pml_lex_val *v)
+{
+	memset(v, 0, sizeof(*v));
+}
+
+
+void pml_lexv_fini(int toknum, struct pml_lex_val *v)
+{
+	fprintf(stderr, "Freeing %d -- ", toknum);
+	if (v->type == PMLLV_STRING) {
+		fprintf(stderr, "data = %s", v->u.raw.data);
+		free(v->u.raw.data);
+		v->u.raw.data = 0;
+	} else {
+		fprintf(stderr, "no-associated data");
+	}
+	fprintf(stderr, "\n");
+}
+
+
+extern void *PMLAlloc(void *(*mallocProc)(size_t));
+extern void PMLFree(void *p, void (*freeProc)(void*));
+extern void PML(void *parser, int tok, struct pml_lex_val xtok,
+		struct pml_ast *ast);
+
+
+pml_parser_t pml_alloc()
+{
+	return PMLAlloc(malloc);
+}
+
+
+int pml_parse(pml_parser_t p, struct pml_ast *ast, int tok,
+	      struct pml_lex_val xtok)
+{
+	PML(p, tok, xtok, ast);
+	if (ast->error)
+		return -1;
+	else
+		return 0;
+}
+
+
+void pml_free(pml_parser_t p)
+{
+	PMLFree(p, free);
+}
+
+

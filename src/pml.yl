@@ -167,7 +167,6 @@ var Count;
 #include <cat/cat.h>
 #include <cat/list.h>
 #include "pmltree.h" 
-#include "pmllex.h"
 }
 %extra_argument { struct pml_ast *ast }
 
@@ -278,10 +277,7 @@ var Count;
 
 %token_type { struct pml_lex_val }
 %token_destructor { 
-	if ($$.type == PMLLV_STRING) {
-		free($$.u.raw.data);
-		$$.u.raw.data = NULL;
-	}
+	pml_lexv_fini(yymajor, &$$);
 }
 
 /* ----- Grammar ----- */
@@ -749,7 +745,7 @@ locator(L1) ::= locator(L0) DOT ID(TOK). {
 		ast->error = 1;
 	}
 	free(TOK.u.raw.data);
-	L0 = L1;
+	L1 = L0;
 }
 locator(L) ::= ID(TOK). { 
 	L = (struct pml_locator *)pmlt_alloc(PMLTT_LOCATOR);

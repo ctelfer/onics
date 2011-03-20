@@ -57,14 +57,16 @@ ${BINDIR}/h2xpkt: h2xpkt.o pktbuf.o xpkt.o protoparse.o ns.o util.o
 .c.o: $<
 	${CC} -Wall -c $< -o $@ ${DEFS} ${INCS} ${OPTS}
 
-lex.pml.c: pml.l pml.h pmllex.h
+lex.pml.c: pml.l pml.h
 	flex pml.l
 
-pml.c: pml.yl ../lemon/lemon pmllex.h
-	../lemon/lemon pml.yl
+lex.pml.o: lex.pml.c
+	${CC} -Wall -c lex.pml.c -o lex.pml.o -DTHIS_IS_SCANNER \
+		${DEFS} ${INCS} ${OPTS}
 
-pml.h: pml.yl ../lemon/lemon
+pml.c pml.h: pml.yl ../lemon/lemon
 	../lemon/lemon pml.yl
+	touch pml.h
 
 ../lemon/lemon: ../lemon/lemon.c
 	(cd ../lemon ; make)
