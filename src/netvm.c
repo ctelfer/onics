@@ -1460,7 +1460,7 @@ int netvm_validate(struct netvm *vm)
 
 
 /* set the read-only segment offset for the VM */
-int netvm_setrooff(struct netvm *vm, uint rooff)
+int netvm_set_rooff(struct netvm *vm, uint rooff)
 {
 	abort_unless(vm);
 	if (rooff > vm->memsz)
@@ -1471,12 +1471,11 @@ int netvm_setrooff(struct netvm *vm, uint rooff)
 
 
 /* set up netvm code */
-int netvm_setcode(struct netvm *vm, struct netvm_inst *inst, uint ni)
+void netvm_set_code(struct netvm *vm, struct netvm_inst *inst, uint ni)
 {
-	abort_unless(vm && inst);
+	abort_unless(vm);
 	vm->inst = inst;
 	vm->ninst = ni;
-	return netvm_validate(vm);
 }
 
 
@@ -1502,15 +1501,14 @@ void netvm_set_matchonly(struct netvm *vm, int matchonly)
 }
 
 
-int netvm_loadpkt(struct netvm *vm, struct pktbuf *pkb, int slot)
+void netvm_load_pkt(struct netvm *vm, struct pktbuf *pkb, int slot)
 {
 	pkb_free(vm->packets[slot]);
 	vm->packets[slot] = pkb;
-	return 0;
 }
 
 
-struct pktbuf *netvm_clrpkt(struct netvm *vm, int slot, int keeppkb)
+struct pktbuf *netvm_clr_pkt(struct netvm *vm, int slot, int keeppkb)
 {
 	struct pktbuf *pkb = NULL;
 	if ((slot >= 0) && (slot < NETVM_MAXPKTS) && 
@@ -1530,7 +1528,7 @@ struct pktbuf *netvm_clrpkt(struct netvm *vm, int slot, int keeppkb)
 
 
 /* clear memory up through read-only segment */
-void netvm_clrmem(struct netvm *vm)
+void netvm_clr_mem(struct netvm *vm)
 {
 	abort_unless(vm && vm->stack && vm->rosegoff <= vm->memsz && vm->inst &&
 		     vm->ninst >= 0 && vm->ninst <= MAXINST);
@@ -1540,7 +1538,7 @@ void netvm_clrmem(struct netvm *vm)
 
 
 /* discard all packets */
-void netvm_clrpkts(struct netvm *vm)
+void netvm_clr_pkts(struct netvm *vm)
 {
 	int i;
 	abort_unless(vm && vm->stack && vm->rosegoff <= vm->memsz && vm->inst &&
@@ -1581,8 +1579,8 @@ void netvm_restart(struct netvm *vm)
 void netvm_reset(struct netvm *vm)
 {
 	/* assume sanity checks in the called functions */
-	netvm_clrmem(vm);
-	netvm_clrpkts(vm);
+	netvm_clr_mem(vm);
+	netvm_clr_pkts(vm);
 	netvm_reset_coprocs(vm);
 	netvm_restart(vm);
 }

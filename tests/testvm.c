@@ -463,7 +463,7 @@ static void send_clr_packets(struct netvm *vm, int npkt)
 	int i;
 	struct pktbuf *p;
 	for (i = 0; i < NETVM_MAXPKTS; ++i) {
-		p = netvm_clrpkt(vm, i, 1);
+		p = netvm_clr_pkt(vm, i, 1);
 		if (p) {
 			if (pkb_pack(p) < 0)
 				err("Error packing packet for writing");
@@ -490,7 +490,7 @@ void run_with_packets(struct netvm *vm, int filter, struct meminit *mi,
 			errsys("Error parsing packets");
 		++npkt;
 		netvm_restart(vm);
-		netvm_loadpkt(vm, p, 0);
+		netvm_load_pkt(vm, p, 0);
 		init_memory(vm, mi, nmi);
 		vmrv = netvm_run(vm, -1, &rc);
 
@@ -525,14 +525,15 @@ int main(int argc, char *argv[])
 	file_emitter_init(&fe, (prog->filter ? stderr : stdout));
 	netvm_init(&vm, vm_stack, array_length(vm_stack), vm_memory,
 		   array_length(vm_memory));
-	netvm_setrooff(&vm, ROSEGOFF);
+	netvm_set_rooff(&vm, ROSEGOFF);
 	if (init_netvm_std_coproc(&vm, &vmcps) < 0)
 		errsys("Error initializing NetVM coprocessors");
 	set_outport_emitter(&vmcps.outport, &fe.fe_emitter);
 
 	if (!prog->filter)
 		vm.matchonly = 1;
-	if ((rv = netvm_setcode(&vm, prog->code, prog->codelen)) < 0)
+	netvm_set_code(&vm, prog->code, prog->codelen);
+	if ((rv = netvm_validate(&vm)) < 0)
 		err("Error validating program %d: %s\n", prognum,
 		    netvm_estr(rv));
 

@@ -5,7 +5,7 @@
 #include "pktbuf.h"
 
 struct netvm;			/* forward declaration */
-typedef void (*netvm_op) (struct netvm * vm);
+typedef void (*netvm_op)(struct netvm * vm);
 
 
 struct netvm_inst {
@@ -150,13 +150,13 @@ struct netvm_coproc {
 	uint			numops;
 	netvm_cpop *		ops;
 
-	int			(*regi)(struct netvm_coproc * coproc, 
-			        	struct netvm * vm, int cpi);
+	int			(*regi)(struct netvm_coproc *coproc, 
+			        	struct netvm *vm, int cpi);
 
-	void			(*reset)(struct netvm_coproc * coproc);
+	void			(*reset)(struct netvm_coproc *coproc);
 
-	int			(*validate)(struct netvm_inst * inst,
-					    struct netvm * vm);
+	int			(*validate)(struct netvm_inst *inst,
+					    struct netvm *vm);
 };
 
 #define NETVM_CPT_NONE		((uint32_t)0)
@@ -488,24 +488,27 @@ enum {
 void netvm_init(struct netvm *vm, uint64_t *stack, uint ssz,
 		byte_t * mem, uint memsz);
 
-/* set the instruction code and validate the vm: 0 on success, -1 on error */
-int netvm_setcode(struct netvm *vm, struct netvm_inst *inst, uint ni);
+/* set the instruction code */
+void netvm_set_code(struct netvm *vm, struct netvm_inst *inst, uint ni);
 
 /* set the offset of the read-only segment for the VM */
-int netvm_setrooff(struct netvm *vm, uint rooff);
+int netvm_set_rooff(struct netvm *vm, uint rooff);
 
 /* set a coprocessor: return the cpi or -1 if initialization error */
 int netvm_set_coproc(struct netvm *vm, int cpi, struct netvm_coproc *coproc);
+
+/* set matchonly flag */
+void netvm_set_matchonly(struct netvm *vm, int matchonly);
 
 /* validate a netvm is properly set up and that all branches are correct */
 /* called by set_netvm_code implicitly:  returns 0 on success, -1 on error */
 int netvm_validate(struct netvm *vm);
 
 /* zero out non-read-only memory */
-void netvm_clrmem(struct netvm *vm);
+void netvm_clr_mem(struct netvm *vm);
 
 /* free all packets */
-void netvm_clrpkts(struct netvm *vm);
+void netvm_clr_pkts(struct netvm *vm);
 
 /* reset co-processors */
 void netvm_reset_coprocs(struct netvm *vm);
@@ -516,19 +519,16 @@ void netvm_restart(struct netvm *vm);
 /* clear memory, set pc <- 0, set sp <- 0, discard packets */
 void netvm_reset(struct netvm *vm);
 
-/* set matchonly */
-void netvm_set_matchonly(struct netvm *vm, int matchonly);
-
 /* will free existing packets if they are slotted.  Note this gives up */
 /* control of the packet.  netvm_clrpkt() or netvm_reset() or other native */
 /* netvm instructions will free it.  Make a copy if this isn't desired or */
 /* be careful of the program that you run and call clrpkt with the don't free */
 /* flag set before calling netvm_reset() */
-int netvm_loadpkt(struct netvm *vm, struct pktbuf *p, int slot);
+void netvm_load_pkt(struct netvm *vm, struct pktbuf *p, int slot);
 
 /* free the packet in a slot:  note this destroys existin packet buffer */
 /* unless keeppktbuf is set */
-struct pktbuf *netvm_clrpkt(struct netvm *vm, int slot, int keeppktbuf);
+struct pktbuf *netvm_clr_pkt(struct netvm *vm, int slot, int keeppktbuf);
 
 /* 0 if run ok and no retval, 1 if run ok and stack not empty, -1 if err, -2 */
 /* if out of cycles */
