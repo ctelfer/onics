@@ -381,19 +381,22 @@ static void nci_prstr(struct netvm *vm, struct netvm_coproc *ncp, int cpi)
 	    container(ncp, struct netvm_outport_cp, coproc);
 	struct netvm_inst *inst = &vm->inst[vm->pc];
 	uint64_t addr, len;
+	byte_t *p;
+	uint8_t seg;
+
 	abort_unless(cp->outport);
+	seg = inst->z;
 	if (inst->y == NETVM_CPOC_PRSTR) {
 		S_POP(vm, len);
 		S_POP(vm, addr);
 	} else {
 		abort_unless(inst->y == NETVM_CPOC_PRSTRI);
-		len = inst->z;
-		addr = inst->w;
+		len = (inst->w >> 24) & 0xFF;
+		addr = inst->w & 0xFFFFFF;
 	}
-	FATAL(vm, NETVM_ERR_IOVFL, addr + len < addr);
-	FATAL(vm, NETVM_ERR_MEMADDR, !vm->mem || !vm->memsz || addr >= vm->memsz
-	      || addr + len > vm->memsz);
-	emit_raw(cp->outport, vm->mem + addr, len);
+	netvm_get_seg_ptr(vm, seg, addr, 0, len, &p);
+	if (!vm->error)
+		emit_raw(cp->outport, p, len);
 }
 
 

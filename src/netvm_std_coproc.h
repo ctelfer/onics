@@ -63,11 +63,17 @@ enum {
 	NETVM_CPOC_PRETH,/* [vhi, vlo] print ethernet addr (network byte order) */
 	                 /*     vhi has only 2 MSB of address */
 	NETVM_CPOC_PRIPV6,/* [v0,v1,v2,v3] print IPv6 addr (network byte order) */
-	NETVM_CPOC_PRSTR,/* [addr,len] print len bytes from addr in mem */
-	NETVM_CPOC_PRSTRI,/* print 'z' bytes from address 'w' in mem */
+	NETVM_CPOC_PRSTR,/* [addr,len] print len bytes from addr in mem,  */
+			 /*   'z' is the memory segment */
+	NETVM_CPOC_PRSTRI,/* as PRSTR except w holds |len(8)|addr(24)| */
 
 	NETVM_CPOC_NUMPR
 };
+
+#define NETVM_CPOP_PRSTRI(seg, addr, len) \
+	NETVM_OP(CPOPI, NETVM_CPI_OUTPORT, NETVM_CPOC_PRSTRI, seg, \
+		 ((((len) & 0xFF) << 24) | (addr & 0xFFFFFF)))
+	
 
 
 struct netvm_outport_cp {

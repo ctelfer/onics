@@ -23,13 +23,15 @@ CLOPTPARSER_INIT(options, array_length(options));
 
 
 uint64_t vm_stack[64];
-byte_t vm_memory[1024];
-#define ROSEGOFF (sizeof(vm_memory)/2)
+byte_t vm_memory[2][1024];
+#define RWSEG 0
+#define ROSEG 1
 
 
 struct meminit {
 	const byte_t *init;
 	uint32_t len;
+	int seg;
 	uint32_t off;
 };
 
@@ -71,14 +73,14 @@ struct netvm_inst vm_prog_toggledf[] = {
 
 struct netvm_inst vm_prog_count10[] = {
 	/*0 */ NETVM_OP(PUSH, 0, 0, 0, '.'), 
-	/*1 */ NETVM_OP(STI, 1, NETVM_SEG_RWMEM, 0, 64),
+	/*1 */ NETVM_OP(STI, 1, RWSEG, 0, 64),
 	/*2 */ NETVM_OP(PUSH, 0, 0, 0, '\n'), 
-	/*3 */ NETVM_OP(STI, 1, NETVM_SEG_RWMEM, 0, 72),
+	/*3 */ NETVM_OP(STI, 1, RWSEG, 0, 72),
 	/*4 */ NETVM_OP(PUSH, 0, 0, 0, 0), 
-	/*5 */ NETVM_OP(STI, 4, NETVM_SEG_RWMEM, 0, 0),
+	/*5 */ NETVM_OP(STI, 4, RWSEG, 0, 0),
 
 	/* top of loop */
-	/*6 */ NETVM_OP(LDI, 4, NETVM_SEG_RWMEM, 0, 0),
+	/*6 */ NETVM_OP(LDI, 4, RWSEG, 0, 0),
 	/*7 */ NETVM_OP(DUP, 0, 0, 0, 0),
 	/*8 */ NETVM_OP(GEI, 0, 0, 0, 10),
 	/*9 */ NETVM_BRIF_F(7), /* out of loop */
@@ -86,7 +88,7 @@ struct netvm_inst vm_prog_count10[] = {
 	/*11*/ NETVM_OP(PUSH, 0, 0, 0, 1), 
 	/*12*/ NETVM_OP(CPOPI, NETVM_CPI_OUTPORT, NETVM_CPOC_PRSTR, 0, 0), 
 	/*13*/ NETVM_OP(ADDI, 0, 0, 0, 1),
-	/*14*/ NETVM_OP(STI, 4, NETVM_SEG_RWMEM, 0, 0),
+	/*14*/ NETVM_OP(STI, 4, RWSEG, 0, 0),
 	/*15*/ NETVM_BR_B(9),
 
 	/* out of loop */
@@ -98,56 +100,47 @@ struct netvm_inst vm_prog_count10[] = {
 
 
 char hws1[] = "Hello World\n";
-#define HWS_OFFSET      (ROSEGOFF)
+#define HWS_OFFSET      (0)
 #define HWS_SIZE        (sizeof(hws1)-1)
 struct meminit hwmi[] = {
-	{(byte_t *) hws1, HWS_SIZE, HWS_OFFSET}
+	{(byte_t *) hws1, HWS_SIZE, ROSEG, HWS_OFFSET}
 };
 
 
 struct netvm_inst vm_prog_helloworld[] = {
-	/*0 */ NETVM_OP(CPOPI, NETVM_CPI_OUTPORT, NETVM_CPOC_PRSTRI, HWS_SIZE, 
-			HWS_OFFSET), 
+	/*0 */ NETVM_CPOP_PRSTRI(ROSEG, HWS_OFFSET, HWS_SIZE), 
 };
 
 
-#define FIB_I0_OFFSET      (ROSEGOFF)
-#define FIB_I0_ROFF	   0
+#define FIB_I0_OFFSET      (0)
 #define FIB_I0_SIZE        sizeof(uint32_t)
 const char fibs1[] = "Fibonnaci number ";
 #define FIB_I1_OFFSET      (FIB_I0_OFFSET + FIB_I0_SIZE)
-#define FIB_I1_ROFF	   (FIB_I0_ROFF + FIB_I0_SIZE)
 #define FIB_I1_SIZE        (sizeof(fibs1)-1)
 const char fibs2[] = " is ";
 #define FIB_I2_OFFSET      (FIB_I1_OFFSET + FIB_I1_SIZE)
-#define FIB_I2_ROFF	   (FIB_I1_ROFF + FIB_I1_SIZE)
 #define FIB_I2_SIZE        (sizeof(fibs2)-1)
 const char fibs3[] = "\n";
 #define FIB_I3_OFFSET      (FIB_I2_OFFSET + FIB_I2_SIZE)
-#define FIB_I3_ROFF	   (FIB_I2_ROFF + FIB_I2_SIZE)
 #define FIB_I3_SIZE        (sizeof(fibs3)-1)
 struct meminit fibi[] = {
-	{(byte_t *) "\x00\x00\x00\x07", FIB_I0_SIZE, FIB_I0_OFFSET}, /* #7 */
-	{(byte_t *) fibs1, FIB_I1_SIZE, FIB_I1_OFFSET},
-	{(byte_t *) fibs2, FIB_I2_SIZE, FIB_I2_OFFSET},
-	{(byte_t *) fibs3, FIB_I3_SIZE, FIB_I3_OFFSET}
+	{(byte_t *) "\x00\x00\x00\x07", FIB_I0_SIZE, ROSEG, FIB_I0_OFFSET},
+	{(byte_t *) fibs1, FIB_I1_SIZE, ROSEG, FIB_I1_OFFSET},
+	{(byte_t *) fibs2, FIB_I2_SIZE, ROSEG, FIB_I2_OFFSET},
+	{(byte_t *) fibs3, FIB_I3_SIZE, ROSEG, FIB_I3_OFFSET}
 };
 
 struct netvm_inst vm_prog_fib[] = {
 	/* print initial string */
-	/* 0 */ NETVM_OP(CPOPI, NETVM_CPI_OUTPORT, NETVM_CPOC_PRSTRI, 
-			 FIB_I1_SIZE, FIB_I1_OFFSET),
-	/* 1 */ NETVM_OP(LDI, 4, NETVM_SEG_ROMEM, 0, FIB_I0_ROFF),
+	/* 0 */ NETVM_CPOP_PRSTRI(ROSEG, FIB_I1_OFFSET, FIB_I1_SIZE),
+	/* 1 */ NETVM_OP(LDI, 4, ROSEG, 0, FIB_I0_OFFSET),
 	/* 2 */ NETVM_OP(DUP, 0, 0, 0, 0),
 	/* 3 */ NETVM_OP(CPOPI, NETVM_CPI_OUTPORT, NETVM_CPOC_PRDEC, 4, 0),
-	/* 4 */ NETVM_OP(CPOPI, NETVM_CPI_OUTPORT, NETVM_CPOC_PRSTRI, 
-			 FIB_I2_SIZE, FIB_I2_OFFSET),
-
+	/* 4 */ NETVM_CPOP_PRSTRI(ROSEG, FIB_I2_OFFSET, FIB_I2_SIZE),
 	/* 5 */ NETVM_OP(PUSH, 0, 0, 0, NETVM_IADDR(10)),
 	/* 6 */ NETVM_OP(CALL, 0, 0, 0, 1),
 	/* 7 */ NETVM_OP(CPOPI, NETVM_CPI_OUTPORT, NETVM_CPOC_PRDEC, 4, 0),
-	/* 8 */ NETVM_OP(CPOPI, NETVM_CPI_OUTPORT, NETVM_CPOC_PRSTRI, 
-			 FIB_I3_SIZE, FIB_I3_OFFSET),
+	/* 8 */ NETVM_CPOP_PRSTRI(ROSEG, FIB_I3_OFFSET, FIB_I3_SIZE),
 	/* 9 */ NETVM_OP(HALT, 0, 0, 0, 0),
 
 	/* (v) <- Fib(n) */
@@ -172,10 +165,10 @@ struct netvm_inst vm_prog_fib[] = {
 
 #define DUP1ST_PNUM     0
 struct netvm_inst vm_prog_dup1st[] = {
-	/* 0 */ NETVM_OP(LDI, 4, NETVM_SEG_RWMEM, 0, DUP1ST_PNUM),
+	/* 0 */ NETVM_OP(LDI, 4, RWSEG, 0, DUP1ST_PNUM),
 	/* 1 */ NETVM_OP(ADDI, 0, 0, 0, 1),
 	/* 2 */ NETVM_OP(DUP, 0, 0, 0, 0),
-	/* 3 */ NETVM_OP(STI, 4, NETVM_SEG_RWMEM, 0, DUP1ST_PNUM),
+	/* 3 */ NETVM_OP(STI, 4, RWSEG, 0, DUP1ST_PNUM),
 	/* 4 */ NETVM_OP(LEI, 0, 0, 0, 1),
 	/* 5 */ NETVM_BRIF_F(3), 
 	/* 6 */ NETVM_OP(PKDELI, 0, 0, 0, 0),
@@ -187,14 +180,14 @@ struct netvm_inst vm_prog_dup1st[] = {
 
 
 char bms1[] = "Hello World\n";
-#define BMS1_OFFSET      (ROSEGOFF)
+#define BMS1_OFFSET      (0)
 #define BMS1_SIZE        (sizeof(bms1)-1)
 char bms2[] = "\n";
 #define BMS2_OFFSET      (BMS1_OFFSET + BMS1_SIZE)
 #define BMS2_SIZE        (sizeof(bms2)-1)
 struct meminit bmi[] = {
-	{(byte_t *) bms1, BMS1_SIZE, BMS1_OFFSET},
-	{(byte_t *) bms2, BMS2_SIZE, BMS2_OFFSET},
+	{(byte_t *) bms1, BMS1_SIZE, ROSEG, BMS1_OFFSET},
+	{(byte_t *) bms2, BMS2_SIZE, ROSEG, BMS2_OFFSET},
 };
 
 
@@ -206,10 +199,10 @@ struct netvm_inst vm_prog_bulkmove[] = {
 	/* 3 */ NETVM_PDIOP(LDPFI, 0, 0, PPT_TCP, 0, NETVM_PRP_PLEN, 0),
 	/* 4 */ NETVM_OP(LTI, 0, 0, 0, 16),
 	/* 5 */ NETVM_BRIF_F(7),
-	/* 6 */ NETVM_OP(LDI, 4, NETVM_SEG_RWMEM, 0, DUP1ST_PNUM),
+	/* 6 */ NETVM_OP(LDI, 4, RWSEG, 0, DUP1ST_PNUM),
 	/* 7 */ NETVM_OP(ADDI, 0, 0, 0, 1),
 	/* 8 */ NETVM_OP(DUP, 0, 0, 0, 0),
-	/* 9 */ NETVM_OP(STI, 4, NETVM_SEG_RWMEM, 0, DUP1ST_PNUM),
+	/* 9 */ NETVM_OP(STI, 4, RWSEG, 0, DUP1ST_PNUM),
 	/*10 */ NETVM_OP(LEI, 0, 0, 0, 1),
 	/*11 */ NETVM_BRIF_F(3),
 	/*12 */ NETVM_OP(PKDELI, 0, 0, 0, 0),
@@ -219,30 +212,29 @@ struct netvm_inst vm_prog_bulkmove[] = {
 	/*14 */ NETVM_PDIOP(LDPFI, 0, 0, PPT_TCP, 0, NETVM_PRP_POFF, 0),
 	/*15 */ NETVM_OP(PUSH, 0, 0, 0, 0), /* Address 0 */
 	/*16 */ NETVM_OP(PUSH, 0, 0, 0, 16), /* Length 16 */
-	/*17 */ NETVM_OP(MOVE, NETVM_SEG_ISPKT|0, NETVM_SEG_RWMEM, 0, 0),
-	/*18 */ NETVM_OP(LDI, 4, NETVM_SEG_RWMEM, 0, 0),
+	/*17 */ NETVM_OP(MOVE, NETVM_SEG_ISPKT|0, RWSEG, 0, 0),
+	/*18 */ NETVM_OP(LDI, 4, RWSEG, 0, 0),
 	/*19 */ NETVM_OP(CPOPI, NETVM_CPI_OUTPORT, NETVM_CPOC_PRHEX, 4, 0),
-	/*20 */ NETVM_OP(LDI, 4, NETVM_SEG_RWMEM, 0, 4),
+	/*20 */ NETVM_OP(LDI, 4, RWSEG, 0, 4),
 	/*21 */ NETVM_OP(CPOPI, NETVM_CPI_OUTPORT, NETVM_CPOC_PRHEX, 4, 0),
-	/*22 */ NETVM_OP(LDI, 4, NETVM_SEG_RWMEM, 0, 8),
+	/*22 */ NETVM_OP(LDI, 4, RWSEG, 0, 8),
 	/*23 */ NETVM_OP(CPOPI, NETVM_CPI_OUTPORT, NETVM_CPOC_PRHEX, 4, 0),
-	/*24 */ NETVM_OP(LDI, 4, NETVM_SEG_RWMEM, 0, 12),
+	/*24 */ NETVM_OP(LDI, 4, RWSEG, 0, 12),
 	/*25 */ NETVM_OP(CPOPI, NETVM_CPI_OUTPORT, NETVM_CPOC_PRHEX, 4, 0),
-	/*26 */ NETVM_OP(CPOPI, NETVM_CPI_OUTPORT, NETVM_CPOC_PRSTRI, 
-			 BMS2_SIZE, BMS2_OFFSET),
+	/*26 */ NETVM_CPOP_PRSTRI(ROSEG, BMS2_OFFSET, BMS2_SIZE),
 
 	/* Next put "hello world" into the beginning of the packet */
 	/*27 */ NETVM_OP(PUSH, 0, 0, 0, BMS1_OFFSET),
 	/*28 */ NETVM_PDIOP(LDPFI, 0, 0, PPT_TCP, 0, NETVM_PRP_POFF, 0),
 	/*29 */ NETVM_OP(PUSH, 0, 0, 0, BMS1_SIZE),
-	/*30 */ NETVM_OP(MOVE, NETVM_SEG_RWMEM, NETVM_SEG_ISPKT|0, 0, 0),
+	/*30 */ NETVM_OP(MOVE, ROSEG, NETVM_SEG_ISPKT|0, 0, 0),
 };
 
 
-#define HD_IDX          (ROSEGOFF - 16)
-#define HD_PKNADDR      (ROSEGOFF - 8)
+#define HD_IDX          (0)
+#define HD_PKNADDR      (8)
 char hds1[] = "Packet ";
-#define HDS1_OFFSET     (ROSEGOFF)
+#define HDS1_OFFSET     (0)
 #define HDS1_SIZE       (sizeof(hds1)-1)
 char hds2[] = ": ";
 #define HDS2_OFFSET     (HDS1_OFFSET + HDS1_SIZE)
@@ -257,71 +249,64 @@ char hds5[] = "\n\t";
 #define HDS5_OFFSET     (HDS4_OFFSET + HDS4_SIZE)
 #define HDS5_SIZE       (sizeof(hds5)-1)
 struct meminit hdi[] = {
-	{(byte_t *) hds1, HDS1_SIZE, HDS1_OFFSET},
-	{(byte_t *) hds2, HDS2_SIZE, HDS2_OFFSET},
-	{(byte_t *) hds3, HDS3_SIZE, HDS3_OFFSET},
-	{(byte_t *) hds4, HDS4_SIZE, HDS4_OFFSET},
-	{(byte_t *) hds5, HDS5_SIZE, HDS5_OFFSET},
+	{(byte_t *) hds1, HDS1_SIZE, ROSEG, HDS1_OFFSET},
+	{(byte_t *) hds2, HDS2_SIZE, ROSEG, HDS2_OFFSET},
+	{(byte_t *) hds3, HDS3_SIZE, ROSEG, HDS3_OFFSET},
+	{(byte_t *) hds4, HDS4_SIZE, ROSEG, HDS4_OFFSET},
+	{(byte_t *) hds5, HDS5_SIZE, ROSEG, HDS5_OFFSET},
 };
 
 struct netvm_inst vm_prog_hexdump[] = {
-	/* 0 */ NETVM_OP(CPOPI, NETVM_CPI_OUTPORT, NETVM_CPOC_PRSTRI, 
-			 HDS1_SIZE, HDS1_OFFSET),
-	/* 1 */ NETVM_OP(LDI, 8, NETVM_SEG_RWMEM, 0, HD_PKNADDR),
+	/* 0 */ NETVM_CPOP_PRSTRI(ROSEG, HDS1_OFFSET, HDS1_SIZE),
+	/* 1 */ NETVM_OP(LDI, 8, RWSEG, 0, HD_PKNADDR),
 	/* 2 */ NETVM_OP(ADDI, 0, 0, 0, 1),
 	/* 3 */ NETVM_OP(DUP, 0, 0, 0, 0),
-	/* 4 */ NETVM_OP(STI, 8, NETVM_SEG_RWMEM, 0, HD_PKNADDR),
+	/* 4 */ NETVM_OP(STI, 8, RWSEG, 0, HD_PKNADDR),
 	/* 5 */ NETVM_OP(CPOPI, NETVM_CPI_OUTPORT, NETVM_CPOC_PRDEC, 8, 0),
-	/* 6 */ NETVM_OP(CPOPI, NETVM_CPI_OUTPORT, NETVM_CPOC_PRSTRI, 
-			 HDS2_SIZE, HDS2_OFFSET),
+	/* 6 */ NETVM_CPOP_PRSTRI(ROSEG, HDS2_OFFSET, HDS2_SIZE),
 	/* 7 */ NETVM_PDIOP(LDPFI, 0, 0, PPT_NONE, 0, NETVM_PRP_PLEN, 0),
 	/* 8 */ NETVM_OP(CPOPI, NETVM_CPI_OUTPORT, NETVM_CPOC_PRDEC, 8, 0),
-	/* 9 */ NETVM_OP(CPOPI, NETVM_CPI_OUTPORT, NETVM_CPOC_PRSTRI, 
-			 HDS3_SIZE, HDS3_OFFSET),
+	/* 9 */ NETVM_CPOP_PRSTRI(ROSEG, HDS3_OFFSET, HDS3_SIZE),
 	/*10 */ NETVM_OP(PUSH, 0, 0, 0, 0),
-	/*11 */ NETVM_OP(STI, 8, NETVM_SEG_RWMEM, 0, HD_IDX),
+	/*11 */ NETVM_OP(STI, 8, RWSEG, 0, HD_IDX),
 
 	/* LOOP top */
-	/*12 */ NETVM_OP(LDI, 8, NETVM_SEG_RWMEM, 0, HD_IDX),
+	/*12 */ NETVM_OP(LDI, 8, RWSEG, 0, HD_IDX),
 	/*13 */ NETVM_PDIOP(LDPFI, 0, 0, PPT_NONE, 0, NETVM_PRP_PLEN, 0),
 	/*14 */ NETVM_OP(GE, 0, 0, 0, 0),
 	/*15 */ NETVM_BRIF_F(14),
 	/* END LOOP TEST */
-	/*16 */ NETVM_OP(LDI, 8, NETVM_SEG_RWMEM, 0, HD_IDX),
+	/*16 */ NETVM_OP(LDI, 8, RWSEG, 0, HD_IDX),
 	/*17 */ NETVM_OP(MODI, 0, 0, 0, 16),
 	/*18 */ NETVM_BRIF_F(2),
-	/*19 */ NETVM_OP(CPOPI, NETVM_CPI_OUTPORT, NETVM_CPOC_PRSTRI, 
-			 HDS5_SIZE, HDS5_OFFSET),
-	/*20 */ NETVM_OP(LDI, 8, NETVM_SEG_RWMEM, 0, HD_IDX),
+	/*19 */ NETVM_CPOP_PRSTRI(ROSEG, HDS5_OFFSET, HDS5_SIZE),
+	/*20 */ NETVM_OP(LDI, 8, RWSEG, 0, HD_IDX),
 	/*21 */ NETVM_OP(PUSHHI, 0, 0, 0,
 			 NETVM_PDESC_HI(0, PPT_NONE, 0, NETVM_PRP_POFF)),
 	/*22 */ NETVM_OP(OR, 0, 0, 0, 0),
 	/*23 */ NETVM_OP(LD, 1, NETVM_SEG_ISPKT, 0, 0),
 	/*24 */ NETVM_OP(CPOPI, NETVM_CPI_OUTPORT, NETVM_CPOC_PRHEX, 1, 2),
 
-	/*25 */ NETVM_OP(LDI, 8, NETVM_SEG_RWMEM, 0, HD_IDX),
+	/*25 */ NETVM_OP(LDI, 8, RWSEG, 0, HD_IDX),
 	/*26 */ NETVM_OP(ADDI, 0, 0, 0, 1),
-	/*27 */ NETVM_OP(STI, 8, NETVM_SEG_RWMEM, 0, HD_IDX),
+	/*27 */ NETVM_OP(STI, 8, RWSEG, 0, HD_IDX),
 	/*28 */ NETVM_BR_B(16),
 	/* LOOP END */
 
-	/*29 */ NETVM_OP(CPOPI, NETVM_CPI_OUTPORT, NETVM_CPOC_PRSTRI, 
-			 HDS4_SIZE, HDS4_OFFSET),
+	/*29 */ NETVM_CPOP_PRSTRI(ROSEG, HDS4_OFFSET, HDS4_SIZE),
 	/*30 */ NETVM_OP(PKDELI, 0, 0, 0, 0),
 };
 
 
 char meqs1[] = "\x45\x00\x00\x34";
-#define MEQ_VAL_OFFSET      (ROSEGOFF)
-#define MEQ_VAL_ROFF	    0
+#define MEQ_VAL_OFFSET      (0)
 #define MEQ_VAL_SIZE        (sizeof(meqs1)-1)
 char meqs2[] = "\xff\x00\xff\xff";
 #define MEQ_MASK_OFFSET     (MEQ_VAL_OFFSET + MEQ_VAL_SIZE)
-#define MEQ_MASK_ROFF	    (MEQ_VAL_ROFF + MEQ_VAL_SIZE)
 #define MEQ_MASK_SIZE       (sizeof(meqs2)-1)
 struct meminit meqsi[] = {
-	{(byte_t *) meqs1, MEQ_VAL_SIZE, MEQ_VAL_OFFSET},
-	{(byte_t *) meqs2, MEQ_MASK_SIZE, MEQ_MASK_OFFSET},
+	{(byte_t *) meqs1, MEQ_VAL_SIZE, ROSEG, MEQ_VAL_OFFSET},
+	{(byte_t *) meqs2, MEQ_MASK_SIZE, ROSEG, MEQ_MASK_OFFSET},
 };
 
 
@@ -332,11 +317,10 @@ struct netvm_inst vm_prog_maskeq[] = {
 
 	/* Compare 1st _SIZE bytes of pkt 0's network header */ 
 	/* 3 */ NETVM_PDIOP(LDPFI, 0, 0, PPT_PCLASS_NET, 0, NETVM_PRP_SOFF, 0),
-	/* 4 */ NETVM_OP(PUSH, 0, 0, 0, MEQ_VAL_ROFF), 
-	/* 5 */ NETVM_OP(PUSH, 0, 0, 0, MEQ_MASK_ROFF), 
+	/* 4 */ NETVM_OP(PUSH, 0, 0, 0, MEQ_VAL_OFFSET), 
+	/* 5 */ NETVM_OP(PUSH, 0, 0, 0, MEQ_MASK_OFFSET), 
 	/* 6 */ NETVM_OP(PUSH, 0, 0, 0, MEQ_MASK_SIZE), 
-	/* 7 */ NETVM_OP(MSKCMP, 0|NETVM_SEG_ISPKT, NETVM_SEG_ROMEM,
-			 NETVM_SEG_ROMEM, 0),
+	/* 7 */ NETVM_OP(MSKCMP, 0|NETVM_SEG_ISPKT, ROSEG, ROSEG, 0),
 };
 
 
@@ -422,10 +406,9 @@ void parse_options(int argc, char *argv[])
 void init_memory(struct netvm *vm, struct meminit *mi, size_t nmi)
 {
 	while (nmi > 0) {
-		abort_unless(mi->off < vm->memsz
-			     && mi->off + mi->len < vm->memsz
-			     && mi->off + mi->len >= mi->off);
-		memcpy(vm->mem + mi->off, mi->init, mi->len);
+		abort_unless(mi->off < vm->msegs[mi->seg].len
+			     && mi->len < vm->msegs[mi->seg].len - mi->off);
+		memcpy(vm->msegs[mi->seg].base + mi->off, mi->init, mi->len);
 		++mi;
 		--nmi;
 	}
@@ -523,9 +506,11 @@ int main(int argc, char *argv[])
 
 	prog = &vm_progs[prognum];
 	file_emitter_init(&fe, (prog->filter ? stderr : stdout));
-	netvm_init(&vm, vm_stack, array_length(vm_stack), vm_memory,
-		   array_length(vm_memory));
-	netvm_set_rooff(&vm, ROSEGOFF);
+	netvm_init(&vm, vm_stack, array_length(vm_stack));
+	netvm_set_mseg(&vm, 0, vm_memory[0], sizeof(vm_memory[0]), 
+		       NETVM_SEG_RDWR);
+	netvm_set_mseg(&vm, 1, vm_memory[1], sizeof(vm_memory[1]), 
+		       NETVM_SEG_RD|NETVM_SEG_MO);
 	if (init_netvm_std_coproc(&vm, &vmcps) < 0)
 		errsys("Error initializing NetVM coprocessors");
 	set_outport_emitter(&vmcps.outport, &fe.fe_emitter);

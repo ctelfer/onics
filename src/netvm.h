@@ -164,12 +164,23 @@ struct netvm_coproc {
 
 
 /* NetVM definition */
-#define NETVM_MAXCOPROC		8
+#define NETVM_MAXMSEGS		4
 #define NETVM_MAXPKTS   	16
+#define NETVM_MAXCOPROC		8
 
-#define	NETVM_SEG_RWMEM		0
-#define	NETVM_SEG_ROMEM		1
+#define NETVM_SEG_RD		1
+#define NETVM_SEG_WR		2
+#define NETVM_SEG_RDWR		3
+#define NETVM_SEG_MO		4	/* useable in matchonly mode */
+#define NETVM_SEG_PMASK		7
 #define	NETVM_SEG_ISPKT		128
+
+
+struct netvm_mseg {
+	byte_t *		base;
+	uint			len;
+	uint			perms;
+};
 
 
 struct netvm {
@@ -183,9 +194,7 @@ struct netvm {
 	uint			sp;
 	uint			bp;
 
-	byte_t *		mem;
-	uint			memsz;
-	uint			rosegoff;
+	struct netvm_mseg	msegs[NETVM_MAXMSEGS];
 
 	struct pktbuf *		packets[NETVM_MAXPKTS];
 
@@ -461,7 +470,7 @@ enum {
 	NETVM_ERR_INSTADDR,
 	NETVM_ERR_MEMADDR,
 	NETVM_ERR_PKTADDR,
-	NETVM_ERR_MRDONLY,
+	NETVM_ERR_MPERM,
 	NETVM_ERR_PKTNUM,
 	NETVM_ERR_NOPKT,
 	NETVM_ERR_NOPRP,
@@ -485,14 +494,14 @@ enum {
 
 /* mem may be NULL and memsz 0.  roseg must be <= memsz.  stack must not be */
 /* 0 and ssz is the number of stack elements.  outport may be NULL */
-void netvm_init(struct netvm *vm, uint64_t *stack, uint ssz,
-		byte_t * mem, uint memsz);
+void netvm_init(struct netvm *vm, uint64_t *stack, uint ssz);
 
 /* set the instruction code */
 void netvm_set_code(struct netvm *vm, struct netvm_inst *inst, uint ni);
 
-/* set the offset of the read-only segment for the VM */
-int netvm_set_rooff(struct netvm *vm, uint rooff);
+/* Set up one of the memory segments in the VM */
+void netvm_set_mseg(struct netvm *vm, int seg, byte_t *base, uint len,
+		    int perms);
 
 /* set a coprocessor: return the cpi or -1 if initialization error */
 int netvm_set_coproc(struct netvm *vm, int cpi, struct netvm_coproc *coproc);

@@ -365,22 +365,22 @@ void netvm_p2stk(struct netvm *vm, byte_t *p, int width)
 void netvm_get_mem_ptr(struct netvm *vm, uint8_t seg, uint64_t addr, int iswr, 
 		       uint64_t len, byte_t **p)
 {
-	FATAL(vm, NETVM_ERR_NOMEM, !vm->mem || !vm->memsz);
-	FATAL(vm, NETVM_ERR_MEMADDR, seg > NETVM_SEG_ROMEM);
-	abort_unless(vm->rosegoff <= vm->memsz);
-	abort_unless(vm->memsz >= 8);
-	if (seg == NETVM_SEG_RWMEM) {
-		FATAL(vm, NETVM_ERR_MEMADDR, addr > vm->memsz);
-		FATAL(vm, NETVM_ERR_MEMADDR, len > vm->memsz - addr);
-		*p = vm->mem + addr;
+	struct netvm_mseg *m;
+
+	FATAL(vm, NETVM_ERR_MEMADDR, seg > NETVM_MAXMSEGS);
+	m = &vm->msegs[seg];
+	FATAL(vm, NETVM_ERR_NOMEM, m->base == NULL || m->len == 0);
+	FATAL(vm, NETVM_ERR_MEMADDR, addr >= m->len);
+	FATAL(vm, NETVM_ERR_MEMADDR, len > m->len - addr);
+	if (iswr) {
+		FATAL(vm, NETVM_ERR_MPERM, (m->perms & NETVM_SEG_WR) == 0);
 	} else {
-		uint seglen;
-		FATAL(vm, NETVM_ERR_MRDONLY, iswr);
-		seglen = vm->memsz - vm->rosegoff;
-		FATAL(vm, NETVM_ERR_MEMADDR, addr > seglen);
-		FATAL(vm, NETVM_ERR_MEMADDR, len > seglen - addr);
-		*p = vm->mem + vm->rosegoff + addr;
+		FATAL(vm, NETVM_ERR_MPERM, (m->perms & NETVM_SEG_RD) == 0);
 	}
+	if (vm->matchonly) {
+		FATAL(vm, NETVM_ERR_MPERM, (m->perms & NETVM_SEG_MO) == 0);
+	}
+	*p = m->base + addr;
 }
 
 
@@ -1371,23 +1371,30 @@ netvm_op g_netvm_ops[NETVM_OC_MAX + 1] = {
 };
 
 
-void netvm_init(struct netvm *vm, uint64_t * stack, uint ssz,
-		byte_t * mem, uint memsz)
+void netvm_init(struct netvm *vm, uint64_t *stack, uint ssz)
 {
 	int i;
+	struct netvm_mseg *m;
+
 	abort_unless(vm && stack && ssz > 0 && ssz + 1 > 0);
 	vm->stack = stack;
 	vm->stksz = ssz;
-	vm->mem = mem;
-	vm->memsz = memsz;
-	vm->rosegoff = memsz;
 	vm->inst = NULL;
 	vm->ninst = 0;
 	vm->pc = 0;
 	vm->sp = 0;
 	vm->bp = 0;
 	vm->matchonly = 0;
+
 	memset(vm->packets, 0, sizeof(vm->packets));
+
+	for (i = 0; i < NETVM_MAXMSEGS; ++i) {
+		m = &vm->msegs[i];
+		m->base = NULL;
+		m->len = 0;
+		m->perms = 0;
+	}
+
 	for (i = 0; i < NETVM_MAXCOPROC; ++i)
 		vm->coprocs[i] = NULL;
 }
@@ -1398,8 +1405,8 @@ int netvm_validate(struct netvm *vm)
 	struct netvm_inst *inst;
 	uint64_t i, maxi, newpc;
 
-	if (!vm || !vm->stack || (vm->rosegoff > vm->memsz) || !vm->inst ||
-	    (vm->ninst < 0) || (vm->ninst > MAXINST))
+	if (!vm || !vm->stack || !vm->inst || (vm->ninst < 1) || 
+	    (vm->ninst > MAXINST))
 		return NETVM_ERR_UNINIT;
 	maxi = vm->matchonly ? NETVM_OC_MAX_MATCH : NETVM_OC_MAX;
 	for (i = 0; i < vm->ninst; i++) {
@@ -1459,23 +1466,26 @@ int netvm_validate(struct netvm *vm)
 }
 
 
-/* set the read-only segment offset for the VM */
-int netvm_set_rooff(struct netvm *vm, uint rooff)
-{
-	abort_unless(vm);
-	if (rooff > vm->memsz)
-		return -1;
-	vm->rosegoff = rooff;
-	return 0;
-}
-
-
 /* set up netvm code */
 void netvm_set_code(struct netvm *vm, struct netvm_inst *inst, uint ni)
 {
 	abort_unless(vm);
 	vm->inst = inst;
 	vm->ninst = ni;
+}
+
+
+void netvm_set_mseg(struct netvm *vm, int seg, byte_t *base, uint len,
+		    int perms)
+{
+	struct netvm_mseg *m;
+	abort_unless(vm);
+	abort_unless(base || len == 0);
+	abort_unless(seg >= 0 && seg < NETVM_MAXMSEGS);
+	m = &vm->msegs[seg];
+	m->base = base;
+	m->len = len;
+	m->perms = perms & NETVM_SEG_PMASK;
 }
 
 
@@ -1527,13 +1537,20 @@ struct pktbuf *netvm_clr_pkt(struct netvm *vm, int slot, int keeppkb)
 }
 
 
-/* clear memory up through read-only segment */
+/* clear writeable memory */
 void netvm_clr_mem(struct netvm *vm)
 {
-	abort_unless(vm && vm->stack && vm->rosegoff <= vm->memsz && vm->inst &&
+	int i;
+	struct netvm_mseg *m;
+
+	abort_unless(vm && vm->stack && vm->inst &&
 		     vm->ninst >= 0 && vm->ninst <= MAXINST);
-	if (vm->mem)
-		memset(vm->mem, 0, vm->rosegoff);
+
+	for (i = 0; i < NETVM_MAXMSEGS; ++i) {
+		m  = &vm->msegs[i];
+		if (((m->perms & NETVM_SEG_WR) != 0) && (m->base != NULL))
+			memset(m->base, m->len, 0);
+	}
 }
 
 
@@ -1541,8 +1558,7 @@ void netvm_clr_mem(struct netvm *vm)
 void netvm_clr_pkts(struct netvm *vm)
 {
 	int i;
-	abort_unless(vm && vm->stack && vm->rosegoff <= vm->memsz && vm->inst &&
-		     vm->ninst >= 0 && vm->ninst <= MAXINST);
+	abort_unless(vm);
 	for (i = 0; i < NETVM_MAXPKTS; ++i) {
 		pkb_free(vm->packets[i]);
 		vm->packets[i] = NULL;
@@ -1566,8 +1582,7 @@ void netvm_reset_coprocs(struct netvm *vm)
 /* reinitialize for running but with same packet and memory state */
 void netvm_restart(struct netvm *vm)
 {
-	abort_unless(vm && vm->stack && vm->rosegoff <= vm->memsz && vm->inst &&
-		     vm->ninst >= 0 && vm->ninst <= MAXINST);
+	abort_unless(vm);
 	vm->pc = 0;
 	vm->nxtpc = 0;
 	vm->sp = 0;
@@ -1592,7 +1607,7 @@ int netvm_run(struct netvm *vm, int maxcycles, uint64_t *rv)
 {
 	struct netvm_inst *inst;
 
-	abort_unless(vm && vm->stack && vm->rosegoff <= vm->memsz && vm->inst &&
+	abort_unless(vm && vm->stack && vm->inst &&
 		     vm->ninst >= 0 && vm->ninst <= MAXINST);
 	vm->error = 0;
 	vm->running = 1;
@@ -1661,7 +1676,7 @@ static const char *rt_error_strings[NETVM_ERR_MAX+1] = {
 	"instruction address error",
 	"memory address error",
 	"packet address error",
-	"write attempt to read-only segment",
+	"memory permission error",
 	"bad packet index",
 	"attempt to access non-existant packet",
 	"attempt to access non-existant header",
