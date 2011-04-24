@@ -62,6 +62,15 @@ struct netvm_inst {
 #define NETVM_PD_OFF_LEN	32
 #define NETVM_PD_OFF_MASK	0xffffffff
 
+#define NETVM_PPD_IDX_OFF	4
+#define NETVM_PPD_IDX_MASK	0xF
+#define NETVM_PPD_FLD_OFF	0
+#define NETVM_PPD_FLD_MASK	0xF
+#define NETVM_PPD_PPT_OFF	16
+#define NETVM_PPD_PPT_MASK	0xFFFF
+#define NETVM_PPD_OFF_OFF	0
+#define NETVM_PPD_OFF_MASK	0xFFFF
+
 #define NETVM_PDESC(pkt, ppt, idx, fld, off) \
   ((((uint64_t)(pkt) & NETVM_PD_PKT_MASK) << NETVM_PD_PKT_OFF)|\
    (((uint64_t)(ppt) & NETVM_PD_PPT_MASK) << NETVM_PD_PPT_OFF)|\
@@ -399,8 +408,8 @@ enum {
 	NETVM_OC_PKDELI,	/* delete packet 'x' */
 	NETVM_OC_PKFXD,		/* [pkn] set dltype from PPT_ of 2nd prp */
 	NETVM_OC_PKFXDI,	/* set dltype of pkt 'x' from PPT_ of 2nd prp */
-	NETVM_OC_PKPUP,		/* [pdesc] update parse fields (packed pdesc) */
-	NETVM_OC_PKPUPI,	/* update the parse fields (stack pdesc) */
+	NETVM_OC_PKPUP,		/* [pdesc] update parse fields (stack pdesc) */
+	NETVM_OC_PKPUPI,	/* update the parse fields (packed pdesc) */
 	NETVM_OC_PKFXL,		/* [pdesc] fix length fields in the packet */
 				/*   If pdesc refers to the base parse, fix */
 				/*   all lengths that are in a layer */

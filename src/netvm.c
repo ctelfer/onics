@@ -43,10 +43,10 @@ void netvm_get_pd(struct netvm *vm, struct netvm_prp_desc *pd, int onstack)
 		pd->offset = sign_extend(val, 32);
 	} else {
 		pd->pktnum = inst->y & ~NETVM_SEG_ISPKT;
-		pd->idx = (inst->z >> 4) & 0xF;
-		pd->field = (inst->z & 0xF);
-		pd->ptype = (inst->w >> 16) & 0xFFFF;
-		pd->offset = inst->w & 0xFFFF;
+		pd->idx = (inst->z >> NETVM_PPD_IDX_OFF) & NETVM_PPD_IDX_MASK;
+		pd->field = (inst->z & NETVM_PPD_FLD_MASK);
+		pd->ptype = (inst->w >> NETVM_PPD_PPT_OFF) & NETVM_PPD_PPT_MASK;
+		pd->offset = inst->w & NETVM_PPD_OFF_MASK;
 	}
 }
 

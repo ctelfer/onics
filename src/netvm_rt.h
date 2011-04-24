@@ -3,17 +3,23 @@
 
 #include "netvm.h"
 
+struct netvm_segdesc {
+	uint			len;
+	uint			perms;
+	struct raw		init;
+};
+
 struct netvm_program {
 	int			matchonly;
 	struct netvm_inst *	inst;
 	size_t			ninst;
 	size_t			isiz;
-	uint			rwmreq;
-	uint			romreq;
+	struct netvm_segdesc	sdescs[NETVM_MAXMSEGS];
 	uint64_t		cpreqs[NETVM_MAXCOPROC];
 };
 
 int nvmp_validate(struct netvm_program *prog, struct netvm *vm);
+void nvmp_init_mem(struct netvm_program *prog, struct netvm *vm);
 int nvmp_exec(struct netvm_program *prog, struct netvm *vm, uint64_t *vmrv);
 
 struct netvm_matchedprog {

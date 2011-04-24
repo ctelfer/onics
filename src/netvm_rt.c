@@ -10,27 +10,56 @@
 int nvmp_validate(struct netvm_program *prog, struct netvm *vm)
 {
 	int i;
-	uint rwmem, romem;
+	struct netvm_segdesc *sd;
 
 	abort_unless(vm && prog);
-	abort_unless(vm->memsz >= vm->rosegoff);
 
 	if (prog->ninst < 1)
 		return -1;
-	rwmem = vm->rosegoff;
-	romem = vm->memsz - rwmem;
-	if (rwmem < prog->rwmreq || romem < prog->romreq)
-		return -1;
+
+	for (i = 0; i < NETVM_MAXMSEGS; ++i) {
+		sd = &prog->sdescs[i];
+		if (sd->len < sd->init.len)
+			return -1;
+		if (sd->len < vm->msegs[i].len)
+			return -1;
+		if (sd->len > 0 && vm->msegs[i].base == NULL)
+			return -1;
+	}
 	for (i = 0; i < NETVM_MAXCOPROC; ++i)
 		if (vm->coprocs[i]->type != prog->cpreqs[i])
 			return -1;
 	netvm_set_code(vm, prog->inst, prog->ninst);
 	netvm_set_matchonly(vm, prog->matchonly);
+	for (i = 0; i < NETVM_MAXMSEGS; ++i)
+		vm->msegs[i].perms = prog->sdescs[i].perms;
 	if (netvm_validate(vm) < 0)
 		return -1;
+
+	/* Clean up */
 	netvm_set_code(vm, NULL, 0);
+	for (i = 0; i < NETVM_MAXMSEGS; ++i)
+		vm->msegs[i].perms = 0;
 
 	return 0;
+}
+
+
+void nvmp_init_mem(struct netvm_program *prog, struct netvm *vm)
+{
+	int i;
+	struct netvm_mseg *ms;
+	struct netvm_segdesc *sd;
+
+	abort_unless(prog && vm);
+
+	ms = &vm->msegs[0];
+	sd = &prog->sdescs[0];
+	for (i = 0; i < NETVM_MAXMSEGS; ++i, ++ms, ++sd) {
+		abort_unless(sd->init.len <= ms->len);
+		ms->perms = sd->perms;
+		memmove(ms->base, sd->init.data, sd->init.len);
+	}
 }
 
 
@@ -58,7 +87,7 @@ void nvmmrt_init(struct netvm_mrt *mrt, uint ssz, uint msz,
 	else
 		mem = NULL;
 
-	netvm_init(&mrt->vm, stk, ssz, mem, msz);
+	netvm_init(&mrt->vm, stk, ssz);
 	mrt->io = io;
 	mrt->begin = NULL;
 	mrt->end = NULL;
@@ -127,6 +156,7 @@ int nvmmrt_execute(struct netvm_mrt *mrt)
 
 
 	if (mrt->begin) {
+		nvmp_init_mem(mrt->begin, &mrt->vm);
 		if (nvmp_exec(mrt->begin, &mrt->vm, NULL) < 0)
 			return -1;
 	}
