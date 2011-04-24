@@ -12,17 +12,12 @@
 #define SYMTABSIZE    256
 
 
-static struct hashsys symtab_sys = {
-	cmp_str, ht_shash, NULL
-};
-
-
 static int symtab_init(struct htab *ht)
 {
-	struct list *bins;
-	if ((bins = malloc(SYMTABSIZE * sizeof(struct list))) == NULL)
+	struct hnode **bins;
+	if ((bins = malloc(SYMTABSIZE * sizeof(struct hnode *))) == NULL)
 		return -1;
-	ht_init(ht, bins, SYMTABSIZE, &symtab_sys);
+	ht_init(ht, bins, SYMTABSIZE, cmp_str, ht_shash, NULL);
 	return 0;
 }
 
@@ -47,8 +42,8 @@ static int ftab_add(struct htab *ht, struct pml_function *func)
 	if (ht_lkup(ht, func->name, &h) != NULL)
 		return -1;
 	hn = &func->hn;
-	ht_ninit(hn, func->name, func, h);
-	ht_ins(ht, hn);
+	ht_ninit(hn, func->name, func);
+	ht_ins(ht, hn, h);
 
 	return 0;
 }
@@ -74,8 +69,8 @@ static int vtab_add(struct htab *ht, struct pml_variable *var)
 	if (ht_lkup(ht, var->name, &h) != NULL)
 		return -1;
 	hn = &var->hn;
-	ht_ninit(hn, var->name, var, h);
-	ht_ins(ht, hn);
+	ht_ninit(hn, var->name, var);
+	ht_ins(ht, hn, h);
 
 	return 0;
 }
@@ -101,11 +96,11 @@ static void freesym(void *nodep, void *ctx)
 
 static void symtab_destroy(struct htab *ht)
 {
-	if (ht->tab == NULL)
+	if (ht->bkts == NULL)
 		return;
 	ht_apply(ht, freesym, NULL);
-	free(ht->tab);
-	ht->tab = NULL;
+	free(ht->bkts);
+	ht->bkts = NULL;
 }
 
 
