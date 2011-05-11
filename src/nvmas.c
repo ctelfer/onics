@@ -29,6 +29,9 @@ struct nvmop {
 #define BRREL  0x40
 #define MAXARGS 4
 #define MAXTOKS (MAXARGS+1)
+#define IDCHARS "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ" \
+		"0123456789_"
+#define LABELCHARS IDCHARS
 
 
 struct nvmop Operations[] = {
@@ -183,6 +186,18 @@ int find_const(struct htab *t, const char *name, ulong *v)
 }
 
 
+int set_const(struct htab *t, const char *name, ulong v)
+{
+	struct hnode *hn;
+	struct constant *c;
+	if ((hn = ht_lkup(t, name, NULL)) == NULL)
+		return 0;
+	c = hn->data;
+	c->val = v;
+	return 1;
+}
+
+
 void add_const(struct htab *t, struct constant *c, const char *name, ulong v)
 {
 	c->val = v;
@@ -217,6 +232,33 @@ static const char *estrs[NUMERR] = {
 };
 
 
+static char *parse_quoted_string(char *s)
+{
+	while (*s != '"') {
+		if (*s == '\0')
+			return NULL;
+		if (*s == '\\') {
+			if (s[1] == '\0')
+				return NULL;
+			if (s[1] == 'x') {
+				if (!isxdigit(s[2]) || !isxdigit(s[3]))
+					return NULL;
+				s[0] = chnval(s[2]) * 16 + chnval(s[3]);
+				s += 3;
+			} else {
+				s[0] = s[1]
+				memmove(s+1, s+2, strlen(s+2)+1);
+				s += 1;
+			}
+		}
+		s++;
+	}
+
+	*s = '\0';
+	return s+1;
+}
+
+
 static int tokenize(char *s, char *toks[], uint maxtoks)
 {
 	int na = 0;
@@ -228,8 +270,15 @@ static int tokenize(char *s, char *toks[], uint maxtoks)
 			return na;
 		if (na == maxtoks)
 			return -ERR_NARG;
-		toks[na++] = s;
-		s = s + strcspn(s, " \t\n");
+		if (*s == '"') {
+			toks[na++] = s+1;
+			s = parse_quoted_string(s+1);
+			if (s == NULL)
+				return -ERR_BADSTR;
+		} else {
+			toks[na++] = s;
+			s = s + strcspn(s, " \t\n");
+		}
 		if (*s != '\0') {
 			*s++ = '\0';
 			s = s + strspn(s, " \t\n");
@@ -466,12 +515,14 @@ struct asmctx {
 	char			files[MAXFILES][MAXLINE];
 	uint			numf;
 	char *			curfile;
-	struct constant		consts[MAXINSTR];
+	struct constant		consts[MAXCONST];
 	uint			numc;
 	struct list 		celem[TABLESIZE];
 	struct htab 		ctab;
 	struct list 		lelem[TABLESIZE];
 	struct htab 		ltab;
+	struct netvm_segdesc    sdescs[NETVM_MAXMSEGS];
+	uint64_t                cpreqs[NETVM_MAXCOPROC];
 };
 
 
@@ -490,22 +541,153 @@ static void init_asmctx(struct asmctx *ctx)
 }
 
 
-void str2directive(struct asmctx *ctx, char *s, char *fname, uint lineno)
+static int read_const(char *s, char *file, char *line, ulong *v)
 {
-	char *toks[MAXTOKS], **tp;
+	char *cp;
+	*v = (ulong)strtol(s, &cp);
+	if (*cp != '\0') {
+		logrec(LOG_INFO, "invalid number '%s' in file %s on line %u",
+		       fname, lineno);
+		return -1;
+	}
+	return 0;
+}
+
+
+static void do_include(struct asmctx *ctx, char *fname, uint lineno,
+		       char *toks[], uint nt)
+{
+}
+
+
+static void do_include(struct asmctx *ctx, char *fname, uint lineno,
+		       char *toks[], uint nt)
+{
+	FILE *fp;
+
+	if (nt != 2) {
+		logrec(LOG_INFO, "invalid number of args for .include "
+				 "in file %s on line %u; expected 2",
+		       fname, lineno);
+		return;
+	}
+	if ((fp = fopen(toks[1], "r")) == NULL) {
+		errsys(LOG_INFO, "unable to open file %s "
+				 "(included on line %s line %u)\n", 
+		       toks[1], fname, lineno);
+		exit(1);
+	}
+	assemble(ctx, toks[1], fp);
+	fclose(fp);
+}
+
+
+static void do_define(struct asmctx *ctx, char *fname, uint lineno,
+		      char *toks[], uint nt)
+{
+	ulong v;
+
+	if (nt != 3) {
+		logrec(LOG_INFO, "invalid number of args for .define "
+				 "in file %s on line %u; expected 3",
+		       fname, lineno);
+		return;
+	}
+	if (!isalnum(toks[1][0]) || 
+	    strspn(toks[1], IDCHARS) != strlen(toks[1])) {
+		logrec(LOG_INFO, "invalid .define token "
+				 "in file %s on line %u",
+		       fname, lineno);
+		return;
+	}
+
+	if (read_const(toks[1], fname, lineno, &v) < 0)
+		return;
+
+	if (find_const(&ctx->ctab, toks[1], NULL))
+		logrec(LOG_INFO, "WARNING: '%s' redefined "
+				 "in file %s on line %u",
+		       fname, lineno);
+
+	set_const(&ctx->ctab, toks[1], v);
+}
+
+
+static void do_segment(struct asmctx *ctx, char *fname, uint lineno,
+		       char *toks[], uint nt)
+{
+	ulong segnum;
+	ulong perms;
+	ulong seglen;
+	struct netvm_segdesc *sd;
+
+	if (nt != 4) {
+		logrec(LOG_INFO, "invalid number of args for .segment "
+				 "in file %s on line %u; expected 4",
+		       fname, lineno);
+		return;
+	}
+
+	if ((read_const(toks[1], fname, lineno, &segnum) < 0) || 
+	    (read_const(toks[2], fname, lineno, &perms) < 0) || 
+	    (read_const(toks[3], fname, lineno, &seglen) < 0))
+		return;
+
+	if (segnum >= NETVM_MAXMSEGS)
+		err("Invalid memory segment (%u) in file %s"
+		    "on line %s", (uint)segnum, fname, lineno);
+	if ((perms & ~NETVM_SEG_PMASK) != 0)
+		err("Invalid permissions for segment %u in file %s"
+		    "on line %s", (uint)segnum, fname, lineno);
+	if (seglen > UINT_MAX)
+		err("Invalid segment length (%lu) in file %s"
+		    "on lien %s", seglen, fname, lineno);
+
+	sd = &ctx->sdescs[segnum];
+	if (sd->perms != (uint)-1)
+		err("redefinition of segment %u in file %s"
+		    "on line %s", (uint)segnum, fname, lineno);
+	sd->len = seglen;
+	sd->perms = perms;
+	sd->init.data = NULL;
+	sd->init.len = 0;
+}
+
+
+static void do_mem(struct asmctx *ctx, char *fname, uint lineno, char *toks[],
+		   uint nt)
+{
+}
+
+
+static void do_coproc(struct asmctx *ctx, char *fname, uint lineno,
+		      char *toks[], uint nt)
+{
+}
+
+
+void parse_asm_mem(struct asmctx *ctx, char *s, char *fname, uint lineno)
+{
+	char *toks[MAXTOKS], **tp, *cp;
 	uint nt;
+	ulong v;
 
 	if ((nt = tokenize(s, toks, array_length(toks))) <= 0) {
-		logrec(LOG_INFO, "invalid directive on file %s line %u",
+		logrec(LOG_INFO, "invalid directive in file %s on line %u",
 		       fname, lineno);
 		return;
 	}
 
 	if (strcmp(toks[0], "include") == 0) {
+		do_include(ctx, fname, lineno, toks, nt);
 	} else if (strcmp(toks[0], "define") == 0) {
+		do_define(ctx, fname, lineno, toks, nt);
 	} else if (strcmp(toks[0], "segment") == 0) {
+		do_segment(ctx, fname, lineno, toks, nt);
 	} else if (strcmp(toks[0], "mem") == 0) {
-	} else if (strcmp(toks[0], "memstr") == 0) {
+		do_mem(ctx, fname, lineno, toks, nt);
+	} else if (strcmp(toks[0], "coproc") == 0) {
+		do_coproc(ctx, fname, lineno, toks, nt);
 	} else {
 		logrec(LOG_INFO, "unknown directive '%s' on file %s line %u",
 		       tok[0], fname, lineno);
@@ -533,7 +715,7 @@ void assemble(struct asmctx *ctx, char *fname, FILE *input)
 		if (*cp == '\0' && *cp == '#')
 			continue;
 		if (*cp == '.') {
-			str2directive(ctx, cp+1);
+			parse_asm_directive(ctx, cp+1);
 			continue;
 		}
 		ep = cp + strspn(cp, LABELCHARS);
@@ -552,7 +734,7 @@ void assemble(struct asmctx *ctx, char *fname, FILE *input)
 			}
 			cp = ep + 1;
 			cp = cp + strspn(cp, " \t\n");
-			if (*cp == '\0' && *cp == '#')
+			if (*cp == '\0')
 				continue;
 		}
 
