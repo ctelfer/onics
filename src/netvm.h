@@ -168,7 +168,7 @@ struct netvm_coproc {
 					    struct netvm *vm);
 };
 
-#define NETVM_CPT_NONE		((uint32_t)0)
+#define NETVM_CPT_NONE		((uint64_t)0)
 
 
 
