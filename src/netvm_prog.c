@@ -138,6 +138,7 @@ int nvmp_read(struct netvm_program *prog, FILE *infile, int *eret)
 	memset(prog, 0, sizeof(prog));
 	/* redundant but explicit */
 	prog->ninst = 0;
+	prog->inst = NULL;
 	for (i = 0, sd = prog->sdescs; i < NETVM_MAXMSEGS; ++i, ++sd)
 		sd->perms = 0;
 	for (i = 0; i < NETVM_MAXCOPROC; ++i)
@@ -177,12 +178,18 @@ int nvmp_read(struct netvm_program *prog, FILE *infile, int *eret)
 	}
 	prog->ninst = ninst;
 	for (i = 0, ni = prog->inst; i < ninst; ++i, ++ni) {
+		uchar op, x, y, z;
+		ulong w;
 		if (fread(buf, 1, 8, infile) < 8) {
 			e = NVMP_RDE_TOOSMALL;
 			goto err;
 		}
-		unpack(buf, 8, "bbbbw", &ni->op, &ni->x, &ni->y, &ni->z,
-		       &ni->w);
+		unpack(buf, 8, "bbbbw", &op, &x, &y, &z, &w);
+		ni->op = op;
+		ni->x = x;
+		ni->y = y;
+		ni->z = z;
+		ni->w = w;
 	}
 
 	/* read coprocessor requirements */
@@ -249,6 +256,8 @@ int nvmp_write(struct netvm_program *prog, FILE *outfile)
 
 	abort_unless(prog);
 
+	ncp = 0;
+	nseg = 0;
 	for (i = 0, sd = prog->sdescs; i < NETVM_MAXMSEGS; ++i, ++sd)
 		if (sd->perms != 0)
 			++nseg;

@@ -267,7 +267,7 @@ int set_const(struct htab *t, const char *name, ulong v)
 void add_const(struct htab *t, struct constant *c, const char *name, ulong v)
 {
 	c->val = v;
-	ht_ninit(&c->hn, estrdup(name), &c);
+	ht_ninit(&c->hn, estrdup(name), c);
 	ht_ins_h(t, &c->hn);
 }
 
@@ -532,8 +532,8 @@ int inst2str(const struct netvm_inst *ni, char *s, size_t len)
 
 	if ((nc = str_copy(s, op->iname, len)) > len)
 		return -1;
-	s += nc;
-	len -= nc;
+	s += nc - 1;
+	len -= nc - 1;
 	
 	if (((op->argmask & PDONLY) != 0) ||
 	    (((op->argmask & PDOPT) != 0) && ((ni->y & NETVM_SEG_ISPKT) != 0)))
@@ -559,7 +559,7 @@ int inst2str(const struct netvm_inst *ni, char *s, size_t len)
 		break;
 	default: abort_unless(0);
 	}
-	if (fr < 0 || len > fr)
+	if (fr < 0 || len < fr)
 		return -1;
 
 	return len + fr;
@@ -578,12 +578,13 @@ static void init_asmctx(struct asmctx *ctx)
 		ctx->lelem[i] = NULL;
 	ht_init(&ctx->ltab, ctx->lelem, TABLESIZE, cmp_str, ht_shash, NULL);
 	for (i = 0; i < NETVM_MAXMSEGS; ++i)
-		ctx->sdescs[i].perms = (uint)-1;
+		ctx->sdescs[i].perms = 0;
 	for (i = 0; i < NETVM_MAXCOPROC; ++i)
 		ctx->cpreqs[i] = NETVM_CPT_NONE;
 	ctx->numi = 0;
 	ctx->numf = 0;
 	ctx->numc = 0;
+	ctx->curfile = NULL;
 }
 
 
@@ -616,7 +617,7 @@ static int do_include(struct asmctx *ctx, char *fn, uint lineno,
 
 	if (nt != 2) {
 		logrec(1, "invalid number of args for .include "
-				 "in file %s on line %u; expected 2",
+				 "in file %s on line %u; expected 2\n",
 		       fn, lineno);
 		return 1;
 	}
@@ -640,21 +641,21 @@ static int do_define(struct asmctx *ctx, char *fn, uint lineno,
 
 	if (nt != 3) {
 		logrec(1, "invalid number of args for .define "
-				 "in file %s on line %u; expected 3",
+				 "in file %s on line %u; expected 3\n",
 		       fn, lineno);
 		return 1;
 	}
 	if (!isalnum(toks[1].data[0]) || 
 	    strspn(toks[1].data, IDCHARS) != toks[1].len) {
 		logrec(1, "invalid .define token "
-				 "in file %s on line %u",
+				 "in file %s on line %u\n",
 		       fn, lineno);
 		return 1;
 	}
 
 	if ((rv = intarg(&toks[2], &ctx->ltab, &ctx->ctab, &v)) != 0) {
 		logrec(1, "invalid numeric value '%s' in .define "
-				 "directive in file %s on line %u: %s",
+				 "directive in file %s on line %u: %s\n",
 		       toks[2].data, fn, lineno, estrs[rv]);
 		return 1;
 	}
@@ -676,51 +677,51 @@ static int do_segment(struct asmctx *ctx, char *fn, uint lineno,
 
 	if (nt != 4) {
 		logrec(1, "invalid number of args for .segment "
-			  "in file %s on line %u; expected 3",
+			  "in file %s on line %u; expected 3\n",
 		       fn, lineno);
 		return 1;
 	}
 
 	if ((rv = intarg(&toks[1], &ctx->ltab, &ctx->ctab, &segnum)) != 0) {
 		logrec(1, "invalid segment number '%s' in .segment "
-		          "directive in file %s on line %u: %s",
+		          "directive in file %s on line %u: %s\n",
 		       toks[1].data, fn, lineno, estrs[rv]);
 		return 1;
 	}
 	if (segnum >= NETVM_MAXMSEGS) {
 		logrec(1, "Invalid memory segment (%u) in file %s"
-		          "on line %s", (uint)segnum, fn, lineno);
+		          "on line %s\n", (uint)segnum, fn, lineno);
 		return 1;
 	}
 
 	if ((rv = intarg(&toks[2], &ctx->ltab, &ctx->ctab, &perms)) != 0) {
 		logrec(1, "invalid permissions value '%s' in .segment "
-		          "directive in file %s on line %u: %s",
+		          "directive in file %s on line %u: %s\n",
 		       toks[2].data, fn, lineno, estrs[rv]);
 		return 1;
 	}
 	if ((perms & ~NETVM_SEG_PMASK) != 0) {
 		logrec(1, "Invalid permissions for segment %u in file %s"
-		          "on line %s", (uint)segnum, fn, lineno);
+		          "on line %s\n", (uint)segnum, fn, lineno);
 		return 1;
 	}
 
 	if ((rv = intarg(&toks[3], &ctx->ltab, &ctx->ctab, &seglen)) != 0) {
 		logrec(1, "invalid segment length '%s' in .segment "
-		          "directive in file %s on line %u: %s",
+		          "directive in file %s on line %u: %s\n",
 		       toks[3].data, fn, lineno, estrs[rv]);
 		return 1;
 	}
 	if (seglen > UINT_MAX) {
 		logrec(1, "Invalid segment length (%lu) in file %s"
-		          "on lien %s", seglen, fn, lineno);
+		          "on line %s\n", seglen, fn, lineno);
 		return 1;
 	}
 
 	sd = &ctx->sdescs[segnum];
-	if (sd->perms != (uint)-1) {
+	if (sd->perms != 0) {
 		logrec(1, "redefinition of segment %u in file %s"
-		          "on line %s", (uint)segnum, fn, lineno);
+		          "on line %s\n", (uint)segnum, fn, lineno);
 		return 1;
 	}
 
@@ -736,7 +737,7 @@ static int do_matchonly(struct asmctx *ctx, char *fn, uint lineno,
 {
 	if (nt != 1) {
 		logrec(1, "unexpected arguments in .matchonly " 
-			  "directive in file %s on line %u",
+			  "directive in file %s on line %u\n",
 		       fn, lineno);
 		return 1;
 	}
@@ -760,28 +761,28 @@ static int do_coproc(struct asmctx *ctx, char *fn, uint lineno,
 
 	if (nt != 3) {
 		logrec(1, "invalid number of args for .segment "
-			  "in file %s on line %u; expected 2",
+			  "in file %s on line %u; expected 2\n",
 		       fn, lineno);
 		return 1;
 	}
 
 	if ((rv = intarg(&toks[1], &ctx->ltab, &ctx->ctab, &cpi)) != 0) {
 		logrec(1, "invalid coprocessor index '%s' in .coproc "
-		          "directive in file %s on line %u: %s",
+		          "directive in file %s on line %u: %s\n",
 		       toks[1].data, fn, lineno, estrs[rv]);
 		return 1;
 	}
 
 	if ((rv = intarg(&toks[2], &ctx->ltab, &ctx->ctab, &cpt)) != 0) {
 		logrec(1, "invalid coprocessor type '%s' in .segment "
-		          "directive in file %s on line %u: %s",
+		          "directive in file %s on line %u: %s\n",
 		       toks[2].data, fn, lineno, estrs[rv]);
 		return 1;
 	}
 
 	if (cpi >= NETVM_MAXCOPROC) {
 		logrec(1, "coprocessor index %lu out of range in .coproc "
-		          "directive in file %s on line %u",
+		          "directive in file %s on line %u\n",
 		       cpi, fn, lineno);
 		return 1;
 	}
@@ -798,7 +799,7 @@ int parse_asm_directive(struct asmctx *ctx, char *s, char *fn, uint lineno)
 	uint nt;
 
 	if ((nt = tokenize(s, toks, array_length(toks))) <= 0) {
-		logrec(1, "invalid directive in file %s on line %u",
+		logrec(1, "invalid directive in file %s on line %u\n",
 		       fn, lineno);
 		return 1;
 	}
@@ -816,7 +817,7 @@ int parse_asm_directive(struct asmctx *ctx, char *s, char *fn, uint lineno)
 	} else if (strcmp(toks[0].data, "coproc") == 0) {
 		return do_coproc(ctx, fn, lineno, toks, nt);
 	} else {
-		logrec(1, "unknown directive '%s' on file %s line %u",
+		logrec(1, "unknown directive '%s' on file %s line %u\n",
 		       toks[0].data, fn, lineno);
 		return 1;
 	}
@@ -831,19 +832,21 @@ static int assemble(struct asmctx *ctx, const char *fn, FILE *input)
 	int rv;
 	uint i;
 	uint ne = 0;
+	char *prevfile;
 
 	if (ctx->numf >= MAXFILES) {
 		logrec(1, "Can't add file '%s' to the assembly "
-		          "-- too many files", fn);
+		          "-- too many files\n", fn);
 		return 1;
 	}
 	str_copy(ctx->files[ctx->numf], fn, MAXSTR);
+	prevfile = ctx->curfile;
 	ctx->curfile = ctx->files[ctx->numf++];
 
 	while (fgets(line, sizeof(line), input)) {
 		lineno += 1;
 		cp = line + strspn(line, " \t\n");
-		if (*cp == '\0' && *cp == '#')
+		if (*cp == '\0' || *cp == '#')
 			continue;
 		if (*cp == '.') {
 			parse_asm_directive(ctx, cp+1, ctx->curfile, lineno);
@@ -854,12 +857,12 @@ static int assemble(struct asmctx *ctx, const char *fn, FILE *input)
 			memcpy(buf, cp, ep - cp);
 			buf[ep - cp + 1] = '\0';
 			if (find_const(&ctx->ltab, buf, NULL)) {
-				logrec(1, "Duplicate label '%s' in %s:%u",
+				logrec(1, "Duplicate label '%s' in %s:%u\n",
 				       buf, ctx->curfile, lineno);
 				ne += 1;
 			} else if (ctx->numc == MAXCONST) {
 				logrec(1, "Out of space for constants "
-					  "adding label '%s'", buf);
+					  "adding label '%s'\n", buf);
 				return ne + 1;
 			} else {
 				add_const(&ctx->ltab, &ctx->consts[ctx->numc++],
@@ -873,7 +876,8 @@ static int assemble(struct asmctx *ctx, const char *fn, FILE *input)
 
 		if (ctx->numi == MAXINSTR) {
 			logrec(1, "Out of space for instructions "
-			          "on file '%s' line %u", ctx->curfile, lineno);
+			          "on file '%s' line %u\n", ctx->curfile,
+			       lineno);
 			return ne + 1;
 		}
 
@@ -885,14 +889,19 @@ static int assemble(struct asmctx *ctx, const char *fn, FILE *input)
 		ctx->numi++;
 	}
 
-	for (i = 0; i < ctx->numi; ++i) {
-		in = &ctx->instrs[i];
-		rv = str2inst(in->str, &ctx->ltab, &ctx->ctab, in->inum,
-			      &in->instr);
-		if (rv != 0) {
-			logrec(1, "Error assembling file %s:%u -- %s",
-			       in->fname, in->lineno, estrs[rv]);
-			ne += 1;
+	ctx->curfile = prevfile;
+
+	if (prevfile == NULL) {
+		/* if we've exited the first file in the system, finalize: */
+		for (i = 0; i < ctx->numi; ++i) {
+			in = &ctx->instrs[i];
+			rv = str2inst(in->str, &ctx->ltab, &ctx->ctab, in->inum,
+				      &in->instr);
+			if (rv != 0) {
+				logrec(1, "Error assembling file %s:%u -- %s\n",
+				       in->fname, in->lineno, estrs[rv]);
+				ne += 1;
+			}
 		}
 	}
 
@@ -955,7 +964,7 @@ void disassemble(FILE *infile, FILE *outfile)
 	for (i = 0; i < prog.ninst; ++i) {
 		if (inst2str(&prog.inst[i], line, sizeof(line)) < 0)
 			err("error disassembling instruction %u\n", i);
-		fprintf(outfile, "# %8u\n\t%s\n", i, line);
+		fprintf(outfile, "#%8u\n\t%s\n", i, line);
 	}
 
 	nvmp_clear(&prog);
@@ -965,10 +974,10 @@ void disassemble(FILE *infile, FILE *outfile)
 void usage()
 {
 	char buf[4096];
-	fprintf(stderr, "usage: nvmas [options]\n");
+	fprintf(stderr, "usage: nvmas [options] [infile [outfile]]\n");
 	optparse_print(&optparser, buf, sizeof(buf));
 	str_cat(buf, "\n", sizeof(buf));
-	fprintf(stderr, "%s\n", buf);
+	fprintf(stderr, "%s", buf);
 	exit(1);
 }
 
@@ -1001,7 +1010,7 @@ int main(int argc, char *argv[])
 		} else {
 			infile = fopen(ifn, "r");
 			if (infile == NULL)
-				errsys("Unable to open file '%s' for reading", 
+				errsys("Unable to open file '%s' for reading\n", 
 				       ifn);
 		}
 	}
@@ -1012,7 +1021,7 @@ int main(int argc, char *argv[])
 		} else {
 			outfile = fopen(argv[rv+1], "w");
 			if (outfile == NULL)
-				errsys("Unable to open file '%s' for writing",
+				errsys("Unable to open file '%s' for writing\n",
 				       argv[rv+1]);
 
 		}
@@ -1022,7 +1031,7 @@ int main(int argc, char *argv[])
 	if (do_assemble) {
 		init_asmctx(&ctx);
 		if ((rv = assemble(&ctx, ifn, infile)) != 0)
-			err("Exiting:  %d errors", rv);
+			err("Exiting:  %d errors\n", rv);
 		fclose(infile);
 		emit_program(&ctx, outfile);
 		free_asmctx(&ctx);
