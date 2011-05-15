@@ -10,7 +10,7 @@ OPTS=-g -Wall -Wno-sign-conversion -Wno-pointer-sign
 LIBS=-L${CATLIB_ROOT}/lib -lcat_dbg -lpcap
 DEFS=
 BINDIR=../bin
-LIBOBJS= xpkt.o ns.o netvm.o netvm_rt.o pktbuf.o stdproto.o \
+LIBOBJS= xpkt.o ns.o netvm.o netvm_prog.o netvm_mrt.o pktbuf.o stdproto.o \
 	 protoparse.o util.o lex.pml.o pmltree.o netvm_std_coproc.o \
 	 pml.o
 
@@ -20,38 +20,44 @@ TARGETS=${BINDIR}/pcapin \
 	${BINDIR}/pktmux \
 	${BINDIR}/pktrel \
 	${BINDIR}/x2hpkt \
-	${BINDIR}/h2xpkt
+	${BINDIR}/h2xpkt \
+	${BINDIR}/nvmas
 
 all: ${LIBOBJS} ${TARGETS}
 
 ${BINDIR}/pcapin: pcapin.o pktbuf.o xpkt.o protoparse.o
-	${CC} -o ../bin/pcapin pcapin.o pktbuf.o xpkt.o protoparse.o \
+	${CC} -o ${BINDIR}/pcapin pcapin.o pktbuf.o xpkt.o protoparse.o \
 		${DEFS} ${OPTS} ${INCS} ${LIBS}
 
 ${BINDIR}/pcapout: pcapout.o pktbuf.o xpkt.o protoparse.o
-	${CC} -o ../bin/pcapout pcapout.o pktbuf.o xpkt.o protoparse.o \
+	${CC} -o ${BINDIR}/pcapout pcapout.o pktbuf.o xpkt.o protoparse.o \
 		${DEFS} ${OPTS} ${INCS} ${LIBS}
 
 ${BINDIR}/pktmux: pktmux.o pktbuf.o xpkt.o protoparse.o
-	${CC} -o ../bin/pktmux pktmux.o pktbuf.o xpkt.o protoparse.o \
+	${CC} -o ${BINDIR}/pktmux pktmux.o pktbuf.o xpkt.o protoparse.o \
 		${DEFS} ${OPTS} ${INCS} ${LIBS}
 
 ${BINDIR}/pktdemux: pktdemux.o pktbuf.o xpkt.o protoparse.o
-	${CC} -o ../bin/pktdemux pktdemux.o pktbuf.o xpkt.o protoparse.o \
+	${CC} -o ${BINDIR}/pktdemux pktdemux.o pktbuf.o xpkt.o protoparse.o \
 		${DEFS} ${OPTS} ${INCS} ${LIBS}
 
 ${BINDIR}/pktrel: pktrel.o pktbuf.o xpkt.o protoparse.o
-	${CC} -o ../bin/pktrel pktrel.o pktbuf.o xpkt.o protoparse.o \
+	${CC} -o ${BINDIR}/pktrel pktrel.o pktbuf.o xpkt.o protoparse.o \
 		${DEFS} ${OPTS} ${INCS} ${LIBS}
 
 ${BINDIR}/x2hpkt: x2hpkt.o pktbuf.o xpkt.o protoparse.o stdproto.o util.o ns.o
-	${CC} -o ../bin/x2hpkt x2hpkt.o pktbuf.o xpkt.o protoparse.o stdproto.o\
-		util.o ns.o \
+	${CC} -o ${BINDIR}/x2hpkt x2hpkt.o pktbuf.o xpkt.o protoparse.o \
+		stdproto.o util.o ns.o \
 		${DEFS} ${OPTS} ${INCS} ${LIBS}
 
 ${BINDIR}/h2xpkt: h2xpkt.o pktbuf.o xpkt.o protoparse.o ns.o util.o
-	${CC} -o ../bin/h2xpkt h2xpkt.o pktbuf.o xpkt.o protoparse.o stdproto.o \
+	${CC} -o ${BINDIR}/h2xpkt h2xpkt.o pktbuf.o xpkt.o protoparse.o stdproto.o \
 		ns.o util.o \
+		${DEFS} ${OPTS} ${INCS} ${LIBS}
+
+${BINDIR}/nvmas: nvmas.o netvm.o netvm_prog.o pktbuf.o protoparse.o xpkt.o
+	${CC} -o ${BINDIR}/nvmas nvmas.o netvm_prog.o netvm.o pktbuf.o \
+		protoparse.o xpkt.o \
 		${DEFS} ${OPTS} ${INCS} ${LIBS}
 
 .c.o: $<

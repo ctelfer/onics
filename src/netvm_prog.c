@@ -1,7 +1,5 @@
-#include "netvm_rt.h"
-#include "pktbuf.h"
+#include "netvm_prog.h"
 #include <cat/pack.h>
-#include <cat/stduse.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <errno.h>
@@ -11,21 +9,31 @@
 
 int nvmp_validate(struct netvm_program *prog, struct netvm *vm)
 {
-	int i;
+	uint i;
 	struct netvm_segdesc *sd;
+	struct netvm_meminit *mi;
 
 	abort_unless(vm && prog);
 
 	if (prog->ninst < 1)
 		return -1;
 
-	for (i = 0; i < NETVM_MAXMSEGS; ++i) {
-		sd = &prog->sdescs[i];
-		if (sd->len < sd->init.len)
+	for (i = 0; i < NETVM_MAXMSEGS; ++i)
+		if ((prog->sdescs[i].perms & ~NETVM_SEG_PMASK) != 0)
 			return -1;
-		if (sd->len < vm->msegs[i].len)
+	if ((prog->ninits > 0) && (prog->inits == NULL))
+		return -1;
+	for (i = 0; i < prog->ninits; ++i) {
+		mi = &prog->inits[i];
+		if (mi->segnum >= NETVM_MAXMSEGS)
 			return -1;
-		if (sd->len > 0 && vm->msegs[i].base == NULL)
+		if (vm->msegs[mi->segnum].base == NULL)
+			return -1;
+		sd = &prog->sdescs[mi->segnum];
+		/* check for overflow */
+		if (UINT_MAX - mi->off < mi->val.len)
+			return -1;
+		if (mi->off + mi->val.len > sd->len)
 			return -1;
 	}
 	for (i = 0; i < NETVM_MAXCOPROC; ++i)
@@ -52,16 +60,27 @@ void nvmp_init_mem(struct netvm_program *prog, struct netvm *vm)
 {
 	int i;
 	struct netvm_mseg *ms;
+	struct netvm_meminit *mi;
 	struct netvm_segdesc *sd;
 
 	abort_unless(prog && vm);
 
-	ms = &vm->msegs[0];
-	sd = &prog->sdescs[0];
-	for (i = 0; i < NETVM_MAXMSEGS; ++i, ++ms, ++sd) {
-		abort_unless(sd->init.len <= ms->len);
+	for (i = 0; i < NETVM_MAXMSEGS; ++i) {
+		sd = &prog->sdescs[i];
+		ms = &vm->msegs[i];
+		abort_unless(sd->len <= ms->len);
 		ms->perms = sd->perms;
-		memmove(ms->base, sd->init.data, sd->init.len);
+	}
+
+	abort_unless(prog->ninits == 0 || prog->inits != NULL);
+
+	mi = prog->inits;
+	for (i = 0; i < prog->ninits; ++i, ++mi) {
+		abort_unless(mi->val.len <= UINT_MAX - mi->off);
+		abort_unless(mi->val.len + mi->off <= ms->len);
+		abort_unless(mi->segnum < NETVM_MAXMSEGS);
+		ms = &vm->msegs[mi->segnum];
+		memmove(ms->base + mi->off, mi->val.data, mi->val.len);
 	}
 }
 
@@ -90,7 +109,7 @@ int nvmp_exec(struct netvm_program *prog, struct netvm *vm, uint64_t *vmrv)
  *  -- 4 -- number of segment sections
  *  -- <# instr> * 8 bytes --  instructions
  *  -- <# cpreqs> * 12 bytes --  coprocessor requirements
- *  -- <remainder> -- segment sections
+ *  -- <# segs> -- segment sections
  *
  *  Instruction format:
  *    opcode[1] x[1] y[1] z[1] w[4]
@@ -99,7 +118,7 @@ int nvmp_exec(struct netvm_program *prog, struct netvm *vm, uint64_t *vmrv)
  *    cpi[4] cpt[8]
  *
  *  Segment format:
- *    segnum[4] len[4] perms[4] ilen[4] <ilen bytes rouded to a multiple of 4>
+ *    segnum[4] len[4] perms[4]
  */
 
 
@@ -112,7 +131,7 @@ int nvmp_read(struct netvm_program *prog, FILE *infile, int *eret)
 	ulong magic, matchonly, ninst, ncp, nseg;
 	ulong cpi;
 	ulonglong cpt;
-	ulong segnum, seglen, perms, ilen;
+	ulong segnum, seglen, perms;
 	int e = NVMP_RDE_OK;
 
 	abort_unless(prog);
@@ -181,12 +200,11 @@ int nvmp_read(struct netvm_program *prog, FILE *infile, int *eret)
 	}
 
 	for (i = 0; i < nseg; ++i) {
-		if (fread(buf, 1, 16, infile) < 12) {
+		if (fread(buf, 1, 12, infile) < 12) {
 			e = NVMP_RDE_TOOSMALL;
 			goto err;
 		}
-		unpack(buf, 16, "wwww", &segnum, &seglen, &perms,
-		       &ilen);
+		unpack(buf, 16, "www", &segnum, &seglen, &perms);
 		if (segnum >= NETVM_MAXCOPROC) {
 			e = NVMP_RDE_BADSEGN;
 			goto err;
@@ -199,30 +217,9 @@ int nvmp_read(struct netvm_program *prog, FILE *infile, int *eret)
 			e = NVMP_RDE_BADSEGL;
 			goto err;
 		}
-		if (ilen > seglen) {
-			e = NVMP_RDE_BADSEGI;
-			goto err;
-		}
 		sd = &prog->sdescs[segnum];
 		sd->len = seglen;
 		sd->perms = perms;
-		sd->init.len = ilen;
-		sd->init.data = malloc(ilen);
-		if (sd->init.data == NULL) {
-			e = NVMP_RDE_OOMEM;
-			goto err;
-		}
-		if (fread(sd->init.data, 1, ilen, infile) < ilen) {
-			e = NVMP_RDE_TOOSMALL;
-			goto err;
-		}
-		if ((ilen & 0x3) != 0) {
-			ilen = 4 - (ilen & 0x3);
-			if (fread(buf, 1, ilen, infile) < ilen) {
-				e = NVMP_RDE_TOOSMALL;
-				goto err;
-			}
-		}
 	}
 
 	if (fread(buf, 1, 1, infile) > 0) {
@@ -249,7 +246,6 @@ int nvmp_write(struct netvm_program *prog, FILE *outfile)
 	byte_t buf[20];
 	struct netvm_inst *ni;
 	uint i;
-	uint x;
 
 	abort_unless(prog);
 
@@ -289,22 +285,10 @@ int nvmp_write(struct netvm_program *prog, FILE *outfile)
 	for (i = 0, sd = prog->sdescs; i < NETVM_MAXMSEGS; ++i, ++sd) {
 		if (sd->perms == 0)
 			continue;
-		pack(buf, sizeof(buf), "wwww", (ulong)i, (ulong)sd->len,
-		     (ulong)sd->perms, (ulong)sd->init.len);
+		pack(buf, sizeof(buf), "www", (ulong)i, (ulong)sd->len,
+		     (ulong)sd->perms);
 		if (fwrite(buf, 1, 16, outfile) < 16)
 			return -1;
-		if (sd->init.len > 0) {
-			abort_unless(sd->init.data != NULL);
-			if (fwrite(sd->init.data, 1, sd->init.len, outfile) < 
-			    sd->init.len)
-				return -1;
-			if ((sd->init.len & 0x3) != 0) {
-				x = 4 - (sd->init.len & 0x3);
-				memset(buf, 0, 3);
-				if (fwrite(buf, 1, x, outfile) < x)
-					return -1;
-			}
-		}
 	}
 
 	return 0;
@@ -326,191 +310,9 @@ void nvmp_clear(struct netvm_program *prog)
 		sd = &prog->sdescs[i];
 		sd->len = 0;
 		sd->perms = 0;
-		sd->init.len = 0;
-		if (sd->init.data != NULL) {
-			free(sd->init.data);
-			sd->init.data = NULL;
-		}
 	}
 
 	for (i = 0; i < NETVM_MAXCOPROC; ++i)
 		prog->cpreqs[i] = NETVM_CPT_NONE;
 }
 
-
-void nvmmrt_init(struct netvm_mrt *mrt, uint ssz, uint msz,
-		 struct netvm_rt_io *io)
-{
-	uint64_t *stk;
-	byte_t *mem;
-
-	abort_unless(mrt && ssz > 0 && io);
-
-	stk = ecalloc(ssz, sizeof(uint64_t));
-	if (msz > 0)
-		mem = ecalloc(msz, sizeof(byte_t));
-	else
-		mem = NULL;
-
-	netvm_init(&mrt->vm, stk, ssz);
-	mrt->io = io;
-	mrt->begin = NULL;
-	mrt->end = NULL;
-	mrt->pktprogs = clist_new_list(&estdmm,
-				       sizeof(struct netvm_matchedprog));
-	mrt->eprog = NULL;
-}
-
-
-int nvmmrt_set_begin(struct netvm_mrt *mrt, struct netvm_program *prog)
-{
-	abort_unless(mrt && prog);
-
-	if (nvmp_validate(prog, &mrt->vm) < 0)
-		return -1;
-
-	mrt->begin = prog;
-
-	return 0;
-}
-
-
-int nvmmrt_set_end(struct netvm_mrt *mrt, struct netvm_program *prog)
-{
-	abort_unless(mrt && prog);
-
-	if (nvmp_validate(prog, &mrt->vm) < 0)
-		return -1;
-
-	mrt->end = prog;
-
-	return 0;
-}
-
-
-int nvmmrt_add_pktprog(struct netvm_mrt *mrt, struct netvm_program *match,
-		       struct netvm_program *action)
-{
-	struct netvm_matchedprog mp;
-
-	abort_unless(mrt && mrt->pktprogs && action && match);
-	abort_unless(match->matchonly);
-
-	if (nvmp_validate(match, &mrt->vm) < 0)
-		return -1;
-	if (nvmp_validate(action, &mrt->vm) < 0)
-		return -1;
-
-	mp.match = match;
-	mp.action = action;
-	clist_enqueue(mrt->pktprogs, &mp);
-
-	return 0;
-}
-
-
-int nvmmrt_execute(struct netvm_mrt *mrt)
-{
-	struct pktbuf *pkb;
-	struct netvm_matchedprog *mprog;
-	int i, rv, send;
-	uint64_t rc;
-	struct clist_node *cln;
-
-	abort_unless(mrt);
-
-
-	if (mrt->begin) {
-		nvmp_init_mem(mrt->begin, &mrt->vm);
-		if (nvmp_exec(mrt->begin, &mrt->vm, NULL) < 0)
-			return -1;
-	}
-
-	while ((pkb = (*mrt->io->pktin)(mrt->io->inctx))) {
-		netvm_load_pkt(&mrt->vm, pkb, 0);
-
-		send = 1;
-		clist_for_each(cln, mrt->pktprogs) {
-			mprog = cln_dptr(cln);
-			if ((rv=nvmp_exec(mprog->match, &mrt->vm, &rc)) < 0)
-				return -1;
-			if (!rc)
-				continue;
-			/* clear all packets on an error */
-			if ((rv=nvmp_exec(mprog->action, &mrt->vm, &rc)) < 0) {
-				for (i = 0; i < NETVM_MAXPKTS; ++i)
-					netvm_clr_pkt(&mrt->vm, i, 0);
-				continue;
-			}
-			if (rv > 0) {
-				if (rv > 0)
-					send = 0;
-				if (rv == 2)
-					break;
-			}
-		}
-		if (send) {
-			for (i = 0; i < NETVM_MAXPKTS; ++i) {
-				pkb = netvm_clr_pkt(&mrt->vm, i, 1);
-				if (pkb)
-					(*mrt->io->pktout)(pkb,mrt->io->outctx);
-			}
-		} else {
-			netvm_clr_pkt(&mrt->vm, 0, 0);
-		}
-	}
-
-	for (i = 0; i < NETVM_MAXPKTS; ++i)
-		netvm_clr_pkt(&mrt->vm, i, 0);
-
-	if (mrt->end) {
-		if (nvmp_exec(mrt->end, &mrt->vm, NULL) < 0)
-			return -1;
-	}
-
-	return 0;
-}
-
-
-void nvmmrt_release(struct netvm_mrt *mrt, void (*progfree) (void *))
-{
-	struct clist_node *cln;
-	struct netvm_matchedprog *mprog;
-
-	abort_unless(mrt);
-
-	if (progfree) {
-		(*progfree)(mrt->begin);
-		(*progfree)(mrt->end);
-		clist_for_each(cln, mrt->pktprogs) {
-			mprog = cln_dptr(cln);
-			(*progfree)(mprog->match);
-			(*progfree)(mprog->action);
-		}
-	}
-
-	clist_free_list(mrt->pktprogs);
-	memset(mrt, 0, sizeof(*mrt));
-}
-
-
-static struct pktbuf *stdio_rdpkt(void *unused)
-{
-	struct pktbuf *pkb;
-	errno = 0;
-	if (pkb_file_read(&pkb, stdin) < 0)
-		return NULL;
-	return pkb;
-}
-
-
-static int stdio_sendpkt(void *unused, struct pktbuf *pkb)
-{
-	errno = 0;
-	return pkb_fd_write(pkb, 1);
-}
-
-
-struct netvm_rt_io netvm_rt_io_stdio = {
-	&stdio_rdpkt, NULL, &stdio_sendpkt, NULL
-};
