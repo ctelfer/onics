@@ -13,6 +13,7 @@
 
 #include "netvm.h"
 #include "netvm_prog.h"
+#include "netvm_op_macros.h"
 
 #define MAXSTR 256
 
@@ -33,7 +34,7 @@ label:	add
 	jmpi, &label
 	bzi, 3
 	cpop 0, 0, z, w
-	pkfxl 0:PPT_TCP:0
+	pkfxli *PKTN:PPT.INDEX.FIELD[OFFSET]
 */
 
 struct clopt options[] = { 
@@ -63,7 +64,10 @@ struct nvmop {
 #define MAXTOKS (MAXARGS+1)
 #define IDCHARS "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ" \
 		"0123456789_"
+#define WS	" \n\t"
 #define LABELCHARS IDCHARS
+#define ARGCHARS "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ" \
+		 "0123456789_*[]&:."
 
 
 struct nvmop Operations[] = {
@@ -79,9 +83,9 @@ struct nvmop Operations[] = {
 	{ "stbp",   NETVM_OC_STBP,   0, 0 },
 	{ "stbpi",  NETVM_OC_STBPI,  1, ARGW },
 	{ "pfe",    NETVM_OC_PFE,    0, 0 },
-	{ "pfei",   NETVM_OC_PFEI,   4, ARGX|ARGY|ARGZ|ARGW|PDONLY },
+	{ "pfei",   NETVM_OC_PFEI,   4, ARGY|ARGZ|ARGW|PDONLY },
 	{ "ldpf",   NETVM_OC_LDPF,   0, 0 },
-	{ "ldpfi",  NETVM_OC_LDPFI,  4, ARGX|ARGY|ARGZ|ARGW|PDONLY },
+	{ "ldpfi",  NETVM_OC_LDPFI,  4, ARGY|ARGZ|ARGW|PDONLY },
 	{ "ld",     NETVM_OC_LD,     2, ARGX|ARGY },
 	{ "ldi",    NETVM_OC_LDI,    4, ARGX|ARGY|ARGZ|ARGW|PDOPT },
 	{ "cmp",    NETVM_OC_CMP,    0, 0 },
@@ -166,11 +170,11 @@ struct nvmop Operations[] = {
 	{ "pkfxd",  NETVM_OC_PKFXD,  0, 0 },
 	{ "pkfxdi", NETVM_OC_PKFXDI, 1, ARGX },
 	{ "pkpup",  NETVM_OC_PKPUP,  0, 0 },
-	{ "pkpupi", NETVM_OC_PKPUPI, 4, ARGX|ARGY|ARGZ|ARGW|PDONLY },
+	{ "pkpupi", NETVM_OC_PKPUPI, 4, ARGY|ARGZ|ARGW|PDONLY },
 	{ "pkfxl",  NETVM_OC_PKFXL,  0, 0 },
-	{ "pkfxli", NETVM_OC_PKFXLI, 4, ARGX|ARGY|ARGZ|ARGW|PDONLY },
+	{ "pkfxli", NETVM_OC_PKFXLI, 4, ARGY|ARGZ|ARGW|PDONLY },
 	{ "pkfxc",  NETVM_OC_PKFXC,  0, 0 },
-	{ "pkfxci", NETVM_OC_PKFXCI, 4, ARGX|ARGY|ARGZ|ARGW|PDONLY },
+	{ "pkfxci", NETVM_OC_PKFXCI, 4, ARGY|ARGZ|ARGW|PDONLY },
 	{ "pkins",  NETVM_OC_PKINS,  1, ARGX },
 	{ "pkcut",  NETVM_OC_PKCUT,  1, ARGX },
 	{ "pkadj",  NETVM_OC_PKADJ,  0, 0 },
@@ -252,18 +256,6 @@ int find_const(struct htab *t, const char *name, ulong *v)
 }
 
 
-int set_const(struct htab *t, const char *name, ulong v)
-{
-	struct hnode *hn;
-	struct constant *c;
-	if ((hn = ht_lkup(t, name, NULL)) == NULL)
-		return 0;
-	c = hn->data;
-	c->val = v;
-	return 1;
-}
-
-
 void add_const(struct htab *t, struct constant *c, const char *name, ulong v)
 {
 	c->val = v;
@@ -331,42 +323,56 @@ static char *parse_quoted_string(char *str, size_t *len)
 }
 
 
-static int tokenize(char *s, struct raw toks[], uint maxtoks)
+static int tokenize(char *s, struct raw toks[], uint maxtoks, int csep)
 {
-	int na = 0;
+	int nt = 0;
 	int first = 1;
 	struct raw *r = toks;
+	char *e;
+
+	s = s + strspn(s, WS);
 
 	while (*s != '\0') {
-		s = s + strspn(s, " \t\n");
-		if (*s == '\0')
-			return na;
-		if (na == maxtoks)
+		if (nt == maxtoks)
 			return -ERR_NARG;
 		if (*s == '"') {
 			r->data = s+1;
 			s = parse_quoted_string(s+1, &r->len);
 			if (s == NULL)
 				return -ERR_BADTOK;
+			s = s + strspn(s, WS);
 		} else {
 			r->data = s;
-			s = s + strcspn(s, " \t\n");
+			s = s + strspn(s, ARGCHARS);
 			r->len = (byte_t*)s - r->data;
-			if (*s != '\0') {
-				*s++ = '\0';
-				s = s + strspn(s, " \t\n");
-				if (!first && *s == ',')
-					++s;
-				else if (!first && *s != '\0')
+			if (r->len == 0)
+				return -ERR_BADTOK;
+		}
+
+		++nt;
+		++r;
+		e = s + strspn(s, WS);
+
+		if (*e == '#') {
+			*s = '\0';
+			return nt;
+		} else if (*e != '\0') {
+			if (csep && !first) {
+				if (*e != ',')
 					return -ERR_BADTOK;
+				++e;
+				e = e + strspn(e, WS);
+				if (*e == '\0')
+					return -ERR_NARG;
 			}
 		}
+		*s = '\0';
+		s = e;
+
 		first = 0;
-		++r;
-		++na;
 	}
 
-	return na;
+	return nt;
 }
 
 
@@ -383,43 +389,43 @@ static int read_pdesc(char *s, int multiseg, struct netvm_inst *ni,
 
 	pktnum = strtoul(s, &cp, 0);
 	if ((cp == s) || (*cp != ':') || (pktnum >= NETVM_MAXPKTS))
-		return -1;
+		return ERR_PDESC;
 	s = cp + 1;
 	if (isalpha(*s)) {
 		cp = s + strcspn(s, ".");
 		if (*cp != '.')
-			return -1;
+			return ERR_PDESC;
 		memcpy(pname, s, cp - s);
 		pname[cp - s] = '\0';
 		if (!find_const(ct, pname, &v))
-			return -1;
+			return ERR_PDESC;
 
 		ppt = v & NETVM_PPD_PPT_MASK;
 	} else {
 		ppt = strtoul(s, &cp, 0) & NETVM_PPD_PPT_MASK;
 		if ((cp == s) || (*cp != '.'))
-			return -1;
+			return ERR_PDESC;
 	}
 
 	s = cp + 1;
 
 	index = strtoul(s, &cp, 0) & NETVM_PPD_IDX_MASK;
 	if ((cp == s) || (*cp != '.'))
-		return -1;
+		return ERR_PDESC;
 	s = cp + 1;
 
 	field = strtoul(s, &cp, 0) & NETVM_PPD_FLD_MASK;
 	if ((cp == s) || (*cp != '['))
-		return -1;
+		return ERR_PDESC;
 	s = cp + 1;
 
 	offset = strtoul(s, &cp, 0) & NETVM_PPD_OFF_MASK;
 	if ((cp == s) || (*cp != ']'))
-		return -1;
+		return ERR_PDESC;
 
 	ni->y = pktnum | (multiseg ? NETVM_SEG_ISPKT : 0);
 	ni->z = (index << NETVM_PPD_IDX_OFF) | (field << NETVM_PPD_FLD_OFF);
-	ni->w = (index << NETVM_PPD_PPT_OFF) | (field << NETVM_PPD_OFF_OFF);
+	ni->w = (ppt << NETVM_PPD_PPT_OFF) | (offset << NETVM_PPD_OFF_OFF);
 
 	return 0;
 }
@@ -458,7 +464,7 @@ int str2inst(const char *s, struct htab *lt, struct htab *ct,
 
 	if (str_copy(ns, s, sizeof(ns)) > sizeof(ns))
 		return ERR_TOOLONG;
-	if ((nt = tokenize(ns, toks, array_length(toks))) <= 0)
+	if ((nt = tokenize(ns, toks, array_length(toks), 1)) <= 0)
 		return nt == 0 ? ERR_NARG : -nt;
 	if ((op = name2op(toks[0].data)) == NULL)
 		return ERR_BADNAME;
@@ -466,9 +472,18 @@ int str2inst(const char *s, struct htab *lt, struct htab *ct,
 	ni->x = ni->y = ni->z = ni->w = 0;
 	ni->op = op->opcode;
 
-	if (nt == 2 && toks[1].data[0] == '*') {
-		rv = read_pdesc(toks[1].data + 1, op->argmask & PDOPT, ni, ct);
-		if (rv < 0)
+	if ((nt == 2 && toks[1].data[0] == '*') ||
+	    (nt == 3 && toks[2].data[0] == '*')) {
+		if (op->nargs != nt + 2)
+			return ERR_NARG;
+		r = toks + 1;
+		if ((op->argmask & ARGX) != 0) {
+			if ((rv = intarg(r++, lt, ct, &v)) != 0)
+				return rv;
+			ni->x = v;
+		}
+		rv = read_pdesc(r->data + 1, op->argmask & PDOPT, ni, ct);
+		if (rv != 0)
 			return rv;
 	} else if (nt - 1 == op->nargs) {
 		r = toks + 1;
@@ -505,22 +520,27 @@ int str2inst(const char *s, struct htab *lt, struct htab *ct,
 }
 
 
-static int pdesc2str(const struct netvm_inst *ni, char *s, size_t len)
+static int pdesc2str(const struct netvm_inst *ni, char *s, size_t len, int xa)
 {
-	int r;
+	char pfx[32];
 	uint ppt = (ni->w >> NETVM_PPD_PPT_OFF) & NETVM_PPD_PPT_MASK;
 
+	if (xa)
+		str_fmt(pfx, sizeof(pfx), "    %02x, ", ni->x);
+	else
+		str_copy(pfx, "    ", sizeof(pfx));
+
 	/* example: *0:0x0103.0.0[3] */
-	r = str_fmt(s, len, "*%u:0x%04x.%u.%u[%u]", ni->y, ppt, 
-		    (ni->z >> NETVM_PPD_IDX_OFF) & NETVM_PPD_IDX_MASK,
-		    (ni->z >> NETVM_PPD_FLD_OFF) & NETVM_PPD_FLD_MASK,
-		    (ni->w >> NETVM_PPD_OFF_OFF) & NETVM_PPD_OFF_MASK);
+	str_fmt(s, len, "%s*%u:%u.%u.%u[%u]", pfx, ni->y, ppt, 
+		(ni->z >> NETVM_PPD_IDX_OFF) & NETVM_PPD_IDX_MASK,
+		(ni->z >> NETVM_PPD_FLD_OFF) & NETVM_PPD_FLD_MASK,
+		(ni->w >> NETVM_PPD_OFF_OFF) & NETVM_PPD_OFF_MASK);
 
 	return 0;
 }
 
 
-int inst2str(const struct netvm_inst *ni, char *s, size_t len)
+int inst2str(const struct netvm_inst *ni, char *s, size_t len, uint inum)
 {
 	struct nvmop *op;
 	size_t nc;
@@ -537,12 +557,18 @@ int inst2str(const struct netvm_inst *ni, char *s, size_t len)
 	
 	if (((op->argmask & PDONLY) != 0) ||
 	    (((op->argmask & PDOPT) != 0) && ((ni->y & NETVM_SEG_ISPKT) != 0)))
-		return pdesc2str(ni, s, len);
+		return pdesc2str(ni, s, len, (op->argmask & ARGX));
 
 	if ((op->argmask & ARGX) != 0) *ap++ = ni->x;
 	if ((op->argmask & ARGY) != 0) *ap++ = ni->y;
 	if ((op->argmask & ARGZ) != 0) *ap++ = ni->z;
-	if ((op->argmask & ARGW) != 0) *ap++ = ni->w;
+	if ((op->argmask & ARGW) != 0) {
+		if ((op->argmask & BRREL) != 0) {
+			*ap++ = sign_extend(ni->w, 32) + inum;
+		} else {
+			*ap++ = ni->w;
+		}
+	}
 
 	switch(op->nargs) {
 	case 0: fr = 0;
@@ -641,26 +667,38 @@ static int do_define(struct asmctx *ctx, char *fn, uint lineno,
 
 	if (nt != 3) {
 		logrec(1, "invalid number of args for .define "
-				 "in file %s on line %u; expected 3\n",
+			  "in file %s on line %u; expected 3\n",
 		       fn, lineno);
 		return 1;
 	}
 	if (!isalnum(toks[1].data[0]) || 
 	    strspn(toks[1].data, IDCHARS) != toks[1].len) {
 		logrec(1, "invalid .define token "
-				 "in file %s on line %u\n",
+			  "in file %s on line %u\n",
 		       fn, lineno);
 		return 1;
 	}
 
 	if ((rv = intarg(&toks[2], &ctx->ltab, &ctx->ctab, &v)) != 0) {
 		logrec(1, "invalid numeric value '%s' in .define "
-				 "directive in file %s on line %u: %s\n",
+			  "directive in file %s on line %u: %s\n",
 		       toks[2].data, fn, lineno, estrs[rv]);
 		return 1;
 	}
 
-	set_const(&ctx->ctab, toks[1].data, v);
+	if (find_const(&ctx->ctab, toks[1].data, NULL)) {
+		logrec(1, "attempting to redefine '%s' in .define "
+			  "directive in file %s on line %u\n",
+		       toks[1].data, fn, lineno);
+		return 1;
+	} else if (ctx->numc == MAXCONST) {
+		logrec(1, "Out of space for constants adding const '%s'\n", 
+		       toks[1].data);
+		return -1;
+	} else {
+		add_const(&ctx->ctab, &ctx->consts[ctx->numc++], toks[1].data,
+			  v);
+	}
 
 	return 0;
 }
@@ -798,7 +836,7 @@ int parse_asm_directive(struct asmctx *ctx, char *s, char *fn, uint lineno)
 	struct raw toks[MAXTOKS];
 	uint nt;
 
-	if ((nt = tokenize(s, toks, array_length(toks))) <= 0) {
+	if ((nt = tokenize(s, toks, array_length(toks), 0)) <= 0) {
 		logrec(1, "invalid directive in file %s on line %u\n",
 		       fn, lineno);
 		return 1;
@@ -845,7 +883,7 @@ static int assemble(struct asmctx *ctx, const char *fn, FILE *input)
 
 	while (fgets(line, sizeof(line), input)) {
 		lineno += 1;
-		cp = line + strspn(line, " \t\n");
+		cp = line + strspn(line, WS);
 		if (*cp == '\0' || *cp == '#')
 			continue;
 		if (*cp == '.') {
@@ -869,7 +907,7 @@ static int assemble(struct asmctx *ctx, const char *fn, FILE *input)
 					  buf, ctx->numi);
 			}
 			cp = ep + 1;
-			cp = cp + strspn(cp, " \t\n");
+			cp = cp + strspn(cp, WS);
 			if (*cp == '\0')
 				continue;
 		}
@@ -962,9 +1000,11 @@ void disassemble(FILE *infile, FILE *outfile)
 
 	fprintf(outfile, "\n# Instructions (%u total)\n", prog.ninst);
 	for (i = 0; i < prog.ninst; ++i) {
-		if (inst2str(&prog.inst[i], line, sizeof(line)) < 0)
+		struct netvm_inst *ni = &prog.inst[i];
+		if (inst2str(ni, line, sizeof(line), i) < 0)
 			err("error disassembling instruction %u\n", i);
-		fprintf(outfile, "#%8u\n\t%s\n", i, line);
+		fprintf(outfile, "#%8u: %02x %02x %02x %02x %08lx\n\t%s\n", i, 
+			ni->op, ni->x, ni->y, ni->z, (ulong)ni->w, line);
 	}
 
 	nvmp_clear(&prog);
