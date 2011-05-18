@@ -376,61 +376,6 @@ static int tokenize(char *s, struct raw toks[], uint maxtoks, int csep)
 }
 
 
-/* example: *0:tcp.0.0[3] */
-/* example: *0:0x0103.0.0[4] */
-static int read_pdesc(char *s, int multiseg, struct netvm_inst *ni,
-		      struct htab *ct)
-{
-	char *cp;
-	char pname[MAXSTR];
-	uchar pktnum, index, field;
-	uint ppt, offset;
-	ulong v;
-
-	pktnum = strtoul(s, &cp, 0);
-	if ((cp == s) || (*cp != ':') || (pktnum >= NETVM_MAXPKTS))
-		return ERR_PDESC;
-	s = cp + 1;
-	if (isalpha(*s)) {
-		cp = s + strcspn(s, ".");
-		if (*cp != '.')
-			return ERR_PDESC;
-		memcpy(pname, s, cp - s);
-		pname[cp - s] = '\0';
-		if (!find_const(ct, pname, &v))
-			return ERR_PDESC;
-
-		ppt = v & NETVM_PPD_PPT_MASK;
-	} else {
-		ppt = strtoul(s, &cp, 0) & NETVM_PPD_PPT_MASK;
-		if ((cp == s) || (*cp != '.'))
-			return ERR_PDESC;
-	}
-
-	s = cp + 1;
-
-	index = strtoul(s, &cp, 0) & NETVM_PPD_IDX_MASK;
-	if ((cp == s) || (*cp != '.'))
-		return ERR_PDESC;
-	s = cp + 1;
-
-	field = strtoul(s, &cp, 0) & NETVM_PPD_FLD_MASK;
-	if ((cp == s) || (*cp != '['))
-		return ERR_PDESC;
-	s = cp + 1;
-
-	offset = strtoul(s, &cp, 0) & NETVM_PPD_OFF_MASK;
-	if ((cp == s) || (*cp != ']'))
-		return ERR_PDESC;
-
-	ni->y = pktnum | (multiseg ? NETVM_SEG_ISPKT : 0);
-	ni->z = (index << NETVM_PPD_IDX_OFF) | (field << NETVM_PPD_FLD_OFF);
-	ni->w = (ppt << NETVM_PPD_PPT_OFF) | (offset << NETVM_PPD_OFF_OFF);
-
-	return 0;
-}
-
-
 static int intarg(const struct raw *r, struct htab *lt, struct htab *ct,
 		  ulong *v)
 {
@@ -448,6 +393,70 @@ static int intarg(const struct raw *r, struct htab *lt, struct htab *ct,
 		if (*cp != '\0')
 			return ERR_BADNUM;
 	}
+
+	return 0;
+}
+
+
+static int pdf2int(char *s, char **e, struct htab *lt, struct htab *ct, ulong *v)
+{
+	struct raw r;
+	char tok[MAXSTR];
+	char *cp;
+
+	if ((cp = s + strspn(s, IDCHARS)) == s)
+		return ERR_PDESC;
+	memcpy(tok, s, cp - s);
+	tok[cp - s] = '\0';
+	r.data = tok;
+	r.len = cp - s;
+	*e = cp;
+	return intarg(&r, lt, ct, v);
+}
+
+
+/* example: *0:tcp.0.0[3] */
+/* example: *0:0x0103.0.0[4] */
+static int read_pdesc(char *s, int multiseg, struct netvm_inst *ni,
+		      struct htab *lt, struct htab *ct)
+{
+	int rv;
+	uchar pktnum, index, field;
+	uint ppt, offset;
+	ulong v;
+
+	if ((rv = pdf2int(s, &s, lt, ct, &v)) != 0)
+		return rv;
+	if ((*s != ':') || ((pktnum = v) >= NETVM_MAXPKTS))
+		return ERR_PDESC;
+
+	if ((rv = pdf2int(s+1, &s, lt, ct, &v)) != 0)
+		return rv;
+	if (*s != '.')
+		return ERR_PDESC;
+	ppt = v & NETVM_PPD_PPT_MASK;
+
+	if ((rv = pdf2int(s+1, &s, lt, ct, &v)) != 0)
+		return rv;
+	if (*s != '.')
+		return ERR_PDESC;
+	index = v & NETVM_PPD_IDX_MASK;
+
+	if ((rv = pdf2int(s+1, &s, lt, ct, &v)) != 0)
+		return rv;
+	if (*s != '[')
+		return ERR_PDESC;
+	field = v & NETVM_PPD_FLD_MASK;
+
+	if ((rv = pdf2int(s+1, &s, lt, ct, &v)) != 0)
+		return rv;
+	if (*s != ']')
+		return ERR_PDESC;
+	offset = v & NETVM_PPD_OFF_MASK;
+
+	ni->y = pktnum | (multiseg ? NETVM_SEG_ISPKT : 0);
+	ni->z = (index << NETVM_PPD_IDX_OFF) | (field << NETVM_PPD_FLD_OFF);
+	ni->w = (ppt << NETVM_PPD_PPT_OFF) | (offset << NETVM_PPD_OFF_OFF);
 
 	return 0;
 }
@@ -482,7 +491,7 @@ int str2inst(const char *s, struct htab *lt, struct htab *ct,
 				return rv;
 			ni->x = v;
 		}
-		rv = read_pdesc(r->data + 1, op->argmask & PDOPT, ni, ct);
+		rv = read_pdesc(r->data + 1, op->argmask & PDOPT, ni, lt, ct);
 		if (rv != 0)
 			return rv;
 	} else if (nt - 1 == op->nargs) {
@@ -503,14 +512,16 @@ int str2inst(const char *s, struct htab *lt, struct htab *ct,
 			ni->z = v;
 		}
 		if ((op->argmask & ARGW) != 0) {
-			if ((rv = intarg(r++, lt, ct, &v)) != 0)
+			if ((rv = intarg(r, lt, ct, &v)) != 0)
 				return rv;
-			if ((op->argmask & BRREL) != 0) {
+			if (((op->argmask & BRREL) != 0) && 
+			    (r->data[0] == '&')) {
 				abort_unless(v < UINT_MAX);
 				ni->w = (uint32_t)(v - inum);
 			} else {
 				ni->w = v;
 			}
+			r++;
 		}
 	} else {
 		return ERR_NARG;
@@ -522,13 +533,11 @@ int str2inst(const char *s, struct htab *lt, struct htab *ct,
 
 static int pdesc2str(const struct netvm_inst *ni, char *s, size_t len, int xa)
 {
-	char pfx[32];
+	char pfx[16] = "";
 	uint ppt = (ni->w >> NETVM_PPD_PPT_OFF) & NETVM_PPD_PPT_MASK;
 
 	if (xa)
-		str_fmt(pfx, sizeof(pfx), "    %02x, ", ni->x);
-	else
-		str_copy(pfx, "    ", sizeof(pfx));
+		str_fmt(pfx, sizeof(pfx), "%02x, ", ni->x);
 
 	/* example: *0:0x0103.0.0[3] */
 	str_fmt(s, len, "%s*%u:%u.%u.%u[%u]", pfx, ni->y, ppt, 
@@ -543,17 +552,17 @@ static int pdesc2str(const struct netvm_inst *ni, char *s, size_t len, int xa)
 int inst2str(const struct netvm_inst *ni, char *s, size_t len, uint inum)
 {
 	struct nvmop *op;
-	size_t nc;
 	ulong args[MAXARGS], *ap = args;
 	int fr;
 
 	if ((op = oc2op(ni->op)) == NULL)
 		return -1;
 
-	if ((nc = str_copy(s, op->iname, len)) > len)
+	if ((strlen(op->iname) > 10) || len < 11)
 		return -1;
-	s += nc - 1;
-	len -= nc - 1;
+	str_fmt(s, len, "%-10s", op->iname);
+	s += 10;
+	len -= 10;
 	
 	if (((op->argmask & PDONLY) != 0) ||
 	    (((op->argmask & PDOPT) != 0) && ((ni->y & NETVM_SEG_ISPKT) != 0)))
@@ -573,14 +582,14 @@ int inst2str(const struct netvm_inst *ni, char *s, size_t len, uint inum)
 	switch(op->nargs) {
 	case 0: fr = 0;
 		break;
-	case 1: fr = str_fmt(s, len, "    %lu", args[0]);
+	case 1: fr = str_fmt(s, len, "%lu", args[0]);
 		break;
-	case 2: fr = str_fmt(s, len, "    %lu, %lu", args[0], args[1]);
+	case 2: fr = str_fmt(s, len, "%lu, %lu", args[0], args[1]);
 		break;
-	case 3: fr = str_fmt(s, len, "    %lu, %lu, %lu", args[0], args[1],
+	case 3: fr = str_fmt(s, len, "%lu, %lu, %lu", args[0], args[1],
 			     args[2]);
 		break;
-	case 4: fr = str_fmt(s, len, "    %lu, %lu, %lu, %lu", args[0], args[1],
+	case 4: fr = str_fmt(s, len, "%lu, %lu, %lu, %lu", args[0], args[1],
 			     args[2], args[3]);
 		break;
 	default: abort_unless(0);
@@ -1003,8 +1012,9 @@ void disassemble(FILE *infile, FILE *outfile)
 		struct netvm_inst *ni = &prog.inst[i];
 		if (inst2str(ni, line, sizeof(line), i) < 0)
 			err("error disassembling instruction %u\n", i);
-		fprintf(outfile, "#%8u: %02x %02x %02x %02x %08lx\n\t%s\n", i, 
-			ni->op, ni->x, ni->y, ni->z, (ulong)ni->w, line);
+		fprintf(outfile, "#%4u: 0x%02x 0x%02x 0x%02x 0x%02x "
+				 "0x%08lx\n\t%s\n", 
+			i, ni->op, ni->x, ni->y, ni->z, (ulong)ni->w, line);
 	}
 
 	nvmp_clear(&prog);
