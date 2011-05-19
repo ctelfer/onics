@@ -25,10 +25,10 @@
 .define PPT_TCP		0x0006
 .define RWSEG		0
 .define RWPERMS 	3
-.segment RWSEG RWPERMS 1024
+.segment RWSEG RWPERMS  1024
 .define CPT_XPKT	1
 .coproc 0 CPT_XPKT
-.mem name segnum nbytes [init]
+.mem name segnum addr nbytes [init]
 
 label:	add 
 	jmpi, &label
@@ -67,7 +67,7 @@ struct nvmop {
 #define WS	" \n\t"
 #define LABELCHARS IDCHARS
 #define ARGCHARS "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ" \
-		 "0123456789_*[]&:."
+		 "0123456789_*[]@:."
 
 
 struct nvmop Operations[] = {
@@ -187,6 +187,8 @@ struct nvmop Operations[] = {
 #define MAXINSTR	65536
 #define MAXCONST	65536
 #define MAXFILES	256
+#define MAXMEMINIT	1024
+
 struct instruction {
 	char *			str;
 	uint			inum;
@@ -213,10 +215,10 @@ struct asmctx {
 	uint			numc;
 	struct hnode *		celem[TABLESIZE];
 	struct htab 		ctab;
-	struct hnode *		lelem[TABLESIZE];
-	struct htab 		ltab;
 	struct netvm_segdesc    sdescs[NETVM_MAXMSEGS];
 	uint64_t                cpreqs[NETVM_MAXCOPROC];
+	struct netvm_meminit	minits[MAXMEMINIT];
+	uint			ninits;
 };
 
 
@@ -376,21 +378,26 @@ static int tokenize(char *s, struct raw toks[], uint maxtoks, int csep)
 }
 
 
-static int intarg(const struct raw *r, struct htab *lt, struct htab *ct,
-		  ulong *v)
+static int intarg(const struct raw *r, struct htab *ct, ulong *v)
 {
 	char *cp;
 
-	if (r->data[0] == '&') {
-		if (lt == NULL || !find_const(lt, r->data+1, v))
-			return ERR_UNKLBL;
+	if (r->data[0] == '@') {
+		if (isdigit(r->data[1])) {
+			*v = strtoul(r->data+1, &cp, 0);
+			if (cp != (char *)r->data + r->len)
+				return ERR_UNKLBL;
+		} else {
+			if (!find_const(ct, r->data, v))
+				return ERR_UNKLBL;
+		}
 	} else if (isalpha(r->data[0])) {
 		if (ct == NULL || !find_const(ct, r->data, v))
 			return ERR_UNKSYM;
 	} else {
-		abort_unless(r->data[0] != '\0');
+		abort_unless(r->len > 0);
 		*v = strtoul(r->data, &cp, 0);
-		if (*cp != '\0')
+		if (cp != (char *)r->data + r->len)
 			return ERR_BADNUM;
 	}
 
@@ -398,60 +405,52 @@ static int intarg(const struct raw *r, struct htab *lt, struct htab *ct,
 }
 
 
-static int pdf2int(char *s, char **e, struct htab *lt, struct htab *ct, ulong *v)
+static int pdf2int(char *s, char **e, char nxtc, struct htab *ct, ulong *v)
 {
 	struct raw r;
 	char tok[MAXSTR];
 	char *cp;
 
-	if ((cp = s + strspn(s, IDCHARS)) == s)
+	if (((cp = s + strspn(s, IDCHARS)) == s) || (*cp != nxtc))
 		return ERR_PDESC;
 	memcpy(tok, s, cp - s);
 	tok[cp - s] = '\0';
 	r.data = tok;
 	r.len = cp - s;
 	*e = cp;
-	return intarg(&r, lt, ct, v);
+	return intarg(&r, ct, v);
 }
 
 
-/* example: *0:tcp.0.0[3] */
-/* example: *0:0x0103.0.0[4] */
+/* example: *0:tcp:0:0[3] */
+/* example: *0:0x0103:0:0[4] */
 static int read_pdesc(char *s, int multiseg, struct netvm_inst *ni,
-		      struct htab *lt, struct htab *ct)
+		      struct htab *ct)
 {
 	int rv;
 	uchar pktnum, index, field;
 	uint ppt, offset;
 	ulong v;
 
-	if ((rv = pdf2int(s, &s, lt, ct, &v)) != 0)
+	if ((rv = pdf2int(s, &s, ':', ct, &v)) != 0)
 		return rv;
-	if ((*s != ':') || ((pktnum = v) >= NETVM_MAXPKTS))
+	if ((pktnum = v) >= NETVM_MAXPKTS)
 		return ERR_PDESC;
 
-	if ((rv = pdf2int(s+1, &s, lt, ct, &v)) != 0)
+	if ((rv = pdf2int(s+1, &s, ':', ct, &v)) != 0)
 		return rv;
-	if (*s != '.')
-		return ERR_PDESC;
 	ppt = v & NETVM_PPD_PPT_MASK;
 
-	if ((rv = pdf2int(s+1, &s, lt, ct, &v)) != 0)
+	if ((rv = pdf2int(s+1, &s, ':', ct, &v)) != 0)
 		return rv;
-	if (*s != '.')
-		return ERR_PDESC;
 	index = v & NETVM_PPD_IDX_MASK;
 
-	if ((rv = pdf2int(s+1, &s, lt, ct, &v)) != 0)
+	if ((rv = pdf2int(s+1, &s, '[', ct, &v)) != 0)
 		return rv;
-	if (*s != '[')
-		return ERR_PDESC;
 	field = v & NETVM_PPD_FLD_MASK;
 
-	if ((rv = pdf2int(s+1, &s, lt, ct, &v)) != 0)
+	if ((rv = pdf2int(s+1, &s, ']', ct, &v)) != 0)
 		return rv;
-	if (*s != ']')
-		return ERR_PDESC;
 	offset = v & NETVM_PPD_OFF_MASK;
 
 	ni->y = pktnum | (multiseg ? NETVM_SEG_ISPKT : 0);
@@ -462,8 +461,7 @@ static int read_pdesc(char *s, int multiseg, struct netvm_inst *ni,
 }
 
 
-int str2inst(const char *s, struct htab *lt, struct htab *ct,
-	     uint inum, struct netvm_inst *ni)
+int str2inst(const char *s, struct htab *ct, uint inum, struct netvm_inst *ni)
 {
 	char ns[MAXSTR];
 	struct raw toks[MAXTOKS], *r;
@@ -487,35 +485,35 @@ int str2inst(const char *s, struct htab *lt, struct htab *ct,
 			return ERR_NARG;
 		r = toks + 1;
 		if ((op->argmask & ARGX) != 0) {
-			if ((rv = intarg(r++, lt, ct, &v)) != 0)
+			if ((rv = intarg(r++, ct, &v)) != 0)
 				return rv;
 			ni->x = v;
 		}
-		rv = read_pdesc(r->data + 1, op->argmask & PDOPT, ni, lt, ct);
+		rv = read_pdesc(r->data + 1, op->argmask & PDOPT, ni, ct);
 		if (rv != 0)
 			return rv;
 	} else if (nt - 1 == op->nargs) {
 		r = toks + 1;
 		if ((op->argmask & ARGX) != 0) {
-			if ((rv = intarg(r++, lt, ct, &v)) != 0)
+			if ((rv = intarg(r++, ct, &v)) != 0)
 				return rv;
 			ni->x = v;
 		}
 		if ((op->argmask & ARGY) != 0) {
-			if ((rv = intarg(r++, lt, ct, &v)) != 0)
+			if ((rv = intarg(r++, ct, &v)) != 0)
 				return rv;
 			ni->y = v;
 		}
 		if ((op->argmask & ARGZ) != 0) {
-			if ((rv = intarg(r++, lt, ct, &v)) != 0)
+			if ((rv = intarg(r++, ct, &v)) != 0)
 				return rv;
 			ni->z = v;
 		}
 		if ((op->argmask & ARGW) != 0) {
-			if ((rv = intarg(r, lt, ct, &v)) != 0)
+			if ((rv = intarg(r, ct, &v)) != 0)
 				return rv;
 			if (((op->argmask & BRREL) != 0) && 
-			    (r->data[0] == '&')) {
+			    (r->data[0] == '@')) {
 				abort_unless(v < UINT_MAX);
 				ni->w = (uint32_t)(v - inum);
 			} else {
@@ -554,6 +552,7 @@ int inst2str(const struct netvm_inst *ni, char *s, size_t len, uint inum)
 	struct nvmop *op;
 	ulong args[MAXARGS], *ap = args;
 	int fr;
+	char a0p[2] = "";
 
 	if ((op = oc2op(ni->op)) == NULL)
 		return -1;
@@ -574,6 +573,7 @@ int inst2str(const struct netvm_inst *ni, char *s, size_t len, uint inum)
 	if ((op->argmask & ARGW) != 0) {
 		if ((op->argmask & BRREL) != 0) {
 			*ap++ = sign_extend(ni->w, 32) + inum;
+			str_copy(a0p, "@", sizeof(a0p));
 		} else {
 			*ap++ = ni->w;
 		}
@@ -582,7 +582,7 @@ int inst2str(const struct netvm_inst *ni, char *s, size_t len, uint inum)
 	switch(op->nargs) {
 	case 0: fr = 0;
 		break;
-	case 1: fr = str_fmt(s, len, "%lu", args[0]);
+	case 1: fr = str_fmt(s, len, "%s%lu", a0p, args[0]);
 		break;
 	case 2: fr = str_fmt(s, len, "%lu, %lu", args[0], args[1]);
 		break;
@@ -609,9 +609,6 @@ static void init_asmctx(struct asmctx *ctx)
 	for (i = 0; i < array_length(ctx->celem); ++i)
 		ctx->celem[i] = NULL;
 	ht_init(&ctx->ctab, ctx->celem, TABLESIZE, cmp_str, ht_shash, NULL);
-	for (i = 0; i < array_length(ctx->lelem); ++i)
-		ctx->lelem[i] = NULL;
-	ht_init(&ctx->ltab, ctx->lelem, TABLESIZE, cmp_str, ht_shash, NULL);
 	for (i = 0; i < NETVM_MAXMSEGS; ++i)
 		ctx->sdescs[i].perms = 0;
 	for (i = 0; i < NETVM_MAXCOPROC; ++i)
@@ -620,6 +617,7 @@ static void init_asmctx(struct asmctx *ctx)
 	ctx->numf = 0;
 	ctx->numc = 0;
 	ctx->curfile = NULL;
+	ctx->ninits = 0;
 }
 
 
@@ -688,7 +686,7 @@ static int do_define(struct asmctx *ctx, char *fn, uint lineno,
 		return 1;
 	}
 
-	if ((rv = intarg(&toks[2], &ctx->ltab, &ctx->ctab, &v)) != 0) {
+	if ((rv = intarg(&toks[2], &ctx->ctab, &v)) != 0) {
 		logrec(1, "invalid numeric value '%s' in .define "
 			  "directive in file %s on line %u: %s\n",
 		       toks[2].data, fn, lineno, estrs[rv]);
@@ -729,7 +727,7 @@ static int do_segment(struct asmctx *ctx, char *fn, uint lineno,
 		return 1;
 	}
 
-	if ((rv = intarg(&toks[1], &ctx->ltab, &ctx->ctab, &segnum)) != 0) {
+	if ((rv = intarg(&toks[1], &ctx->ctab, &segnum)) != 0) {
 		logrec(1, "invalid segment number '%s' in .segment "
 		          "directive in file %s on line %u: %s\n",
 		       toks[1].data, fn, lineno, estrs[rv]);
@@ -741,7 +739,7 @@ static int do_segment(struct asmctx *ctx, char *fn, uint lineno,
 		return 1;
 	}
 
-	if ((rv = intarg(&toks[2], &ctx->ltab, &ctx->ctab, &perms)) != 0) {
+	if ((rv = intarg(&toks[2], &ctx->ctab, &perms)) != 0) {
 		logrec(1, "invalid permissions value '%s' in .segment "
 		          "directive in file %s on line %u: %s\n",
 		       toks[2].data, fn, lineno, estrs[rv]);
@@ -753,7 +751,7 @@ static int do_segment(struct asmctx *ctx, char *fn, uint lineno,
 		return 1;
 	}
 
-	if ((rv = intarg(&toks[3], &ctx->ltab, &ctx->ctab, &seglen)) != 0) {
+	if ((rv = intarg(&toks[3], &ctx->ctab, &seglen)) != 0) {
 		logrec(1, "invalid segment length '%s' in .segment "
 		          "directive in file %s on line %u: %s\n",
 		       toks[3].data, fn, lineno, estrs[rv]);
@@ -796,6 +794,107 @@ static int do_matchonly(struct asmctx *ctx, char *fn, uint lineno,
 static int do_mem(struct asmctx *ctx, char *fn, uint lineno, 
 		  struct raw toks[], uint nt)
 {
+	ulong segnum, addr, len;
+	struct netvm_meminit *mi;
+	int rv;
+	char *k;
+
+	if (nt < 5 || nt > 6) {
+		logrec(1, "invalid number of arguments in .mem directive "
+			  "in file %s on line %u: expected 5 or 6\n",
+		       fn, lineno, nt);
+		return 1;
+	}
+
+	if (ctx->ninits >= MAXMEMINIT) {
+		logrec(1, "out of memory initialization slots for .mem "
+			  "directive in file %s on line %u\n",
+		       fn, lineno);
+		return 1;
+	}
+	if (ctx->numc > MAXCONST-2) {
+		logrec(1, "out of space for constants for .mem "
+			  "directive in file %s on line %u\n",
+		       fn, lineno);
+		return 1;
+	}
+
+	if (!isalnum(toks[1].data[0]) || 
+	    (toks[1].len > MAXSTR - 6) ||
+	    strspn(toks[1].data, IDCHARS) != toks[1].len) {
+		logrec(1, "invalid .mem name in file %s on line %u\n",
+		       fn, lineno);
+		return 1;
+	}
+
+	if ((rv = intarg(&toks[2], &ctx->ctab, &segnum)) != 0) {
+		logrec(1, "invalid segment number '%s' in .mem "
+		          "directive in file %s on line %u: %s\n",
+		       toks[2].data, fn, lineno, estrs[rv]);
+		return 1;
+	}
+	if (segnum >= NETVM_MAXMSEGS) {
+		logrec(1, "invalid segment number '%u' in .mem "
+		          "directive in file %s on line %u\n",
+		       segnum, fn, lineno);
+		return 1;
+	}
+
+	if ((rv = intarg(&toks[3], &ctx->ctab, &len)) != 0) {
+		logrec(1, "invalid number of bytes '%s' in .mem "
+		          "directive in file %s on line %u: %s\n",
+		       toks[3].data, fn, lineno, estrs[rv]);
+		return 1;
+	}
+
+	if ((rv = intarg(&toks[4], &ctx->ctab, &addr)) != 0) {
+		logrec(1, "invalid address '%s' in .mem "
+		          "directive in file %s on line %u: %s\n",
+		       toks[4].data, fn, lineno, estrs[rv]);
+		return 1;
+	}
+
+	if ((len > UINT_MAX) || (UINT_MAX - len < addr)) {
+		logrec(1, "invalid mem region (%lu to %lu) in .mem "
+		          "directive in file %s on line %u\n",
+		       addr, addr + len - 1, fn, lineno);
+		return 1;
+	}
+
+	if ((nt == 6) && (toks[5].len > len)) {
+		logrec(1, "initialization data in .mem larger than region "
+		          "in file %s on line %u\n",
+		       fn, lineno);
+		return 1;
+	}
+
+	k = emalloc(toks[1].len + 6);
+	memcpy(k, toks[1].data, toks[1].len);
+	str_copy(k + toks[1].len, ".addr", 6);
+	if (find_const(&ctx->ctab, k, NULL)) {
+		logrec(1, "duplicate .mem name '%s' in file %s on line %u\n",
+		       toks[1].data, fn, lineno);
+		return 1;
+	}
+	add_const(&ctx->ctab, &ctx->consts[ctx->numc++], k, addr);
+
+	k = emalloc(toks[1].len + 5);
+	memcpy(k, toks[1].data, toks[1].len);
+	str_copy(k + toks[1].len, ".seg", 5);
+	abort_unless(!find_const(&ctx->ctab, k, NULL));
+	add_const(&ctx->ctab, &ctx->consts[ctx->numc++], k, segnum);
+
+	mi = &ctx->minits[ctx->ninits++];
+	mi->segnum = segnum;
+	mi->off = addr;
+	mi->val.len = len;
+	if (nt == 6) {
+		mi->val.data = ecalloc(1, len);
+		memcpy(mi->val.data, toks[5].data, toks[5].len);
+	} else {
+		mi->val.data = 0;
+	}
+
 	return 0;
 }
 
@@ -813,14 +912,14 @@ static int do_coproc(struct asmctx *ctx, char *fn, uint lineno,
 		return 1;
 	}
 
-	if ((rv = intarg(&toks[1], &ctx->ltab, &ctx->ctab, &cpi)) != 0) {
+	if ((rv = intarg(&toks[1], &ctx->ctab, &cpi)) != 0) {
 		logrec(1, "invalid coprocessor index '%s' in .coproc "
 		          "directive in file %s on line %u: %s\n",
 		       toks[1].data, fn, lineno, estrs[rv]);
 		return 1;
 	}
 
-	if ((rv = intarg(&toks[2], &ctx->ltab, &ctx->ctab, &cpt)) != 0) {
+	if ((rv = intarg(&toks[2], &ctx->ctab, &cpt)) != 0) {
 		logrec(1, "invalid coprocessor type '%s' in .segment "
 		          "directive in file %s on line %u: %s\n",
 		       toks[2].data, fn, lineno, estrs[rv]);
@@ -901,18 +1000,19 @@ static int assemble(struct asmctx *ctx, const char *fn, FILE *input)
 		}
 		ep = cp + strspn(cp, LABELCHARS);
 		if (*ep == ':') {
-			memcpy(buf, cp, ep - cp);
-			buf[ep - cp + 1] = '\0';
-			if (find_const(&ctx->ltab, buf, NULL)) {
-				logrec(1, "Duplicate label '%s' in %s:%u\n",
-				       buf, ctx->curfile, lineno);
+			buf[0] = '@';
+			memcpy(buf+1, cp, ep - cp);
+			buf[ep - cp + 2] = '\0';
+			if (find_const(&ctx->ctab, buf, NULL)) {
+				logrec(1, "Duplicate label '%s:' in %s:%u\n",
+				       buf+1, ctx->curfile, lineno);
 				ne += 1;
 			} else if (ctx->numc == MAXCONST) {
 				logrec(1, "Out of space for constants "
 					  "adding label '%s'\n", buf);
 				return ne + 1;
 			} else {
-				add_const(&ctx->ltab, &ctx->consts[ctx->numc++],
+				add_const(&ctx->ctab, &ctx->consts[ctx->numc++],
 					  buf, ctx->numi);
 			}
 			cp = ep + 1;
@@ -942,7 +1042,7 @@ static int assemble(struct asmctx *ctx, const char *fn, FILE *input)
 		/* if we've exited the first file in the system, finalize: */
 		for (i = 0; i < ctx->numi; ++i) {
 			in = &ctx->instrs[i];
-			rv = str2inst(in->str, &ctx->ltab, &ctx->ctab, in->inum,
+			rv = str2inst(in->str, &ctx->ctab, in->inum,
 				      &in->instr);
 			if (rv != 0) {
 				logrec(1, "Error assembling file %s:%u -- %s\n",
