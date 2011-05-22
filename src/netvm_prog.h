@@ -46,7 +46,11 @@ int nvmp_exec(struct netvm_program *prog, struct netvm *vm, uint64_t *vmrv);
 #define NVMP_RDE_BADSEGN  10
 #define NVMP_RDE_BADSEGP  11
 #define NVMP_RDE_BADSEGL  12
-#define NVMP_RDE_OOMEM	  13
+#define NVMP_RDE_MITOTLEN 13
+#define NVMP_RDE_MILEN    14
+#define NVMP_RDE_MISEG    15 
+#define NVMP_RDE_MIOFFLEN 17 
+#define NVMP_RDE_OOMEM	  18
 
 int nvmp_read(struct netvm_program *prog, FILE *infile, int *err);
 int nvmp_write(struct netvm_program *prog, FILE *outfile);

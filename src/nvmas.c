@@ -60,7 +60,8 @@ struct nvmop {
 #define PDONLY 0x10
 #define PDOPT  0x20
 #define BRREL  0x40
-#define MAXARGS 4
+#define ZOPT   0x80
+#define MAXARGS 5
 #define MAXTOKS (MAXARGS+1)
 #define IDCHARS "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ" \
 		"0123456789_"
@@ -87,7 +88,7 @@ struct nvmop Operations[] = {
 	{ "ldpf",   NETVM_OC_LDPF,   0, 0 },
 	{ "ldpfi",  NETVM_OC_LDPFI,  4, ARGY|ARGZ|ARGW|PDONLY },
 	{ "ld",     NETVM_OC_LD,     2, ARGX|ARGY },
-	{ "ldi",    NETVM_OC_LDI,    4, ARGX|ARGY|ARGZ|ARGW|PDOPT },
+	{ "ldi",    NETVM_OC_LDI,    4, ARGX|ARGY|ARGZ|ARGW|ZOPT|PDOPT },
 	{ "cmp",    NETVM_OC_CMP,    0, 0 },
 	{ "pcmp",   NETVM_OC_PCMP,   0, 0 },
 	{ "mskcmp", NETVM_OC_MSKCMP, 0, 0 },
@@ -156,7 +157,7 @@ struct nvmop Operations[] = {
 	{ "ret",    NETVM_OC_RET,    1, ARGW },
 	{ "popbp",  NETVM_OC_POPBP,  0, 0 },
 	{ "st",     NETVM_OC_ST,     2, ARGX|ARGY },
-	{ "sti",    NETVM_OC_STI,    4, ARGX|ARGY|ARGZ|ARGW|PDOPT },
+	{ "sti",    NETVM_OC_STI,    4, ARGX|ARGY|ARGZ|ARGW|ZOPT|PDOPT },
 	{ "move",   NETVM_OC_MOVE,   0, 0 },
 	{ "pkswap", NETVM_OC_PKSWAP, 0, 0 },
 	{ "pknew",  NETVM_OC_PKNEW,  0, 0 },
@@ -342,7 +343,6 @@ static int tokenize(char *s, struct raw toks[], uint maxtoks, int csep)
 			s = parse_quoted_string(s+1, &r->len);
 			if (s == NULL)
 				return -ERR_BADTOK;
-			s = s + strspn(s, WS);
 		} else {
 			r->data = s;
 			s = s + strspn(s, ARGCHARS);
@@ -492,7 +492,8 @@ int str2inst(const char *s, struct htab *ct, uint inum, struct netvm_inst *ni)
 		rv = read_pdesc(r->data + 1, op->argmask & PDOPT, ni, ct);
 		if (rv != 0)
 			return rv;
-	} else if (nt - 1 == op->nargs) {
+	} else if ((nt - 1 == op->nargs) ||
+		   (((op->argmask & ZOPT) != 0) && (nt == op->nargs))) {
 		r = toks + 1;
 		if ((op->argmask & ARGX) != 0) {
 			if ((rv = intarg(r++, ct, &v)) != 0)
@@ -504,7 +505,12 @@ int str2inst(const char *s, struct htab *ct, uint inum, struct netvm_inst *ni)
 				return rv;
 			ni->y = v;
 		}
-		if ((op->argmask & ARGZ) != 0) {
+
+		/* in a very few instructions, Z is an optional argument.   */
+		/* if so, it defaults to 0 (but this should not be used:    */
+		/* The Z should really only be omitted when it isn't needed */
+		if (((op->argmask & ARGZ) != 0) &&
+		    (((op->argmask & ZOPT) == 0) || (nt - 1 == op->nargs))) {
 			if ((rv = intarg(r++, ct, &v)) != 0)
 				return rv;
 			ni->z = v;
@@ -650,7 +656,7 @@ static int do_include(struct asmctx *ctx, char *fn, uint lineno,
 
 	if (nt != 2) {
 		logrec(1, "invalid number of args for .include "
-				 "in file %s on line %u; expected 2\n",
+			  "in file %s on line %u; expected 2\n",
 		       fn, lineno);
 		return 1;
 	}
@@ -658,6 +664,7 @@ static int do_include(struct asmctx *ctx, char *fn, uint lineno,
 		logsys(1, "unable to open file %s "
 			  "(included on line %s line %u)", 
 		       toks[1].data, fn, lineno);
+		return 1;
 	}
 	ne = assemble(ctx, toks[1].data, fp);
 	fclose(fp);
@@ -840,15 +847,15 @@ static int do_mem(struct asmctx *ctx, char *fn, uint lineno,
 		return 1;
 	}
 
-	if ((rv = intarg(&toks[3], &ctx->ctab, &len)) != 0) {
-		logrec(1, "invalid number of bytes '%s' in .mem "
+	if ((rv = intarg(&toks[3], &ctx->ctab, &addr)) != 0) {
+		logrec(1, "invalid address '%s' in .mem "
 		          "directive in file %s on line %u: %s\n",
 		       toks[3].data, fn, lineno, estrs[rv]);
 		return 1;
 	}
 
-	if ((rv = intarg(&toks[4], &ctx->ctab, &addr)) != 0) {
-		logrec(1, "invalid address '%s' in .mem "
+	if ((rv = intarg(&toks[4], &ctx->ctab, &len)) != 0) {
+		logrec(1, "invalid number of bytes '%s' in .mem "
 		          "directive in file %s on line %u: %s\n",
 		       toks[4].data, fn, lineno, estrs[rv]);
 		return 1;
@@ -942,7 +949,7 @@ static int do_coproc(struct asmctx *ctx, char *fn, uint lineno,
 int parse_asm_directive(struct asmctx *ctx, char *s, char *fn, uint lineno)
 {
 	struct raw toks[MAXTOKS];
-	uint nt;
+	int nt;
 
 	if ((nt = tokenize(s, toks, array_length(toks), 0)) <= 0) {
 		logrec(1, "invalid directive in file %s on line %u\n",
@@ -995,7 +1002,7 @@ static int assemble(struct asmctx *ctx, const char *fn, FILE *input)
 		if (*cp == '\0' || *cp == '#')
 			continue;
 		if (*cp == '.') {
-			parse_asm_directive(ctx, cp+1, ctx->curfile, lineno);
+			ne += parse_asm_directive(ctx, cp+1, ctx->curfile, lineno);
 			continue;
 		}
 		ep = cp + strspn(cp, LABELCHARS);
@@ -1060,6 +1067,7 @@ void emit_program(struct asmctx *ctx, FILE *outfile)
 {
 	struct netvm_program prog;
 	struct netvm_inst *istore;
+	struct netvm_meminit *mi;
 	int i;
 
 	istore = emalloc(sizeof(struct netvm_inst) * ctx->numi);
@@ -1072,6 +1080,16 @@ void emit_program(struct asmctx *ctx, FILE *outfile)
 		prog.sdescs[i] = ctx->sdescs[i];
 	for (i = 0; i < NETVM_MAXCOPROC; ++i)
 		prog.cpreqs[i] = ctx->cpreqs[i];
+	prog.inits = NULL;
+	prog.ninits = ctx->ninits;
+	if (prog.ninits != 0) {
+		mi = ecalloc(sizeof(struct netvm_meminit), prog.ninits);
+		abort_unless(SIZE_MAX / sizeof(struct netvm_meminit) >= 
+			     prog.ninits);
+		memcpy(mi, ctx->minits, 
+		       sizeof(struct netvm_meminit) * prog.ninits);
+		prog.inits = mi;
+	}
 
 	nvmp_write(&prog, outfile);
 	nvmp_clear(&prog);
@@ -1086,7 +1104,7 @@ void disassemble(FILE *infile, FILE *outfile)
 	struct netvm_segdesc *sd;
 
 	if (nvmp_read(&prog, infile, &i) < 0)
-		err("unable to read input file: %d", i);
+		err("unable to read input file: %d\n", i);
 
 	fprintf(outfile, "# Declarations\n");
 
