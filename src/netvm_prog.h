@@ -28,9 +28,16 @@ struct netvm_program {
 
 };
 
+
+/* returns the same error codes as netvm_validate */
 int nvmp_validate(struct netvm_program *prog, struct netvm *vm);
+
+/* Assumes that the VM already has sufficient memory for the program */
 void nvmp_init_mem(struct netvm_program *prog, struct netvm *vm);
-int nvmp_exec(struct netvm_program *prog, struct netvm *vm, uint64_t *vmrv);
+
+/* Returns the same error codes as netvm_run */
+int nvmp_exec(struct netvm_program *prog, struct netvm *vm, int maxcycles,
+	      uint64_t *vmrv);
 
 
 #define NVMP_RDE_OK       0
@@ -54,6 +61,7 @@ int nvmp_exec(struct netvm_program *prog, struct netvm *vm, uint64_t *vmrv);
 
 int nvmp_read(struct netvm_program *prog, FILE *infile, int *err);
 int nvmp_write(struct netvm_program *prog, FILE *outfile);
+
 /* Should only be called for programs read with nfmp_read() */
 void nvmp_clear(struct netvm_program *prog);
 

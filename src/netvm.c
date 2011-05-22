@@ -1664,6 +1664,8 @@ static const char *val_error_strings[-(NETVM_ERR_MIN) + 1] = {
 	"Invalid width field",
 	"Coprocessor instruction invalid",
 	"Coprocessor-specific validation error",
+	"Coprocessor required but not present",
+	"Program format error",
 };
 
 

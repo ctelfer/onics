@@ -12,40 +12,41 @@ int nvmp_validate(struct netvm_program *prog, struct netvm *vm)
 	uint i;
 	struct netvm_segdesc *sd;
 	struct netvm_meminit *mi;
+	int rv;
 
 	abort_unless(vm && prog);
 
 	if (prog->ninst < 1)
-		return -1;
+		return NETVM_ERR_PROG;
 
 	for (i = 0; i < NETVM_MAXMSEGS; ++i)
 		if ((prog->sdescs[i].perms & ~NETVM_SEG_PMASK) != 0)
-			return -1;
+			return NETVM_ERR_PROG;
 	if ((prog->ninits > 0) && (prog->inits == NULL))
 		return -1;
 	for (i = 0; i < prog->ninits; ++i) {
 		mi = &prog->inits[i];
 		if (mi->segnum >= NETVM_MAXMSEGS)
-			return -1;
+			return NETVM_ERR_PROG;
 		if (vm->msegs[mi->segnum].base == NULL)
-			return -1;
+			return NETVM_ERR_PROG;
 		sd = &prog->sdescs[mi->segnum];
 		/* check for overflow */
 		if (UINT_MAX - mi->off < mi->val.len)
-			return -1;
+			return NETVM_ERR_PROG;
 		if (mi->off + mi->val.len > sd->len)
-			return -1;
+			return NETVM_ERR_PROG;
 	}
 	for (i = 0; i < NETVM_MAXCOPROC; ++i)
 		if ((prog->cpreqs[i] != NETVM_CPT_NONE) && 
 		    (vm->coprocs[i]->type != prog->cpreqs[i]))
-			return -1;
+			return NETVM_ERR_BADCP;
 	netvm_set_code(vm, prog->inst, prog->ninst);
 	netvm_set_matchonly(vm, prog->matchonly);
 	for (i = 0; i < NETVM_MAXMSEGS; ++i)
 		vm->msegs[i].perms = prog->sdescs[i].perms;
-	if (netvm_validate(vm) < 0)
-		return -1;
+	if ((rv = netvm_validate(vm)) < 0)
+		return rv;
 
 	/* Clean up */
 	netvm_set_code(vm, NULL, 0);
@@ -85,13 +86,14 @@ void nvmp_init_mem(struct netvm_program *prog, struct netvm *vm)
 }
 
 
-int nvmp_exec(struct netvm_program *prog, struct netvm *vm, uint64_t *vmrv)
+int nvmp_exec(struct netvm_program *prog, struct netvm *vm, int maxc,
+	      uint64_t *vmrv)
 {
 	abort_unless(prog && vm);
 	netvm_set_code(vm, prog->inst, prog->ninst);
 	netvm_set_matchonly(vm, prog->matchonly);
 	netvm_restart(vm);
-	return netvm_run(vm, -1, vmrv);
+	return netvm_run(vm, maxc, vmrv);
 }
 
 

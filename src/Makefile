@@ -21,7 +21,8 @@ TARGETS=${BINDIR}/pcapin \
 	${BINDIR}/pktrel \
 	${BINDIR}/x2hpkt \
 	${BINDIR}/h2xpkt \
-	${BINDIR}/nvmas
+	${BINDIR}/nvmas \
+	${BINDIR}/nvmpf
 
 all: ${LIBOBJS} ${TARGETS}
 
@@ -59,6 +60,14 @@ ${BINDIR}/nvmas: nvmas.o netvm.o netvm_prog.o pktbuf.o protoparse.o xpkt.o
 	${CC} -o ${BINDIR}/nvmas nvmas.o netvm_prog.o netvm.o pktbuf.o \
 		protoparse.o xpkt.o \
 		${DEFS} ${OPTS} ${INCS} ${LIBS}
+
+${BINDIR}/nvmpf: protoparse.o stdproto.o util.o pktbuf.o netvm.o xpkt.o \
+		 netvm_std_coproc.o netvm_prog.o ns.o nvmpf.c \
+	         netvm.h protoparse.h pktbuf.h xpkt.h netvm_prog.h
+	${CC} -o ${BINDIR}/nvmpf nvmpf.c protoparse.o stdproto.o util.o \
+	         pktbuf.o netvm.o xpkt.o netvm_std_coproc.o netvm_prog.o ns.o \
+		${DEFS} ${OPTS} ${INCS} ${LIBS}
+
 
 .c.o: $<
 	${CC} -Wall -c $< -o $@ ${DEFS} ${INCS} ${OPTS}
