@@ -172,108 +172,108 @@ var Count;
 
 /* ----- Mappings between non-terminals and C types ----- */
 
-%type decl { union pml_tree * }
+%type decl { union pml_node * }
 %destructor decl { pmlt_free($$); }
 
 %type fundecl { struct pml_function * }
-%destructor fundecl { pmlt_free((union pml_tree *)$$); }
+%destructor fundecl { pmlt_free((union pml_node *)$$); }
 
 %type preddecl { struct pml_function * }
-%destructor preddecl { pmlt_free((union pml_tree *)$$); }
+%destructor preddecl { pmlt_free((union pml_node *)$$); }
 
 %type lvar { struct pml_variable * }
-%destructor lvar { pmlt_free((union pml_tree *)$$); }
+%destructor lvar { pmlt_free((union pml_node *)$$); }
 
 %type gvar { struct pml_variable * }
-%destructor gvar { pmlt_free((union pml_tree *)$$); }
+%destructor gvar { pmlt_free((union pml_node *)$$); }
 
 %type lvardecls { struct pml_list * }
-%destructor lvardecls { pmlt_free((union pml_tree *)$$); }
+%destructor lvardecls { pmlt_free((union pml_node *)$$); }
 
 %type rule { struct pml_rule * }
-%destructor rule { pmlt_free((union pml_tree *)$$); }
+%destructor rule { pmlt_free((union pml_node *)$$); }
 
 %type pktpat { union pml_expr_u * }
-%destructor pktpat { pmlt_free((union pml_tree *)$$); }
+%destructor pktpat { pmlt_free((union pml_node *)$$); }
 
 %type expr { union pml_expr_u * }
-%destructor expr { pmlt_free((union pml_tree *)$$); }
+%destructor expr { pmlt_free((union pml_node *)$$); }
 
-%type stmt { union pml_tree * }
+%type stmt { union pml_node * }
 %destructor stmt { pmlt_free($$); }
 
 %type stmtlist { struct pml_list * }
-%destructor stmtlist { pmlt_free((union pml_tree *)$$); }
+%destructor stmtlist { pmlt_free((union pml_node *)$$); }
 
 %type stmts { struct pml_list * }
-%destructor stmts { pmlt_free((union pml_tree *)$$); }
+%destructor stmts { pmlt_free((union pml_node *)$$); }
 
 %type var { struct pml_locator * }
-%destructor var { pmlt_free((union pml_tree *)$$); }
+%destructor var { pmlt_free((union pml_node *)$$); }
 
 %type exprlist { struct pml_list * }
-%destructor exprlist { pmlt_free((union pml_tree *)$$); }
+%destructor exprlist { pmlt_free((union pml_node *)$$); }
 
 %type locator { struct pml_locator * }
-%destructor locator { pmlt_free((union pml_tree *)$$); }
+%destructor locator { pmlt_free((union pml_node *)$$); }
 
 %type idlist { struct pml_list * }
-%destructor idlist { pmlt_free((union pml_tree *)$$); }
+%destructor idlist { pmlt_free((union pml_node *)$$); }
 
 %type someids { struct pml_list * }
-%destructor someids { pmlt_free((union pml_tree *)$$); }
+%destructor someids { pmlt_free((union pml_node *)$$); }
 
 %type type { int }
 
 %type orexpr { union pml_expr_u * } 
-%destructor orexpr { pmlt_free((union pml_tree *)$$); }
+%destructor orexpr { pmlt_free((union pml_node *)$$); }
 
 %type andexpr { union pml_expr_u * } 
-%destructor andexpr { pmlt_free((union pml_tree *)$$); }
+%destructor andexpr { pmlt_free((union pml_node *)$$); }
 
 %type cmpexpr { union pml_expr_u * } 
-%destructor cmpexpr { pmlt_free((union pml_tree *)$$); }
+%destructor cmpexpr { pmlt_free((union pml_node *)$$); }
 
 %type matchop { int }
 %type cmpop  { int }
 
 %type borexpr { union pml_expr_u * } 
-%destructor borexpr { pmlt_free((union pml_tree *)$$); }
+%destructor borexpr { pmlt_free((union pml_node *)$$); }
 
 %type bxorexpr { union pml_expr_u * } 
-%destructor bxorexpr { pmlt_free((union pml_tree *)$$); }
+%destructor bxorexpr { pmlt_free((union pml_node *)$$); }
 
 %type bandexpr { union pml_expr_u * } 
-%destructor bandexpr { pmlt_free((union pml_tree *)$$); }
+%destructor bandexpr { pmlt_free((union pml_node *)$$); }
 
 %type addexpr { union pml_expr_u * } 
-%destructor addexpr { pmlt_free((union pml_tree *)$$); }
+%destructor addexpr { pmlt_free((union pml_node *)$$); }
 
 %type mulexpr { union pml_expr_u * } 
-%destructor mulexpr { pmlt_free((union pml_tree *)$$); }
+%destructor mulexpr { pmlt_free((union pml_node *)$$); }
 
 %type shiftexpr { union pml_expr_u * } 
-%destructor shiftexpr { pmlt_free((union pml_tree *)$$); }
+%destructor shiftexpr { pmlt_free((union pml_node *)$$); }
 
 %type shiftop { int }
 
 %type uexpr { union pml_expr_u * } 
-%destructor uexpr { pmlt_free((union pml_tree *)$$); }
+%destructor uexpr { pmlt_free((union pml_node *)$$); }
 
 %type pexpr { union pml_expr_u * } 
-%destructor pexpr { pmlt_free((union pml_tree *)$$); }
+%destructor pexpr { pmlt_free((union pml_node *)$$); }
 
 %type valexpr { union pml_expr_u * } 
-%destructor valexpr { pmlt_free((union pml_tree *)$$); }
+%destructor valexpr { pmlt_free((union pml_node *)$$); }
 
 %type value { struct pml_value * } 
-%destructor value { pmlt_free((union pml_tree *)$$); }
+%destructor value { pmlt_free((union pml_node *)$$); }
 
 %type funcall { struct pml_funcall * } 
-%destructor funcall { pmlt_free((union pml_tree *)$$); }
+%destructor funcall { pmlt_free((union pml_node *)$$); }
 
 %type numval { struct pml_value * }
-%destructor numval { pmlt_free((union pml_tree *)$$); }
+%destructor numval { pmlt_free((union pml_node *)$$); }
 
 %token_type { struct pml_lex_val }
 %token_destructor { 
@@ -298,7 +298,7 @@ decl ::= fundecl(F). {
 		pml_ast_err(ast, "Duplicate function/predicate: %s\n", 
 		            F->name);
 		ast->error = 1;
-		pmlt_free((union pml_tree *)F);
+		pmlt_free((union pml_node *)F);
 	}
 }
 decl ::= preddecl(F). {
@@ -306,14 +306,14 @@ decl ::= preddecl(F). {
 		pml_ast_err(ast, "Duplicate function/predicate: %s\n", 
 		            F->name);
 		ast->error = 1;
-		pmlt_free((union pml_tree *)F);
+		pmlt_free((union pml_node *)F);
 	}
 }
 decl ::= gvar(V). {
 	if (pml_ast_add_var(ast, V) < 0) {
 		pml_ast_err(ast, "Duplicate variable: %s\n", V->name);
 		ast->error = 1;
-		pmlt_free((union pml_tree *)V);
+		pmlt_free((union pml_node *)V);
 	}
 }
 
@@ -336,7 +336,7 @@ preddecl(F) ::= PRED ID(N) LPAREN idlist(P) RPAREN LPAREN expr(E) RPAREN. {
 	}
 	F->prmlist = P;
 
-	F->body = (union pml_tree *)E;
+	F->body = (union pml_node *)E;
 
 pd_out:
 }
@@ -372,7 +372,7 @@ fundecl(F) ::= FUNC ID(N) LPAREN idlist(P) RPAREN LBRACE lvardecls(V)
 	}
 	F->varlist = V;
 
-	F->body = (union pml_tree *)S;
+	F->body = (union pml_node *)S;
 
 fd_out:
 }
@@ -442,7 +442,7 @@ stmts(SS) ::= . {
 	SS = l;
 }
 stmts(SSO) ::= stmts(SSI) stmt(S) SEMICOLON. {
-	l_ins(&SSI->list, &S->node.ln);
+	l_ins(&SSI->list, &S->base.ln);
 	SSO = SSI;
 }
 
@@ -453,21 +453,21 @@ stmt(S) ::= var(V) ASSIGN expr(E). {
 		(struct pml_set_action *)pmlt_alloc(PMLTT_SETACT);
 	a->varname = V;
 	a->expr = E;
-	S = (union pml_tree *)a;
+	S = (union pml_node *)a;
 }
 
 stmt(S) ::= WHILE LPAREN expr(E) RPAREN stmtlist(SL). {
 	struct pml_while *w = (struct pml_while *)pmlt_alloc(PMLTT_WHILE);
 	w->test = E;
 	w->body = SL;
-	S = (union pml_tree *)w;
+	S = (union pml_node *)w;
 }
 
 stmt(S) ::= IF LPAREN expr(E) RPAREN stmtlist(SL). {
 	struct pml_if *i = (struct pml_if *)pmlt_alloc(PMLTT_IF);
 	i->test = E;
 	i->tbody = SL;
-	S = (union pml_tree *)i;
+	S = (union pml_node *)i;
 }
 
 stmt(S) ::= IF LPAREN expr(E) RPAREN stmtlist(SLT) ELSE stmtlist(SLF). {
@@ -475,26 +475,26 @@ stmt(S) ::= IF LPAREN expr(E) RPAREN stmtlist(SLT) ELSE stmtlist(SLF). {
 	i->test = E;
 	i->tbody = SLT;
 	i->fbody = SLF;
-	S = (union pml_tree *)i;
+	S = (union pml_node *)i;
 }
 
 stmt(S) ::= RETURN expr(E).  {
 	struct pml_return *r = (struct pml_return *)pmlt_alloc(PMLTT_RETURN);
 	r->expr = E;
-	S = (union pml_tree *)r;
+	S = (union pml_node *)r;
 }
 
 stmt(S) ::= PRINT STRING(TV). {
 	struct pml_print *p = (struct pml_print *)pmlt_alloc(PMLTT_PRINT);
 	p->fmt = (char *)TV.u.raw.data;
-	S = (union pml_tree *)p;
+	S = (union pml_node *)p;
 }
 
 stmt(S) ::= PRINT STRING(TV) COMMA exprlist(EL). {
 	struct pml_print *p = (struct pml_print *)pmlt_alloc(PMLTT_PRINT);
 	p->fmt = (char *)TV.u.raw.data;
 	p->args = EL;
-	S = (union pml_tree *)p;
+	S = (union pml_node *)p;
 }
 
 pktpat(PP) ::= PPBEGIN expr(E) PPEND. { PP = E; }
@@ -685,12 +685,12 @@ funcall(F) ::= ID(N) LPAREN RPAREN. {
 	F->args = (struct pml_list *)pmlt_alloc(PMLTT_LIST);
 }
 exprlist(EL1) ::= exprlist(EL0) COMMA expr(E). { 
-	l_enq(&EL0->list, &E->node.ln);
+	l_enq(&EL0->list, &E->base.ln);
 	EL1 = EL0;
 }
 exprlist(EL) ::= expr(E). { 
 	struct pml_list *l = (struct pml_list *)pmlt_alloc(PMLTT_LIST);
-	l_enq(&l->list, &E->node.ln);
+	l_enq(&l->list, &E->base.ln);
 	EL = l;
 }
 

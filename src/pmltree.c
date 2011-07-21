@@ -8,7 +8,7 @@
 #include <string.h>
 #include <stdarg.h>
 
-#define l_to_node(p) container(p, struct pml_node, ln)
+#define l_to_node(p) container(p, struct pml_node_base, ln)
 #define SYMTABSIZE    256
 
 
@@ -78,7 +78,7 @@ static int vtab_add(struct htab *ht, struct pml_variable *var)
 
 static void freesym(void *nodep, void *ctx)
 {
-	struct pml_node *node = nodep;
+	struct pml_node_base *node = nodep;
 	if (node->type == PMLTT_VAR) {
 		struct pml_variable *p = nodep;
 		ht_rem(&p->hn);
@@ -90,7 +90,7 @@ static void freesym(void *nodep, void *ctx)
 	} else {
 		abort_unless(0);
 	}
-	pmlt_free((union pml_tree *)node);
+	pmlt_free((union pml_node *)node);
 }
 
 
@@ -108,7 +108,7 @@ static void freerule(void *rulep, void *ctx)
 {
 	struct pml_rule *r = rulep;
 	l_rem(&r->ln);
-	pmlt_free((union pml_tree *)r);
+	pmlt_free((union pml_node *)r);
 }
 
 
@@ -182,9 +182,9 @@ int pml_func_add_var(struct pml_function *func, struct pml_variable *var)
 }
 
 
-union pml_tree *pmlt_alloc(int pmltt)
+union pml_node *pmlt_alloc(int pmltt)
 {
-	union pml_tree *tp;
+	union pml_node *tp;
 
 	tp = calloc(1, sizeof(*tp));
 	if (tp == NULL)
@@ -237,7 +237,7 @@ union pml_tree *pmlt_alloc(int pmltt)
 		p->op = 0;
 		p->arg1 = NULL;
 		p->arg2 = NULL;
-		return (union pml_tree *)p;
+		return (union pml_node *)p;
 	} break;
 
 	case PMLTT_FUNCALL: {
@@ -246,7 +246,7 @@ union pml_tree *pmlt_alloc(int pmltt)
 		l_init(&p->ln);
 		p->func = NULL;
 		p->args = NULL;
-		return (union pml_tree *)p;
+		return (union pml_node *)p;
 	} break;
 
 	case PMLTT_IF: {
@@ -256,7 +256,7 @@ union pml_tree *pmlt_alloc(int pmltt)
 		p->test = NULL;
 		p->tbody = NULL;
 		p->fbody = NULL;
-		return (union pml_tree *)p;
+		return (union pml_node *)p;
 	} break;
 
 	case PMLTT_WHILE: {
@@ -337,18 +337,18 @@ union pml_tree *pmlt_alloc(int pmltt)
 }
 
 
-void pmlt_free(union pml_tree *tree)
+void pmlt_free(union pml_node *node)
 {
-	if (tree == NULL)
+	if (node == NULL)
 		return;
 
-	switch (tree->node.type) {
+	switch (node ->base.type) {
 
 	case PMLTT_LIST: {
-		struct pml_list *p = &tree->list;
+		struct pml_list *p = &node->list;
 		struct list *l;
 		while ((l = l_deq(&p->list)) != NULL)
-			pmlt_free((union pml_tree *)l_to_node(l));
+			pmlt_free((union pml_node *)l_to_node(l));
 	} break;
 
 	case PMLTT_SCALAR:
@@ -356,105 +356,105 @@ void pmlt_free(union pml_tree *tree)
 
 	case PMLTT_VARREF: 
 	case PMLTT_VARADDR: {
-		struct pml_value *p = &tree->value;
-		pmlt_free((union pml_tree *)&p->u.varname);
+		struct pml_value *p = &node->value;
+		pmlt_free((union pml_node *)&p->u.varname);
 	} break;
 
 	case PMLTT_BYTESTR: {
-		struct pml_value *p = &tree->value;
+		struct pml_value *p = &node->value;
 		pml_bytestr_free(&p->u.bytestr);
 	} break;
 
 	case PMLTT_VAR: {
-		struct pml_variable *p = &tree->variable;
+		struct pml_variable *p = &node->variable;
 		free(p->name);
-		pmlt_free((union pml_tree *)p->init);
+		pmlt_free((union pml_node *)p->init);
 	}
 
 	case PMLTT_MASKVAL: {
-		struct pml_value *p = &tree->value;
+		struct pml_value *p = &node->value;
 		pml_bytestr_free(&p->u.maskval.val);
 		pml_bytestr_free(&p->u.maskval.mask);
 	} break;
 
 	case PMLTT_BINOP: {
-		struct pml_op *p = &tree->op;
-		pmlt_free((union pml_tree *)p->arg1);
-		pmlt_free((union pml_tree *)p->arg2);
+		struct pml_op *p = &node->op;
+		pmlt_free((union pml_node *)p->arg1);
+		pmlt_free((union pml_node *)p->arg2);
 	} break;
 
 	case PMLTT_UNOP: {
-		struct pml_op *p = &tree->op;
-		pmlt_free((union pml_tree *)p->arg1);
+		struct pml_op *p = &node->op;
+		pmlt_free((union pml_node *)p->arg1);
 	} break;
 
 	case PMLTT_FUNCALL: {
-		struct pml_funcall *p = &tree->funcall;
-		pmlt_free((union pml_tree *)p->args);
+		struct pml_funcall *p = &node->funcall;
+		pmlt_free((union pml_node *)p->args);
 	} break;
 
 	case PMLTT_IF: {
-		struct pml_if *p = &tree->ifstmt;
-		pmlt_free((union pml_tree *)p->test);
-		pmlt_free((union pml_tree *)p->tbody);
-		pmlt_free((union pml_tree *)p->fbody);
+		struct pml_if *p = &node->ifstmt;
+		pmlt_free((union pml_node *)p->test);
+		pmlt_free((union pml_node *)p->tbody);
+		pmlt_free((union pml_node *)p->fbody);
 	} break;
 
 	case PMLTT_WHILE: {
-		struct pml_while *p = &tree->whilestmt;
-		pmlt_free((union pml_tree *)p->test);
-		pmlt_free((union pml_tree *)p->body);
+		struct pml_while *p = &node->whilestmt;
+		pmlt_free((union pml_node *)p->test);
+		pmlt_free((union pml_node *)p->body);
 	} break;
 
 	case PMLTT_NAME:
 	case PMLTT_OFFSETOF:
 	case PMLTT_LOCATOR: {
-		struct pml_locator *p = &tree->locator;
+		struct pml_locator *p = &node->locator;
 		free(p->name);
-		pmlt_free((union pml_tree *)p->pkt);
-		pmlt_free((union pml_tree *)p->off);
-		pmlt_free((union pml_tree *)p->len);
+		pmlt_free((union pml_node *)p->pkt);
+		pmlt_free((union pml_node *)p->off);
+		pmlt_free((union pml_node *)p->len);
 	} break;
 
 	case PMLTT_SETACT: {
-		struct pml_set_action *p = &tree->setact;
-		pmlt_free((union pml_tree *)p->varname);
-		pmlt_free((union pml_tree *)p->expr);
+		struct pml_set_action *p = &node->setact;
+		pmlt_free((union pml_node *)p->varname);
+		pmlt_free((union pml_node *)p->expr);
 	} break;
 
 	case PMLTT_RETURN: {
-		struct pml_return *p = &tree->retact;
-		pmlt_free((union pml_tree *)p->expr);
+		struct pml_return *p = &node->retact;
+		pmlt_free((union pml_node *)p->expr);
 	} break;
 
 	case PMLTT_PRINT: {
-		struct pml_print *p = &tree->print;
+		struct pml_print *p = &node->print;
 		free(p->fmt);
-		pmlt_free((union pml_tree *)p->args);
+		pmlt_free((union pml_node *)p->args);
 	} break;
 
 	case PMLTT_FUNCTION:
 	case PMLTT_PREDICATE: {
-		struct pml_function *p = &tree->function;
+		struct pml_function *p = &node->function;
 		free(p->name);
 		p->name = NULL;
 		symtab_destroy(&p->vars);
-		pmlt_free((union pml_tree *)p->prmlist);
-		pmlt_free((union pml_tree *)p->varlist);
+		pmlt_free((union pml_node *)p->prmlist);
+		pmlt_free((union pml_node *)p->varlist);
 		pmlt_free(p->body);
 	} break;
 
 	case PMLTT_RULE: {
-		struct pml_rule *p = &tree->rule;
-		pmlt_free((union pml_tree *)p->pattern);
-		pmlt_free((union pml_tree *)p->stmts);
+		struct pml_rule *p = &node->rule;
+		pmlt_free((union pml_node *)p->pattern);
+		pmlt_free((union pml_node *)p->stmts);
 	} break;
 
 	default:
 		abort_unless(0);
 	}
 
-	free(tree);
+	free(node);
 }
 
 

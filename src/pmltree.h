@@ -25,9 +25,9 @@ enum {
 	PMLTT_SCALAR,
 	PMLTT_BYTESTR,
 	PMLTT_MASKVAL,
-	PMLTT_VAR,
 	PMLTT_VARREF,
 	PMLTT_VARADDR,
+	PMLTT_VAR,
 	PMLTT_BINOP,
 	PMLTT_UNOP,
 	PMLTT_FUNCALL,
@@ -79,7 +79,7 @@ enum {
 };
 
 
-struct pml_node {
+struct pml_node_base {
 	int			type;
 	struct list		ln;
 };
@@ -216,7 +216,7 @@ struct pml_function {
 	struct htab		vars;
 	struct pml_list *	prmlist;
 	struct pml_list *	varlist;
-	union pml_tree *	body;  /* expr for pred, list for func */
+	union pml_node *	body;  /* expr for pred, list for func */
 };
 
 
@@ -229,15 +229,15 @@ struct pml_rule {
 
 
 union pml_expr_u {
-	struct pml_node		node;
+	struct pml_node_base	base;
 	struct pml_value	value;
 	struct pml_op		op;
 	struct pml_funcall	funcall;
 };
 
 
-union pml_tree {
-	struct pml_node		node;
+union pml_node {
+	struct pml_node_base	base;
 	struct pml_value	value;
 	struct pml_variable	variable;
 	struct pml_op		op;
@@ -254,8 +254,8 @@ union pml_tree {
 };
 
 
-union pml_tree *pmlt_alloc(int pmltt);
-void pmlt_free(union pml_tree *tree);
+union pml_node *pmlt_alloc(int pmltt);
+void pmlt_free(union pml_node *node);
 
 void pml_ast_init(struct pml_ast *ast);
 void pml_ast_clear(struct pml_ast *ast);
