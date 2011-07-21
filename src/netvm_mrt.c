@@ -92,7 +92,7 @@ int nvmmrt_execute(struct netvm_mrt *mrt)
 
 	if (mrt->begin) {
 		nvmp_init_mem(mrt->begin, &mrt->vm);
-		if (nvmp_exec(mrt->begin, &mrt->vm, NULL) < 0)
+		if (nvmp_exec(mrt->begin, &mrt->vm, -1, NULL) < 0)
 			return -1;
 	}
 
@@ -102,12 +102,13 @@ int nvmmrt_execute(struct netvm_mrt *mrt)
 		send = 1;
 		clist_for_each(cln, mrt->pktprogs) {
 			mprog = cln_dptr(cln);
-			if ((rv=nvmp_exec(mprog->match, &mrt->vm, &rc)) < 0)
+			if ((rv=nvmp_exec(mprog->match, &mrt->vm, -1, &rc)) < 0)
 				return -1;
 			if (!rc)
 				continue;
 			/* clear all packets on an error */
-			if ((rv=nvmp_exec(mprog->action, &mrt->vm, &rc)) < 0) {
+			rv = nvmp_exec(mprog->action, &mrt->vm, -1, &rc);
+			if (rv < 0) {
 				for (i = 0; i < NETVM_MAXPKTS; ++i)
 					netvm_clr_pkt(&mrt->vm, i, 0);
 				continue;
@@ -134,8 +135,8 @@ int nvmmrt_execute(struct netvm_mrt *mrt)
 		netvm_clr_pkt(&mrt->vm, i, 0);
 
 	if (mrt->end) {
-		if (nvmp_exec(mrt->end, &mrt->vm, NULL) < 0)
-			return -1;
+		if ((rv = nvmp_exec(mrt->end, &mrt->vm, -1, NULL)) < 0)
+			return rv;
 	}
 
 	return 0;
