@@ -18,16 +18,31 @@ int main(int argc, char *argv[])
 		errsys("pml_alloc:");
 	pml_ast_init(&tree);
 
-	while ((tok = pmllex(scanner)) > 0) {
+	do {
+		tok = pmllex(scanner);
+		if (tok < 0)
+			err("Encountered invalid token on line %d\n",
+			    pmlget_lineno(scanner));
 		extra = pmlget_extra(scanner);
-		printf("-- %d -> '%s'\n", tok, pmlget_text(scanner));
+		printf("Token -- %d -> '%s'\n", tok, pmlget_text(scanner));
 		if (pml_parse(parser, &tree, tok, extra)) {
 			err("parse error on line %d\n",
 			    pmlget_lineno(scanner));
 		}
 		pmlset_extra(none, scanner);
-	}
+	} while (tok > 0);
+
+	if (!tree.done)
+		err("File did not reduce to a complete tree\n");
+
+	printf("Done parsing, destroying scanner and parser\n");
+
 	pmllex_destroy(scanner);
+	pml_free(parser);
+
+	pml_ast_print(&tree);
+
+	pml_ast_clear(&tree);
 
 	return 0;
 }

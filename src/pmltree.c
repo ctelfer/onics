@@ -90,7 +90,7 @@ static void freesym(void *nodep, void *ctx)
 	} else {
 		abort_unless(0);
 	}
-	pmlt_free((union pml_node *)node);
+	pmln_free((union pml_node *)node);
 }
 
 
@@ -108,13 +108,14 @@ static void freerule(void *rulep, void *ctx)
 {
 	struct pml_rule *r = rulep;
 	l_rem(&r->ln);
-	pmlt_free((union pml_node *)r);
+	pmln_free((union pml_node *)r);
 }
 
 
 void pml_ast_init(struct pml_ast *ast)
 {
 	ast->error = 0;
+	ast->done = 0;
 	ast->line = 0;
 	symtab_init(&ast->vartab);
 	symtab_init(&ast->functab);
@@ -126,6 +127,7 @@ void pml_ast_init(struct pml_ast *ast)
 void pml_ast_clear(struct pml_ast *ast)
 {
 	ast->error = 0;
+	ast->done = 0;
 	ast->line = 0;
 	symtab_destroy(&ast->vartab);
 	symtab_destroy(&ast->functab);
@@ -182,18 +184,18 @@ int pml_func_add_var(struct pml_function *func, struct pml_variable *var)
 }
 
 
-union pml_node *pmlt_alloc(int pmltt)
+union pml_node *pmln_alloc(int pmltt)
 {
-	union pml_node *tp;
+	union pml_node *np;
 
-	tp = calloc(1, sizeof(*tp));
-	if (tp == NULL)
+	np = calloc(1, sizeof(*np));
+	if (np == NULL)
 		return NULL;
 
 	switch (pmltt) {
 
 	case PMLTT_LIST: {
-		struct pml_list *p = &tp->list;
+		struct pml_list *p = &np->list;
 		p->type = pmltt;
 		l_init(&p->ln);
 		l_init(&p->list);
@@ -204,7 +206,7 @@ union pml_node *pmlt_alloc(int pmltt)
 	case PMLTT_MASKVAL:
 	case PMLTT_VARREF:
 	case PMLTT_VARADDR: {
-		struct pml_value *p = &tp->value;
+		struct pml_value *p = &np->value;
 		p->type = pmltt;
 		l_init(&p->ln);
 		if (pmltt == PMLTT_SCALAR) {
@@ -222,7 +224,7 @@ union pml_node *pmlt_alloc(int pmltt)
 	} break;
 
 	case PMLTT_VAR: {
-		struct pml_variable *p = &tp->variable;
+		struct pml_variable *p = &np->variable;
 		p->type = pmltt;
 		l_init(&p->ln);
 		p->name = NULL;
@@ -231,7 +233,7 @@ union pml_node *pmlt_alloc(int pmltt)
 
 	case PMLTT_UNOP:
 	case PMLTT_BINOP: {
-		struct pml_op *p = &tp->op;
+		struct pml_op *p = &np->op;
 		p->type = pmltt;
 		l_init(&p->ln);
 		p->op = 0;
@@ -241,7 +243,7 @@ union pml_node *pmlt_alloc(int pmltt)
 	} break;
 
 	case PMLTT_FUNCALL: {
-		struct pml_funcall *p = &tp->funcall;
+		struct pml_funcall *p = &np->funcall;
 		p->type = pmltt;
 		l_init(&p->ln);
 		p->func = NULL;
@@ -250,7 +252,7 @@ union pml_node *pmlt_alloc(int pmltt)
 	} break;
 
 	case PMLTT_IF: {
-		struct pml_if *p = &tp->ifstmt;
+		struct pml_if *p = &np->ifstmt;
 		p->type = pmltt;
 		l_init(&p->ln);
 		p->test = NULL;
@@ -260,17 +262,15 @@ union pml_node *pmlt_alloc(int pmltt)
 	} break;
 
 	case PMLTT_WHILE: {
-		struct pml_while *p = &tp->whilestmt;;
+		struct pml_while *p = &np->whilestmt;;
 		p->type = pmltt;
 		l_init(&p->ln);
 		p->test = NULL;
 		p->body = NULL;
 	} break;
 
-	case PMLTT_NAME:
-	case PMLTT_OFFSETOF:
 	case PMLTT_LOCATOR: {
-		struct pml_locator *p = &tp->locator;
+		struct pml_locator *p = &np->locator;
 		p->type = pmltt;
 		l_init(&p->ln);
 		p->name = NULL;
@@ -280,7 +280,7 @@ union pml_node *pmlt_alloc(int pmltt)
 	} break;
 
 	case PMLTT_SETACT: {
-		struct pml_set_action *p = &tp->setact;
+		struct pml_set_action *p = &np->setact;
 		p->type = pmltt;
 		l_init(&p->ln);
 		p->conv = 0;
@@ -290,14 +290,14 @@ union pml_node *pmlt_alloc(int pmltt)
 	} break;
 
 	case PMLTT_RETURN: {
-		struct pml_return *p = &tp->retact;
+		struct pml_return *p = &np->retact;
 		p->type = pmltt;
 		l_init(&p->ln);
 		p->expr = NULL;
         } break;
 
 	case PMLTT_PRINT: {
-		struct pml_print *p = &tp->print;
+		struct pml_print *p = &np->print;
 		p->type = pmltt;
 		l_init(&p->ln);
 		p->fmt = NULL;
@@ -306,9 +306,9 @@ union pml_node *pmlt_alloc(int pmltt)
 
 	case PMLTT_FUNCTION:
 	case PMLTT_PREDICATE: {
-		struct pml_function *p = &tp->function;
+		struct pml_function *p = &np->function;
 		if (symtab_init(&p->vars) < 0) {
-			free(tp);
+			free(np);
 			return NULL;
 		}
 		p->type = pmltt;
@@ -317,10 +317,11 @@ union pml_node *pmlt_alloc(int pmltt)
 		p->arity = 0;
 		p->prmlist = NULL;
 		p->varlist = NULL;
+		p->body = NULL;
 	} break;
 
 	case PMLTT_RULE: {
-		struct pml_rule *p = &tp->rule;
+		struct pml_rule *p = &np->rule;
 		p->type = pmltt;
 		l_init(&p->ln);
 		p->pattern = NULL;
@@ -328,27 +329,27 @@ union pml_node *pmlt_alloc(int pmltt)
 	} break;
 
 	default: {
-		free(tp);
-		tp = NULL;
+		free(np);
+		np = NULL;
 	} break;
 
 	}
-	return tp;
+	return np;
 }
 
 
-void pmlt_free(union pml_node *node)
+void pmln_free(union pml_node *node)
 {
 	if (node == NULL)
 		return;
 
-	switch (node ->base.type) {
+	switch (node->base.type) {
 
 	case PMLTT_LIST: {
 		struct pml_list *p = &node->list;
 		struct list *l;
 		while ((l = l_deq(&p->list)) != NULL)
-			pmlt_free((union pml_node *)l_to_node(l));
+			pmln_free((union pml_node *)l_to_node(l));
 	} break;
 
 	case PMLTT_SCALAR:
@@ -357,7 +358,7 @@ void pmlt_free(union pml_node *node)
 	case PMLTT_VARREF: 
 	case PMLTT_VARADDR: {
 		struct pml_value *p = &node->value;
-		pmlt_free((union pml_node *)&p->u.varname);
+		pmln_free((union pml_node *)p->u.varname);
 	} break;
 
 	case PMLTT_BYTESTR: {
@@ -368,7 +369,7 @@ void pmlt_free(union pml_node *node)
 	case PMLTT_VAR: {
 		struct pml_variable *p = &node->variable;
 		free(p->name);
-		pmlt_free((union pml_node *)p->init);
+		pmln_free((union pml_node *)p->init);
 	}
 
 	case PMLTT_MASKVAL: {
@@ -379,58 +380,56 @@ void pmlt_free(union pml_node *node)
 
 	case PMLTT_BINOP: {
 		struct pml_op *p = &node->op;
-		pmlt_free((union pml_node *)p->arg1);
-		pmlt_free((union pml_node *)p->arg2);
+		pmln_free((union pml_node *)p->arg1);
+		pmln_free((union pml_node *)p->arg2);
 	} break;
 
 	case PMLTT_UNOP: {
 		struct pml_op *p = &node->op;
-		pmlt_free((union pml_node *)p->arg1);
+		pmln_free((union pml_node *)p->arg1);
 	} break;
 
 	case PMLTT_FUNCALL: {
 		struct pml_funcall *p = &node->funcall;
-		pmlt_free((union pml_node *)p->args);
+		pmln_free((union pml_node *)p->args);
 	} break;
 
 	case PMLTT_IF: {
 		struct pml_if *p = &node->ifstmt;
-		pmlt_free((union pml_node *)p->test);
-		pmlt_free((union pml_node *)p->tbody);
-		pmlt_free((union pml_node *)p->fbody);
+		pmln_free((union pml_node *)p->test);
+		pmln_free((union pml_node *)p->tbody);
+		pmln_free((union pml_node *)p->fbody);
 	} break;
 
 	case PMLTT_WHILE: {
 		struct pml_while *p = &node->whilestmt;
-		pmlt_free((union pml_node *)p->test);
-		pmlt_free((union pml_node *)p->body);
+		pmln_free((union pml_node *)p->test);
+		pmln_free((union pml_node *)p->body);
 	} break;
 
-	case PMLTT_NAME:
-	case PMLTT_OFFSETOF:
 	case PMLTT_LOCATOR: {
 		struct pml_locator *p = &node->locator;
 		free(p->name);
-		pmlt_free((union pml_node *)p->pkt);
-		pmlt_free((union pml_node *)p->off);
-		pmlt_free((union pml_node *)p->len);
+		pmln_free((union pml_node *)p->pkt);
+		pmln_free((union pml_node *)p->off);
+		pmln_free((union pml_node *)p->len);
 	} break;
 
 	case PMLTT_SETACT: {
 		struct pml_set_action *p = &node->setact;
-		pmlt_free((union pml_node *)p->varname);
-		pmlt_free((union pml_node *)p->expr);
+		pmln_free((union pml_node *)p->varname);
+		pmln_free((union pml_node *)p->expr);
 	} break;
 
 	case PMLTT_RETURN: {
 		struct pml_return *p = &node->retact;
-		pmlt_free((union pml_node *)p->expr);
+		pmln_free((union pml_node *)p->expr);
 	} break;
 
 	case PMLTT_PRINT: {
 		struct pml_print *p = &node->print;
 		free(p->fmt);
-		pmlt_free((union pml_node *)p->args);
+		pmln_free((union pml_node *)p->args);
 	} break;
 
 	case PMLTT_FUNCTION:
@@ -439,15 +438,15 @@ void pmlt_free(union pml_node *node)
 		free(p->name);
 		p->name = NULL;
 		symtab_destroy(&p->vars);
-		pmlt_free((union pml_node *)p->prmlist);
-		pmlt_free((union pml_node *)p->varlist);
-		pmlt_free(p->body);
+		pmln_free((union pml_node *)p->prmlist);
+		pmln_free((union pml_node *)p->varlist);
+		pmln_free(p->body);
 	} break;
 
 	case PMLTT_RULE: {
 		struct pml_rule *p = &node->rule;
-		pmlt_free((union pml_node *)p->pattern);
-		pmlt_free((union pml_node *)p->stmts);
+		pmln_free((union pml_node *)p->pattern);
+		pmln_free((union pml_node *)p->stmts);
 	} break;
 
 	default:
@@ -461,7 +460,7 @@ void pmlt_free(union pml_node *node)
 union pml_expr_u *pml_binop_alloc(int op, union pml_expr_u *left, 
 		                  union pml_expr_u *right)
 {
-	struct pml_op *o = (struct pml_op *)pmlt_alloc(PMLTT_BINOP);
+	struct pml_op *o = (struct pml_op *)pmln_alloc(PMLTT_BINOP);
 	o->op = op;
 	o->arg1 = left;
 	o->arg2 = right;
@@ -471,7 +470,7 @@ union pml_expr_u *pml_binop_alloc(int op, union pml_expr_u *left,
 
 union pml_expr_u *pml_unop_alloc(int op, union pml_expr_u *ex)
 {
-	struct pml_op *o = (struct pml_op *)pmlt_alloc(PMLTT_UNOP);
+	struct pml_op *o = (struct pml_op *)pmln_alloc(PMLTT_UNOP);
 	o->op = op;
 	o->arg1 = ex;
 	return (union pml_expr_u *)o;
@@ -482,7 +481,7 @@ struct pml_variable *pml_var_alloc(char *name, int width,
 		                   struct pml_value *init)
 {
 	struct pml_variable *v = (struct pml_variable *)
-		pmlt_alloc(PMLTT_VAR);
+		pmln_alloc(PMLTT_VAR);
 	v->name = name;
 	v->init = init;
 	return v;
@@ -548,6 +547,307 @@ int pml_locator_extend_name(struct pml_locator *l, char *name, size_t elen)
 }
 
 
+static void indent(uint depth)
+{
+	static const char *idstr = "   ";
+	while (depth > 0) {
+		fputs(idstr, stdout);
+		depth--;
+	}
+}
+
+
+static void print_bytes(struct pml_bytestr *bs, uint depth)
+{
+	size_t i = 0;
+	for (i = 0; i < bs->bytes.len; ++i) {
+		if (i % 8 == 0)
+			indent(depth);
+		printf("%02x", bs->bytes.data[i]);
+		if ((i == bs->bytes.len - 1) || (i % 8 == 7))
+			fputc('\n', stdout);
+	}
+}
+
+
+/* Basically a pre-order printing traversal of the tree */
+void pmlt_print(union pml_node *np, uint depth)
+{
+	if (np == NULL) {
+		indent(depth);
+		printf("(null)\n");
+		return;
+	}
+
+	switch (np->base.type) {
+
+	case PMLTT_LIST: {
+		struct pml_list *p = &np->list;
+		struct list *e;
+		indent(depth);
+		printf("List:\n");
+		indent(depth);
+		printf("-----\n");
+		l_for_each(e, &p->list) {
+			union pml_node *en = 
+				(union pml_node *)
+					container(e, struct pml_node_base, ln);
+			pmlt_print(en, depth);
+			indent(depth);
+			printf("-----\n");
+		}
+	} break;
+
+	case PMLTT_SCALAR: {
+		struct pml_value *p = &np->value;
+		indent(depth);
+		printf("Scalar-- width %d: %lu (0x%lx)\n", 
+		       p->u.scalar.width, p->u.scalar.val, p->u.scalar.val);
+	} break;
+
+	case PMLTT_BYTESTR: {
+		struct pml_value *p = &np->value;
+		indent(depth);
+		printf("Byte string -- \n");
+		print_bytes(&p->u.bytestr, depth);
+	} break;
+
+	case PMLTT_MASKVAL: {
+		struct pml_value *p = &np->value;
+		indent(depth);
+		printf("Masked Pattern\n");
+		indent(depth);
+		printf("Value --\n");
+		print_bytes(&p->u.maskval.val, depth);
+		printf("Mask --\n");
+		print_bytes(&p->u.maskval.mask, depth);
+	} break;
+
+	case PMLTT_VARREF:
+	case PMLTT_VARADDR: {
+		struct pml_value *p = &np->value;
+		struct pml_locator *l = p->u.varname;
+		indent(depth);
+		printf("%s: %s (%s)\n",
+		       (np->base.type == PMLTT_VARREF) ? 
+		       		"Variable Reference" : "Variable address",
+		       (l != NULL) ? "BAD REFERENCE" : l->name,
+		       (p->varref != NULL) ? "resolved" : "unresolved");
+		indent(depth);
+		printf("Variable -- \n");
+		pmlt_print((union pml_node *)l, depth+1);
+	} break;
+
+	case PMLTT_VAR: {
+		struct pml_variable *p = &np->variable;
+		indent(depth);
+		printf("Variable: %s\n", p->name);
+		if (p->init != NULL) {
+			indent(depth+1);
+			printf("Initialization value -- \n");
+			pmlt_print((union pml_node *)p->init, depth+1);
+		}
+	} break;
+
+	case PMLTT_UNOP: {
+		struct pml_op *p = &np->op;
+		indent(depth);
+		printf("Unary Operation: %d\n", p->op);
+
+		indent(depth);
+		printf("Operand -- \n");
+		pmlt_print((union pml_node *)p->arg1, depth+1);
+	} break;
+
+	case PMLTT_BINOP: {
+		struct pml_op *p = &np->op;
+		indent(depth);
+		printf("Binary Operation: %d\n", p->op);
+
+		indent(depth);
+		printf("Left Operand -- \n");
+		pmlt_print((union pml_node *)p->arg1, depth+1);
+
+		indent(depth);
+		printf("Right Operand -- \n");
+		pmlt_print((union pml_node *)p->arg2, depth+1);
+	} break;
+
+	case PMLTT_FUNCALL: {
+		struct pml_funcall *p = &np->funcall;
+		struct pml_function *f = p->func;
+		indent(depth);
+		printf("Function call to: %s\n", 
+		       (f == NULL) ? "UNDEFINED!" : f->name);
+		indent(depth);
+		printf("Arguments -- \n");
+		pmlt_print((union pml_node *)p->args, depth+1);
+	} break;
+
+	case PMLTT_IF: {
+		struct pml_if *p = &np->ifstmt;
+		indent(depth);
+		printf("If Statement\n");
+
+		indent(depth);
+		printf("Test -- \n");
+		pmlt_print((union pml_node *)p->test, depth+1);
+
+		indent(depth);
+		printf("True body -- \n");
+		pmlt_print((union pml_node *)p->tbody, depth+1);
+
+		if (p->fbody != NULL) {
+			indent(depth);
+			printf("False body -- \n");
+			pmlt_print((union pml_node *)p->fbody, depth+1);
+		}
+	} break;
+
+	case PMLTT_WHILE: {
+		struct pml_while *p = &np->whilestmt;
+		indent(depth);
+		printf("While Statement\n");
+
+		indent(depth);
+		printf("Loop Test -- \n");
+		pmlt_print((union pml_node *)p->test, depth+1);
+
+		indent(depth);
+		printf("Loop Body -- \n");
+		pmlt_print((union pml_node *)p->body, depth+1);
+	} break;
+
+	case PMLTT_LOCATOR: {
+		struct pml_locator *p = &np->locator;
+		indent(depth);
+		printf("Locator: %s\n", p->name);
+
+		if (p->pkt != NULL) {
+			indent(depth);
+			printf("Packet -- \n");
+			pmlt_print((union pml_node *)p->pkt, depth+1);
+		}
+
+		if (p->off != NULL) {
+			indent(depth);
+			printf("Offset -- \n");
+			pmlt_print((union pml_node *)p->off, depth+1);
+		}
+
+		if (p->len != NULL) {
+			indent(depth);
+			printf("Length -- \n");
+			pmlt_print((union pml_node *)p->len, depth+1);
+		}
+	} break;
+
+	case PMLTT_SETACT: {
+		struct pml_set_action *p = &np->setact;
+		indent(depth);
+		printf("Assignment to %s (%s)\n", p->varname->name,
+		       (p->varref != NULL) ? "resolved" : "unresolved");
+
+		if (p->expr != NULL) {
+			indent(depth);
+			printf("Value -- \n");
+			pmlt_print((union pml_node *)p->expr, depth+1);
+		}
+	} break;
+
+	case PMLTT_RETURN: {
+		struct pml_return *p = &np->retact;
+		indent(depth);
+		printf("Function return wth value --\n");
+		pmlt_print((union pml_node *)p->expr, depth+1);
+
+        } break;
+
+	case PMLTT_PRINT: {
+		struct pml_print *p = &np->print;
+		indent(depth);
+		printf("Print Statement: \"%s\"\n", p->fmt);
+		if (p->args != NULL) {
+			indent(depth);
+			printf("Arguments -- \n");
+			pmlt_print((union pml_node *)p->args, depth+1);
+		}
+	} break;
+
+	case PMLTT_FUNCTION:
+	case PMLTT_PREDICATE: {
+		struct pml_function *p = &np->function;
+		indent(depth);
+		printf("%s: %s with %d arguments\n", 
+		       (np->base.type == PMLTT_FUNCTION) ? 
+		       		"Function" : 
+				"Predicate",
+			p->name, p->arity);
+
+		indent(depth);
+		printf("Parameters -- \n");
+		pmlt_print((union pml_node *)p->prmlist, depth+1);
+
+		indent(depth);
+		printf("Variables -- \n");
+		pmlt_print((union pml_node *)p->varlist, depth+1);
+
+		pmlt_print(p->body, depth+1);
+	} break;
+
+	case PMLTT_RULE: {
+		struct pml_rule *p = &np->rule;
+		indent(depth);
+		printf("Rule\n");
+
+		indent(depth);
+		printf("Pattern -- \n");
+		pmlt_print((union pml_node *)p->pattern, depth+1);
+
+		indent(depth);
+		printf("Action -- \n");
+		pmlt_print((union pml_node *)p->stmts, depth+1);
+	} break;
+
+	default:
+		printf("Unknown type: %d\n", np->base.type);
+		break;
+	}
+}
+
+
+void pml_ast_print(struct pml_ast *ast)
+{
+	struct hnode *hn;
+	struct hash_iter hi;
+	struct list *ln;
+
+	printf("Printing PML Abstract Syntax Tree\n");
+	printf("-----------\n");
+	printf("Variables\n");
+	ht_for_each(hn, hi, ast->vartab) {
+		struct pml_variable *p = container(hn, struct pml_variable, hn);
+		pmlt_print((union pml_node *)p, 1);
+
+	}
+	printf("-----------\n");
+	printf("Functions\n");
+	ht_for_each(hn, hi, ast->functab) {
+		struct pml_function *p = container(hn, struct pml_function, hn);
+		pmlt_print((union pml_node *)p, 1);
+	}
+	printf("-----------\n");
+	printf("Rules\n");
+	l_for_each(ln, &ast->rules) {
+		union pml_node *en = 
+			(union pml_node *)
+				container(ln, struct pml_node_base, ln);
+		pmlt_print((union pml_node *)en, 1);
+	}
+	printf("-----------\n");
+}
+
+
 void pml_lexv_init(struct pml_lex_val *v)
 {
 	memset(v, 0, sizeof(*v));
@@ -556,15 +856,11 @@ void pml_lexv_init(struct pml_lex_val *v)
 
 void pml_lexv_fini(int toknum, struct pml_lex_val *v)
 {
-	fprintf(stderr, "Freeing %d -- ", toknum);
 	if (v->type == PMLLV_STRING) {
-		fprintf(stderr, "data = %s", v->u.raw.data);
 		free(v->u.raw.data);
 		v->u.raw.data = 0;
-	} else {
-		fprintf(stderr, "no-associated data");
 	}
-	fprintf(stderr, "\n");
+	memset(v, 0, sizeof(*v));
 }
 
 

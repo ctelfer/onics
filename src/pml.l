@@ -114,6 +114,7 @@ dnum		0|[1-9][0-9]*
 "?-"		{ return PMLTOK_PPBEGIN; }
 "-?"		{ return PMLTOK_PPEND; }
 ","		{ return PMLTOK_COMMA; }
+";"		{ return PMLTOK_SEMICOLON; }
 
 [a-zA-Z_][a-zA-Z0-9_]*	{ 
 	return copy_string(yyscanner, yytext, PMLTOK_ID);
@@ -129,7 +130,7 @@ dnum		0|[1-9][0-9]*
 void parse_eth_addr(yyscan_t scanner, const char *text)
 {
 	struct pml_lex_val v;
-	unsigned n[6];
+	uint n[6];
 	int i;
 	v.type  = PMLLV_SCALAR;
 	sscanf(text, "%x:%x:%x:%x:%x:%x", &n[0], &n[1], &n[2], &n[3], &n[4], 
@@ -152,7 +153,7 @@ void parse_num(yyscan_t scanner, const char *text)
 void parse_ipv4_addr(yyscan_t scanner, const char *text)
 {
 	struct pml_lex_val v;
-	unsigned n[4];
+	uint n[4];
 	int i;
 	v.type  = PMLLV_SCALAR;
 	sscanf(text, "%u.%u.%u.%u", &n[0], &n[1], &n[2], &n[3]);

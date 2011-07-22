@@ -12,6 +12,7 @@
 
 struct pml_ast {
 	int			error;
+	int			done;
 	unsigned long		line;
 	struct htab		vartab;
 	struct htab		functab;
@@ -33,8 +34,6 @@ enum {
 	PMLTT_FUNCALL,
 	PMLTT_IF,
 	PMLTT_WHILE,
-	PMLTT_NAME,
-	PMLTT_OFFSETOF,
 	PMLTT_LOCATOR,
 	PMLTT_SETACT,
 	PMLTT_RETURN,
@@ -254,12 +253,14 @@ union pml_node {
 };
 
 
-union pml_node *pmlt_alloc(int pmltt);
-void pmlt_free(union pml_node *node);
+union pml_node *pmln_alloc(int pmltt);
+void pmln_free(union pml_node *node);
+void pmln_print(union pml_node *node, uint depth);
 
 void pml_ast_init(struct pml_ast *ast);
 void pml_ast_clear(struct pml_ast *ast);
 void pml_ast_err(struct pml_ast *ast, const char *fmt, ...);
+void pml_ast_print(struct pml_ast *ast);
 struct pml_function *pml_ast_lookup_func(struct pml_ast *ast, char *name);
 int pml_ast_add_func(struct pml_ast *ast, struct pml_function *func);
 struct pml_variable *pml_ast_lookup_var(struct pml_ast *ast, char *name);
