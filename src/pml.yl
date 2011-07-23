@@ -325,7 +325,7 @@ decl ::= gvar(V). {
 	}
 }
 decl ::= rule(A). {
-	l_ins(ast->rules.prev, &A->ln);
+	l_enq(&ast->rules, &A->ln);
 }
 
 preddecl(F) ::= PRED ID(N) LPAREN idlist(P) RPAREN LPAREN expr(E) RPAREN. {
@@ -443,7 +443,11 @@ rule(R) ::= pktpat(P) stmtlist(SL). {
 	R->pattern = P;
 	R->stmts = SL;
 }
-
+rule(R) ::= stmtlist(SL). {
+	R = (struct pml_rule *)pmln_alloc(PMLTT_RULE);
+	R->pattern = NULL;
+	R->stmts = SL;
+}
 
 /* Statements */
 stmtlist(SL) ::= LBRACE stmts(SS) RBRACE. { SL = SS; }

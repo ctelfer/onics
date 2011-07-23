@@ -106,8 +106,7 @@ static void symtab_destroy(struct htab *ht)
 
 static void freerule(void *rulep, void *ctx)
 {
-	struct pml_rule *r = rulep;
-	l_rem(&r->ln);
+	struct pml_rule *r = container(rulep, struct pml_rule, ln);
 	pmln_free((union pml_node *)r);
 }
 
@@ -445,6 +444,7 @@ void pmln_free(union pml_node *node)
 
 	case PMLTT_RULE: {
 		struct pml_rule *p = &node->rule;
+		l_rem(&p->ln);
 		pmln_free((union pml_node *)p->pattern);
 		pmln_free((union pml_node *)p->stmts);
 	} break;
@@ -801,8 +801,12 @@ void pmlt_print(union pml_node *np, uint depth)
 		printf("Rule\n");
 
 		indent(depth);
-		printf("Pattern -- \n");
-		pmlt_print((union pml_node *)p->pattern, depth+1);
+		if (p->pattern == NULL) {
+			printf("Empty pattern\n");
+		} else {
+			printf("Pattern -- \n");
+			pmlt_print((union pml_node *)p->pattern, depth+1);
+		}
 
 		indent(depth);
 		printf("Action -- \n");
