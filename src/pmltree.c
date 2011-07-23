@@ -825,6 +825,7 @@ void pml_ast_print(struct pml_ast *ast)
 	printf("Printing PML Abstract Syntax Tree\n");
 	printf("-----------\n");
 	printf("Variables\n");
+	printf("-----------\n");
 	ht_for_each(hn, hi, ast->vartab) {
 		struct pml_variable *p = container(hn, struct pml_variable, hn);
 		pmlt_print((union pml_node *)p, 1);
@@ -832,12 +833,14 @@ void pml_ast_print(struct pml_ast *ast)
 	}
 	printf("-----------\n");
 	printf("Functions\n");
+	printf("-----------\n");
 	ht_for_each(hn, hi, ast->functab) {
 		struct pml_function *p = container(hn, struct pml_function, hn);
 		pmlt_print((union pml_node *)p, 1);
 	}
 	printf("-----------\n");
 	printf("Rules\n");
+	printf("-----------\n");
 	l_for_each(ln, &ast->rules) {
 		union pml_node *en = 
 			(union pml_node *)

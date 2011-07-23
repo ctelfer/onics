@@ -170,6 +170,18 @@ var Count;
 }
 %extra_argument { struct pml_ast *ast }
 
+%syntax_error {
+	ast->error = 1;
+}
+
+%parse_failure {
+	ast->error = 1;
+}
+
+%parse_accept {
+	ast->done = 1;
+}
+
 /* ----- Mappings between non-terminals and C types ----- */
 
 %type decl { union pml_node * }
@@ -282,16 +294,10 @@ var Count;
 
 /* ----- Grammar ----- */
 
-prog ::= decllist. {
-	ast->done = 1;
-}
+prog ::= decllist.
 
 /* Declarations */
 decllist ::= decllist decl. /* nothing to do: resolved below. */
-
-decllist ::= decllist rule(A). {
-	l_ins(ast->rules.prev, &A->ln);
-}
 
 decllist ::= . /* nothing to do */
 
@@ -317,6 +323,9 @@ decl ::= gvar(V). {
 		ast->error = 1;
 		pmln_free((union pml_node *)V);
 	}
+}
+decl ::= rule(A). {
+	l_ins(ast->rules.prev, &A->ln);
 }
 
 preddecl(F) ::= PRED ID(N) LPAREN idlist(P) RPAREN LPAREN expr(E) RPAREN. {
@@ -443,7 +452,7 @@ stmts(SS) ::= . {
 	struct pml_list *l = (struct pml_list *)pmln_alloc(PMLTT_LIST);
 	SS = l;
 }
-stmts(SSO) ::= stmts(SSI) stmt(S) SEMICOLON. {
+stmts(SSO) ::= stmt(S) SEMICOLON stmts(SSI) . {
 	l_ins(&SSI->list, &S->base.ln);
 	SSO = SSI;
 }

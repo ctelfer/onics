@@ -1,5 +1,7 @@
 #include "pmltree.h"
 
+extern void PMLTrace(FILE *trace, char *pfx);
+
 int main(int argc, char *argv[])
 {
 	int tok;
@@ -17,6 +19,8 @@ int main(int argc, char *argv[])
 	if (!(parser = pml_alloc()))
 		errsys("pml_alloc:");
 	pml_ast_init(&tree);
+
+	PMLTrace(stderr, "  ---  ");
 
 	do {
 		tok = pmllex(scanner);

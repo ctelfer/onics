@@ -75,6 +75,7 @@ dnum		0|[1-9][0-9]*
 "else"		{ return PMLTOK_ELSE; }
 "return"	{ return PMLTOK_RETURN; }
 "var"		{ return PMLTOK_VAR; }
+"print"		{ return PMLTOK_PRINT; }
 
 "=="		{ return PMLTOK_EQ; }
 "!="		{ return PMLTOK_NEQ; }
