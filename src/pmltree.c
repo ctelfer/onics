@@ -202,10 +202,8 @@ union pml_node *pmln_alloc(int pmltt)
 
 	case PMLTT_SCALAR:
 	case PMLTT_BYTESTR:
-	case PMLTT_MASKVAL:
-	case PMLTT_VARREF:
-	case PMLTT_VARADDR: {
-		struct pml_value *p = &np->value;
+	case PMLTT_MASKVAL: {
+		struct pml_literal *p = &np->literal;
 		p->type = pmltt;
 		l_init(&p->ln);
 		if (pmltt == PMLTT_SCALAR) {
@@ -216,10 +214,7 @@ union pml_node *pmln_alloc(int pmltt)
 		} else if (pmltt == PMLTT_MASKVAL) {
 			pml_bytestr_set_static(&p->u.maskval.val, NULL, 0);
 			pml_bytestr_set_static(&p->u.maskval.mask, NULL, 0);
-		} else {
-			p->u.varname = NULL;
 		}
-		p->varref = NULL;
 	} break;
 
 	case PMLTT_VAR: {
@@ -268,7 +263,8 @@ union pml_node *pmln_alloc(int pmltt)
 		p->body = NULL;
 	} break;
 
-	case PMLTT_LOCATOR: {
+	case PMLTT_LOCATOR:
+	case PMLTT_LOCADDR: {
 		struct pml_locator *p = &np->locator;
 		p->type = pmltt;
 		l_init(&p->ln);
@@ -278,13 +274,12 @@ union pml_node *pmln_alloc(int pmltt)
 		p->len = NULL;
 	} break;
 
-	case PMLTT_SETACT: {
-		struct pml_set_action *p = &np->setact;
+	case PMLTT_ASSIGN: {
+		struct pml_assign *p = &np->assign;
 		p->type = pmltt;
 		l_init(&p->ln);
 		p->conv = 0;
-		p->varname = NULL;
-		p->varref = NULL;
+		p->loc = NULL;
 		p->expr = NULL;
 	} break;
 
@@ -354,15 +349,15 @@ void pmln_free(union pml_node *node)
 	case PMLTT_SCALAR:
 		break;
 
-	case PMLTT_VARREF: 
-	case PMLTT_VARADDR: {
-		struct pml_value *p = &node->value;
-		pmln_free((union pml_node *)p->u.varname);
+	case PMLTT_BYTESTR: {
+		struct pml_literal *p = &node->literal;
+		pml_bytestr_free(&p->u.bytestr);
 	} break;
 
-	case PMLTT_BYTESTR: {
-		struct pml_value *p = &node->value;
-		pml_bytestr_free(&p->u.bytestr);
+	case PMLTT_MASKVAL: {
+		struct pml_literal *p = &node->literal;
+		pml_bytestr_free(&p->u.maskval.val);
+		pml_bytestr_free(&p->u.maskval.mask);
 	} break;
 
 	case PMLTT_VAR: {
@@ -370,12 +365,6 @@ void pmln_free(union pml_node *node)
 		free(p->name);
 		pmln_free((union pml_node *)p->init);
 	}
-
-	case PMLTT_MASKVAL: {
-		struct pml_value *p = &node->value;
-		pml_bytestr_free(&p->u.maskval.val);
-		pml_bytestr_free(&p->u.maskval.mask);
-	} break;
 
 	case PMLTT_BINOP: {
 		struct pml_op *p = &node->op;
@@ -406,7 +395,8 @@ void pmln_free(union pml_node *node)
 		pmln_free((union pml_node *)p->body);
 	} break;
 
-	case PMLTT_LOCATOR: {
+	case PMLTT_LOCATOR:
+	case PMLTT_LOCADDR: {
 		struct pml_locator *p = &node->locator;
 		free(p->name);
 		pmln_free((union pml_node *)p->pkt);
@@ -414,9 +404,9 @@ void pmln_free(union pml_node *node)
 		pmln_free((union pml_node *)p->len);
 	} break;
 
-	case PMLTT_SETACT: {
-		struct pml_set_action *p = &node->setact;
-		pmln_free((union pml_node *)p->varname);
+	case PMLTT_ASSIGN: {
+		struct pml_assign *p = &node->assign;
+		pmln_free((union pml_node *)p->loc);
 		pmln_free((union pml_node *)p->expr);
 	} break;
 
@@ -478,11 +468,12 @@ union pml_expr_u *pml_unop_alloc(int op, union pml_expr_u *ex)
 
 
 struct pml_variable *pml_var_alloc(char *name, int width, 
-		                   struct pml_value *init)
+		                   union pml_expr_u *init)
 {
 	struct pml_variable *v = (struct pml_variable *)
 		pmln_alloc(PMLTT_VAR);
 	v->name = name;
+	v->width = width;
 	v->init = init;
 	return v;
 }
@@ -599,21 +590,21 @@ void pmlt_print(union pml_node *np, uint depth)
 	} break;
 
 	case PMLTT_SCALAR: {
-		struct pml_value *p = &np->value;
+		struct pml_literal *p = &np->literal;
 		indent(depth);
 		printf("Scalar-- width %d: %lu (0x%lx)\n", 
 		       p->u.scalar.width, p->u.scalar.val, p->u.scalar.val);
 	} break;
 
 	case PMLTT_BYTESTR: {
-		struct pml_value *p = &np->value;
+		struct pml_literal *p = &np->literal;
 		indent(depth);
 		printf("Byte string -- \n");
 		print_bytes(&p->u.bytestr, depth);
 	} break;
 
 	case PMLTT_MASKVAL: {
-		struct pml_value *p = &np->value;
+		struct pml_literal *p = &np->literal;
 		indent(depth);
 		printf("Masked Pattern\n");
 		indent(depth);
@@ -621,21 +612,6 @@ void pmlt_print(union pml_node *np, uint depth)
 		print_bytes(&p->u.maskval.val, depth);
 		printf("Mask --\n");
 		print_bytes(&p->u.maskval.mask, depth);
-	} break;
-
-	case PMLTT_VARREF:
-	case PMLTT_VARADDR: {
-		struct pml_value *p = &np->value;
-		struct pml_locator *l = p->u.varname;
-		indent(depth);
-		printf("%s: %s (%s)\n",
-		       (np->base.type == PMLTT_VARREF) ? 
-		       		"Variable Reference" : "Variable address",
-		       (l != NULL) ? "BAD REFERENCE" : l->name,
-		       (p->varref != NULL) ? "resolved" : "unresolved");
-		indent(depth);
-		printf("Variable -- \n");
-		pmlt_print((union pml_node *)l, depth+1);
 	} break;
 
 	case PMLTT_VAR: {
@@ -718,10 +694,15 @@ void pmlt_print(union pml_node *np, uint depth)
 		pmlt_print((union pml_node *)p->body, depth+1);
 	} break;
 
-	case PMLTT_LOCATOR: {
+	case PMLTT_LOCATOR:
+	case PMLTT_LOCADDR: {
 		struct pml_locator *p = &np->locator;
 		indent(depth);
-		printf("Locator: %s\n", p->name);
+		printf("%s: %s\n", 
+		       (p->type == PMLTT_LOCATOR) ? 
+		           "Locator"              : 
+			   "Location Address",
+		       p->name);
 
 		if (p->pkt != NULL) {
 			indent(depth);
@@ -742,11 +723,10 @@ void pmlt_print(union pml_node *np, uint depth)
 		}
 	} break;
 
-	case PMLTT_SETACT: {
-		struct pml_set_action *p = &np->setact;
+	case PMLTT_ASSIGN: {
+		struct pml_assign *p = &np->assign;
 		indent(depth);
-		printf("Assignment to %s (%s)\n", p->varname->name,
-		       (p->varref != NULL) ? "resolved" : "unresolved");
+		printf("Assignment to %s\n", p->loc->name);
 
 		if (p->expr != NULL) {
 			indent(depth);

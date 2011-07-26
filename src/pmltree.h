@@ -26,8 +26,6 @@ enum {
 	PMLTT_SCALAR,
 	PMLTT_BYTESTR,
 	PMLTT_MASKVAL,
-	PMLTT_VARREF,
-	PMLTT_VARADDR,
 	PMLTT_VAR,
 	PMLTT_BINOP,
 	PMLTT_UNOP,
@@ -35,7 +33,8 @@ enum {
 	PMLTT_IF,
 	PMLTT_WHILE,
 	PMLTT_LOCATOR,
-	PMLTT_SETACT,
+	PMLTT_LOCADDR,
+	PMLTT_ASSIGN,
 	PMLTT_RETURN,
 	PMLTT_PRINT,
 	PMLTT_FUNCTION,
@@ -114,16 +113,15 @@ struct pml_scalar {
 };
 
 
-struct pml_value {
+struct pml_literal {
 	int			type;
 	struct list		ln;
+	int			valtype;
 	union {
 		struct pml_scalar	scalar;
 		struct pml_bytestr	bytestr;
 		struct pml_maskval	maskval;
-		struct pml_locator *	varname;
 	} u;
-	struct pml_variable *	varref;
 };
 
 
@@ -161,12 +159,11 @@ struct pml_while {
 };
 
 
-struct pml_set_action {
+struct pml_assign {
 	int			type;
 	struct list		ln;
 	int			conv;	/* byte order conversion */
-	struct pml_locator *	varname;
-	struct pml_variable *	varref;
+	struct pml_locator *	loc;
 	union pml_expr_u *	expr;
 };
 
@@ -193,6 +190,10 @@ struct pml_locator {
 	union pml_expr_u *	pkt;
 	union pml_expr_u *	off;
 	union pml_expr_u *	len;
+	union {
+		struct pml_variable *	varref;
+		struct ns_elem *	nsref;
+	} u;
 };
 
 
@@ -202,7 +203,7 @@ struct pml_variable {
 	struct hnode		hn;
 	char *			name;
 	int			width;
-	struct pml_value *	init;
+	union pml_expr_u *	init;
 };
 
 
@@ -229,7 +230,8 @@ struct pml_rule {
 
 union pml_expr_u {
 	struct pml_node_base	base;
-	struct pml_value	value;
+	struct pml_literal	value;
+	struct pml_locator	loc;
 	struct pml_op		op;
 	struct pml_funcall	funcall;
 };
@@ -237,13 +239,13 @@ union pml_expr_u {
 
 union pml_node {
 	struct pml_node_base	base;
-	struct pml_value	value;
+	struct pml_literal	literal;
 	struct pml_variable	variable;
 	struct pml_op		op;
 	struct pml_funcall	funcall;
 	struct pml_if		ifstmt;
 	struct pml_while	whilestmt;
-	struct pml_set_action	setact;
+	struct pml_assign	assign;
 	struct pml_return	retact;
 	struct pml_print	print;
 	struct pml_list		list;
@@ -273,7 +275,7 @@ union pml_expr_u *pml_binop_alloc(int op, union pml_expr_u *left,
 		                  union pml_expr_u *right);
 union pml_expr_u *pml_unop_alloc(int op, union pml_expr_u *ex);
 struct pml_variable *pml_var_alloc(char *name, int width,
-				   struct pml_value *init);
+				   union pml_expr_u *init);
 
 void pml_bytestr_set_static(struct pml_bytestr *b, void *data, size_t len);
 void pml_bytestr_set_dynamic(struct pml_bytestr *b, void *data, size_t len);

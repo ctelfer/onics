@@ -220,14 +220,14 @@ var Count;
 %type stmts { struct pml_list * }
 %destructor stmts { pmln_free((union pml_node *)$$); }
 
-%type var { struct pml_locator * }
-%destructor var { pmln_free((union pml_node *)$$); }
+%type locator { struct pml_locator * }
+%destructor locator { pmln_free((union pml_node *)$$); }
 
 %type exprlist { struct pml_list * }
 %destructor exprlist { pmln_free((union pml_node *)$$); }
 
-%type locator { struct pml_locator * }
-%destructor locator { pmln_free((union pml_node *)$$); }
+%type locname { struct pml_locator * }
+%destructor locname { pmln_free((union pml_node *)$$); }
 
 %type idlist { struct pml_list * }
 %destructor idlist { pmln_free((union pml_node *)$$); }
@@ -278,13 +278,13 @@ var Count;
 %type valexpr { union pml_expr_u * } 
 %destructor valexpr { pmln_free((union pml_node *)$$); }
 
-%type value { struct pml_value * } 
+%type value { union pml_expr_u * } 
 %destructor value { pmln_free((union pml_node *)$$); }
 
 %type funcall { struct pml_funcall * } 
 %destructor funcall { pmln_free((union pml_node *)$$); }
 
-%type numval { struct pml_value * }
+%type numval { struct pml_literal * }
 %destructor numval { pmln_free((union pml_node *)$$); }
 
 %token_type { struct pml_lex_val }
@@ -410,7 +410,7 @@ gvar(G) ::= VAR ID(I) LBRACKET NUM(N) RBRACKET. {
 	G = pml_var_alloc((char *)I.u.raw.data, N.u.num, NULL);
 }
 gvar(G) ::= lvar(L) ASSIGN numval(V). {
-	L->init = V;
+	L->init = (union pml_expr_u *)V;
 	G = L;
 }
 gvar(G) ::= VAR ID(I) LBRACKET NUM(N) RBRACKET ASSIGN value(VAL). {
@@ -463,10 +463,9 @@ stmts(SSO) ::= stmt(S) SEMICOLON stmts(SSI) . {
 
 
 /* Specific types of statements */
-stmt(S) ::= var(V) ASSIGN expr(E). {
-	struct pml_set_action *a = 
-		(struct pml_set_action *)pmln_alloc(PMLTT_SETACT);
-	a->varname = V;
+stmt(S) ::= locator(L) ASSIGN expr(E). {
+	struct pml_assign *a = (struct pml_assign *)pmln_alloc(PMLTT_ASSIGN);
+	a->loc = L;
 	a->expr = E;
 	S = (union pml_node *)a;
 }
@@ -530,13 +529,13 @@ cmpexpr(E) ::= borexpr(LHS) cmpop(OP) borexpr(RHS). {
 	E = pml_binop_alloc(OP, LHS, RHS); 
 }
 cmpexpr(E) ::= borexpr(LHS) matchop(OP) BYTESTR(T1) DIV BYTESTR(T2). {
-	struct pml_value *v = (struct pml_value *)pmln_alloc(PMLTT_MASKVAL);
+	struct pml_literal *v = (struct pml_literal *)pmln_alloc(PMLTT_MASKVAL);
 	pml_bytestr_set_dynamic(&v->u.maskval.val, T1.u.raw.data, T1.u.raw.len);
 	pml_bytestr_set_dynamic(&v->u.maskval.mask,T2.u.raw.data, T2.u.raw.len);
 	E = pml_binop_alloc(OP, LHS, (union pml_expr_u *)v); 
 }
 cmpexpr(E) ::= borexpr(LHS) matchop(OP) IPV4ADDR(A) DIV NUM(L). {
-	struct pml_value *v = (struct pml_value *)pmln_alloc(PMLTT_MASKVAL);
+	struct pml_literal *v = (struct pml_literal *)pmln_alloc(PMLTT_MASKVAL);
 	uchar mask[4] = { 0 };
 	int i, rem;
 
@@ -559,13 +558,13 @@ cmpexpr(E) ::= borexpr(LHS) matchop(OP) IPV4ADDR(A) DIV NUM(L). {
 	E = pml_binop_alloc(OP, LHS, (union pml_expr_u *)v); 
 }
 cmpexpr(E) ::= borexpr(LHS) matchop(OP) IPV4ADDR(A1) DIV IPV4ADDR(A2). {
-	struct pml_value *v = (struct pml_value *)pmln_alloc(PMLTT_MASKVAL);
+	struct pml_literal *v = (struct pml_literal *)pmln_alloc(PMLTT_MASKVAL);
 	pml_bytestr_set_static(&v->u.maskval.val, A1.u.v4addr, 4);
 	pml_bytestr_set_static(&v->u.maskval.mask, A2.u.v4addr, 4);
 	E = pml_binop_alloc(OP, LHS, (union pml_expr_u *)v); 
 }
 cmpexpr(E) ::= borexpr(LHS) matchop(OP) IPV6ADDR(A) DIV NUM(L). {
-	struct pml_value *v = (struct pml_value *)pmln_alloc(PMLTT_MASKVAL);
+	struct pml_literal *v = (struct pml_literal *)pmln_alloc(PMLTT_MASKVAL);
 	uchar mask[16] = { 0 };
 	int i, rem;
 
@@ -588,19 +587,19 @@ cmpexpr(E) ::= borexpr(LHS) matchop(OP) IPV6ADDR(A) DIV NUM(L). {
 	E = pml_binop_alloc(OP, LHS, (union pml_expr_u *)v); 
 }
 cmpexpr(E) ::= borexpr(LHS) matchop(OP) IPV6ADDR(A1) DIV IPV6ADDR(A2). {
-	struct pml_value *v = (struct pml_value *)pmln_alloc(PMLTT_MASKVAL);
+	struct pml_literal *v = (struct pml_literal *)pmln_alloc(PMLTT_MASKVAL);
 	pml_bytestr_set_static(&v->u.maskval.val, A1.u.v6addr, 16);
 	pml_bytestr_set_static(&v->u.maskval.mask, A2.u.v6addr, 16);
 	E = pml_binop_alloc(OP, LHS, (union pml_expr_u *)v); 
 }
 cmpexpr(E) ::= borexpr(LHS) matchop(OP) ETHADDR(E1) DIV ETHADDR(E2). {
-	struct pml_value *v = (struct pml_value *)pmln_alloc(PMLTT_MASKVAL);
+	struct pml_literal *v = (struct pml_literal *)pmln_alloc(PMLTT_MASKVAL);
 	pml_bytestr_set_static(&v->u.maskval.val, E1.u.ethaddr, 6);
 	pml_bytestr_set_static(&v->u.maskval.mask, E2.u.ethaddr, 6);
 	E = pml_binop_alloc(OP, LHS, (union pml_expr_u *)v); 
 }
 cmpexpr(E) ::= borexpr(LHS) matchop(OP) REGEX(R). {
-	struct pml_value *v = (struct pml_value *)pmln_alloc(PMLTT_BYTESTR);
+	struct pml_literal *v = (struct pml_literal *)pmln_alloc(PMLTT_BYTESTR);
 	int op = (OP == PMLOP_MATCH) ? PMLOP_REXMATCH : PMLOP_NOTREXMATCH;
 	pml_bytestr_set_dynamic(&v->u.bytestr, R.u.raw.data, R.u.raw.len);
 	E = pml_binop_alloc(op, LHS, (union pml_expr_u *)v); 
@@ -709,51 +708,55 @@ exprlist(EL) ::= expr(E). {
 	EL = l;
 }
 
-value(V) ::= var(VAR). { 
-	V = (struct pml_value *)pmln_alloc(PMLTT_VARREF);
-	V->u.varname = VAR;
+value(V) ::= locator(L). { 
+	V = (union pml_expr_u *)L;
 }
-value(V) ::= AMP locator(VAR). { 
-	V = (struct pml_value *)pmln_alloc(PMLTT_VARADDR);
-	V->u.varname = VAR;
+value(V) ::= AMP locname(L). { 
+	L->type = PMLTT_LOCADDR;
+	V = (union pml_expr_u *)L;
 }
 value(V) ::= BYTESTR(I). {
-	V = (struct pml_value *)pmln_alloc(PMLTT_BYTESTR);
-	pml_bytestr_set_dynamic(&V->u.bytestr, I.u.raw.data, I.u.raw.len);
+	struct pml_literal *v = (struct pml_literal *)pmln_alloc(PMLTT_BYTESTR);
+	pml_bytestr_set_dynamic(&v->u.bytestr, I.u.raw.data, I.u.raw.len);
+	V = (union pml_expr_u *)v;
 }
 value(V) ::= IPADDR(I). {
-	V = (struct pml_value *)pmln_alloc(PMLTT_BYTESTR);
-	pml_bytestr_set_static(&V->u.bytestr, I.u.v4addr, 4);
+	struct pml_literal *v = (struct pml_literal *)pmln_alloc(PMLTT_BYTESTR);
+	pml_bytestr_set_static(&v->u.bytestr, I.u.v4addr, 4);
+	V = (union pml_expr_u *)v;
 }
 value(V) ::= IPV6ADDR(I). {
-	V = (struct pml_value *)pmln_alloc(PMLTT_BYTESTR);
-	pml_bytestr_set_static(&V->u.bytestr, I.u.v6addr, 16);
+	struct pml_literal *v = (struct pml_literal *)pmln_alloc(PMLTT_BYTESTR);
+	pml_bytestr_set_static(&v->u.bytestr, I.u.v6addr, 16);
+	V = (union pml_expr_u *)v;
 }
 value(V) ::= ETHADDR(I). {
-	V = (struct pml_value *)pmln_alloc(PMLTT_BYTESTR);
-	pml_bytestr_set_static(&V->u.bytestr, I.u.ethaddr, 6);
+	struct pml_literal *v = (struct pml_literal *)pmln_alloc(PMLTT_BYTESTR);
+	pml_bytestr_set_static(&v->u.bytestr, I.u.ethaddr, 6);
+	V = (union pml_expr_u *)v;
 }
-value(V) ::= numval(N). { V = N; }
+value(V) ::= numval(N). { V = (union pml_expr_u *)N; }
 value(V) ::= STRING(I). {
-	V = (struct pml_value *)pmln_alloc(PMLTT_BYTESTR);
-	pml_bytestr_set_dynamic(&V->u.bytestr, I.u.raw.data, I.u.raw.len);
+	struct pml_literal *v = (struct pml_literal *)pmln_alloc(PMLTT_BYTESTR);
+	pml_bytestr_set_dynamic(&v->u.bytestr, I.u.raw.data, I.u.raw.len);
+	V = (union pml_expr_u *)v;
 }
 
-var(V) ::= locator(L). { V = L; }
-var(V) ::= locator(N) LBRACKET borexpr(PK) COMMA borexpr(O) COMMA borexpr(L)
+locator(V) ::= locname(L). { V = L; }
+locator(V) ::= locname(N) LBRACKET borexpr(PK) COMMA borexpr(O) COMMA borexpr(L)
 	   RBRACKET. {
 	N->pkt = PK;
 	N->off = O;
 	N->len = L;
 	V = N;
 }
-var(V) ::= locator(N) LBRACKET borexpr(O) COMMA borexpr(L) RBRACKET. {
+locator(V) ::= locname(N) LBRACKET borexpr(O) COMMA borexpr(L) RBRACKET. {
 	N->off = O;
 	N->len = L;
 	V = N;
 }
 
-locator(L1) ::= locator(L0) DOT ID(TOK). {
+locname(L1) ::= locname(L0) DOT ID(TOK). {
 	if (pml_locator_extend_name(L0, (char *)TOK.u.raw.data, 
 				    TOK.u.raw.len) < 0) {
 		pml_ast_err(ast, "Out of memory for space.\n");
@@ -762,13 +765,13 @@ locator(L1) ::= locator(L0) DOT ID(TOK). {
 	free(TOK.u.raw.data);
 	L1 = L0;
 }
-locator(L) ::= ID(TOK). { 
+locname(L) ::= ID(TOK). { 
 	L = (struct pml_locator *)pmln_alloc(PMLTT_LOCATOR);
 	L->name = (char *)TOK.u.raw.data;
 }
 
 numval(N) ::= NUM(TOK). {
-	N = (struct pml_value *)pmln_alloc(PMLTT_SCALAR);
+	N = (struct pml_literal *)pmln_alloc(PMLTT_SCALAR);
 	N->u.scalar.val = TOK.u.num;
 	N->u.scalar.width = 4;
 }

@@ -33,11 +33,11 @@ dnum		0|[1-9][0-9]*
 
 #.*\n
 
-\"{sch}*\"		{
+\"{sch}*\" {
 	return copy_string(yyscanner, yytext, PMLTOK_STRING);
 }
 
-`{sch}*`		{
+`{sch}*` {
 	return copy_string(yyscanner, yytext, PMLTOK_REGEX);
 }
 
@@ -48,7 +48,7 @@ dnum		0|[1-9][0-9]*
 	return PMLTOK_NUM; 
 }
 
-\\x{xb}+		{
+\\x{xb}+ {
 	return copy_string(yyscanner, yytext, PMLTOK_BYTESTR);
 }
 
@@ -57,13 +57,13 @@ dnum		0|[1-9][0-9]*
 	return PMLTOK_IPV4ADDR; 
 }
 
-{xb}:{xb}:{xb}:{xb}:{xb}:{xb}	{ 
+{xb}:{xb}:{xb}:{xb}:{xb}:{xb} { 
 	parse_eth_addr(yyscanner, yytext);
 	return PMLTOK_ETHADDR; 
 }
 
-::({xq}(:{xq})*)?		|
-({xq}:)+(((:{xq})+)|{xq}|:)	{ 
+::({xq}(:{xq})*)?	    |
+({xq}:)+(((:{xq})+)|{xq}|:) { 
 	return parse_ipv6_addr(yyscanner, yytext); 
 }
 
@@ -117,7 +117,7 @@ dnum		0|[1-9][0-9]*
 ","		{ return PMLTOK_COMMA; }
 ";"		{ return PMLTOK_SEMICOLON; }
 
-[a-zA-Z_][a-zA-Z0-9_]*	{ 
+[a-zA-Z_][a-zA-Z0-9_]* { 
 	return copy_string(yyscanner, yytext, PMLTOK_ID);
 }
 
