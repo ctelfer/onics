@@ -3,6 +3,7 @@
 #include "pmltree.h"
 #include <cat/err.h>
 #include <cat/str.h>
+#include <string.h>
 
 #define YY_EXTRA_TYPE	struct pml_lex_val
 #define YY_NO_INPUT
@@ -10,7 +11,8 @@ static void parse_eth_addr(yyscan_t scanner, const char *text);
 static void parse_num(yyscan_t scanner, const char *text);
 static void parse_ipv4_addr(yyscan_t scanner, const char *text);
 static int parse_ipv6_addr(yyscan_t scanner, const char *text);
-static int copy_string(yyscan_t scanner, const char *text, int tok);
+static int copy_string(yyscan_t scanner, const char *text, int tok, int quoted);
+static int copy_bytestr(yyscan_t scanner, const char *hex, int tok);
 %}
 
 %option reentrant
@@ -34,11 +36,11 @@ dnum		0|[1-9][0-9]*
 #.*\n
 
 \"{sch}*\" {
-	return copy_string(yyscanner, yytext, PMLTOK_STRING);
+	return copy_string(yyscanner, yytext, PMLTOK_STRING, 1);
 }
 
 `{sch}*` {
-	return copy_string(yyscanner, yytext, PMLTOK_REGEX);
+	return copy_string(yyscanner, yytext, PMLTOK_REGEX, 1);
 }
 
 {xnum}	|
@@ -48,8 +50,8 @@ dnum		0|[1-9][0-9]*
 	return PMLTOK_NUM; 
 }
 
-\\x{xb}+ {
-	return copy_string(yyscanner, yytext, PMLTOK_BYTESTR);
+\\x({xb}{xb})+ {
+	return copy_bytestr(yyscanner, yytext, PMLTOK_BYTESTR);
 }
 
 {ipb}\.{ipb}\.{ipb}\.{ipb} { 
@@ -118,7 +120,7 @@ dnum		0|[1-9][0-9]*
 ";"		{ return PMLTOK_SEMICOLON; }
 
 [a-zA-Z_][a-zA-Z0-9_]* { 
-	return copy_string(yyscanner, yytext, PMLTOK_ID);
+	return copy_string(yyscanner, yytext, PMLTOK_ID, 0);
 }
 
 {ws}		/* skip ws */
@@ -146,7 +148,7 @@ void parse_num(yyscan_t scanner, const char *text)
 {
 	struct pml_lex_val v;
 	v.type  = PMLLV_SCALAR;
-	v.u.num = strtoul(text, NULL, 0);
+	v.u.num = strtoull(text, NULL, 0);
 	pmlset_extra(v, scanner);
 }
 
@@ -176,17 +178,51 @@ int parse_ipv6_addr(yyscan_t scanner, const char *text)
 }
 
 
-static int copy_string(yyscan_t scanner, const char *text, int tok)
+static int copy_string(yyscan_t scanner, const char *text, int tok, int quoted)
 {
 	size_t len;
 	struct pml_lex_val v;
 
 	v.type  = PMLLV_STRING;
 	len = strlen(text) + 1;
+	if ( quoted ) {
+		len -= 2;
+		text += 1;
+	}
 	if ( (v.u.raw.data = malloc(len)) == NULL )
 		return -1;
 	memcpy(v.u.raw.data, text, len);
+	if ( quoted )
+		v.u.raw.data[len-1] = '\0';
 	v.u.raw.len = len;
+	pmlset_extra(v, scanner);
+
+	return tok;
+}
+
+
+static int copy_bytestr(yyscan_t scanner, const char *hex, int tok)
+{
+	size_t len = 0;
+	struct pml_lex_val v;
+	uint8_t *bp;
+
+	v.type  = PMLLV_STRING;
+	len = strlen(hex);
+	abort_unless(len >= 4 && (len % 2 == 0));
+	len -= 2;
+	hex += 2;
+	if ( (v.u.raw.data = malloc(len+1)) == NULL )
+		return -1;
+	len /= 2;
+	v.u.raw.len = len;
+	bp = v.u.raw.data;
+	while ( len > 0 ) {
+		*bp++ = chnval(hex[0]) * 16 + chnval(hex[1]);
+		hex += 2;
+		--len;
+	}
+	*bp = '\0'; /* paranoid/defensive */
 	pmlset_extra(v, scanner);
 
 	return tok;

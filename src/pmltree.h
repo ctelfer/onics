@@ -8,6 +8,7 @@
 #include <cat/list.h>
 #include <cat/hash.h>
 #include <stdio.h>
+#include <stdint.h>
 #include "pml.h"
 
 struct pml_ast {
@@ -93,6 +94,21 @@ struct pml_list {
 union pml_expr_u;
 
 
+enum {
+	PML_ETYPE_UNKNOWN,
+	PML_ETYPE_SCALAR,
+	PML_ETYPE_BYTESTR,
+	PML_ETYPE_MASKSTR,
+};
+struct pml_expr_base {
+	int			type;
+	struct list		ln;
+	ushort			etype;
+	uchar			width;		/* scalar only */
+	uchar			issigned;	/* scalar only */
+};
+
+
 #define PML_BYTESTR_MAX_STATIC	16
 struct pml_bytestr {
 	int			is_dynamic;
@@ -107,18 +123,14 @@ struct pml_maskval {
 };
 
 
-struct pml_scalar {
-	unsigned long		val;
-	int			width;
-};
-
-
 struct pml_literal {
 	int			type;
 	struct list		ln;
-	int			valtype;
+	ushort			etype;
+	uchar			width;		/* scalar only */
+	uchar			issigned;	/* scalar only */
 	union {
-		struct pml_scalar	scalar;
+		uint64_t		scalar;
 		struct pml_bytestr	bytestr;
 		struct pml_maskval	maskval;
 	} u;
@@ -128,6 +140,9 @@ struct pml_literal {
 struct pml_op {
 	int			type;
 	struct list		ln;
+	ushort			etype;
+	uchar			width;		/* scalar only */
+	uchar			issigned;	/* scalar only */
 	int			op;
 	union pml_expr_u *	arg1;
 	union pml_expr_u *	arg2;
@@ -137,6 +152,9 @@ struct pml_op {
 struct pml_funcall {
 	int			type;
 	struct list		ln;
+	ushort			etype;
+	uchar			width;		/* scalar only */
+	uchar			issigned;	/* scalar only */
 	struct pml_function *	func;
 	struct pml_list *	args;	/* expressions */
 };
@@ -183,10 +201,19 @@ struct pml_print {
 };
 
 
+enum {
+	PML_REF_UNKNOWN,
+	PML_REF_VAR,
+	PML_REF_NS,
+};
 struct pml_locator {
 	int			type;
-	struct list		ln;	/* unused */
+	struct list		ln;
+	ushort			etype;
+	uchar			width;		/* scalar only */
+	uchar			issigned;	/* scalar only */
 	char *			name;
+	int			reftype;
 	union pml_expr_u *	pkt;
 	union pml_expr_u *	off;
 	union pml_expr_u *	len;
@@ -194,6 +221,13 @@ struct pml_locator {
 		struct pml_variable *	varref;
 		struct ns_elem *	nsref;
 	} u;
+};
+
+
+struct pml_sym {
+	int			type;
+	struct list		ln;
+	struct hnode		hn;
 };
 
 
@@ -230,10 +264,18 @@ struct pml_rule {
 
 union pml_expr_u {
 	struct pml_node_base	base;
-	struct pml_literal	value;
+	struct pml_expr_base	expr;
+	struct pml_literal	literal;
 	struct pml_locator	loc;
 	struct pml_op		op;
 	struct pml_funcall	funcall;
+};
+
+
+union pml_id_u {
+	struct pml_sym		sym;
+	struct pml_variable	var;
+	struct pml_function	func;
 };
 
 

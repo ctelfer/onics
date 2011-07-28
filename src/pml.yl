@@ -456,14 +456,14 @@ stmts(SS) ::= . {
 	struct pml_list *l = (struct pml_list *)pmln_alloc(PMLTT_LIST);
 	SS = l;
 }
-stmts(SSO) ::= stmt(S) SEMICOLON stmts(SSI) . {
+stmts(SSO) ::= stmt(S) stmts(SSI) . {
 	l_ins(&SSI->list, &S->base.ln);
 	SSO = SSI;
 }
 
 
 /* Specific types of statements */
-stmt(S) ::= locator(L) ASSIGN expr(E). {
+stmt(S) ::= locator(L) ASSIGN expr(E) SEMICOLON. {
 	struct pml_assign *a = (struct pml_assign *)pmln_alloc(PMLTT_ASSIGN);
 	a->loc = L;
 	a->expr = E;
@@ -492,19 +492,19 @@ stmt(S) ::= IF LPAREN expr(E) RPAREN stmtlist(SLT) ELSE stmtlist(SLF). {
 	S = (union pml_node *)i;
 }
 
-stmt(S) ::= RETURN expr(E).  {
+stmt(S) ::= RETURN expr(E) SEMICOLON.  {
 	struct pml_return *r = (struct pml_return *)pmln_alloc(PMLTT_RETURN);
 	r->expr = E;
 	S = (union pml_node *)r;
 }
 
-stmt(S) ::= PRINT STRING(TV). {
+stmt(S) ::= PRINT STRING(TV) SEMICOLON. {
 	struct pml_print *p = (struct pml_print *)pmln_alloc(PMLTT_PRINT);
 	p->fmt = (char *)TV.u.raw.data;
 	S = (union pml_node *)p;
 }
 
-stmt(S) ::= PRINT STRING(TV) COMMA exprlist(EL). {
+stmt(S) ::= PRINT STRING(TV) COMMA exprlist(EL) SEMICOLON. {
 	struct pml_print *p = (struct pml_print *)pmln_alloc(PMLTT_PRINT);
 	p->fmt = (char *)TV.u.raw.data;
 	p->args = EL;
@@ -772,6 +772,6 @@ locname(L) ::= ID(TOK). {
 
 numval(N) ::= NUM(TOK). {
 	N = (struct pml_literal *)pmln_alloc(PMLTT_SCALAR);
-	N->u.scalar.val = TOK.u.num;
-	N->u.scalar.width = 4;
+	N->width = 8;
+	N->u.scalar = TOK.u.num;
 }

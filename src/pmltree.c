@@ -78,19 +78,10 @@ static int vtab_add(struct htab *ht, struct pml_variable *var)
 
 static void freesym(void *nodep, void *ctx)
 {
-	struct pml_node_base *node = nodep;
-	if (node->type == PMLTT_VAR) {
-		struct pml_variable *p = nodep;
-		ht_rem(&p->hn);
-		l_rem(&p->ln);
-	} else if (node->type == PMLTT_FUNCTION) {
-		struct pml_function *p = nodep;
-		ht_rem(&p->hn);
-		l_rem(&p->ln);
-	} else {
-		abort_unless(0);
-	}
-	pmln_free((union pml_node *)node);
+	struct pml_sym *sym = container(nodep, struct pml_sym, hn);
+	ht_rem(&sym->hn);
+	l_rem(&sym->ln);
+	pmln_free((union pml_node *)sym);
 }
 
 
@@ -207,11 +198,14 @@ union pml_node *pmln_alloc(int pmltt)
 		p->type = pmltt;
 		l_init(&p->ln);
 		if (pmltt == PMLTT_SCALAR) {
-			p->u.scalar.val = 0;
-			p->u.scalar.width = 4;
+			p->etype = PML_ETYPE_SCALAR;
+			p->u.scalar = 0;
+			p->width = 8;
 		} else if (pmltt == PMLTT_BYTESTR) {
+			p->etype = PML_ETYPE_BYTESTR;
 			pml_bytestr_set_static(&p->u.bytestr, NULL, 0);
 		} else if (pmltt == PMLTT_MASKVAL) {
+			p->etype = PML_ETYPE_MASKSTR;
 			pml_bytestr_set_static(&p->u.maskval.val, NULL, 0);
 			pml_bytestr_set_static(&p->u.maskval.mask, NULL, 0);
 		}
@@ -229,6 +223,7 @@ union pml_node *pmln_alloc(int pmltt)
 	case PMLTT_BINOP: {
 		struct pml_op *p = &np->op;
 		p->type = pmltt;
+		p->etype = PML_ETYPE_UNKNOWN;
 		l_init(&p->ln);
 		p->op = 0;
 		p->arg1 = NULL;
@@ -238,6 +233,7 @@ union pml_node *pmln_alloc(int pmltt)
 
 	case PMLTT_FUNCALL: {
 		struct pml_funcall *p = &np->funcall;
+		p->etype = PML_ETYPE_UNKNOWN;
 		p->type = pmltt;
 		l_init(&p->ln);
 		p->func = NULL;
@@ -266,6 +262,14 @@ union pml_node *pmln_alloc(int pmltt)
 	case PMLTT_LOCATOR:
 	case PMLTT_LOCADDR: {
 		struct pml_locator *p = &np->locator;
+		if (pmltt == PMLTT_LOCATOR) {
+			p->etype = PML_ETYPE_UNKNOWN;
+		} else {
+			p->etype = PML_ETYPE_SCALAR;
+			p->width = 8;
+			p->issigned = 0;
+		}
+		p->reftype = PML_REF_UNKNOWN;
 		p->type = pmltt;
 		l_init(&p->ln);
 		p->name = NULL;
@@ -364,7 +368,7 @@ void pmln_free(union pml_node *node)
 		struct pml_variable *p = &node->variable;
 		free(p->name);
 		pmln_free((union pml_node *)p->init);
-	}
+	} break;
 
 	case PMLTT_BINOP: {
 		struct pml_op *p = &node->op;
@@ -593,7 +597,7 @@ void pmlt_print(union pml_node *np, uint depth)
 		struct pml_literal *p = &np->literal;
 		indent(depth);
 		printf("Scalar-- width %d: %lu (0x%lx)\n", 
-		       p->u.scalar.width, p->u.scalar.val, p->u.scalar.val);
+		       p->width, p->u.scalar, p->u.scalar);
 	} break;
 
 	case PMLTT_BYTESTR: {
