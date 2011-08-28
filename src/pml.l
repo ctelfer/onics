@@ -69,6 +69,8 @@ dnum		0|[1-9][0-9]*
 	return parse_ipv6_addr(yyscanner, yytext); 
 }
 
+"func"		{ return PMLTOK_FUNC; }
+"inline"	{ return PMLTOK_INLINE; }
 "not"		{ return PMLTOK_NOT; }
 "and"		{ return PMLTOK_AND; }
 "or"		{ return PMLTOK_OR; }
@@ -107,6 +109,8 @@ dnum		0|[1-9][0-9]*
 ">>-"		{ return PMLTOK_SHRA; }
 "."		{ return PMLTOK_DOT; }
 "="		{ return PMLTOK_ASSIGN; }
+"$"		{ return PMLTOK_DOLLAR; }
+"@"		{ return PMLTOK_AT; }
 
 "{"		{ return PMLTOK_LBRACE; }
 "}"		{ return PMLTOK_RBRACE; }
