@@ -1,0 +1,51 @@
+.entry @start
+
+.segment 0 3 1024
+
+# Define coprocessor decls for output port
+.define outport_type 2
+.define cpout 1
+.define prstri 8
+.define prnum 2
+
+.coproc cpout outport_type
+
+.define fibnlen 4
+.mem fibnum 0 0 fibnlen "\x00\x00\x00\x07"
+.mem fibs1_mem 0 32 32 "Fibonacci number "
+.define fibs1 0x11000020	# length 17, addr 32
+.mem fibs2_mem 0 64 32 " is "
+.define fibs2 0x04000040	# length 4, addr 64
+.mem fibs3_mem 0 96 32 "\x0A"
+.define fibs3 0x01000060	# length 1, addr 96
+
+
+fib:
+	push	1
+	ldbpi	0
+	lei	2
+	bnzi	@fib_done
+	ldbpi	0
+	subi	1
+	push	@fib
+	call	1
+	ldbpi	0
+	subi	2
+	push	@fib
+	call	1
+	add
+fib_done:
+	ret	1
+	
+
+start:
+	cpopi	cpout, prstri, fibs1_mem.seg, fibs1
+	ldi	fibnlen, 0, fibnum.addr
+	dup	0
+	cpopi	cpout, prnum, 4, 0
+	cpopi	cpout, prstri, fibs2_mem.seg, fibs2
+	push	@fib
+	call	1
+	cpopi	cpout, prnum, 4, 0
+	cpopi	cpout, prstri, fibs3_mem.seg, fibs3
+	halt	0

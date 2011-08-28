@@ -1,0 +1,20 @@
+.include "inctest.na"
+.define tcp 0x0103
+.define RWSEG           0
+.define RWPERMS         3
+.segment RWSEG RWPERMS  1024
+.define CPT_XPKT        1
+.coproc 0 CPT_XPKT
+.mem g_var RWSEG 4 16 "abcdefgh12345678"
+
+l:	push	30
+	addi	2
+	jmpi	@l
+
+b:
+	subi	4
+	pkfxli	*0:tcp:0:0[4]
+	bzi     @l
+	bnzi	@b
+	ldi	8, g_var.seg, g_var.addr
+	ldi	8, g_var.seg, 9, g_var.addr
