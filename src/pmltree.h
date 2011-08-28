@@ -18,7 +18,8 @@ struct pml_ast {
 	struct htab		vartab;
 	struct htab		functab;
 	struct list		rules;
-	FILE *			errfp;
+	struct pml_function *	curfunc;
+	char			errbuf[80];
 };
 
 
@@ -39,7 +40,7 @@ enum {
 	PMLTT_RETURN,
 	PMLTT_PRINT,
 	PMLTT_FUNCTION,
-	PMLTT_PREDICATE,
+	PMLTT_INLINE,
 	PMLTT_RULE,
 };
 
@@ -96,16 +97,21 @@ union pml_expr_u;
 
 enum {
 	PML_ETYPE_UNKNOWN,
-	PML_ETYPE_SCALAR,
+	PML_ETYPE_UINT,
+	PML_ETYPE_SINT,
 	PML_ETYPE_BYTESTR,
 	PML_ETYPE_MASKSTR,
+};
+
+enum {
+	PML_EFLAG_CONST	= 1,
 };
 struct pml_expr_base {
 	int			type;
 	struct list		ln;
 	ushort			etype;
-	uchar			width;		/* scalar only */
-	uchar			issigned;	/* scalar only */
+	ushort			eflags;
+	size_t			width;
 };
 
 
@@ -127,8 +133,8 @@ struct pml_literal {
 	int			type;
 	struct list		ln;
 	ushort			etype;
-	uchar			width;		/* scalar only */
-	uchar			issigned;	/* scalar only */
+	ushort			eflags;
+	size_t			width;
 	union {
 		uint64_t		scalar;
 		struct pml_bytestr	bytestr;
@@ -141,8 +147,8 @@ struct pml_op {
 	int			type;
 	struct list		ln;
 	ushort			etype;
-	uchar			width;		/* scalar only */
-	uchar			issigned;	/* scalar only */
+	ushort			eflags;
+	size_t			width;
 	int			op;
 	union pml_expr_u *	arg1;
 	union pml_expr_u *	arg2;
@@ -153,10 +159,10 @@ struct pml_funcall {
 	int			type;
 	struct list		ln;
 	ushort			etype;
-	uchar			width;		/* scalar only */
-	uchar			issigned;	/* scalar only */
+	ushort			eflags;
+	size_t			width;
 	struct pml_function *	func;
-	struct pml_list *	args;	/* expressions */
+	struct pml_list *	args;		/* expressions */
 };
 
 
@@ -210,8 +216,8 @@ struct pml_locator {
 	int			type;
 	struct list		ln;
 	ushort			etype;
-	uchar			width;		/* scalar only */
-	uchar			issigned;	/* scalar only */
+	ushort			eflags;
+	size_t			width;
 	char *			name;
 	int			reftype;
 	union pml_expr_u *	pkt;
@@ -236,8 +242,10 @@ struct pml_variable {
 	struct list		ln;
 	struct hnode		hn;
 	char *			name;
-	int			width;
 	union pml_expr_u *	init;
+	uint			vtype;
+	size_t			width;
+	uint64_t		addr;
 };
 
 
@@ -251,6 +259,8 @@ struct pml_function {
 	struct pml_list *	prmlist;
 	struct pml_list *	varlist;
 	union pml_node *	body;  /* expr for pred, list for func */
+	uint			rtype;
+	size_t			width;
 };
 
 
@@ -318,6 +328,8 @@ union pml_expr_u *pml_binop_alloc(int op, union pml_expr_u *left,
 union pml_expr_u *pml_unop_alloc(int op, union pml_expr_u *ex);
 struct pml_variable *pml_var_alloc(char *name, int width,
 				   union pml_expr_u *init);
+
+void pml_expr_copy_attrs(union pml_expr_u *dst, union pml_expr_u *src);
 
 void pml_bytestr_set_static(struct pml_bytestr *b, void *data, size_t len);
 void pml_bytestr_set_dynamic(struct pml_bytestr *b, void *data, size_t len);

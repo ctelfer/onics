@@ -40,12 +40,9 @@
 # probably not intended 
 ?- ipv6.saddr == 5 -? 
 
-# A predicate is pure function that calls only other predicates
-# and is not recursive (neither directly or indirectly.
-# The reason is that predicates are shorthand mainly for matching and
-# need to be able to be used in a matchonly program with only forward
-# branches.
-pred ishttp() ( tcp && (tcp.sport == 80 || tcp.dport == 80) )
+# A inline function that calls only other inline functions and is not
+# directly or indirectly recursive.
+inline ishttp() ( tcp && (tcp.sport == 80 || tcp.dport == 80) )
 
 # A function can be recursive, have local variables and it has
 # a series of statements enclosed in parentheses.
@@ -58,7 +55,7 @@ func incr(v) {
 }
 var Count;
 
-# Patterns can call predicates.  (for shorthand)
+# Patterns can call inline functions.
 ?- ishttp() -? { Count = incr(Count); }
 
 */
@@ -94,15 +91,15 @@ var Count;
 		  fields in the data.
 
   Notation:
-   a			-- Variable name (global or local) or proto name
-   $<protoname>		-- Protocol ID 
+   $a			-- Variable name (global or local) or proto name
+   @<protoname>		-- Protocol ID 
    a.b.c.d		-- Field for packet 0
-   @<pkt>:a.b.c.d	-- Field for packet <pkt>
+   a.b.c.d[<o>,<l>]	-- Bytes from packet 0, field a.b.c.d, offset o length l
+   a.b.c.d[<p>,<o>,<l>]	-- Bytes from packet p, field a.b.c.d, offset o length l
    &<field>		-- Byte offset for a field <byte string or integer>
 
 
   Intrinsic Functions:
-
    - Drop
    - Fix dlt
    - Insert space
@@ -131,7 +128,8 @@ var Count;
 
 
   Example:
-	insert(10, &tcp + 20); #insert 10 bytes of data 20-bytes after the TCP section star
+	insert(10, &tcp + 20); # insert 10 bytes of data 20-bytes 
+                               # after the TCP section start
 	insert(4, &net + 20, 20);
 	cut(10, &ip + ip.hl * 4);
 	fixcsum();
@@ -153,7 +151,9 @@ var Count;
   }
 
   var name;
-  var name[width];
+  var name = <scalar value>;
+  var name[width]; # global only
+  var name[width] = <value>; # global only
 */
 
 /* ----- Basic Lemon Declarations ----- */
@@ -167,6 +167,7 @@ var Count;
 #include <cat/cat.h>
 #include <cat/list.h>
 #include "pmltree.h" 
+#include "ns.h"
 }
 %extra_argument { struct pml_ast *ast }
 
@@ -187,11 +188,11 @@ var Count;
 %type decl { union pml_node * }
 %destructor decl { pmln_free($$); }
 
-%type fundecl { struct pml_function * }
-%destructor fundecl { pmln_free((union pml_node *)$$); }
+%type funcdecl { struct pml_function * }
+%destructor funcdecl { pmln_free((union pml_node *)$$); }
 
-%type preddecl { struct pml_function * }
-%destructor preddecl { pmln_free((union pml_node *)$$); }
+%type inlinedecl { struct pml_function * }
+%destructor inlinedecl { pmln_free((union pml_node *)$$); }
 
 %type lvar { struct pml_variable * }
 %destructor lvar { pmln_free((union pml_node *)$$); }
@@ -301,21 +302,30 @@ decllist ::= decllist decl. /* nothing to do: resolved below. */
 
 decllist ::= . /* nothing to do */
 
-decl ::= fundecl(F). {
+decl ::= funcdecl(F). {
 	if (pml_ast_add_func(ast, F) < 0) {
-		pml_ast_err(ast, "Duplicate function/predicate: %s\n", 
-		            F->name);
+		pml_ast_err(ast, "Duplicate function: %s\n", F->name);
 		ast->error = 1;
 		pmln_free((union pml_node *)F);
 	}
 }
-decl ::= preddecl(F). {
+decl ::= inlinedecl(F). {
+	struct pml_expr_base *pe;
 	if (pml_ast_add_func(ast, F) < 0) {
-		pml_ast_err(ast, "Duplicate function/predicate: %s\n", 
-		            F->name);
+		pml_ast_err(ast, "Duplicate function: %s\n", F->name);
 		ast->error = 1;
 		pmln_free((union pml_node *)F);
 	}
+	/* A inline func's return value is constant if its expr is constant */
+	pe = (struct pml_expr_base *)F->body;
+	if (pe->etype != PML_ETYPE_UINT && pe->etype != PML_ETYPE_SINT) {
+		pml_ast_err(ast, "Non-scalar expression for inline function %s "
+				 "(type = %d)\n",
+			    F->name, pe->etype);
+		ast->error = 1;
+		pmln_free((union pml_node *)F);
+	}
+	pml_expr_copy_attrs((union pml_expr_u *)F, (union pml_expr_u *)pe);
 }
 decl ::= gvar(V). {
 	if (pml_ast_add_var(ast, V) < 0) {
@@ -328,31 +338,7 @@ decl ::= rule(A). {
 	l_enq(&ast->rules, &A->ln);
 }
 
-preddecl(F) ::= PRED ID(N) LPAREN idlist(P) RPAREN LPAREN expr(E) RPAREN. {
-	struct list *t; 
-	struct pml_variable *p;
-
-	F = (struct pml_function *)pmln_alloc(PMLTT_PREDICATE);
-	F->name = (char *)N.u.raw.data;
-
-	l_for_each(t, &P->list) {
-		F->arity += 1;
-		p = container(t, struct pml_variable, ln);
-		if (pml_func_add_var(F, p) < 0) {
-			pml_ast_err(ast, "Duplicate variable name: %s\n",
-			            p->name);
-			ast->error = 1;
-			goto pd_out;
-		}
-	}
-	F->prmlist = P;
-
-	F->body = (union pml_node *)E;
-
-pd_out:
-}
-
-fundecl(F) ::= FUNC ID(N) LPAREN idlist(P) RPAREN LBRACE lvardecls(V) 
+funcdecl(F) ::= FUNC ID(N) LPAREN idlist(P) RPAREN LBRACE lvardecls(V) 
                stmts(S) RBRACE. {
 	struct list *t; 
 	struct pml_variable *p;
@@ -388,6 +374,29 @@ fundecl(F) ::= FUNC ID(N) LPAREN idlist(P) RPAREN LBRACE lvardecls(V)
 fd_out:
 }
 
+inlinedecl(I) ::= INLINE ID(N) LPAREN idlist(P) RPAREN LBRACE expr(E) RBRACE. {
+	struct list *t; 
+	struct pml_variable *p;
+
+	I = (struct pml_function *)pmln_alloc(PMLTT_INLINE);
+	I->name = (char *)N.u.raw.data;
+
+	l_for_each(t, &P->list) {
+		I->arity += 1;
+		p = container(t, struct pml_variable, ln);
+		if (pml_func_add_var(I, p) < 0) {
+			pml_ast_err(ast, "Duplicate variable name: %s\n",
+			            p->name);
+			ast->error = 1;
+			goto id_out;
+		}
+	}
+	I->prmlist = P;
+	I->body = (union pml_node *)E;
+
+id_out:
+}
+
 idlist(IL) ::= . { IL = (struct pml_list *)pmln_alloc(PMLTT_LIST); }
 idlist(IL) ::= someids(IL2). { IL = IL2; }
 someids(IL) ::= ID(V). {
@@ -402,18 +411,16 @@ someids(IL) ::= someids(IL2) COMMA ID(V). {
 }
 
 
-lvar(L) ::= VAR ID(I) SEMICOLON. {
-	L = pml_var_alloc((char *)I.u.raw.data, 8, NULL); 
+gvar(G) ::= VAR DOLLAR DOLLAR ID(I) SEMICOLON. {
+	G = pml_var_alloc((char *)I.u.raw.data, 8, NULL); 
 }
-gvar(G) ::= lvar(L). { G = L; }
-gvar(G) ::= VAR ID(I) LBRACKET NUM(N) RBRACKET. {
+gvar(G) ::= VAR DOLLAR DOLLAR ID(I) LBRACKET NUM(N) RBRACKET. {
 	G = pml_var_alloc((char *)I.u.raw.data, N.u.num, NULL);
 }
-gvar(G) ::= lvar(L) ASSIGN numval(V). {
-	L->init = (union pml_expr_u *)V;
-	G = L;
+gvar(G) ::= VAR DOLLAR DOLLAR ID(I) SEMICOLON ASSIGN numval(V). {
+	G = pml_var_alloc((char *)I.u.raw.data, 8, (union pml_expr_u *)V); 
 }
-gvar(G) ::= VAR ID(I) LBRACKET NUM(N) RBRACKET ASSIGN value(VAL). {
+gvar(G) ::= VAR DOLLAR DOLLAR ID(I) LBRACKET NUM(N) RBRACKET ASSIGN value(VAL).{
 	G = pml_var_alloc((char *)I.u.raw.data, N.u.num, VAL);
 }
 
@@ -435,6 +442,9 @@ lvardecls(L1) ::= lvardecls(L0) lvar(V).  {
 	l_ins(L0->list.prev, &V->ln);
 done:
 	L1 = L0;
+}
+lvar(L) ::= VAR DOLLAR ID(I) SEMICOLON. {
+	L = pml_var_alloc((char *)I.u.raw.data, 8, NULL); 
 }
 
 /* Rules */
@@ -515,6 +525,7 @@ pktpat(PP) ::= PPBEGIN expr(E) PPEND. { PP = E; }
 
 expr(E) ::= orexpr(OE). { E = OE; }
 
+/* TODO: add type checking for compound expressions */
 orexpr(E) ::= orexpr(LHS) OR andexpr(RHS). {
 	E = pml_binop_alloc(PMLOP_OR, LHS, RHS); 
 }
@@ -741,16 +752,81 @@ value(V) ::= STRING(I). {
 	pml_bytestr_set_dynamic(&v->u.bytestr, I.u.raw.data, I.u.raw.len);
 	V = (union pml_expr_u *)v;
 }
+value(V) ::= AT locname(L). {
+	struct ns_elem *ne = ns_lookup(NULL, L->name);
+	struct pml_literal *v;
+	if (ne == NULL) {
+		pml_ast_err(ast, "invalid @location: '%s'\n", L->name);
+	} else if (ne->type == NST_NAMESPACE) {
+		struct ns_namespace *ns = (struct ns_namespace *)ne;
+		v = (struct pml_literal *)pmln_alloc(PMLTT_SCALAR);
+		v->width = 8;
+		v->u.scalar = ns->ppt;
+	} else if (ne->type != NST_PKTFLD) {
+		struct ns_pktfld *pf = (struct ns_pktfld *)ne;
+		v = (struct pml_literal *)pmln_alloc(PMLTT_SCALAR);
+		v->width = 8;
+		v->u.scalar = pf->ppt;
+	} else {
+		pml_ast_err(ast, "@location '%s' is neither a namespace "
+				 "or a packet field\n", L->name);
+	}
+	pmln_free((union pml_node *)L);
+	V = (union pml_expr_u *)v;
+}
 
-locator(V) ::= locname(L). { V = L; }
+locator(V) ::= DOLLAR DOLLAR ID(TOK). {
+	struct pml_variable *var;
+	V = (struct pml_locator *)pmln_alloc(PMLTT_LOCATOR);
+	V->name = (char *)TOK.u.raw.data;
+	var = pml_ast_lookup_var(ast, V->name);
+	if (var != NULL) {
+		V->u.varref = var;
+		pml_expr_copy_attrs((union pml_expr_u *)V, 
+				    (union pml_expr_u *)var);
+	} else {
+		pml_ast_err(ast, "unknown global variable $$%s\n", V->name);
+	}
+}
+locator(V) ::= DOLLAR DOLLAR ID(TOK) LBRACKET borexpr(O) COMMA 
+	       borexpr(L) RBRACKET. {
+	struct pml_variable *var;
+	V = (struct pml_locator *)pmln_alloc(PMLTT_LOCATOR);
+	V->name = (char *)TOK.u.raw.data;
+	V->off = O;
+	V->len = L;
+	var = pml_ast_lookup_var(ast, V->name);
+	if (var != NULL) {
+		V->u.varref = var;
+		V->etype = PML_ETYPE_BYTESTR;
+	} else {
+		pml_ast_err(ast, "unknown global variable $$%s\n", V->name);
+	}
+}
+locator(V) ::= DOLLAR ID(TOK). {
+	V = (struct pml_locator *)pmln_alloc(PMLTT_LOCATOR);
+	V->name = (char *)TOK.u.raw.data;
+	/* TODO: resolve variable */
+	/* TODO: set value type and expression type */
+}
+locator(V) ::= locname(N). {
+	/* TODO: resolve namespace */
+	/* TODO: substitute constant expression if warranted */
+	/* TODO: set value type and expression type */
+	V = N;
+}
 locator(V) ::= locname(N) LBRACKET borexpr(PK) COMMA borexpr(O) COMMA borexpr(L)
 	   RBRACKET. {
+	/* TODO: set value type and expression type */
+	/* TODO: check type of PK, O, L */
 	N->pkt = PK;
 	N->off = O;
 	N->len = L;
 	V = N;
 }
 locator(V) ::= locname(N) LBRACKET borexpr(O) COMMA borexpr(L) RBRACKET. {
+	/* TODO: set value type and expression type */
+	/* TODO: check type of O, L */
 	N->off = O;
 	N->len = L;
 	V = N;

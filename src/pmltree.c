@@ -4,6 +4,7 @@
  */
 #include "pmltree.h"
 #include <cat/aux.h>
+#include <cat/str.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdarg.h>
@@ -110,7 +111,8 @@ void pml_ast_init(struct pml_ast *ast)
 	symtab_init(&ast->vartab);
 	symtab_init(&ast->functab);
 	l_init(&ast->rules);
-	ast->errfp = stderr;
+	str_copy(ast->errbuf, "", sizeof(ast->errbuf));
+	ast->curfunc = NULL;
 }
 
 
@@ -123,7 +125,7 @@ void pml_ast_clear(struct pml_ast *ast)
 	symtab_destroy(&ast->functab);
 	l_apply(&ast->rules, freerule, NULL);
 	l_init(&ast->rules);
-	ast->errfp = NULL;
+	str_copy(ast->errbuf, "", sizeof(ast->errbuf));
 }
 
 
@@ -132,8 +134,7 @@ void pml_ast_err(struct pml_ast *ast, const char *fmt, ...)
 	va_list ap;
 
 	va_start(ap, fmt);
-	if (ast->errfp != NULL)
-		vfprintf(ast->errfp, fmt, ap);
+	vsnprintf(ast->errbuf, sizeof(ast->errbuf), fmt, ap);
 	va_end(ap);
 }
 
@@ -197,8 +198,9 @@ union pml_node *pmln_alloc(int pmltt)
 		struct pml_literal *p = &np->literal;
 		p->type = pmltt;
 		l_init(&p->ln);
+		p->eflags = PML_EFLAG_CONST;
 		if (pmltt == PMLTT_SCALAR) {
-			p->etype = PML_ETYPE_SCALAR;
+			p->etype = PML_ETYPE_UINT;
 			p->u.scalar = 0;
 			p->width = 8;
 		} else if (pmltt == PMLTT_BYTESTR) {
@@ -215,6 +217,8 @@ union pml_node *pmln_alloc(int pmltt)
 		struct pml_variable *p = &np->variable;
 		p->type = pmltt;
 		l_init(&p->ln);
+		p->vtype = PML_ETYPE_UNKNOWN;
+		p->width = 0;
 		p->name = NULL;
 		p->init = NULL;
 	} break;
@@ -224,6 +228,8 @@ union pml_node *pmln_alloc(int pmltt)
 		struct pml_op *p = &np->op;
 		p->type = pmltt;
 		p->etype = PML_ETYPE_UNKNOWN;
+		p->eflags = 0;
+		p->width = 0;
 		l_init(&p->ln);
 		p->op = 0;
 		p->arg1 = NULL;
@@ -233,7 +239,9 @@ union pml_node *pmln_alloc(int pmltt)
 
 	case PMLTT_FUNCALL: {
 		struct pml_funcall *p = &np->funcall;
-		p->etype = PML_ETYPE_UNKNOWN;
+		p->etype = PML_ETYPE_UINT;
+		p->eflags = 0;
+		p->width = 8;
 		p->type = pmltt;
 		l_init(&p->ln);
 		p->func = NULL;
@@ -262,12 +270,13 @@ union pml_node *pmln_alloc(int pmltt)
 	case PMLTT_LOCATOR:
 	case PMLTT_LOCADDR: {
 		struct pml_locator *p = &np->locator;
+		p->eflags = 0;
 		if (pmltt == PMLTT_LOCATOR) {
 			p->etype = PML_ETYPE_UNKNOWN;
+			p->width = 0;
 		} else {
-			p->etype = PML_ETYPE_SCALAR;
+			p->etype = PML_ETYPE_UINT;
 			p->width = 8;
-			p->issigned = 0;
 		}
 		p->reftype = PML_REF_UNKNOWN;
 		p->type = pmltt;
@@ -303,12 +312,14 @@ union pml_node *pmln_alloc(int pmltt)
 	} break;
 
 	case PMLTT_FUNCTION:
-	case PMLTT_PREDICATE: {
+	case PMLTT_INLINE: {
 		struct pml_function *p = &np->function;
 		if (symtab_init(&p->vars) < 0) {
 			free(np);
 			return NULL;
 		}
+		p->rtype = PML_ETYPE_UINT;
+		p->width = 8;
 		p->type = pmltt;
 		l_init(&p->ln);
 		p->name = NULL;
@@ -426,7 +437,7 @@ void pmln_free(union pml_node *node)
 	} break;
 
 	case PMLTT_FUNCTION:
-	case PMLTT_PREDICATE: {
+	case PMLTT_INLINE: {
 		struct pml_function *p = &node->function;
 		free(p->name);
 		p->name = NULL;
@@ -480,6 +491,14 @@ struct pml_variable *pml_var_alloc(char *name, int width,
 	v->width = width;
 	v->init = init;
 	return v;
+}
+
+
+void pml_expr_copy_attrs(union pml_expr_u *dst, union pml_expr_u *src)
+{
+	dst->expr.etype = src->expr.etype;
+	dst->expr.eflags = src->expr.eflags;
+	dst->expr.width = src->expr.width;
 }
 
 
@@ -597,7 +616,7 @@ void pmlt_print(union pml_node *np, uint depth)
 		struct pml_literal *p = &np->literal;
 		indent(depth);
 		printf("Scalar-- width %d: %lu (0x%lx)\n", 
-		       p->width, p->u.scalar, p->u.scalar);
+		       (unsigned)p->width, p->u.scalar, p->u.scalar);
 	} break;
 
 	case PMLTT_BYTESTR: {
@@ -614,6 +633,7 @@ void pmlt_print(union pml_node *np, uint depth)
 		indent(depth);
 		printf("Value --\n");
 		print_bytes(&p->u.maskval.val, depth);
+		indent(depth);
 		printf("Mask --\n");
 		print_bytes(&p->u.maskval.mask, depth);
 	} break;
@@ -759,13 +779,13 @@ void pmlt_print(union pml_node *np, uint depth)
 	} break;
 
 	case PMLTT_FUNCTION:
-	case PMLTT_PREDICATE: {
+	case PMLTT_INLINE: {
 		struct pml_function *p = &np->function;
 		indent(depth);
 		printf("%s: %s with %d arguments\n", 
 		       (np->base.type == PMLTT_FUNCTION) ? 
 		       		"Function" : 
-				"Predicate",
+				"Inline Function",
 			p->name, p->arity);
 
 		indent(depth);
