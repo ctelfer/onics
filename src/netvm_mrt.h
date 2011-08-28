@@ -9,6 +9,15 @@ struct netvm_matchedprog {
 	struct netvm_program *	action;
 };
 
+
+struct netvm_mrt_vmcfg {
+	uint			stksz;
+	struct netvm_segdesc	sdescs[NETVM_MAXMSEGS];
+	struct netvm_coproc *	coprocs[NETVM_MAXCOPROC];
+	struct netvm_meminit	*inits;
+	uint			ninits;
+};
+
 typedef struct pktbuf *(*netvm_pktin_f)(void *ctx);
 typedef int (*netvm_pktout_f)(void *ctx, struct pktbuf *pkb);
 
@@ -27,10 +36,9 @@ struct netvm_mrt {
 	struct netvm_program *	begin;
 	struct netvm_program *	end;
 	struct clist *		pktprogs;
-	struct netvm_program *	eprog;
 };
 
-void nvmmrt_init(struct netvm_mrt *mrt, uint ssz, uint msz,
+void nvmmrt_init(struct netvm_mrt *mrt, struct netvm_mrt_vmcfg *cfg,
 		 struct netvm_rt_io *io);
 int nvmmrt_set_begin(struct netvm_mrt *mrt, struct netvm_program *prog);
 int nvmmrt_set_end(struct netvm_mrt *mrt, struct netvm_program *prog);

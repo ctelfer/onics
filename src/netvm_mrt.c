@@ -4,31 +4,51 @@
 #include <string.h>
 #include <cat/stduse.h>
 #include <cat/emalloc.h>
+#include <cat/err.h>
 #include "netvm_mrt.h"
 #include "pktbuf.h"
 
 
-void nvmmrt_init(struct netvm_mrt *mrt, uint ssz, uint msz,
+void nvmmrt_init(struct netvm_mrt *mrt, struct netvm_mrt_vmcfg *cfg,
 		 struct netvm_rt_io *io)
 {
 	uint64_t *stk;
 	byte_t *mem;
+	uint len;
+	int i;
+	struct netvm_segdesc *sd;
+	struct netvm_coproc *cp;
 
-	abort_unless(mrt && ssz > 0 && io);
+	abort_unless(mrt && cfg && cfg->stksz > 0 && io);
 
-	stk = ecalloc(ssz, sizeof(uint64_t));
-	if (msz > 0)
-		mem = ecalloc(msz, sizeof(byte_t));
-	else
-		mem = NULL;
+	stk = ecalloc(cfg->stksz, sizeof(uint64_t));
 
-	netvm_init(&mrt->vm, stk, ssz);
+	netvm_init(&mrt->vm, stk, cfg->stksz);
 	mrt->io = io;
 	mrt->begin = NULL;
 	mrt->end = NULL;
 	mrt->pktprogs = clist_new_list(&estdmm,
 				       sizeof(struct netvm_matchedprog));
-	mrt->eprog = NULL;
+
+	for (i = 0; i < NETVM_MAXMSEGS; ++i) {
+		sd = &cfg->sdescs[i];
+		mem = NULL;
+		len = 0;
+		if (sd->perms != 0) {
+			mem = ecalloc(sd->len, 1);
+			len = len;
+		}
+		netvm_set_mseg(&mrt->vm, i, mem, len, sd->perms);
+	}
+
+	for (i = 0; i < NETVM_MAXCOPROC; ++i) {
+		cp = cfg->coprocs[i];
+		if (cp != NULL) {
+			if (netvm_set_coproc(&mrt->vm, i, cp) < 0)
+				err("error installing coprocessor %d"
+				    "of type %llu\n", (ulonglong)cp->type);
+		}
+	}
 }
 
 
