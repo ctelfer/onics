@@ -7,21 +7,55 @@
 #include <limits.h>
 
 
+static void install_mseg(struct netvm *vm, struct netvm_program *prog,
+		         struct netvm_segdesc save[NETVM_MAXMSEGS])
+{
+	int i;
+	for (i = 0; i < NETVM_MAXMSEGS; ++i) {
+		save[i].len = vm->msegs[i].len;
+		vm->msegs[i].len = prog->sdescs[i].len;
+		save[i].perms = vm->msegs[i].perms;
+		vm->msegs[i].perms = prog->sdescs[i].perms;
+	}
+
+}
+
+
+static void restore_mseg(struct netvm *vm, 
+		         struct netvm_segdesc save[NETVM_MAXMSEGS])
+{
+	int i;
+	for (i = 0; i < NETVM_MAXMSEGS; ++i) {
+		vm->msegs[i].len = save[i].len;
+		vm->msegs[i].perms = save[i].perms;
+	}
+
+}
+
+
 int nvmp_validate(struct netvm_program *prog, struct netvm *vm)
 {
 	uint i;
+	int rv = 0;
 	struct netvm_segdesc *sd;
 	struct netvm_meminit *mi;
-	int rv;
+	struct netvm_mseg *ms;
+	struct netvm_segdesc msave[NETVM_MAXMSEGS];
 
 	abort_unless(vm && prog);
 
 	if (prog->ninst < 1)
 		return NETVM_ERR_PROG;
 
-	for (i = 0; i < NETVM_MAXMSEGS; ++i)
-		if ((prog->sdescs[i].perms & ~NETVM_SEG_PMASK) != 0)
+	for (i = 0; i < NETVM_MAXMSEGS; ++i) {
+		sd = &prog->sdescs[i];
+		ms = &vm->msegs[i];
+		if (((sd->perms & ~NETVM_SEG_PMASK) != 0) ||
+		    ((sd->perms & ms->perms) != sd->perms) ||
+		    (sd->len > ms->len))
 			return NETVM_ERR_PROG;
+	}
+
 	if ((prog->ninits > 0) && (prog->inits == NULL))
 		return -1;
 	for (i = 0; i < prog->ninits; ++i) {
@@ -37,23 +71,23 @@ int nvmp_validate(struct netvm_program *prog, struct netvm *vm)
 		if (mi->off + mi->val.len > sd->len)
 			return NETVM_ERR_PROG;
 	}
+
 	for (i = 0; i < NETVM_MAXCOPROC; ++i)
 		if ((prog->cpreqs[i] != NETVM_CPT_NONE) && 
 		    (vm->coprocs[i]->type != prog->cpreqs[i]))
 			return NETVM_ERR_BADCP;
+
 	netvm_set_code(vm, prog->inst, prog->ninst);
 	netvm_set_matchonly(vm, prog->matchonly);
-	for (i = 0; i < NETVM_MAXMSEGS; ++i)
-		vm->msegs[i].perms = prog->sdescs[i].perms;
-	if ((rv = netvm_validate(vm)) < 0)
-		return rv;
+	install_mseg(vm, prog, msave);
+
+	rv = netvm_validate(vm);
 
 	/* Clean up */
 	netvm_set_code(vm, NULL, 0);
-	for (i = 0; i < NETVM_MAXMSEGS; ++i)
-		vm->msegs[i].perms = 0;
+	restore_mseg(vm, msave);
 
-	return 0;
+	return rv;
 }
 
 
@@ -62,25 +96,17 @@ void nvmp_init_mem(struct netvm_program *prog, struct netvm *vm)
 	int i;
 	struct netvm_mseg *ms;
 	struct netvm_meminit *mi;
-	struct netvm_segdesc *sd;
 
 	abort_unless(prog && vm);
-
-	for (i = 0; i < NETVM_MAXMSEGS; ++i) {
-		sd = &prog->sdescs[i];
-		ms = &vm->msegs[i];
-		abort_unless(sd->len <= ms->len);
-		ms->perms = sd->perms;
-	}
 
 	abort_unless(prog->ninits == 0 || prog->inits != NULL);
 
 	mi = prog->inits;
 	for (i = 0; i < prog->ninits; ++i, ++mi) {
-		abort_unless(mi->val.len <= UINT_MAX - mi->off);
-		abort_unless(mi->val.len + mi->off <= ms->len);
 		abort_unless(mi->segnum < NETVM_MAXMSEGS);
 		ms = &vm->msegs[mi->segnum];
+		abort_unless(mi->val.len <= UINT_MAX - mi->off);
+		abort_unless(mi->val.len + mi->off <= ms->len);
 		memmove(ms->base + mi->off, mi->val.data, mi->val.len);
 	}
 }
@@ -89,52 +115,20 @@ void nvmp_init_mem(struct netvm_program *prog, struct netvm *vm)
 int nvmp_exec(struct netvm_program *prog, struct netvm *vm, int maxc,
 	      uint64_t *vmrv)
 {
+	int rv;
+	struct netvm_segdesc msave[NETVM_MAXMSEGS];
+
 	abort_unless(prog && vm);
 	netvm_set_code(vm, prog->inst, prog->ninst);
 	netvm_set_matchonly(vm, prog->matchonly);
 	netvm_restart(vm);
-	return netvm_run(vm, maxc, vmrv);
+	netvm_set_pc(vm, prog->ep);
+	install_mseg(vm, prog, msave);
+	rv = netvm_run(vm, maxc, vmrv);
+	restore_mseg(vm, msave);
+
+	return rv;
 }
-
-
-/*
- * NetVM Program file format: 
- *
- * All multibyte fields are stored big endian.
- * For simplicity, each base field is a 32-bit unsigned integer.
- *  -- 0 -- Magic (0x4E564D50 "NVMP")
- *  -- 1 -- 1B: version, 1B matchonly, 2B reserved
- *  -- 2 -- number of instructions
- *  -- 3 -- number of co-processor requirements
- *  -- 4 -- number of segment sections
- *  -- 5 -- number of mem inits
- *  -- 6 -- mem initialization length 
- *  -- 7 -- reserved
- *  -- <# instr> * 8 bytes --  instructions
- *  -- <# cpreqs> * 12 bytes --  coprocessor requirements
- *  -- <# segs> -- segment sections
- *  -- <# mem inits> -- memory initializations
- *
- *  Instruction format:
- *    opcode[1] x[1] y[1] z[1] w[4]
- *
- *  Co Processor requirement format:
- *    cpi[4] cpt[8]
- *
- *  Segment format:
- *    segnum[4] len[4] perms[4]
- *
- *  Memory initialization format:
- *    segnum[4] off[4] len[4] <data padded to 4 byte multiples>
- */
-
-#define NVMP_MAGIC	0x4E564D50
-#define NVMP_V1		1
-#define NVMP_HLEN	32
-#define NVMP_INSTLEN	8
-#define NVMP_CPLEN	12
-#define NVMP_SEGPLEN	12
-#define NVMP_MIHLEN	12
 
 
 int nvmp_read(struct netvm_program *prog, FILE *infile, int *eret)
@@ -145,7 +139,7 @@ int nvmp_read(struct netvm_program *prog, FILE *infile, int *eret)
 	struct netvm_meminit *mi;
 	uint i;
 	byte_t version, matchonly, p1, p2;
-	ulong magic, ninst, ncp, nseg, nmi, milen;
+	ulong magic, ninst, ncp, nseg, nmi, milen, ep;
 	ulong cpi;
 	ulonglong cpt;
 	ulong segnum, off, len, perms;
@@ -157,8 +151,10 @@ int nvmp_read(struct netvm_program *prog, FILE *infile, int *eret)
 	/* redundant but explicit */
 	prog->ninst = 0;
 	prog->inst = NULL;
-	for (i = 0, sd = prog->sdescs; i < NETVM_MAXMSEGS; ++i, ++sd)
+	for (i = 0, sd = prog->sdescs; i < NETVM_MAXMSEGS; ++i, ++sd) {
 		sd->perms = 0;
+		sd->len = 0;
+	}
 	for (i = 0; i < NETVM_MAXCOPROC; ++i)
 		prog->cpreqs[i] = NETVM_CPT_NONE;
 
@@ -168,14 +164,18 @@ int nvmp_read(struct netvm_program *prog, FILE *infile, int *eret)
 	}
 
 	/* Read header */
-	unpack(buf, sizeof(buf), "wbbbbwwwww", &magic, &version, &matchonly, 
-	       &p1, &p2, &ninst, &ncp, &nseg, &nmi, &milen);
+	unpack(buf, sizeof(buf), "wbbbbwwwwww", &magic, &version, &matchonly, 
+	       &p1, &p2, &ninst, &ncp, &nseg, &nmi, &milen, &ep);
 	if ((magic != NVMP_MAGIC) || (version != NVMP_V1)) {
 		e = NVMP_RDE_BADMAGIC;
 		goto err;
 	}
 	if (ninst > UINT_MAX) {
 		e = NVMP_RDE_BADNINST;
+		goto err;
+	}
+	if (ep >= ninst) {
+		e = NVMP_RDE_BADEP;
 		goto err;
 	}
 	if (ncp > NETVM_MAXCOPROC) {
@@ -200,6 +200,7 @@ int nvmp_read(struct netvm_program *prog, FILE *infile, int *eret)
 		goto err;
 	}
 	prog->ninst = ninst;
+	prog->ep = ep;
 	for (i = 0, ni = prog->inst; i < ninst; ++i, ++ni) {
 		uchar op, x, y, z;
 		ulong w;
@@ -261,6 +262,10 @@ int nvmp_read(struct netvm_program *prog, FILE *infile, int *eret)
 		goto err;
 	}
 	prog->ninits = nmi;
+	for (i = 0; i < prog->ninits; ++i) {
+		prog->inits[i].val.data = NULL;
+		prog->inits[i].val.len = 0;
+	}
 	for (i = 0; i < nmi; ++i, ++mi) {
 		if (milen < NVMP_MIHLEN) {
 			e = NVMP_RDE_MITOTLEN;
@@ -281,11 +286,11 @@ int nvmp_read(struct netvm_program *prog, FILE *infile, int *eret)
 			goto err;
 		}
 		sd = &prog->sdescs[segnum];
-		if ((off >= sd->len) || (sd->len - off > len)) {
+		if ((off >= sd->len) || (sd->len - off < len)) {
 			e = NVMP_RDE_MIOFFLEN;
 			goto err;
 		}
-		ilen = (len + 3) & 3;
+		ilen = (len + 3) & ~3;
 		if (milen < ilen) {
 			e = NVMP_RDE_MITOTLEN;
 			goto err;
@@ -355,10 +360,10 @@ int nvmp_write(struct netvm_program *prog, FILE *outfile)
 
 
 	/* Write header */
-	pack(buf, sizeof(buf), "wbbbbwww",
+	pack(buf, sizeof(buf), "wbbbbwwwwww",
 	     (ulong)NVMP_MAGIC, NVMP_V1, prog->matchonly, 0, 0, 
 	     (ulong)prog->ninst, (ulong)ncp, (ulong)nseg,
-	     (ulong)prog->ninits, (ulong)milen, (ulong)0);
+	     (ulong)prog->ninits, (ulong)milen, (ulong)prog->ep);
 
 	/* write instructions */
 	if (fwrite(buf, 1, NVMP_HLEN, outfile) < NVMP_HLEN)
