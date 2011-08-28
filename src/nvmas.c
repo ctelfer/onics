@@ -29,9 +29,10 @@
 .define CPT_XPKT	1
 .coproc 0 CPT_XPKT
 .mem name segnum addr nbytes [init]
+.entry @label
 
 label:	add 
-	jmpi, &label
+	jmpi, @label
 	bzi, 3
 	cpop 0, 0, z, w
 	pkfxli *PKTN:PPT.INDEX.FIELD[OFFSET]
@@ -83,6 +84,8 @@ struct nvmop Operations[] = {
 	{ "ldbpi",  NETVM_OC_LDBPI,  1, ARGW },
 	{ "stbp",   NETVM_OC_STBP,   0, 0 },
 	{ "stbpi",  NETVM_OC_STBPI,  1, ARGW },
+	{ "pushfr", NETVM_OC_PUSHFR, 1, ARGW },
+	{ "popfr",  NETVM_OC_POPFR,  2, ARGX|ARGY },
 	{ "pfe",    NETVM_OC_PFE,    0, 0 },
 	{ "pfei",   NETVM_OC_PFEI,   4, ARGY|ARGZ|ARGW|PDONLY },
 	{ "ldpf",   NETVM_OC_LDPF,   0, 0 },
@@ -146,7 +149,7 @@ struct nvmop Operations[] = {
 	{ "bnzi",   NETVM_OC_BNZI,   1, ARGW|BRREL },
 	{ "bzi",    NETVM_OC_BZI,    1, ARGW|BRREL },
 	{ "jmpi",   NETVM_OC_JMPI,   1, ARGW },
-	{ "halt",   NETVM_OC_HALT,   1, ARGW },
+	{ "halt",   NETVM_OC_HALT,   1, 0 },
 	{ "cpop",   NETVM_OC_CPOP,   0, 0 },
 	{ "br",     NETVM_OC_BR,     0, 0 },
 	{ "bnz",    NETVM_OC_BNZ,    0, 0 },
@@ -155,7 +158,6 @@ struct nvmop Operations[] = {
 	{ "jmp",    NETVM_OC_JMP,    0, 0 },
 	{ "call",   NETVM_OC_CALL,   1, ARGW },
 	{ "ret",    NETVM_OC_RET,    1, ARGW },
-	{ "popbp",  NETVM_OC_POPBP,  0, 0 },
 	{ "st",     NETVM_OC_ST,     2, ARGX|ARGY },
 	{ "sti",    NETVM_OC_STI,    4, ARGX|ARGY|ARGZ|ARGW|ZOPT|PDOPT },
 	{ "move",   NETVM_OC_MOVE,   0, 0 },
@@ -209,6 +211,7 @@ struct asmctx {
 	int 			matchonly;
 	struct instruction  	instrs[MAXINSTR];
 	uint			numi;
+	char 			entry[MAXSTR];
 	char			files[MAXFILES][MAXSTR];
 	uint			numf;
 	char *			curfile;
@@ -507,7 +510,7 @@ int str2inst(const char *s, struct htab *ct, uint inum, struct netvm_inst *ni)
 		}
 
 		/* in a very few instructions, Z is an optional argument.   */
-		/* if so, it defaults to 0 (but this should not be used:    */
+		/* if so, it defaults to 0 (but this should not be used):   */
 		/* The Z should really only be omitted when it isn't needed */
 		if (((op->argmask & ARGZ) != 0) &&
 		    (((op->argmask & ZOPT) == 0) || (nt - 1 == op->nargs))) {
@@ -611,6 +614,7 @@ static void init_asmctx(struct asmctx *ctx)
 {
 	int i;
 	ctx->matchonly = 0;
+	str_copy(ctx->entry, "", sizeof(ctx->entry));
 	memset(ctx->consts, 0, sizeof(ctx->consts));
 	for (i = 0; i < array_length(ctx->celem); ++i)
 		ctx->celem[i] = NULL;
@@ -946,6 +950,34 @@ static int do_coproc(struct asmctx *ctx, char *fn, uint lineno,
 }
 
 
+static int do_entry(struct asmctx *ctx, char *fn, uint lineno,
+		    struct raw toks[], uint nt)
+{
+	if (nt != 2) {
+		logrec(1, "invalid number of args for .entry"
+			  "in file %s on line %u; expected 2\n",
+		       fn, lineno);
+		return 1;
+	}
+	if (strcmp(ctx->entry, "") != 0) {
+		logrec(1, "multiple entry points specified:"
+			  " dup is in file %s on line %u\n",
+		       fn, lineno);
+		return 1;
+	}
+	if (strcmp(toks[1].data, "") == 0 || 
+	    toks[1].len == sizeof(ctx->entry)) {
+		logrec(1, "invalid entry point '%s' specified"
+			  " in file %s on line %u\n", 
+		       toks[1].data, fn, lineno);
+		return 1;
+	}
+	str_copy(ctx->entry, toks[1].data, sizeof(ctx->entry));
+
+	return 0;
+}
+
+
 int parse_asm_directive(struct asmctx *ctx, char *s, char *fn, uint lineno)
 {
 	struct raw toks[MAXTOKS];
@@ -969,6 +1001,8 @@ int parse_asm_directive(struct asmctx *ctx, char *s, char *fn, uint lineno)
 		return do_mem(ctx, fn, lineno, toks, nt);
 	} else if (strcmp(toks[0].data, "coproc") == 0) {
 		return do_coproc(ctx, fn, lineno, toks, nt);
+	} else if (strcmp(toks[0].data, "entry") == 0) {
+		return do_entry(ctx, fn, lineno, toks, nt);
 	} else {
 		logrec(1, "unknown directive '%s' on file %s line %u\n",
 		       toks[0].data, fn, lineno);
@@ -1007,9 +1041,9 @@ static int assemble(struct asmctx *ctx, const char *fn, FILE *input)
 		}
 		ep = cp + strspn(cp, LABELCHARS);
 		if (*ep == ':') {
+			*ep = '\0';
 			buf[0] = '@';
-			memcpy(buf+1, cp, ep - cp);
-			buf[ep - cp + 2] = '\0';
+			str_copy(buf+1, cp, MAXSTR-1);
 			if (find_const(&ctx->ctab, buf, NULL)) {
 				logrec(1, "Duplicate label '%s:' in %s:%u\n",
 				       buf+1, ctx->curfile, lineno);
@@ -1069,6 +1103,17 @@ void emit_program(struct asmctx *ctx, FILE *outfile)
 	struct netvm_inst *istore;
 	struct netvm_meminit *mi;
 	int i;
+	ulong ep = 0;
+
+	if (strcmp(ctx->entry, "") != 0) {
+		if (isdigit(ctx->entry[0])) {
+			ep = strtoul(ctx->entry, NULL, 0);
+		} else {
+			if (!find_const(&ctx->ctab, ctx->entry, &ep))
+				err("entry point '%s' unknown", ctx->entry);
+		}
+	}
+	prog.ep = ep;
 
 	istore = emalloc(sizeof(struct netvm_inst) * ctx->numi);
 	prog.matchonly = ctx->matchonly;
@@ -1110,6 +1155,7 @@ void disassemble(FILE *infile, FILE *outfile)
 
 	if (prog.matchonly)
 		fprintf(outfile, ".matchonly\n");
+	fprintf(outfile, ".entry %u\n", prog.ep);
 
 	for (i = 0; i < NETVM_MAXMSEGS; ++i) {
 		sd = &prog.sdescs[i];
