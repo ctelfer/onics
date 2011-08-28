@@ -249,6 +249,44 @@ static void ni_stbpi(struct netvm *vm)
 }
 
 
+static void ni_pushfr(struct netvm *vm)
+{
+	struct netvm_inst *inst = &vm->inst[vm->pc];
+	uint64_t sslot;
+
+	FATAL(vm, NETVM_ERR_STKUNDF, !S_HAS(vm, inst->w));
+	FATAL(vm, NETVM_ERR_STKOVFL, S_AVAIL(vm) < 1);
+	sslot = vm->sp - inst->w;
+	memmove(vm->stack + sslot + 1, vm->stack + sslot,
+		inst->w * sizeof(vm->stack[0]));
+	vm->stack[sslot] = vm->bp;
+	vm->bp = sslot + 1;
+	vm->sp += 1;
+}
+
+
+static void ni_popfr(struct netvm *vm)
+{
+	struct netvm_inst *inst = &vm->inst[vm->pc];
+	uint64_t tos;
+	uint64_t bp;
+
+	if (inst->x) {
+		FATAL(vm, NETVM_ERR_STKUNDF, (vm->bp < 1));
+		if (inst->y)
+			S_POP(vm, tos);
+		vm->sp = vm->bp - 1;
+		bp = vm->stack[vm->bp - 1];
+		FATAL(vm, NETVM_ERR_STKUNDF, bp >= vm->bp - 1);
+		vm->bp = bp;
+		if (inst->y)
+			S_PUSH_NOCK(vm, tos);
+	} else {
+		vm->sp = vm->bp;
+	}
+}
+
+
 static void ni_pfe(struct netvm *vm)
 {
 	struct netvm_inst *inst = &vm->inst[vm->pc];
@@ -866,15 +904,6 @@ static void ni_ret(struct netvm *vm)
 }
 
 
-static void ni_popbp(struct netvm *vm)
-{
-	uint64_t bp;
-	S_POP(vm, bp);
-	FATAL(vm, NETVM_ERR_STKUNDF, bp > vm->sp);
-	vm->bp = bp;
-}
-
-
 void netvm_stk2p(struct netvm *vm, byte_t *p, uint64_t val, int width)
 {
 	switch (width & 0x7F) {
@@ -1258,6 +1287,8 @@ netvm_op g_netvm_ops[NETVM_OC_MAX + 1] = {
 	ni_ldbpi,		/* LDBPI */
 	ni_stbp,		/* STBP */
 	ni_stbpi,		/* STBPI */
+	ni_pushfr,		/* PUSHFR */
+	ni_popfr,		/* POPFR */
 	ni_pfe,			/* PFE */
 	ni_pfe,			/* PFEI */
 	ni_ldpf,		/* LDPF */
@@ -1339,7 +1370,6 @@ netvm_op g_netvm_ops[NETVM_OC_MAX + 1] = {
 	ni_jmp,			/* JMP */
 	ni_call,		/* CALL */
 	ni_ret,			/* RET */
-	ni_popbp,		/* POPBP */
 
 	ni_st,			/* ST */
 	ni_st,			/* STI */
@@ -1598,6 +1628,13 @@ void netvm_reset(struct netvm *vm)
 	netvm_clr_pkts(vm);
 	netvm_reset_coprocs(vm);
 	netvm_restart(vm);
+}
+
+
+/* reinitialize for running but with same packet and memory state */
+void netvm_set_pc(struct netvm *vm, uint pc)
+{
+	vm->pc = pc;
 }
 
 

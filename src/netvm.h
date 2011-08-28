@@ -241,12 +241,19 @@ enum {
 	NETVM_OC_DUP,		/* dups 'w' from the top of the stack */
 	NETVM_OC_SWAP,		/* swap stack pos 0 and 'w' from SP down */
 	NETVM_OC_LDBP,		/* [i] load value i positions above the BP */
-				/*   if !x or i positions below the BP if x */
 	NETVM_OC_LDBPI,		/* as BPLD but position is taken from 'w' */
 	NETVM_OC_STBP,		/* [v, i] pop top of stack and store the value */
 				/*   i positions above the BP. This must be */
 				/*   within the newly popped stack frame. */
 	NETVM_OC_STBPI,		/* [v] as BPST but position is taken from 'w' */
+	NETVM_OC_PUSHFR,	/* push current bp onto stack - 'w' slots */
+				/*     pushing the rest of the stack up.  Set */
+				/*     the bp to point to the saved bp. */
+	NETVM_OC_POPFR,		/* pop the stack to the BP.  If 'x' pop the */
+				/*     saved BP and set the BP to the saved */
+				/*     value.  If 'x' and 'y' then keep the */
+				/*     top stack value, restore the old BP, */
+       				/*     and push the saved val onto the stack */
 	NETVM_OC_PFE,		/* [pdesc] push 1 if field exists 0 otherwise */
 	NETVM_OC_PFEI,		/* same as PFE but use packed pdesc */
 	NETVM_OC_LDPF,		/* [pdesc] load field from proto parse */
@@ -376,8 +383,6 @@ enum {
 				/*   branch back to bp-2 addr, restoring */
 				/*   bp to bp-1 value.  leave the top 'w' */
 				/*   vals from the stack on the top of stack */
-	NETVM_OC_POPBP,		/* Pop the top of the stack to the BP. */
-				/*   The new value must be <= the new SP */
 
 	/* 
 	 * See NETVM_OC_LD(I) for information on how these instructions are
@@ -538,6 +543,9 @@ void netvm_restart(struct netvm *vm);
 
 /* clear memory, set pc <- 0, set sp <- 0, discard packets */
 void netvm_reset(struct netvm *vm);
+
+/* set the program counter in the vm to pc */
+void netvm_set_pc(struct netvm *vm, uint pc);
 
 /* will free existing packets if they are slotted.  Note this gives up */
 /* control of the packet.  netvm_clrpkt() or netvm_reset() or other native */
