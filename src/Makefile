@@ -10,7 +10,7 @@ OPTS=-g -Wall -Wno-sign-conversion -Wno-pointer-sign
 LIBS=-L${CATLIB_ROOT}/lib -lcat_dbg -lpcap
 DEFS=
 BINDIR=../bin
-LIBOBJS= xpkt.o ns.o netvm.o netvm_prog.o netvm_mrt.o pktbuf.o stdproto.o \
+LIBOBJS= xpkt.o ns.o netvm.o netvm_prog.o pktbuf.o stdproto.o \
 	 protoparse.o util.o lex.pml.o pmltree.o netvm_std_coproc.o \
 	 pml.o
 

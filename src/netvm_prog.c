@@ -7,6 +7,9 @@
 #include <limits.h>
 
 
+STATIC_BUG_ON(uint_larger_than_32_bits, sizeof(uint32_t) < sizeof(uint));
+
+
 static void install_mseg(struct netvm *vm, struct netvm_program *prog,
 		         struct netvm_segdesc save[NETVM_MAXMSEGS])
 {
@@ -30,6 +33,13 @@ static void restore_mseg(struct netvm *vm,
 		vm->msegs[i].perms = save[i].perms;
 	}
 
+}
+
+
+int nvmp_ep_is_set(struct netvm_program *prog, int ep)
+{
+	abort_unless(prog && ep >= 0 && ep < NVMP_EP_NUMEP);
+	return prog->eps[ep] != NVMP_EP_INVALID;
 }
 
 
@@ -112,23 +122,26 @@ void nvmp_init_mem(struct netvm_program *prog, struct netvm *vm)
 }
 
 
-int nvmp_exec(struct netvm_program *prog, struct netvm *vm, int maxc,
+int nvmp_exec(struct netvm_program *prog, int ep, struct netvm *vm, int maxc,
 	      uint64_t *vmrv)
 {
 	int rv;
 	struct netvm_segdesc msave[NETVM_MAXMSEGS];
 
-	abort_unless(prog && vm);
+	abort_unless(prog && vm && ep >= 0 && ep < NVMP_EP_NUMEP);
 	netvm_set_code(vm, prog->inst, prog->ninst);
 	netvm_set_matchonly(vm, prog->matchonly);
 	netvm_restart(vm);
-	netvm_set_pc(vm, prog->ep);
+	netvm_set_pc(vm, prog->eps[ep]);
 	install_mseg(vm, prog, msave);
 	rv = netvm_run(vm, maxc, vmrv);
 	restore_mseg(vm, msave);
 
 	return rv;
 }
+
+
+#define NETVM_PROG_EXT_EP_INVALID 0xFFFFFFFF
 
 
 int nvmp_read(struct netvm_program *prog, FILE *infile, int *eret)
@@ -139,7 +152,8 @@ int nvmp_read(struct netvm_program *prog, FILE *infile, int *eret)
 	struct netvm_meminit *mi;
 	uint i;
 	byte_t version, matchonly, p1, p2;
-	ulong magic, ninst, ncp, nseg, nmi, milen, ep;
+	ulong magic, ninst, ncp, nseg, nmi, milen;
+	ulong sep, pep, eep;
 	ulong cpi;
 	ulonglong cpt;
 	ulong segnum, off, len, perms;
@@ -164,8 +178,16 @@ int nvmp_read(struct netvm_program *prog, FILE *infile, int *eret)
 	}
 
 	/* Read header */
-	unpack(buf, sizeof(buf), "wbbbbwwwwww", &magic, &version, &matchonly, 
-	       &p1, &p2, &ninst, &ncp, &nseg, &nmi, &milen, &ep);
+	unpack(buf, sizeof(buf), "wbbbbwwwwwwww", &magic, &version, &matchonly, 
+	       &p1, &p2, &ninst, &ncp, &nseg, &nmi, &milen, &sep, &pep, &eep);
+
+	if (sep == NETVM_PROG_EXT_EP_INVALID)
+		sep = NVMP_EP_INVALID;
+	if (pep == NETVM_PROG_EXT_EP_INVALID)
+		pep = NVMP_EP_INVALID;
+	if (eep == NETVM_PROG_EXT_EP_INVALID)
+		eep = NVMP_EP_INVALID;
+
 	if ((magic != NVMP_MAGIC) || (version != NVMP_V1)) {
 		e = NVMP_RDE_BADMAGIC;
 		goto err;
@@ -174,7 +196,9 @@ int nvmp_read(struct netvm_program *prog, FILE *infile, int *eret)
 		e = NVMP_RDE_BADNINST;
 		goto err;
 	}
-	if (ep >= ninst) {
+	if (((sep != NVMP_EP_INVALID) && (sep >= ninst)) || 
+	    ((pep != NVMP_EP_INVALID) && (pep >= ninst)) || 
+	    ((eep != NVMP_EP_INVALID) && (eep >= ninst))) {
 		e = NVMP_RDE_BADEP;
 		goto err;
 	}
@@ -200,7 +224,9 @@ int nvmp_read(struct netvm_program *prog, FILE *infile, int *eret)
 		goto err;
 	}
 	prog->ninst = ninst;
-	prog->ep = ep;
+	prog->eps[NVMP_EP_START] = sep;
+	prog->eps[NVMP_EP_PACKET] = pep;
+	prog->eps[NVMP_EP_END] = eep;
 	for (i = 0, ni = prog->inst; i < ninst; ++i, ++ni) {
 		uchar op, x, y, z;
 		ulong w;
@@ -326,18 +352,16 @@ err:
 
 int nvmp_write(struct netvm_program *prog, FILE *outfile)
 {
-	int ncp, nseg;
 	struct netvm_segdesc *sd;
 	struct netvm_meminit *mi;
 	byte_t buf[NVMP_HLEN];
 	struct netvm_inst *ni;
 	uint i;
-	ulong milen = 0, ilen;
+	ulong ncp = 0, nseg = 0, milen = 0, ilen;
+	ulong eps[NVMP_EP_NUMEP];
 
 	abort_unless(prog);
 
-	ncp = 0;
-	nseg = 0;
 	for (i = 0, sd = prog->sdescs; i < NETVM_MAXMSEGS; ++i, ++sd)
 		if (sd->perms != 0)
 			++nseg;
@@ -358,12 +382,18 @@ int nvmp_write(struct netvm_program *prog, FILE *outfile)
 		milen += ilen;
 	}
 
+	for (i = 0; i < NVMP_EP_NUMEP; ++i) {
+		if (prog->eps[i] == NVMP_EP_INVALID)
+			eps[i] = NETVM_PROG_EXT_EP_INVALID;
+		else
+			eps[i] = prog->eps[i];
+	}
 
-	/* Write header */
-	pack(buf, sizeof(buf), "wbbbbwwwwww",
+	/* write header */
+	pack(buf, sizeof(buf), "wbbbbwwwwwwww",
 	     (ulong)NVMP_MAGIC, NVMP_V1, prog->matchonly, 0, 0, 
-	     (ulong)prog->ninst, (ulong)ncp, (ulong)nseg,
-	     (ulong)prog->ninits, (ulong)milen, (ulong)prog->ep);
+	     (ulong)prog->ninst, ncp, nseg,
+	     (ulong)prog->ninits, milen, eps[0], eps[1], eps[2]);
 
 	/* write instructions */
 	if (fwrite(buf, 1, NVMP_HLEN, outfile) < NVMP_HLEN)

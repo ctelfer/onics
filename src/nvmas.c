@@ -29,7 +29,7 @@
 .define CPT_XPKT	1
 .coproc 0 CPT_XPKT
 .mem name segnum addr nbytes [init]
-.entry @label
+.entry (start|packet|end) @label
 
 label:	add 
 	jmpi, @label
@@ -211,7 +211,7 @@ struct asmctx {
 	int 			matchonly;
 	struct instruction  	instrs[MAXINSTR];
 	uint			numi;
-	char 			entry[MAXSTR];
+	char 			eps[NVMP_EP_NUMEP][MAXSTR];
 	char			files[MAXFILES][MAXSTR];
 	uint			numf;
 	char *			curfile;
@@ -223,6 +223,11 @@ struct asmctx {
 	uint64_t                cpreqs[NETVM_MAXCOPROC];
 	struct netvm_meminit	minits[MAXMEMINIT];
 	uint			ninits;
+};
+
+
+const char *epnames[NVMP_EP_NUMEP] = {
+	"start", "packet", "end"
 };
 
 
@@ -614,7 +619,8 @@ static void init_asmctx(struct asmctx *ctx)
 {
 	int i;
 	ctx->matchonly = 0;
-	str_copy(ctx->entry, "", sizeof(ctx->entry));
+	for (i = 0; i < NVMP_EP_NUMEP; ++i)
+		str_copy(ctx->eps[i], "", sizeof(ctx->eps[0]));
 	memset(ctx->consts, 0, sizeof(ctx->consts));
 	for (i = 0; i < array_length(ctx->celem); ++i)
 		ctx->celem[i] = NULL;
@@ -953,26 +959,36 @@ static int do_coproc(struct asmctx *ctx, char *fn, uint lineno,
 static int do_entry(struct asmctx *ctx, char *fn, uint lineno,
 		    struct raw toks[], uint nt)
 {
-	if (nt != 2) {
-		logrec(1, "invalid number of args for .entry"
-			  "in file %s on line %u; expected 2\n",
+	int epi;
+	if (nt != 3) {
+		logrec(1, "invalid number of args for .entry "
+			  "in file %s on line %u; expected 3\n",
 		       fn, lineno);
 		return 1;
 	}
-	if (strcmp(ctx->entry, "") != 0) {
-		logrec(1, "multiple entry points specified:"
-			  " dup is in file %s on line %u\n",
-		       fn, lineno);
-		return 1;
-	}
-	if (strcmp(toks[1].data, "") == 0 || 
-	    toks[1].len == sizeof(ctx->entry)) {
-		logrec(1, "invalid entry point '%s' specified"
-			  " in file %s on line %u\n", 
+	for (epi = 0; epi < NVMP_EP_NUMEP; ++epi)
+		if (strcmp(toks[1].data, epnames[epi]) == 0)
+			break;
+	if (epi == NVMP_EP_NUMEP) {
+		logrec(1, "erroneous entry point type: '%s'"
+			  " in file %s on line %u\n",
 		       toks[1].data, fn, lineno);
 		return 1;
 	}
-	str_copy(ctx->entry, toks[1].data, sizeof(ctx->entry));
+	if (strcmp(ctx->eps[epi], "") != 0) {
+		logrec(1, "multiple %s entry points specified:"
+			  " dup is in file %s on line %u\n",
+		       toks[1], fn, lineno);
+		return 1;
+	}
+	if (strcmp(toks[2].data, "") == 0 || 
+	    toks[2].len == sizeof(ctx->eps[0])) {
+		logrec(1, "invalid entry point '%s' specified"
+			  " in file %s on line %u\n", 
+		       toks[2].data, fn, lineno);
+		return 1;
+	}
+	str_copy(ctx->eps[epi], toks[2].data, sizeof(ctx->eps[0]));
 
 	return 0;
 }
@@ -1097,23 +1113,42 @@ static int assemble(struct asmctx *ctx, const char *fn, FILE *input)
 }
 
 
+static void resolve_entry_points(struct asmctx *ctx, struct netvm_program *prog)
+{
+	int hasep = 0;
+	int i;
+	ulong ep = 0;
+
+	for (i = 0; i < NVMP_EP_NUMEP; ++i) {
+		prog->eps[i] = NVMP_EP_INVALID;
+		if (strcmp(ctx->eps[i], "") != 0) {
+			if (isdigit(ctx->eps[i][0])) {
+				ep = strtoul(ctx->eps[i], NULL, 0);
+			} else {
+				if (!find_const(&ctx->ctab, ctx->eps[i], &ep))
+					err("entry point '%s' unknown",
+					    ctx->eps[i]);
+			}
+			prog->eps[i] = ep;
+			hasep = 1;
+		}
+	}
+
+	/* if there are no entry points specified, default to a starting the */
+	/* program with the start entry point at instruction 0 */
+	if (!hasep)
+		prog->eps[NVMP_EP_START] = 0;
+}
+
+
 void emit_program(struct asmctx *ctx, FILE *outfile)
 {
 	struct netvm_program prog;
 	struct netvm_inst *istore;
 	struct netvm_meminit *mi;
 	int i;
-	ulong ep = 0;
 
-	if (strcmp(ctx->entry, "") != 0) {
-		if (isdigit(ctx->entry[0])) {
-			ep = strtoul(ctx->entry, NULL, 0);
-		} else {
-			if (!find_const(&ctx->ctab, ctx->entry, &ep))
-				err("entry point '%s' unknown", ctx->entry);
-		}
-	}
-	prog.ep = ep;
+	resolve_entry_points(ctx, &prog);
 
 	istore = emalloc(sizeof(struct netvm_inst) * ctx->numi);
 	prog.matchonly = ctx->matchonly;
@@ -1155,7 +1190,10 @@ void disassemble(FILE *infile, FILE *outfile)
 
 	if (prog.matchonly)
 		fprintf(outfile, ".matchonly\n");
-	fprintf(outfile, ".entry %u\n", prog.ep);
+	for (i = 0; i < NVMP_EP_NUMEP; ++i)
+		if (prog.eps[i] != NVMP_EP_INVALID)
+			fprintf(outfile, ".entry %s %u\n", epnames[i], 
+				prog.eps[i]);
 
 	for (i = 0; i < NETVM_MAXMSEGS; ++i) {
 		sd = &prog.sdescs[i];

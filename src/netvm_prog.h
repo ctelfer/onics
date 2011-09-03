@@ -17,17 +17,28 @@ struct netvm_meminit {
 };
 
 
+#define NVMP_EP_INVALID		(uint)-1
+/* Entry points in the netvm program */
+enum {
+	NVMP_EP_START,
+	NVMP_EP_PACKET,
+	NVMP_EP_END,
+	NVMP_EP_NUMEP,
+};
 struct netvm_program {
 	int			matchonly;		
 	struct netvm_inst *	inst;
 	uint			ninst;
-	uint			ep;			/* entry point */
+	uint			eps[NVMP_EP_NUMEP];
 	struct netvm_segdesc	sdescs[NETVM_MAXMSEGS];
 	uint64_t		cpreqs[NETVM_MAXCOPROC];
 	struct netvm_meminit	*inits;
 	uint			ninits;
 };
 
+
+/* Determine whether a program has a particular type of entry point defined */
+int nvmp_ep_is_set(struct netvm_program *prog, int ep);
 
 /* returns the same error codes as netvm_validate */
 int nvmp_validate(struct netvm_program *prog, struct netvm *vm);
@@ -36,8 +47,9 @@ int nvmp_validate(struct netvm_program *prog, struct netvm *vm);
 /* This is checked in nvmp_validate(). */
 void nvmp_init_mem(struct netvm_program *prog, struct netvm *vm);
 
-/* Returns the same error codes as netvm_run */
-int nvmp_exec(struct netvm_program *prog, struct netvm *vm, int maxcycles,
+/* Returns the same error codes as netvm_run.  Use netvm_run() to continue */
+/* execution if the program runs out of cycles. */
+int nvmp_exec(struct netvm_program *prog, int ep, struct netvm *vm, int maxcycles,
 	      uint64_t *vmrv);
 
 /*
@@ -52,7 +64,9 @@ int nvmp_exec(struct netvm_program *prog, struct netvm *vm, int maxcycles,
  *  -- 4 -- number of segment sections
  *  -- 5 -- number of mem inits
  *  -- 6 -- mem initialization length 
- *  -- 7 -- reserved
+ *  -- 7 -- initialization entry point
+ *  -- 8 -- packet entry point
+ *  -- 9 -- finalization entry point
  *  -- <# instr> * 8 bytes --  instructions
  *  -- <# cpreqs> * 12 bytes --  coprocessor requirements
  *  -- <# segs> -- segment sections
@@ -73,8 +87,9 @@ int nvmp_exec(struct netvm_program *prog, struct netvm *vm, int maxcycles,
 
 #define NVMP_MAGIC	0x4E564D50
 #define NVMP_V1		1
-#define NVMP_HLEN	32
+#define NVMP_HLEN	40
 #define NVMP_INSTLEN	8
+#define NVMP_NUMEPS	3
 #define NVMP_CPLEN	12
 #define NVMP_SEGPLEN	12
 #define NVMP_MIHLEN	12

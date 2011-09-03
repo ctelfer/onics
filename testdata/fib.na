@@ -1,4 +1,4 @@
-.entry @start
+.entry start @start
 
 .segment 0 3 1024
 
