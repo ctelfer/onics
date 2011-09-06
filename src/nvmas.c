@@ -86,8 +86,6 @@ struct nvmop Operations[] = {
 	{ "stbpi",  NETVM_OC_STBPI,  1, ARGW },
 	{ "pushfr", NETVM_OC_PUSHFR, 1, ARGW },
 	{ "popfr",  NETVM_OC_POPFR,  2, ARGX|ARGY },
-	{ "pfe",    NETVM_OC_PFE,    0, 0 },
-	{ "pfei",   NETVM_OC_PFEI,   4, ARGY|ARGZ|ARGW|PDONLY },
 	{ "ldpf",   NETVM_OC_LDPF,   0, 0 },
 	{ "ldpfi",  NETVM_OC_LDPFI,  4, ARGY|ARGZ|ARGW|PDONLY },
 	{ "ld",     NETVM_OC_LD,     2, ARGX|ARGY },

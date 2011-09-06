@@ -109,6 +109,7 @@ enum {
 	NETVM_PRP_LEN,
 	NETVM_PRP_ERR,
 	NETVM_PRP_TYPE,
+	NETVM_PRP_PIDX,
 	NETVM_PRP_OFF_BASE,
 
 	NETVM_PRP_SOFF = NETVM_PRP_OFF_BASE,
@@ -253,9 +254,7 @@ enum {
 				/*     saved BP and set the BP to the saved */
 				/*     value.  If 'x' and 'y' then keep the */
 				/*     top stack value, restore the old BP, */
-       				/*     and push the saved val onto the stack */
-	NETVM_OC_PFE,		/* [pdesc] push 1 if field exists 0 otherwise */
-	NETVM_OC_PFEI,		/* same as PFE but use packed pdesc */
+				/*     and push the saved val onto the stack */
 	NETVM_OC_LDPF,		/* [pdesc] load field from proto parse */
 	NETVM_OC_LDPFI,		/* load field from proto parse (packed pdesc) */
 

@@ -1631,7 +1631,7 @@ struct prparse_ops tcp_prparse_ops = {
 /* Ethernet Namespace */
 extern struct ns_elem *stdproto_eth2_ns_elems[STDPROTO_NS_ELEN];
 static struct ns_namespace eth2_ns = 
-	NS_NAMESPACE_I("eth", NULL, PPT_ETHERNET2,
+	NS_NAMESPACE_I("eth", NULL, PPT_ETHERNET2, PPT_PCLASS_LINK,
 		"Ethernet II -- Offset %lu, Length %lu",
 		stdproto_eth2_ns_elems, array_length(stdproto_eth2_ns_elems));
 
@@ -1650,7 +1650,7 @@ extern struct ns_elem *stdproto_eth2_vlan0_ns_elems[STDPROTO_NS_SUB_ELEN];
 extern struct ns_elem *stdproto_eth2_vlan1_ns_elems[STDPROTO_NS_SUB_ELEN];
 
 static struct ns_namespace eth2_vlan0_ns = 
-	NS_NAMESPACE_IDX_I("vlan0", &eth2_ns, PPT_ETHERNET2, 
+	NS_NAMESPACE_IDX_I("vlan0", &eth2_ns, PPT_ETHERNET2, PPT_NONE,
 		PRP_ETHFLD_VLAN0, 4,
 		"Ethernet VLAN 0 -- Length %lu, Offset %lu",
 		stdproto_eth2_vlan0_ns_elems,
@@ -1677,7 +1677,7 @@ struct ns_elem *stdproto_eth2_vlan0_ns_elems[STDPROTO_NS_SUB_ELEN] = {
 };
 
 static struct ns_namespace eth2_vlan1_ns = 
-	NS_NAMESPACE_IDX_I("vlan1", &eth2_ns, PPT_ETHERNET2, 
+	NS_NAMESPACE_IDX_I("vlan1", &eth2_ns, PPT_ETHERNET2, PPT_NONE,
 		PRP_ETHFLD_VLAN1, 4,
 		"Ethernet VLAN 1 -- Length %lu, Offset %lu",
 		stdproto_eth2_vlan1_ns_elems,
@@ -1713,7 +1713,7 @@ struct ns_elem *stdproto_eth2_ns_elems[STDPROTO_NS_ELEN] = {
 /* ARP Namespace */
 extern struct ns_elem *stdproto_arp_ns_elems[STDPROTO_NS_ELEN];
 static struct ns_namespace arp_ns = 
-	NS_NAMESPACE_I("arp", NULL, PPT_ARP, 
+	NS_NAMESPACE_I("arp", NULL, PPT_ARP, PPT_PCLASS_NET,
 	       "Address Resolution Protocol -- Offset %lu, Length %lu bytes",
 	       stdproto_arp_ns_elems, array_length(stdproto_arp_ns_elems));
 
@@ -1762,7 +1762,7 @@ struct ns_elem *stdproto_arp_ns_elems[STDPROTO_NS_ELEN] = {
 
 extern struct ns_elem *stdproto_ipv4_ns_elems[STDPROTO_NS_ELEN];
 static struct ns_namespace ipv4_ns = 
-	NS_NAMESPACE_I("ip", NULL, PPT_IPV4, 
+	NS_NAMESPACE_I("ip", NULL, PPT_IPV4, PPT_PCLASS_NET,
 		"Internet Protocol Version 4 -- Offset %lu, Length %lu",
 		stdproto_ipv4_ns_elems, array_length(stdproto_ipv4_ns_elems));
 
@@ -1830,7 +1830,7 @@ struct ns_elem *stdproto_ipv4_ns_elems[STDPROTO_NS_ELEN] = {
 
 extern struct ns_elem *stdproto_ipv6_ns_elems[STDPROTO_NS_ELEN];
 static struct ns_namespace ipv6_ns = 
-	NS_NAMESPACE_I("ip6", NULL, PPT_IPV6,
+	NS_NAMESPACE_I("ip6", NULL, PPT_IPV6, PPT_PCLASS_NET,
 		"Internet Protocol Version 6 -- Offset %lu, Length %lu",
 	       	stdproto_ipv6_ns_elems, array_length(stdproto_ipv6_ns_elems));
 
@@ -1874,7 +1874,7 @@ struct ns_elem *stdproto_ipv6_ns_elems[STDPROTO_NS_ELEN] = {
 
 extern struct ns_elem *stdproto_icmp_ns_elems[STDPROTO_NS_ELEN];
 static struct ns_namespace icmp_ns = 
-	NS_NAMESPACE_I("icmp", NULL, PPT_ICMP,
+	NS_NAMESPACE_I("icmp", NULL, PPT_ICMP, PPT_PCLASS_XPORT,
 		"Internet Control Message Protocol -- Offset %lu, Length %lu",
 	       	stdproto_icmp_ns_elems, array_length(stdproto_icmp_ns_elems));
 
@@ -1917,7 +1917,7 @@ struct ns_elem *stdproto_icmp_ns_elems[STDPROTO_NS_ELEN] = {
 
 extern struct ns_elem *stdproto_icmp6_ns_elems[STDPROTO_NS_ELEN];
 static struct ns_namespace icmp6_ns = 
-	NS_NAMESPACE_I("icmp6", NULL, PPT_ICMP6,
+	NS_NAMESPACE_I("icmp6", NULL, PPT_ICMP6, PPT_PCLASS_XPORT,
 		"Internet Control Message Protocol v6 -- Offset %lu, Length %lu",
 		stdproto_icmp6_ns_elems, array_length(stdproto_icmp6_ns_elems));
 
@@ -1942,7 +1942,7 @@ struct ns_elem *stdproto_icmp6_ns_elems[STDPROTO_NS_ELEN] = {
 
 extern struct ns_elem *stdproto_udp_ns_elems[STDPROTO_NS_ELEN];
 static struct ns_namespace udp_ns = 
-	NS_NAMESPACE_I("udp", NULL, PPT_UDP,
+	NS_NAMESPACE_I("udp", NULL, PPT_UDP, PPT_PCLASS_XPORT,
 		"User Datagram Protocol -- Offset %lu, Length %lu",
 	       	stdproto_udp_ns_elems, array_length(stdproto_udp_ns_elems));
 
@@ -1967,7 +1967,7 @@ struct ns_elem *stdproto_udp_ns_elems[STDPROTO_NS_ELEN] = {
 
 extern struct ns_elem *stdproto_tcp_ns_elems[STDPROTO_NS_ELEN];
 static struct ns_namespace tcp_ns = 
-	NS_NAMESPACE_I("tcp", NULL, PPT_TCP,
+	NS_NAMESPACE_I("tcp", NULL, PPT_TCP, PPT_PCLASS_XPORT,
 		"Transmission Control Protocol -- Offset %lu, Length %lu",
 	       	stdproto_tcp_ns_elems, array_length(stdproto_tcp_ns_elems));
 
@@ -2038,7 +2038,7 @@ extern struct ns_elem *stdproto_tcp_md5_ns_elems[STDPROTO_NS_SUB_ELEN];
 
 /* TCP MSS Option */
 static struct ns_namespace tcp_mss_ns = 
-	NS_NAMESPACE_IDX_I("mss", &tcp_ns, PPT_TCP, PRP_TCPFLD_MSS, 4,
+	NS_NAMESPACE_IDX_I("mss", &tcp_ns, PPT_TCP, PPT_NONE, PRP_TCPFLD_MSS, 4,
 		"TCP Maximum Segment Size Option -- Length %lu, Offset %lu",
 		stdproto_tcp_mss_ns_elems,
 		array_length(stdproto_tcp_mss_ns_elems));
@@ -2058,7 +2058,8 @@ struct ns_elem *stdproto_tcp_mss_ns_elems[STDPROTO_NS_SUB_ELEN] = {
 
 /* TCP Window Scale Option */
 static struct ns_namespace tcp_wscale_ns = 
-	NS_NAMESPACE_IDX_I("wscale", &tcp_ns, PPT_TCP, PRP_TCPFLD_WSCALE, 4,
+	NS_NAMESPACE_IDX_I("wscale", &tcp_ns, PPT_TCP, PPT_NONE,
+		PRP_TCPFLD_WSCALE, 4,
 		"TCP Window Scale Option -- Length %lu, Offset %lu",
 		stdproto_tcp_wscale_ns_elems,
 		array_length(stdproto_tcp_wscale_ns_elems));
@@ -2081,7 +2082,8 @@ struct ns_elem *stdproto_tcp_wscale_ns_elems[STDPROTO_NS_SUB_ELEN] = {
 
 /* TCP Selective Acknowledgement Permitted Option */
 static struct ns_namespace tcp_sackok_ns = 
-	NS_NAMESPACE_IDX_I("sackok", &tcp_ns, PPT_TCP, PRP_TCPFLD_SACKOK, 2,
+	NS_NAMESPACE_IDX_I("sackok", &tcp_ns, PPT_TCP, PPT_NONE,
+		PRP_TCPFLD_SACKOK, 2,
 		"TCP Window Scale Option -- Length %lu, Offset %lu",
 		stdproto_tcp_sackok_ns_elems,
 		array_length(stdproto_tcp_sackok_ns_elems));
@@ -2099,7 +2101,8 @@ struct ns_elem *stdproto_tcp_sackok_ns_elems[STDPROTO_NS_SUB_ELEN] = {
 
 /* TCP Selective Acknowledgement Option */
 static struct ns_namespace tcp_sack_ns = 
-	NS_NAMESPACE_VARLEN_I("sack", &tcp_ns, PPT_TCP, PRP_TCPFLD_SACK,
+	NS_NAMESPACE_VARLEN_I("sack", &tcp_ns, PPT_TCP, PPT_NONE,
+		PRP_TCPFLD_SACK,
 		PRP_TCPFLD_SACK_END,
 		"TCP Selective Acknowledgement Option -- Length %lu, Offset %lu",
 		stdproto_tcp_sack_ns_elems,
@@ -2125,7 +2128,8 @@ struct ns_elem *stdproto_tcp_sack_ns_elems[STDPROTO_NS_SUB_ELEN] = {
 
 /* TCP Timestamp Option */
 static struct ns_namespace tcp_ts_ns = 
-	NS_NAMESPACE_IDX_I("ts", &tcp_ns, PPT_TCP, PRP_TCPFLD_TSTAMP, 10,
+	NS_NAMESPACE_IDX_I("ts", &tcp_ns, PPT_TCP, PPT_NONE,
+		PRP_TCPFLD_TSTAMP, 10,
 		"TCP Timestamp Option -- Length %lu, Offset %lu",
 		stdproto_tcp_ts_ns_elems,
 		array_length(stdproto_tcp_ts_ns_elems));
@@ -2153,7 +2157,8 @@ struct ns_elem *stdproto_tcp_ts_ns_elems[STDPROTO_NS_SUB_ELEN] = {
 
 /* TCP MD5 Signature Option */
 static struct ns_namespace tcp_md5_ns = 
-	NS_NAMESPACE_IDX_I("md5", &tcp_ns, PPT_TCP, PRP_TCPFLD_MD5, 18,
+	NS_NAMESPACE_IDX_I("md5", &tcp_ns, PPT_TCP, PPT_NONE,
+		PRP_TCPFLD_MD5, 18,
 		"TCP MD5 Signature Option -- Length %lu, Offset %lu",
 		stdproto_tcp_md5_ns_elems,
 		array_length(stdproto_tcp_md5_ns_elems));

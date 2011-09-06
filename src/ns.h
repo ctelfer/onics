@@ -45,6 +45,7 @@ struct ns_namespace {
 	struct ns_namespace *	parent;
 	const char *		name;
 	uint			ppt;
+	uint			pclass;
 	uint			oidx;
 	ulong			len;
 	const char *		fmtstr;
@@ -54,18 +55,20 @@ struct ns_namespace {
 };
 
 #define NS_NAMESPACE_ROOT(elem, nelem) \
-	{ NST_NAMESPACE, 0, NULL, "", PPT_NONE, 0, 0, 0, NULL, (elem), (nelem) }
+	{ NST_NAMESPACE, 0, NULL, "", PPT_NONE, PPT_NONE, 0, 0, 0, NULL, \
+	  (elem), (nelem) }
 
-#define NS_NAMESPACE_I(name, par, ppt, desc, elems, nelem)\
-	{ NST_NAMESPACE, (NSF_VARLEN), (par), (name), (ppt), PRP_OI_SOFF, \
+#define NS_NAMESPACE_I(name, par, ppt, pc, desc, elems, nelem)\
+	{ NST_NAMESPACE, (NSF_VARLEN), (par), (name), (ppt), (pc), PRP_OI_SOFF,\
 	  PRP_OI_EOFF, (desc), &ns_fmt_hdr, (elems), (nelem) }
 
-#define NS_NAMESPACE_IDX_I(name, par, ppt, oidx, len, desc, elems, nelem)\
-	{ NST_NAMESPACE, 0, (par), (name), (ppt), (oidx), \
+#define NS_NAMESPACE_IDX_I(name, par, ppt, pc, oidx, len, desc, elems, nelem)\
+	{ NST_NAMESPACE, 0, (par), (name), (ppt), (pc), (oidx), \
 	  (len), (desc), &ns_fmt_hdr, (elems), (nelem) }
 
-#define NS_NAMESPACE_VARLEN_I(name, par, ppt, oidx, eidx, desc, elems, nelem)\
-	{ NST_NAMESPACE, (NSF_VARLEN), (par), (name), (ppt), (oidx), \
+#define NS_NAMESPACE_VARLEN_I(name, par, ppt, pc, oidx, eidx, desc, elems, \
+		nelem)\
+	{ NST_NAMESPACE, (NSF_VARLEN), (par), (name), (ppt), (pc), (oidx), \
 	  (eidx), (desc), &ns_fmt_hdr, (elems), (nelem) }
 
 

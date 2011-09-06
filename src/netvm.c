@@ -287,39 +287,6 @@ static void ni_popfr(struct netvm *vm)
 }
 
 
-static void ni_pfe(struct netvm *vm)
-{
-	struct netvm_inst *inst = &vm->inst[vm->pc];
-	struct netvm_prp_desc pd0;
-	struct prparse *prp;
-	uint64_t val = 0;
-
-	prp = netvm_find_header(vm, &pd0, inst->op == NETVM_OC_PFE);
-	if (vm->error) {
-		if (vm->error == NETVM_ERR_NOPKT) {
-			/* unlike other operations that use netvm_find_header, */
-			/* pfe(i) do not assume the packet is there.  If */
-			/* it is not, we just push 0.  */
-			vm->error = 0;
-			S_PUSH(vm, 0);
-		}
-		return;
-	}
-
-	if (prp) {
-		if (pd0.field < NETVM_PRP_OFF_BASE) {
-			val = 1;
-		} else {
-			uint field = pd0.field - NETVM_PRP_OFF_BASE;
-			val = (field < prp->noff) &&
-			      (prp->offs[field] != PRP_OFF_INVALID);
-		}
-	}
-
-	S_PUSH(vm, val);
-}
-
-
 static void ni_ldpf(struct netvm *vm)
 {
 	struct netvm_inst *inst = &vm->inst[vm->pc];
@@ -334,7 +301,8 @@ static void ni_ldpf(struct netvm *vm)
 		return;
 
 	if (!prp) {
-		S_PUSH(vm, NETVM_PF_INVALID);
+		S_PUSH(vm, 
+		       (pd0.field == NETVM_PRP_PIDX ? 0 : NETVM_PF_INVALID));
 		return;
 	}
 
@@ -356,6 +324,12 @@ static void ni_ldpf(struct netvm *vm)
 		break;
 	case NETVM_PRP_TYPE:
 		S_PUSH(vm, prp->type);
+		break;
+	case NETVM_PRP_PIDX:
+		/* count number of headers until start of packet */
+		for (off = 0; !prp_list_end(prp); prp = prp_prev(prp))
+			++off;
+		S_PUSH(vm, off);
 		break;
 	default:
 		abort_unless(pd0.field >= NETVM_PRP_OFF_BASE);
@@ -1289,8 +1263,6 @@ netvm_op g_netvm_ops[NETVM_OC_MAX + 1] = {
 	ni_stbpi,		/* STBPI */
 	ni_pushfr,		/* PUSHFR */
 	ni_popfr,		/* POPFR */
-	ni_pfe,			/* PFE */
-	ni_pfe,			/* PFEI */
 	ni_ldpf,		/* LDPF */
 	ni_ldpf,		/* LDPFI */
 

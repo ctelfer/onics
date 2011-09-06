@@ -31,7 +31,7 @@ int main(int argc, char *argv[])
 		printf("Token -- %d -> '%s'\n", tok, pmlget_text(scanner));
 		if (pml_parse(parser, &tree, tok, extra)) {
 			err("parse error on line %d: %s\n",
-			    pmlget_lineno(scanner), ast->errbuf);
+			    pmlget_lineno(scanner), tree.errbuf);
 		}
 		pmlset_extra(none, scanner);
 	} while (tok > 0);
