@@ -11,14 +11,20 @@
 #include <stdint.h>
 #include "pml.h"
 
+
+struct pml_symtab {
+	struct list		list;
+	struct htab		tab;
+};
+
+
 struct pml_ast {
 	int			error;
 	int			done;
 	unsigned long		line;
-	struct htab		vartab;
-	struct htab		functab;
+	struct pml_symtab	vars;
+	struct pml_symtab	funcs;
 	struct list		rules;
-	struct pml_function *	curfunc;
 	char			errbuf[80];
 };
 
@@ -31,7 +37,7 @@ enum {
 	PMLTT_VAR,
 	PMLTT_BINOP,
 	PMLTT_UNOP,
-	PMLTT_FUNCALL,
+	PMLTT_CALL,
 	PMLTT_IF,
 	PMLTT_WHILE,
 	PMLTT_LOCATOR,
@@ -104,8 +110,15 @@ enum {
 };
 
 enum {
+	/* expression is constant */
 	PML_EFLAG_CONST	= 1,
+
+	/* expression is constant if parameters are constant */
+	/* for inline functions. */
+	PML_EFLAG_PCONST = 2,
 };
+#define PML_EXPR_IS_CONST(ep) \
+	((((union pml_expr_u *)ep)->expr.eflags & PML_EFLAG_CONST) != 0)
 struct pml_expr_base {
 	int			type;
 	struct list		ln;
@@ -135,6 +148,7 @@ struct pml_literal {
 	ushort			etype;
 	ushort			eflags;
 	size_t			width;
+
 	union {
 		uint64_t		scalar;
 		struct pml_bytestr	bytestr;
@@ -149,18 +163,20 @@ struct pml_op {
 	ushort			etype;
 	ushort			eflags;
 	size_t			width;
+
 	int			op;
 	union pml_expr_u *	arg1;
 	union pml_expr_u *	arg2;
 };
 
 
-struct pml_funcall {
+struct pml_call {
 	int			type;
 	struct list		ln;
 	ushort			etype;
 	ushort			eflags;
 	size_t			width;
+
 	struct pml_function *	func;
 	struct pml_list *	args;		/* expressions */
 };
@@ -169,6 +185,7 @@ struct pml_funcall {
 struct pml_if {
 	int			type;
 	struct list		ln;
+
 	union pml_expr_u *	test;
 	struct pml_list *	tbody;
 	struct pml_list *	fbody;
@@ -178,6 +195,7 @@ struct pml_if {
 struct pml_while {
 	int			type;
 	struct list		ln;
+
 	union pml_expr_u *	test;
 	struct pml_list *	body;
 };
@@ -186,6 +204,7 @@ struct pml_while {
 struct pml_assign {
 	int			type;
 	struct list		ln;
+
 	int			conv;	/* byte order conversion */
 	struct pml_locator *	loc;
 	union pml_expr_u *	expr;
@@ -195,6 +214,7 @@ struct pml_assign {
 struct pml_return {
 	int			type;
 	struct list		ln;
+
 	union pml_expr_u *	expr;
 };
 
@@ -202,6 +222,7 @@ struct pml_return {
 struct pml_print {
 	int			type;
 	struct list		ln;
+
 	char *			fmt;
 	struct pml_list *	args;	/* expressions */
 };
@@ -209,8 +230,10 @@ struct pml_print {
 
 enum {
 	PML_REF_UNKNOWN,
-	PML_REF_VAR,
-	PML_REF_NS,
+	PML_REF_GVAR,
+	PML_REF_LVAR,
+	PML_REF_PKTFLD,
+	PML_REF_NS_CONST,
 };
 struct pml_locator {
 	int			type;
@@ -218,9 +241,11 @@ struct pml_locator {
 	ushort			etype;
 	ushort			eflags;
 	size_t			width;
+
 	char *			name;
 	int			reftype;
-	union pml_expr_u *	pkt;
+	union pml_expr_u *	pkt;	/* packet number */
+	union pml_expr_u *	idx;	/* header index */
 	union pml_expr_u *	off;
 	union pml_expr_u *	len;
 	union {
@@ -234,14 +259,25 @@ struct pml_sym {
 	int			type;
 	struct list		ln;
 	struct hnode		hn;
+	char *			name;
+};
+
+
+enum {
+	PML_VTYPE_UNKNOWN, 
+	PML_VTYPE_CONST,
+	PML_VTYPE_GLOBAL,
+	PML_VTYPE_LOCAL,
 };
 
 
 struct pml_variable {
+	/* pml_sym_base fields */
 	int			type;
 	struct list		ln;
 	struct hnode		hn;
 	char *			name;
+
 	union pml_expr_u *	init;
 	uint			vtype;
 	size_t			width;
@@ -250,15 +286,17 @@ struct pml_variable {
 
 
 struct pml_function {
+	/* pml_sym_base fields */
 	int			type;
 	struct list		ln;
-	struct hnode		hn;
+	struct hnode		hn;		/* node for lookup in the AST */
 	char *			name;
-	uint			arity;
-	struct htab		vars;
-	struct pml_list *	prmlist;
-	struct pml_list *	varlist;
+
+	uint			arity;		/* number of arguments */
+	struct pml_symtab	params;
+	struct pml_symtab	vars;
 	union pml_node *	body;  /* expr for pred, list for func */
+	int			isconst; /* inline is const if params are */
 	uint			rtype;
 	size_t			width;
 };
@@ -267,6 +305,9 @@ struct pml_function {
 struct pml_rule {
 	int			type;
 	struct list		ln;
+
+	struct pml_symtab	vars;
+
 	union pml_expr_u *	pattern;
 	struct pml_list *	stmts;
 };
@@ -278,14 +319,7 @@ union pml_expr_u {
 	struct pml_literal	literal;
 	struct pml_locator	loc;
 	struct pml_op		op;
-	struct pml_funcall	funcall;
-};
-
-
-union pml_id_u {
-	struct pml_sym		sym;
-	struct pml_variable	var;
-	struct pml_function	func;
+	struct pml_call		call;
 };
 
 
@@ -294,7 +328,7 @@ union pml_node {
 	struct pml_literal	literal;
 	struct pml_variable	variable;
 	struct pml_op		op;
-	struct pml_funcall	funcall;
+	struct pml_call		call;
 	struct pml_if		ifstmt;
 	struct pml_while	whilestmt;
 	struct pml_assign	assign;
@@ -307,11 +341,14 @@ union pml_node {
 };
 
 
+typedef int pml_walk_f(union pml_node *node, void *ctx);
+
+
 union pml_node *pmln_alloc(int pmltt);
 void pmln_free(union pml_node *node);
 void pmln_print(union pml_node *node, uint depth);
 
-void pml_ast_init(struct pml_ast *ast);
+int pml_ast_init(struct pml_ast *ast);
 void pml_ast_clear(struct pml_ast *ast);
 void pml_ast_err(struct pml_ast *ast, const char *fmt, ...);
 void pml_ast_print(struct pml_ast *ast);
@@ -320,26 +357,29 @@ int pml_ast_add_func(struct pml_ast *ast, struct pml_function *func);
 struct pml_variable *pml_ast_lookup_var(struct pml_ast *ast, char *name);
 int pml_ast_add_var(struct pml_ast *ast, struct pml_variable *var);
 
-struct pml_variable *pml_func_lookup_var(struct pml_function *func, char *name);
-int pml_func_add_var(struct pml_function *func, struct pml_variable *var);
+struct pml_variable *pml_func_lookup_param(struct pml_function *func, 
+					   char *name);
+int pml_func_add_param(struct pml_function *func, struct pml_variable *var);
 
 union pml_expr_u *pml_binop_alloc(int op, union pml_expr_u *left, 
 		                  union pml_expr_u *right);
 union pml_expr_u *pml_unop_alloc(int op, union pml_expr_u *ex);
 struct pml_variable *pml_var_alloc(char *name, int width,
 				   union pml_expr_u *init);
-
-void pml_expr_copy_attrs(union pml_expr_u *dst, union pml_expr_u *src);
+struct pml_call *pml_call_alloc(struct pml_ast *ast, struct pml_function *func,
+				struct pml_list *args);
 
 void pml_bytestr_set_static(struct pml_bytestr *b, void *data, size_t len);
 void pml_bytestr_set_dynamic(struct pml_bytestr *b, void *data, size_t len);
 void pml_bytestr_free(struct pml_bytestr *b);
 
-
 struct pml_function *pml_ast_lookup_func(struct pml_ast *ast, char *name);
 
 int pml_locator_extend_name(struct pml_locator *l, char *name, size_t len);
 
+int pml_const_eval(struct pml_ast *ast, union pml_expr_u *e, uint64_t *v);
+
+int pml_resolve_refs(struct pml_ast *ast, union pml_node *node);
 
 /* Lexical analyzer definitions */
 

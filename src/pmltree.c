@@ -9,122 +9,99 @@
 #include <string.h>
 #include <stdarg.h>
 
-#define l_to_node(p) container(p, struct pml_node_base, ln)
+#define l_to_node(p) (union pml_node *)container(p, struct pml_node_base, ln)
 #define SYMTABSIZE    256
 
 
-static int symtab_init(struct htab *ht)
+static int symtab_init(struct pml_symtab *t)
 {
 	struct hnode **bins;
-	if ((bins = malloc(SYMTABSIZE * sizeof(struct hnode *))) == NULL)
+
+	abort_unless(t);
+	if ((bins = malloc(SYMTABSIZE * sizeof(struct hnode *))) == NULL) {
 		return -1;
-	ht_init(ht, bins, SYMTABSIZE, cmp_str, ht_shash, NULL);
+	}
+	ht_init(&t->tab, bins, SYMTABSIZE, cmp_str, ht_shash, NULL);
+	l_init(&t->list);
 	return 0;
 }
 
 
-static struct pml_function *ftab_lkup(struct htab *ht, const char *s)
+static union pml_node *symtab_lkup(struct pml_symtab *t, const char *s)
 {
 	uint h;
 	struct hnode *hn;
 
-	abort_unless(ht && s);
-	if ((hn = ht_lkup(ht, (void *)s, &h)) == NULL)
+	abort_unless(t && s);
+	if ((hn = ht_lkup(&t->tab, (void *)s, &h)) == NULL)
 		return NULL;
-	return container(hn, struct pml_function, hn);
+
+	return (union pml_node *)container(hn, struct pml_sym, hn);
 }
 
 
-static int ftab_add(struct htab *ht, struct pml_function *func) 
+static int symtab_add(struct pml_symtab *t, struct pml_sym *sym) 
 {
 	uint h;
 	struct hnode *hn;
 
-	if (ht_lkup(ht, func->name, &h) != NULL)
+	abort_unless(t && sym);
+	if (ht_lkup(&t->tab, sym->name, &h) != NULL)
 		return -1;
-	hn = &func->hn;
-	ht_ninit(hn, func->name, func);
-	ht_ins(ht, hn, h);
+	hn = &sym->hn;
+	ht_ninit(hn, sym->name, sym);
+	ht_ins(&t->tab, hn, h);
+	l_enq(&t->list, &sym->ln);
 
 	return 0;
 }
 
 
-static struct pml_variable *vtab_lkup(struct htab *ht, const char *s)
+static void symtab_destroy(struct pml_symtab *t)
 {
-	uint h;
-	struct hnode *hn;
+	struct list *n;
 
-	abort_unless(ht && s);
-	if ((hn = ht_lkup(ht, (void *)s, &h)) == NULL)
-		return NULL;
-	return container(hn, struct pml_variable, hn);
-}
-
-
-static int vtab_add(struct htab *ht, struct pml_variable *var) 
-{
-	uint h;
-	struct hnode *hn;
-
-	if (ht_lkup(ht, var->name, &h) != NULL)
-		return -1;
-	hn = &var->hn;
-	ht_ninit(hn, var->name, var);
-	ht_ins(ht, hn, h);
-
-	return 0;
-}
-
-
-static void freesym(void *nodep, void *ctx)
-{
-	struct pml_sym *sym = container(nodep, struct pml_sym, hn);
-	ht_rem(&sym->hn);
-	l_rem(&sym->ln);
-	pmln_free((union pml_node *)sym);
-}
-
-
-static void symtab_destroy(struct htab *ht)
-{
-	if (ht->bkts == NULL)
+	abort_unless(t);
+	if (t->tab.bkts == NULL)
 		return;
-	ht_apply(ht, freesym, NULL);
-	free(ht->bkts);
-	ht->bkts = NULL;
+	l_for_each(n, &t->list) {
+		pmln_free(l_to_node(n));
+	}
+	free(t->tab.bkts);
+	t->tab.bkts = NULL;
+	abort_unless(l_isempty(&t->list));
 }
 
 
-static void freerule(void *rulep, void *ctx)
-{
-	struct pml_rule *r = container(rulep, struct pml_rule, ln);
-	pmln_free((union pml_node *)r);
-}
-
-
-void pml_ast_init(struct pml_ast *ast)
+int pml_ast_init(struct pml_ast *ast)
 {
 	ast->error = 0;
 	ast->done = 0;
 	ast->line = 0;
-	symtab_init(&ast->vartab);
-	symtab_init(&ast->functab);
+	if (symtab_init(&ast->vars) < 0)
+		return -1;
+	if (symtab_init(&ast->funcs) < 0) {
+		symtab_destroy(&ast->vars);
+		return -1;
+	}
 	l_init(&ast->rules);
 	str_copy(ast->errbuf, "", sizeof(ast->errbuf));
-	ast->curfunc = NULL;
+	return 0;
 }
 
 
 void pml_ast_clear(struct pml_ast *ast)
 {
+	struct list *n;
 	ast->error = 0;
 	ast->done = 0;
 	ast->line = 0;
-	symtab_destroy(&ast->vartab);
-	symtab_destroy(&ast->functab);
-	l_apply(&ast->rules, freerule, NULL);
-	l_init(&ast->rules);
+	symtab_destroy(&ast->vars);
+	symtab_destroy(&ast->funcs);
+	l_for_each(n, &ast->rules) {
+		pmln_free(l_to_node(n));
+	}
+	abort_unless(l_isempty(&ast->rules));
 	str_copy(ast->errbuf, "", sizeof(ast->errbuf));
 }
 
@@ -141,37 +118,37 @@ void pml_ast_err(struct pml_ast *ast, const char *fmt, ...)
 
 struct pml_function *pml_ast_lookup_func(struct pml_ast *ast, char *name)
 {
-	return ftab_lkup(&ast->functab, name);
+	return (struct pml_function *)symtab_lkup(&ast->funcs, name);
 }
 
 
 int pml_ast_add_func(struct pml_ast *ast, struct pml_function *func)
 {
-	return ftab_add(&ast->functab, func);
+	return symtab_add(&ast->funcs, (struct pml_sym *)func);
 }
 
 
 struct pml_variable *pml_ast_lookup_var(struct pml_ast *ast, char *name)
 {
-	return vtab_lkup(&ast->vartab, name);
+	return (struct pml_variable *)symtab_lkup(&ast->vars, name);
 }
 
 
 int pml_ast_add_var(struct pml_ast *ast, struct pml_variable *var)
 {
-	return vtab_add(&ast->vartab, var);
+	return symtab_add(&ast->vars, (struct pml_sym *)var);
 }
 
 
-struct pml_variable *pml_func_lookup_var(struct pml_function *func, char *name)
+struct pml_variable *pml_func_lookup_param(struct pml_function *func, char *s)
 {
-	return vtab_lkup(&func->vars, name);
+	return (struct pml_variable *)symtab_lkup(&func->params, s);
 }
 
 
-int pml_func_add_var(struct pml_function *func, struct pml_variable *var)
+int pml_func_add_param(struct pml_function *func, struct pml_variable *var)
 {
-	return vtab_add(&func->vars, var);
+	return symtab_add(&func->params, (struct pml_sym *)var);
 }
 
 
@@ -217,6 +194,7 @@ union pml_node *pmln_alloc(int pmltt)
 		struct pml_variable *p = &np->variable;
 		p->type = pmltt;
 		l_init(&p->ln);
+		ht_ninit(&p->hn, NULL, p);
 		p->vtype = PML_ETYPE_UNKNOWN;
 		p->width = 0;
 		p->name = NULL;
@@ -237,8 +215,8 @@ union pml_node *pmln_alloc(int pmltt)
 		return (union pml_node *)p;
 	} break;
 
-	case PMLTT_FUNCALL: {
-		struct pml_funcall *p = &np->funcall;
+	case PMLTT_CALL: {
+		struct pml_call *p = &np->call;
 		p->etype = PML_ETYPE_UINT;
 		p->eflags = 0;
 		p->width = 8;
@@ -283,6 +261,7 @@ union pml_node *pmln_alloc(int pmltt)
 		l_init(&p->ln);
 		p->name = NULL;
 		p->pkt = NULL;
+		p->idx = NULL;
 		p->off = NULL;
 		p->len = NULL;
 	} break;
@@ -314,18 +293,22 @@ union pml_node *pmln_alloc(int pmltt)
 	case PMLTT_FUNCTION:
 	case PMLTT_INLINE: {
 		struct pml_function *p = &np->function;
+		l_init(&p->ln);
+		ht_ninit(&p->hn, NULL, p);
+		if (symtab_init(&p->params) < 0) {
+			free(np);
+			return NULL;
+		}
 		if (symtab_init(&p->vars) < 0) {
+			symtab_destroy(&p->params);
 			free(np);
 			return NULL;
 		}
 		p->rtype = PML_ETYPE_UINT;
 		p->width = 8;
 		p->type = pmltt;
-		l_init(&p->ln);
 		p->name = NULL;
 		p->arity = 0;
-		p->prmlist = NULL;
-		p->varlist = NULL;
 		p->body = NULL;
 	} break;
 
@@ -352,6 +335,9 @@ void pmln_free(union pml_node *node)
 	if (node == NULL)
 		return;
 
+	/* remove from whatever list it is on, if any */
+	l_rem(&node->base.ln);
+
 	switch (node->base.type) {
 
 	case PMLTT_LIST: {
@@ -377,6 +363,7 @@ void pmln_free(union pml_node *node)
 
 	case PMLTT_VAR: {
 		struct pml_variable *p = &node->variable;
+		ht_rem(&p->hn);
 		free(p->name);
 		pmln_free((union pml_node *)p->init);
 	} break;
@@ -392,8 +379,8 @@ void pmln_free(union pml_node *node)
 		pmln_free((union pml_node *)p->arg1);
 	} break;
 
-	case PMLTT_FUNCALL: {
-		struct pml_funcall *p = &node->funcall;
+	case PMLTT_CALL: {
+		struct pml_call *p = &node->call;
 		pmln_free((union pml_node *)p->args);
 	} break;
 
@@ -415,6 +402,7 @@ void pmln_free(union pml_node *node)
 		struct pml_locator *p = &node->locator;
 		free(p->name);
 		pmln_free((union pml_node *)p->pkt);
+		pmln_free((union pml_node *)p->idx);
 		pmln_free((union pml_node *)p->off);
 		pmln_free((union pml_node *)p->len);
 	} break;
@@ -439,17 +427,16 @@ void pmln_free(union pml_node *node)
 	case PMLTT_FUNCTION:
 	case PMLTT_INLINE: {
 		struct pml_function *p = &node->function;
+		ht_rem(&p->hn);
 		free(p->name);
 		p->name = NULL;
+		symtab_destroy(&p->params);
 		symtab_destroy(&p->vars);
-		pmln_free((union pml_node *)p->prmlist);
-		pmln_free((union pml_node *)p->varlist);
 		pmln_free(p->body);
 	} break;
 
 	case PMLTT_RULE: {
 		struct pml_rule *p = &node->rule;
-		l_rem(&p->ln);
 		pmln_free((union pml_node *)p->pattern);
 		pmln_free((union pml_node *)p->stmts);
 	} break;
@@ -469,6 +456,8 @@ union pml_expr_u *pml_binop_alloc(int op, union pml_expr_u *left,
 	o->op = op;
 	o->arg1 = left;
 	o->arg2 = right;
+	if (PML_EXPR_IS_CONST(left) && PML_EXPR_IS_CONST(right))
+		o->eflags = PML_EFLAG_CONST;
 	return (union pml_expr_u *)o;
 }
 
@@ -478,6 +467,8 @@ union pml_expr_u *pml_unop_alloc(int op, union pml_expr_u *ex)
 	struct pml_op *o = (struct pml_op *)pmln_alloc(PMLTT_UNOP);
 	o->op = op;
 	o->arg1 = ex;
+	if (PML_EXPR_IS_CONST(ex))
+		o->eflags = PML_EFLAG_CONST;
 	return (union pml_expr_u *)o;
 }
 
@@ -494,11 +485,44 @@ struct pml_variable *pml_var_alloc(char *name, int width,
 }
 
 
-void pml_expr_copy_attrs(union pml_expr_u *dst, union pml_expr_u *src)
+struct pml_call *pml_call_alloc(struct pml_ast *ast, struct pml_function *func,
+				struct pml_list *args)
 {
-	dst->expr.etype = src->expr.etype;
-	dst->expr.eflags = src->expr.eflags;
-	dst->expr.width = src->expr.width;
+	uint alen;
+	struct pml_call *c = (struct pml_call *)pmln_alloc(PMLTT_CALL);
+	struct list *n;
+
+	alen = l_length(&args->list);
+	if (alen != func->arity) {
+		pml_ast_err(ast, "argument length for call of '%s' does"
+				 "not match function arity (%u vs %u)\n)",
+			    alen, func->arity);
+		ast->error = 1;
+		return NULL;
+	}
+
+	c->func = func;
+	c->args = args;
+	c->width = func->width;
+	/* TODO: get from rtype */
+	c->etype = PML_ETYPE_UINT;
+	c->eflags = 0;
+
+	/* a call is a constant expression if the function is an inline */
+	/* and if the arguments to the function are all constant */
+	if (func->type == PMLTT_INLINE && func->isconst) {
+		c->eflags = PML_EFLAG_CONST;
+		l_for_each(n, &args->list) {
+			struct pml_expr_base *b = 
+				container(n, struct pml_expr_base, ln);
+			if (!PML_EXPR_IS_CONST(b)) {
+				c->eflags = 0;
+				break;
+			}
+		}
+	}
+
+	return c;
 }
 
 
@@ -603,10 +627,7 @@ void pmlt_print(union pml_node *np, uint depth)
 		indent(depth);
 		printf("-----\n");
 		l_for_each(e, &p->list) {
-			union pml_node *en = 
-				(union pml_node *)
-					container(e, struct pml_node_base, ln);
-			pmlt_print(en, depth);
+			pmlt_print(l_to_node(e), depth);
 			indent(depth);
 			printf("-----\n");
 		}
@@ -673,8 +694,8 @@ void pmlt_print(union pml_node *np, uint depth)
 		pmlt_print((union pml_node *)p->arg2, depth+1);
 	} break;
 
-	case PMLTT_FUNCALL: {
-		struct pml_funcall *p = &np->funcall;
+	case PMLTT_CALL: {
+		struct pml_call *p = &np->call;
 		struct pml_function *f = p->func;
 		indent(depth);
 		printf("Function call to: %s\n", 
@@ -734,6 +755,12 @@ void pmlt_print(union pml_node *np, uint depth)
 			pmlt_print((union pml_node *)p->pkt, depth+1);
 		}
 
+		if (p->idx != NULL) {
+			indent(depth);
+			printf("Header Index -- \n");
+			pmlt_print((union pml_node *)p->pkt, depth+1);
+		}
+
 		if (p->off != NULL) {
 			indent(depth);
 			printf("Offset -- \n");
@@ -781,6 +808,7 @@ void pmlt_print(union pml_node *np, uint depth)
 	case PMLTT_FUNCTION:
 	case PMLTT_INLINE: {
 		struct pml_function *p = &np->function;
+		struct list *n;
 		indent(depth);
 		printf("%s: %s with %d arguments\n", 
 		       (np->base.type == PMLTT_FUNCTION) ? 
@@ -790,11 +818,15 @@ void pmlt_print(union pml_node *np, uint depth)
 
 		indent(depth);
 		printf("Parameters -- \n");
-		pmlt_print((union pml_node *)p->prmlist, depth+1);
+		l_for_each(n, &p->params.list) {
+			pmlt_print(l_to_node(n), depth+1);
+		}
 
 		indent(depth);
 		printf("Variables -- \n");
-		pmlt_print((union pml_node *)p->varlist, depth+1);
+		l_for_each(n, &p->vars.list) {
+			pmlt_print(l_to_node(n), depth+1);
+		}
 
 		pmlt_print(p->body, depth+1);
 	} break;
@@ -826,36 +858,252 @@ void pmlt_print(union pml_node *np, uint depth)
 
 void pml_ast_print(struct pml_ast *ast)
 {
-	struct hnode *hn;
-	struct hash_iter hi;
-	struct list *ln;
+	struct list *n;
 
 	printf("Printing PML Abstract Syntax Tree\n");
 	printf("-----------\n");
 	printf("Variables\n");
 	printf("-----------\n");
-	ht_for_each(hn, hi, ast->vartab) {
-		struct pml_variable *p = container(hn, struct pml_variable, hn);
-		pmlt_print((union pml_node *)p, 1);
-
+	l_for_each(n, &ast->vars.list) {
+		pmlt_print(l_to_node(n), 1);
 	}
 	printf("-----------\n");
 	printf("Functions\n");
 	printf("-----------\n");
-	ht_for_each(hn, hi, ast->functab) {
-		struct pml_function *p = container(hn, struct pml_function, hn);
-		pmlt_print((union pml_node *)p, 1);
+	l_for_each(n, &ast->funcs.list) {
+		pmlt_print(l_to_node(n), 1);
 	}
 	printf("-----------\n");
 	printf("Rules\n");
 	printf("-----------\n");
-	l_for_each(ln, &ast->rules) {
-		union pml_node *en = 
-			(union pml_node *)
-				container(ln, struct pml_node_base, ln);
-		pmlt_print((union pml_node *)en, 1);
+	l_for_each(n, &ast->rules) {
+		pmlt_print(l_to_node(n), 1);
 	}
 	printf("-----------\n");
+}
+
+
+int pmlt_walk(union pml_node *np, void *ctx, pml_walk_f pre, pml_walk_f in,
+	      pml_walk_f post)
+{
+	int rv = 0;
+
+	if (np == NULL)
+		return 0;
+	
+	if (pre != NULL) {
+		rv = (*pre)(np, ctx);
+		if (rv < 0)
+			return rv;
+	}
+
+	switch (np->base.type) {
+
+	case PMLTT_LIST: {
+		struct pml_list *p = &np->list;
+		struct list *e;
+		l_for_each(e, &p->list) {
+			rv = pmlt_walk(l_to_node(e), ctx, pre, in, post);
+			if (rv < 0)
+				return rv;
+		}
+	} break;
+
+	case PMLTT_VAR: {
+		struct pml_variable *p = &np->variable;
+		if (p->init != NULL) {
+			rv = pmlt_walk((union pml_node *)p->init, ctx, pre, in,
+				       post);
+			if (rv < 0)
+				return rv;
+		}
+	} break;
+
+	case PMLTT_UNOP: {
+		struct pml_op *p = &np->op;
+		rv = pmlt_walk((union pml_node *)p->arg1, ctx, pre, in, post);
+		if (rv < 0)
+			return rv;
+	} break;
+
+	case PMLTT_BINOP: {
+		struct pml_op *p = &np->op;
+
+		rv = pmlt_walk((union pml_node *)p->arg1, ctx, pre, in, post);
+		if (rv < 0)
+			return rv;
+
+		if (in != NULL) {
+			rv = (*in)((union pml_node *)p, ctx);
+			if (rv < 0)
+				return rv;
+		}
+
+		rv = pmlt_walk((union pml_node *)p->arg2, ctx, pre, in, post);
+		if (rv < 0)
+			return rv;
+	} break;
+
+	case PMLTT_CALL: {
+		struct pml_call *p = &np->call;
+		rv = pmlt_walk((union pml_node *)p->args, ctx, pre, in, post);
+		if (rv < 0)
+			return rv;
+	} break;
+
+	case PMLTT_IF: {
+		struct pml_if *p = &np->ifstmt;
+
+		rv = pmlt_walk((union pml_node *)p->test, ctx, pre, in, post);
+		if (rv < 0)
+			return rv;
+
+		rv = pmlt_walk((union pml_node *)p->tbody, ctx, pre, in, post);
+		if (rv < 0)
+			return rv;
+
+		if (p->fbody != NULL) {
+			rv = pmlt_walk((union pml_node *)p->fbody, ctx, pre, in,
+				       post);
+			if (rv < 0)
+				return rv;
+		}
+	} break;
+
+	case PMLTT_WHILE: {
+		struct pml_while *p = &np->whilestmt;
+
+		rv = pmlt_walk((union pml_node *)p->test, ctx, pre, in, post);
+		if (rv < 0)
+			return rv;
+
+		rv = pmlt_walk((union pml_node *)p->body, ctx, pre, in, post);
+		if (rv < 0)
+			return rv;
+	} break;
+
+	case PMLTT_LOCATOR:
+	case PMLTT_LOCADDR: {
+		struct pml_locator *p = &np->locator;
+
+		if (p->pkt != NULL) {
+			rv = pmlt_walk((union pml_node *)p->pkt, ctx, pre, in,
+				       post);
+			if (rv < 0)
+				return rv;
+		}
+
+		if (p->off != NULL) {
+			rv = pmlt_walk((union pml_node *)p->off, ctx, pre, in,
+				       post);
+			if (rv < 0)
+				return rv;
+		}
+
+		if (p->len != NULL) {
+			rv = pmlt_walk((union pml_node *)p->len, ctx, pre, in,
+				       post);
+			if (rv < 0)
+				return rv;
+		}
+	} break;
+
+	case PMLTT_ASSIGN: {
+		struct pml_assign *p = &np->assign;
+
+		rv = pmlt_walk((union pml_node *)p->loc, ctx, pre, in, post);
+		if (rv < 0)
+			return rv;
+
+		rv = pmlt_walk((union pml_node *)p->expr, ctx, pre, in, post);
+		if (rv < 0)
+			return rv;
+	} break;
+
+	case PMLTT_RETURN: {
+		struct pml_return *p = &np->retact;
+
+		rv = pmlt_walk((union pml_node *)p->expr, ctx, pre, in, post);
+		if (rv < 0)
+			return rv;
+        } break;
+
+	case PMLTT_PRINT: {
+		struct pml_print *p = &np->print;
+
+		rv = pmlt_walk((union pml_node *)p->args, ctx, pre, in, post);
+		if (rv < 0)
+			return rv;
+	} break;
+
+	case PMLTT_FUNCTION:
+	case PMLTT_INLINE: {
+		struct pml_function *p = &np->function;
+		struct list *n;
+
+		l_for_each(n, &p->params.list) {
+			rv = pmlt_walk(l_to_node(n), ctx, pre, in, post);
+			if (rv < 0)
+				return rv;
+		}
+
+		l_for_each(n, &p->vars.list) {
+			rv = pmlt_walk(l_to_node(n), ctx, pre, in, post);
+			if (rv < 0)
+				return rv;
+		}
+
+		rv = pmlt_walk((union pml_node *)p->body, ctx, pre, in, post);
+		if (rv < 0)
+			return rv;
+	} break;
+
+	case PMLTT_RULE: {
+		struct pml_rule *p = &np->rule;
+
+		if (p->pattern != NULL) {
+			rv = pmlt_walk((union pml_node *)p->pattern, ctx, pre,
+				       in, post);
+			if (rv < 0)
+				return rv;
+		}
+
+		rv = pmlt_walk((union pml_node *)p->stmts, ctx, pre, in, post);
+		if (rv < 0)
+			return rv;
+	} break;
+
+	default:
+		break;
+	}
+
+	if (post != NULL) {
+		rv = (*post)(np, ctx);
+		if (rv < 0)
+			return rv;
+	}
+
+	return 0;
+}
+
+
+struct pml_resolv_ctx {
+	struct pml_block *block;
+	struct pml_ast *ast;
+};
+
+
+int pml_resolve_refs(struct pml_ast *ast, union pml_node *node)
+{
+	return 0;
+}
+
+
+
+
+int pml_const_eval(struct pml_ast *ast, union pml_expr_u *e, uint64_t *v)
+{
+	return -1;
 }
 
 

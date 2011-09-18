@@ -19,7 +19,7 @@
 ?- ipv6.daddr =~ ff80:abcd::/8 -?	# ipv6 w/mask
 ?- tcp.dport !~ tcp.ports.reserved -?   # numeric range
 ?- udp.sport !~ [0..1023] -?		# numeric range
-?- tcp[2:10] =~ \xABCDEF0123DEADBEEF01/FEEDA110FFFFFFFFAB -? # bytes w/ mask
+?- tcp[2,10] =~ \xABCDEF0123DEADBEEF01/FEEDA110FFFFFFFFAB -? # bytes w/ mask
 
 # Short circuiting boolean ops are supported of course
 ?- eth && ip6 && pkt.len > ip6.len + 40 + 14 -?
@@ -28,10 +28,10 @@
 
 ?- nlz(ip6.flowid) == 4 -?
 
-?- tcp[2:2] == 1628 -?
+?- tcp[2,2] == 1628 -?
 
-# second IP header in the 
-?- ip[1][3:1] == 65 -?
+# second IP header in the first packet
+?- ip[3,1] == 65 -?
 
 # compares as 64-bit integer
 ?- eth.saddr == 5 -? 
@@ -194,14 +194,8 @@ var Count;
 %type inlinedecl { struct pml_function * }
 %destructor inlinedecl { pmln_free((union pml_node *)$$); }
 
-%type lvar { struct pml_variable * }
-%destructor lvar { pmln_free((union pml_node *)$$); }
-
 %type gvar { struct pml_variable * }
 %destructor gvar { pmln_free((union pml_node *)$$); }
-
-%type lvardecls { struct pml_list * }
-%destructor lvardecls { pmln_free((union pml_node *)$$); }
 
 %type rule { struct pml_rule * }
 %destructor rule { pmln_free((union pml_node *)$$); }
@@ -229,6 +223,12 @@ var Count;
 
 %type locname { struct pml_locator * }
 %destructor locname { pmln_free((union pml_node *)$$); }
+
+%type locstr { struct pml_locator * }
+%destructor locstr { pmln_free((union pml_node *)$$); }
+
+%type pktname { struct pml_locator * }
+%destructor pktname { pmln_free((union pml_node *)$$); }
 
 %type idlist { struct pml_list * }
 %destructor idlist { pmln_free((union pml_node *)$$); }
@@ -282,8 +282,8 @@ var Count;
 %type value { union pml_expr_u * } 
 %destructor value { pmln_free((union pml_node *)$$); }
 
-%type funcall { struct pml_funcall * } 
-%destructor funcall { pmln_free((union pml_node *)$$); }
+%type call { struct pml_call * } 
+%destructor call { pmln_free((union pml_node *)$$); }
 
 %type numval { struct pml_literal * }
 %destructor numval { pmln_free((union pml_node *)$$); }
@@ -319,13 +319,12 @@ decl ::= inlinedecl(F). {
 	/* A inline func's return value is constant if its expr is constant */
 	pe = (struct pml_expr_base *)F->body;
 	if (pe->etype != PML_ETYPE_UINT && pe->etype != PML_ETYPE_SINT) {
-		pml_ast_err(ast, "Non-scalar expression for inline function %s "
+		pml_ast_err(ast, "Non-scalar expression for inline %s "
 				 "(type = %d)\n",
 			    F->name, pe->etype);
 		ast->error = 1;
 		pmln_free((union pml_node *)F);
 	}
-	pml_expr_copy_attrs((union pml_expr_u *)F, (union pml_expr_u *)pe);
 }
 decl ::= gvar(V). {
 	if (pml_ast_add_var(ast, V) < 0) {
@@ -338,8 +337,8 @@ decl ::= rule(A). {
 	l_enq(&ast->rules, &A->ln);
 }
 
-funcdecl(F) ::= FUNC ID(N) LPAREN idlist(P) RPAREN LBRACE lvardecls(V) 
-               stmts(S) RBRACE. {
+funcdecl(F) ::= FUNC ID(N) LPAREN idlist(P) RPAREN LBRACE 
+                stmts(S) RBRACE. {
 	struct list *t; 
 	struct pml_variable *p;
 
@@ -349,26 +348,15 @@ funcdecl(F) ::= FUNC ID(N) LPAREN idlist(P) RPAREN LBRACE lvardecls(V)
 	l_for_each(t, &P->list) {
 		F->arity += 1;
 		p = container(t, struct pml_variable, ln);
-		if (pml_func_add_var(F, p) < 0) {
+		l_rem(&p->ln);
+		if (pml_func_add_param(F, p) < 0) {
 			pml_ast_err(ast, "Duplicate variable name: %s\n",
 			            p->name);
 			ast->error = 1;
 			goto fd_out;
 		}
 	}
-	F->prmlist = P;
-
-	l_for_each(t, &V->list) {
-		p = container(t, struct pml_variable, ln);
-		if (pml_func_add_var(F, p) < 0) {
-			pml_ast_err(ast, "Duplicate variable name: %s\n",
-			            p->name);
-			ast->error = 1;
-			goto fd_out;
-		}
-	}
-	F->varlist = V;
-
+	pmln_free((union pml_node *)P);
 	F->body = (union pml_node *)S;
 
 fd_out:
@@ -384,14 +372,15 @@ inlinedecl(I) ::= INLINE ID(N) LPAREN idlist(P) RPAREN LBRACE expr(E) RBRACE. {
 	l_for_each(t, &P->list) {
 		I->arity += 1;
 		p = container(t, struct pml_variable, ln);
-		if (pml_func_add_var(I, p) < 0) {
+		l_rem(&p->ln);
+		if (pml_func_add_param(I, p) < 0) {
 			pml_ast_err(ast, "Duplicate variable name: %s\n",
 			            p->name);
 			ast->error = 1;
 			goto id_out;
 		}
 	}
-	I->prmlist = P;
+	pmln_free((union pml_node *)P);
 	I->body = (union pml_node *)E;
 
 id_out:
@@ -411,40 +400,35 @@ someids(IL) ::= someids(IL2) COMMA ID(V). {
 }
 
 
-gvar(G) ::= VAR DOLLAR DOLLAR ID(I) SEMICOLON. {
-	G = pml_var_alloc((char *)I.u.raw.data, 8, NULL); 
-}
-gvar(G) ::= VAR DOLLAR DOLLAR ID(I) LBRACKET NUM(N) RBRACKET. {
-	G = pml_var_alloc((char *)I.u.raw.data, N.u.num, NULL);
-}
-gvar(G) ::= VAR DOLLAR DOLLAR ID(I) SEMICOLON ASSIGN numval(V). {
-	G = pml_var_alloc((char *)I.u.raw.data, 8, (union pml_expr_u *)V); 
-}
-gvar(G) ::= VAR DOLLAR DOLLAR ID(I) LBRACKET NUM(N) RBRACKET ASSIGN value(VAL).{
-	G = pml_var_alloc((char *)I.u.raw.data, N.u.num, VAL);
-}
-
-lvardecls(L) ::= . {
-	L = (struct pml_list *)pmln_alloc(PMLTT_LIST);
-}
-lvardecls(L1) ::= lvardecls(L0) lvar(V).  {
-	struct list *t; 
-	l_for_each(t, &L0->list) {
-		struct pml_variable *p;
-		p = container(p, struct pml_variable, ln);
-		if (strcmp(p->name, V->name) == 0) {
-			pml_ast_err(ast, "Duplicate variable name: %s\n",
-			            p->name);
-			ast->error = 1;
-			goto done;
-		}
+gvar(G) ::= CONST ID(I) ASSIGN expr(E). {
+	if (!PML_EXPR_IS_CONST(E)) {
+		pml_ast_err(ast, "Constant '%s' expression is not constant.\n",
+			    (char *)I.u.raw.data);
+		ast->error = 1;
 	}
-	l_ins(L0->list.prev, &V->ln);
-done:
-	L1 = L0;
+	G = pml_var_alloc((char *)I.u.raw.data, 8, E); 
+	G->vtype = PML_VTYPE_CONST;
 }
-lvar(L) ::= VAR DOLLAR ID(I) SEMICOLON. {
-	L = pml_var_alloc((char *)I.u.raw.data, 8, NULL); 
+gvar(G) ::= VAR ID(I) SEMICOLON. {
+	G = pml_var_alloc((char *)I.u.raw.data, 8, NULL); 
+	G->vtype = PML_VTYPE_GLOBAL;
+}
+gvar(G) ::= VAR ID(I) LBRACKET NUM(N) RBRACKET. {
+	G = pml_var_alloc((char *)I.u.raw.data, N.u.num, NULL);
+	G->vtype = PML_VTYPE_GLOBAL;
+}
+gvar(G) ::= VAR ID(I) ASSIGN expr(E). {
+	if (!PML_EXPR_IS_CONST(E)) {
+		pml_ast_err(ast, "Var '%s' initializer is not constant.\n",
+			    (char *)I.u.raw.data);
+		ast->error = 1;
+	}
+	G = pml_var_alloc((char *)I.u.raw.data, 8, E); 
+	G->vtype = PML_VTYPE_GLOBAL;
+}
+gvar(G) ::= VAR ID(I) LBRACKET NUM(N) RBRACKET ASSIGN value(VAL).{
+	G = pml_var_alloc((char *)I.u.raw.data, N.u.num, VAL);
+	G->vtype = PML_VTYPE_GLOBAL;
 }
 
 /* Rules */
@@ -453,11 +437,13 @@ rule(R) ::= pktpat(P) stmtlist(SL). {
 	R->pattern = P;
 	R->stmts = SL;
 }
+/* 
 rule(R) ::= stmtlist(SL). {
 	R = (struct pml_rule *)pmln_alloc(PMLTT_RULE);
 	R->pattern = NULL;
 	R->stmts = SL;
 }
+*/
 
 /* Statements */
 stmtlist(SL) ::= LBRACE stmts(SS) RBRACE. { SL = SS; }
@@ -680,10 +666,10 @@ uexpr(E) ::= MINUS pexpr(PE). { E = pml_unop_alloc(PMLOP_NEG, PE); }
 uexpr(E) ::= pexpr(PE). { E = PE; }
 
 pexpr(PE) ::= LPAREN expr(E) RPAREN. { PE = E; }
-pexpr(PE) ::= funcall(FC). { PE = (union pml_expr_u *)FC; }
+pexpr(PE) ::= call(C). { PE = (union pml_expr_u *)C; }
 pexpr(PE) ::= value(V). { PE = (union pml_expr_u *)V; }
 
-funcall(F) ::= ID(N) LPAREN exprlist(A) RPAREN. { 
+call(C) ::= ID(N) LPAREN exprlist(A) RPAREN. { 
 	struct pml_function *f;
 	char *name = (char *)N.u.raw.data;
 	f = pml_ast_lookup_func(ast, name); 
@@ -692,12 +678,11 @@ funcall(F) ::= ID(N) LPAREN exprlist(A) RPAREN. {
 		ast->error = 1;
 	}
 	free(name);
-	F = (struct pml_funcall *)pmln_alloc(PMLTT_FUNCALL);
-	F->func = f;
-	F->args = A;
+	C = pml_call_alloc(ast, f, A);
 }
-funcall(F) ::= ID(N) LPAREN RPAREN. { 
+call(C) ::= ID(N) LPAREN RPAREN. { 
 	struct pml_function *f;
+	struct pml_list *args;
 	char *name = (char *)N.u.raw.data;
 	f = pml_ast_lookup_func(ast, name);
 	if (f == NULL) {
@@ -705,9 +690,8 @@ funcall(F) ::= ID(N) LPAREN RPAREN. {
 		ast->error = 1;
 	}
 	free(name);
-	F = (struct pml_funcall *)pmln_alloc(PMLTT_FUNCALL);
-	F->func = f;
-	F->args = (struct pml_list *)pmln_alloc(PMLTT_LIST);
+	args = (struct pml_list *)pmln_alloc(PMLTT_LIST);
+	C = pml_call_alloc(ast, f, args);
 }
 exprlist(EL1) ::= exprlist(EL0) COMMA expr(E). { 
 	l_enq(&EL0->list, &E->base.ln);
@@ -775,75 +759,58 @@ value(V) ::= AT locname(L). {
 	V = (union pml_expr_u *)v;
 }
 
-locator(V) ::= DOLLAR DOLLAR ID(TOK). {
-	struct pml_variable *var;
-	V = (struct pml_locator *)pmln_alloc(PMLTT_LOCATOR);
-	V->name = (char *)TOK.u.raw.data;
-	var = pml_ast_lookup_var(ast, V->name);
-	if (var != NULL) {
-		V->u.varref = var;
-		pml_expr_copy_attrs((union pml_expr_u *)V, 
-				    (union pml_expr_u *)var);
-	} else {
-		pml_ast_err(ast, "unknown global variable $$%s\n", V->name);
-	}
-}
-locator(V) ::= DOLLAR DOLLAR ID(TOK) LBRACKET borexpr(O) COMMA 
-	       borexpr(L) RBRACKET. {
-	struct pml_variable *var;
-	V = (struct pml_locator *)pmln_alloc(PMLTT_LOCATOR);
-	V->name = (char *)TOK.u.raw.data;
-	V->off = O;
-	V->len = L;
-	var = pml_ast_lookup_var(ast, V->name);
-	if (var != NULL) {
-		V->u.varref = var;
-		V->etype = PML_ETYPE_BYTESTR;
-	} else {
-		pml_ast_err(ast, "unknown global variable $$%s\n", V->name);
-	}
-}
-locator(V) ::= DOLLAR ID(TOK). {
-	V = (struct pml_locator *)pmln_alloc(PMLTT_LOCATOR);
-	V->name = (char *)TOK.u.raw.data;
-	/* TODO: resolve variable */
-	/* TODO: set value type and expression type */
-}
 locator(V) ::= locname(N). {
-	/* TODO: resolve namespace */
 	/* TODO: substitute constant expression if warranted */
 	/* TODO: set value type and expression type */
 	V = N;
 }
-locator(V) ::= locname(N) LBRACKET borexpr(PK) COMMA borexpr(O) COMMA borexpr(L)
-	   RBRACKET. {
+locator(V) ::= locname(N) LBRACKET expr(O) COMMA expr(L) RBRACKET. {
 	/* TODO: set value type and expression type */
+	/* TODO: substitute constant expression if warranted */
 	/* TODO: check type of PK, O, L */
-	N->pkt = PK;
-	N->off = O;
-	N->len = L;
-	V = N;
-}
-locator(V) ::= locname(N) LBRACKET borexpr(O) COMMA borexpr(L) RBRACKET. {
-	/* TODO: set value type and expression type */
-	/* TODO: check type of O, L */
 	N->off = O;
 	N->len = L;
 	V = N;
 }
 
-locname(L1) ::= locname(L0) DOT ID(TOK). {
+locname(L) ::= pktname(P). { L = P; }
+locname(L1) ::= locstr(L0). { L1 = L0; }
+locname(L1) ::= pktname(P) DOT locstr(L0). {
+	if (pml_locator_extend_name(P, L0->name, strlen(L0->name)) < 0) {
+		pml_ast_err(ast, "Out of memory for string.\n");
+		ast->error = 1;
+	}
+	pmln_free((union pml_node *)L0);
+	/* TODO: resolve packet field to ensure it is a field */
+	L1 = P;
+}
+
+locstr(L1) ::= locstr(L0) DOT ID(TOK). {
 	if (pml_locator_extend_name(L0, (char *)TOK.u.raw.data, 
 				    TOK.u.raw.len) < 0) {
-		pml_ast_err(ast, "Out of memory for space.\n");
+		pml_ast_err(ast, "Out of memory for string.\n");
 		ast->error = 1;
 	}
 	free(TOK.u.raw.data);
 	L1 = L0;
 }
-locname(L) ::= ID(TOK). { 
+locstr(L) ::= ID(TOK). { 
 	L = (struct pml_locator *)pmln_alloc(PMLTT_LOCATOR);
 	L->name = (char *)TOK.u.raw.data;
+}
+
+pktname(L) ::= ID(TOK) LBRACE expr(PK) COMMA expr(IDX) RBRACE. {
+	L = (struct pml_locator *)pmln_alloc(PMLTT_LOCATOR);
+	L->name = (char *)TOK.u.raw.data;
+	L->reftype = PML_REF_PKTFLD;
+	L->pkt = PK;
+	L->idx = IDX;
+}
+pktname(L) ::= ID(TOK) LBRACE expr(PK) RBRACE. {
+	L = (struct pml_locator *)pmln_alloc(PMLTT_LOCATOR);
+	L->name = (char *)TOK.u.raw.data;
+	L->reftype = PML_REF_PKTFLD;
+	L->pkt = PK;
 }
 
 numval(N) ::= NUM(TOK). {
