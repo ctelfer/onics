@@ -109,6 +109,7 @@ dnum		0|[1-9][0-9]*
 ">>-"		{ return PMLTOK_SHRA; }
 "."		{ return PMLTOK_DOT; }
 "="		{ return PMLTOK_ASSIGN; }
+"@@"		{ return PMLTOK_ATAT; }
 "@"		{ return PMLTOK_AT; }
 
 "{"		{ return PMLTOK_LBRACE; }

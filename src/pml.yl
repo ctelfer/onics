@@ -91,11 +91,12 @@ var Count;
 		  fields in the data.
 
   Notation:
-   $a			-- Variable name (global or local) or proto name
-   @<protoname>		-- Protocol ID 
-   a.b.c.d		-- Field for packet 0
-   a.b.c.d[<o>,<l>]	-- Bytes from packet 0, field a.b.c.d, offset o length l
-   a.b.c.d[<p>,<o>,<l>]	-- Bytes from packet p, field a.b.c.d, offset o length l
+   a			-- Variable name (global or local) or proto name
+   @@<protoname>	-- Protocol ID 
+   a.b.c.d		-- Field for packet 0 or protocol constant
+   a.b.c.d[o,l]		-- Bytes from packet 0, field a.b.c.d, offset o length l
+   @a{p}.b.c.d[o,l]	-- Bytes from packet p, field a.b.c.d, offset o length l
+   @a{p,i}.b.c.d[o,l]	-- Bytes from packet p, field a.b.c.d, offset o length l
    &<field>		-- Byte offset for a field <byte string or integer>
 
 
@@ -437,13 +438,13 @@ rule(R) ::= pktpat(P) stmtlist(SL). {
 	R->pattern = P;
 	R->stmts = SL;
 }
-/* 
+
 rule(R) ::= stmtlist(SL). {
 	R = (struct pml_rule *)pmln_alloc(PMLTT_RULE);
 	R->pattern = NULL;
 	R->stmts = SL;
 }
-*/
+
 
 /* Statements */
 stmtlist(SL) ::= LBRACE stmts(SS) RBRACE. { SL = SS; }
@@ -736,7 +737,7 @@ value(V) ::= STRING(I). {
 	pml_bytestr_set_dynamic(&v->u.bytestr, I.u.raw.data, I.u.raw.len);
 	V = (union pml_expr_u *)v;
 }
-value(V) ::= AT locname(L). {
+value(V) ::= ATAT locname(L). {
 	struct ns_elem *ne = ns_lookup(NULL, L->name);
 	struct pml_literal *v;
 	if (ne == NULL) {
@@ -799,14 +800,14 @@ locstr(L) ::= ID(TOK). {
 	L->name = (char *)TOK.u.raw.data;
 }
 
-pktname(L) ::= ID(TOK) LBRACE expr(PK) COMMA expr(IDX) RBRACE. {
+pktname(L) ::= AT ID(TOK) LBRACE expr(PK) COMMA expr(IDX) RBRACE. {
 	L = (struct pml_locator *)pmln_alloc(PMLTT_LOCATOR);
 	L->name = (char *)TOK.u.raw.data;
 	L->reftype = PML_REF_PKTFLD;
 	L->pkt = PK;
 	L->idx = IDX;
 }
-pktname(L) ::= ID(TOK) LBRACE expr(PK) RBRACE. {
+pktname(L) ::= AT ID(TOK) LBRACE expr(PK) RBRACE. {
 	L = (struct pml_locator *)pmln_alloc(PMLTT_LOCATOR);
 	L->name = (char *)TOK.u.raw.data;
 	L->reftype = PML_REF_PKTFLD;
