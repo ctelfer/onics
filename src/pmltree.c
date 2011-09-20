@@ -3,6 +3,7 @@
  * See attached licence.
  */
 #include "pmltree.h"
+#include "ns.h"
 #include <cat/aux.h>
 #include <cat/str.h>
 #include <stdlib.h>
@@ -23,11 +24,12 @@ static int symtab_init(struct pml_symtab *t)
 	}
 	ht_init(&t->tab, bins, SYMTABSIZE, cmp_str, ht_shash, NULL);
 	l_init(&t->list);
+	t->nxtaddr = 0;
 	return 0;
 }
 
 
-static union pml_node *symtab_lkup(struct pml_symtab *t, const char *s)
+static union pml_node *symtab_lookup(struct pml_symtab *t, const char *s)
 {
 	uint h;
 	struct hnode *hn;
@@ -118,7 +120,7 @@ void pml_ast_err(struct pml_ast *ast, const char *fmt, ...)
 
 struct pml_function *pml_ast_lookup_func(struct pml_ast *ast, char *name)
 {
-	return (struct pml_function *)symtab_lkup(&ast->funcs, name);
+	return (struct pml_function *)symtab_lookup(&ast->funcs, name);
 }
 
 
@@ -130,7 +132,7 @@ int pml_ast_add_func(struct pml_ast *ast, struct pml_function *func)
 
 struct pml_variable *pml_ast_lookup_var(struct pml_ast *ast, char *name)
 {
-	return (struct pml_variable *)symtab_lkup(&ast->vars, name);
+	return (struct pml_variable *)symtab_lookup(&ast->vars, name);
 }
 
 
@@ -142,13 +144,25 @@ int pml_ast_add_var(struct pml_ast *ast, struct pml_variable *var)
 
 struct pml_variable *pml_func_lookup_param(struct pml_function *func, char *s)
 {
-	return (struct pml_variable *)symtab_lkup(&func->params, s);
+	return (struct pml_variable *)symtab_lookup(&func->params, s);
 }
 
 
 int pml_func_add_param(struct pml_function *func, struct pml_variable *var)
 {
-	return symtab_add(&func->params, (struct pml_sym *)var);
+	int rv;
+	rv = symtab_add(&func->params, (struct pml_sym *)var);
+	if (rv < 0)
+		return -1;
+	var->addr = func->params.nxtaddr;
+	func->params.nxtaddr += 1;
+
+	/* XXX all parameters must be added before local addresses, so */
+	/* the local variable table's next address always starts at the  */
+	/* last parameter table's next address. */
+	func->vars.nxtaddr = func->params.nxtaddr;
+
+	return 0;
 }
 
 
@@ -304,6 +318,7 @@ union pml_node *pmln_alloc(int pmltt)
 			free(np);
 			return NULL;
 		}
+		p->isconst = 0;
 		p->rtype = PML_ETYPE_UINT;
 		p->width = 8;
 		p->type = pmltt;
@@ -473,13 +488,14 @@ union pml_expr_u *pml_unop_alloc(int op, union pml_expr_u *ex)
 }
 
 
-struct pml_variable *pml_var_alloc(char *name, int width, 
+struct pml_variable *pml_var_alloc(char *name, int width, int vtype,
 		                   union pml_expr_u *init)
 {
 	struct pml_variable *v = (struct pml_variable *)
 		pmln_alloc(PMLTT_VAR);
 	v->name = name;
 	v->width = width;
+	v->vtype = vtype;
 	v->init = init;
 	return v;
 }
@@ -1087,18 +1103,260 @@ int pmlt_walk(union pml_node *np, void *ctx, pml_walk_f pre, pml_walk_f in,
 }
 
 
-struct pml_resolv_ctx {
-	struct pml_block *block;
-	struct pml_ast *ast;
-};
-
-
-int pml_resolve_refs(struct pml_ast *ast, union pml_node *node)
+int pml_locator_resolve_nsref(struct pml_locator *l)
 {
+	struct ns_elem *e;
+	struct ns_namespace *ns;
+	struct ns_pktfld *pf;
+	struct ns_scalar *sc;
+	struct ns_bytestr *bs;
+	struct ns_maskstr *ms;
+
+	abort_unless(l && l->name);
+
+	e = ns_lookup(NULL, l->name);
+	if (e == NULL)
+		return -1;
+
+	l->u.nsref = e;
+
+	switch (e->type) {
+	case NST_NAMESPACE:
+		ns = (struct ns_namespace *)e;
+		l->reftype = PML_REF_PKTFLD;
+		if ((ns->flags & NSF_VARLEN) != 0) {
+			l->width = 0;
+			l->eflags |= PML_EFLAG_VARLEN;
+		} else {
+			l->width = ns->len;
+		}
+		break;
+
+	case NST_PKTFLD:
+		pf = (struct ns_pktfld *)e;
+		l->reftype = PML_REF_PKTFLD;
+		if ((pf->flags & NSF_VARLEN) != 0) {
+			l->width = 0;
+			l->eflags |= PML_EFLAG_VARLEN;
+		} else {
+			l->width = pf->len;
+		}
+		break;
+
+	case NST_SCALAR:
+		sc = (struct ns_scalar *)e;
+		l->reftype = PML_REF_NS_CONST;
+		l->eflags |= PML_EFLAG_CONST;
+		l->width = 8;
+		break;
+
+	case NST_BYTESTR:
+		bs = (struct ns_bytestr *)e;
+		l->reftype = PML_REF_NS_CONST;
+		l->eflags |= PML_EFLAG_CONST;
+		l->width = bs->value.len;
+		break;
+
+	case NST_MASKSTR:
+		ms = (struct ns_maskstr *)e;
+		l->reftype = PML_REF_NS_CONST;
+		l->eflags |= PML_EFLAG_CONST;
+		l->width = ms->value.len;
+		break;
+	}
+
 	return 0;
 }
 
 
+struct pml_resolve_ctx {
+	/* at most 3 var symbol tables to consider:  params, vars, global */
+	struct pml_symtab *symtabs[3];
+	int nst;
+	int vtidx;
+	struct pml_ast *ast;
+};
+
+
+static struct pml_variable *rlookup(struct pml_resolve_ctx *ctx, 
+				    const char *name, int *ti)
+{
+	int i;
+	union pml_node *node;
+
+	for (i = 0; i < ctx->nst; ++i) {
+		node = symtab_lookup(ctx->symtabs[i], name);
+		if (node != NULL) {
+			abort_unless(node->base.type == PMLTT_VAR);
+			*ti = i;
+			return (struct pml_variable *)node;
+		}
+	}
+
+	return NULL;
+}
+
+
+static int resolve_locator(struct pml_resolve_ctx *ctx, struct pml_locator *l)
+{
+	struct pml_variable *v;
+	int ti;
+	struct pml_symtab *t;
+
+	/* check if already resolved */
+	if (l->reftype != PML_REF_UNKNOWN)
+		return 0;
+
+	v = rlookup(ctx, l->name, &ti);
+	if (v != NULL) {
+		l->reftype = PML_REF_VAR;
+		l->u.varref = v;
+		if (v->vtype == PML_VTYPE_CONST)
+			l->eflags |= (PML_EFLAG_CONST|PML_EFLAG_PCONST);
+		return 0;
+	}
+
+	/* if we can't create the local variable, return an error */
+	if (ctx->vtidx < 0) {
+		pml_ast_err(ctx->ast, "unable to resolve variable '%s'\n",
+			    l->name);
+		return -1;
+	}
+
+	t = ctx->symtabs[ctx->vtidx];
+	v = pml_var_alloc(l->name, 8, PML_VTYPE_LOCAL, NULL);
+	if (v == NULL) {
+		pml_ast_err(ctx->ast, "out of memory building ast\n");
+		return -1;
+	}
+	v->addr = t->nxtaddr;
+	t->nxtaddr += 1;
+	symtab_add(t, (struct pml_sym *)v);
+	l->reftype = PML_REF_VAR;
+	l->u.varref = v;
+
+	return 0;
+}
+
+
+static int resolve_node(union pml_node *node, void *ctxp)
+{
+	struct pml_resolve_ctx *ctx = ctxp;
+
+	switch(node->base.type) {
+
+	case PMLTT_BINOP: {
+		struct pml_op *op = (struct pml_op *)node;
+		if (PML_EXPR_IS_PCONST(op->arg1) && 
+		    PML_EXPR_IS_PCONST(op->arg2))
+			op->eflags |= PML_EFLAG_PCONST;
+	} break;
+
+	case PMLTT_UNOP: {
+		struct pml_op *op = (struct pml_op *)node;
+		if (PML_EXPR_IS_PCONST(op->arg1))
+			op->eflags |= PML_EFLAG_PCONST;
+	} break;
+
+	case PMLTT_CALL: {
+		struct pml_call *c = (struct pml_call *)node;
+		struct pml_function *f;
+		struct list *n;
+		f = c->func;
+		if ((f->type == PMLTT_INLINE) && f->isconst) {
+			c->eflags |= PML_EFLAG_PCONST;
+			l_for_each(n, &c->args->list) {
+				if (!PML_EXPR_IS_PCONST(l_to_node(n))) {
+					c->eflags &= ~PML_EFLAG_PCONST;
+					break;
+				}
+			}
+		}
+	} break;
+
+	case PMLTT_LOCATOR: {
+		struct pml_locator *l = (struct pml_locator *)node;
+		if (resolve_locator(ctx, l) < 0)
+			return -1;
+	} break;
+
+	case PMLTT_LOCADDR: {
+		struct pml_locator *l = (struct pml_locator *)node;
+		if (resolve_locator(ctx, l) < 0)
+			return -1;
+		if ((l->reftype == PML_REF_NS_CONST) || 
+		    ((l->reftype == PML_REF_VAR) && 
+		     (l->u.varref->vtype == PML_VTYPE_CONST))) {
+			pml_ast_err(ctx->ast, "'%s' is not a field with"
+					      "an address to take\n",
+				    l->name);
+			return -1;
+		}
+	} break;
+
+	case PMLTT_ASSIGN: {
+		struct pml_assign *a = (struct pml_assign *)node;
+		if ((a->loc->reftype != PML_REF_VAR) && 
+		    (a->loc->reftype != PML_REF_PKTFLD)) {
+			pml_ast_err(ctx->ast, "locator '%s' in assignment is"
+					      "not a valid lvalue\n",
+				    a->loc->name);
+			return -1;
+		}
+	} break;
+
+	}
+
+	return 0;
+}
+
+
+int pml_resolve_refs(struct pml_ast *ast, union pml_node *node)
+{
+	struct pml_resolve_ctx ctx;
+	int rv;
+
+	ctx.ast = ast;
+
+	if (node->base.type == PMLTT_RULE) {
+		struct pml_rule *rule = (struct pml_rule *)node;
+		ctx.symtabs[0] = &rule->vars;
+		ctx.symtabs[1] = &ast->vars;
+		ctx.nst = 2;
+		ctx.vtidx = 0;
+		rv = pmlt_walk((union pml_node *)rule->pattern, &ctx, NULL,
+			       NULL, resolve_node);
+		if (rv < 0)
+			return -1;
+		return pmlt_walk((union pml_node *)rule->stmts, &ctx, NULL,
+				 NULL, resolve_node);
+	} else if (node->base.type == PMLTT_FUNCTION) {
+		struct pml_function *func = (struct pml_function *)node;
+		ctx.symtabs[0] = &func->params;
+		ctx.symtabs[1] = &func->vars;
+		ctx.symtabs[2] = &ast->vars;
+		ctx.nst = 3;
+		ctx.vtidx = 1;
+		return pmlt_walk((union pml_node *)func->body, &ctx, NULL,
+				 NULL, resolve_node);
+	} else if (node->base.type == PMLTT_INLINE) {
+		struct pml_function *inln = (struct pml_function *)node;
+		ctx.symtabs[0] = &inln->params;
+		ctx.symtabs[1] = &ast->vars;
+		ctx.nst = 2;
+		ctx.vtidx = -1; /* no local variables in inlines */
+		rv = pmlt_walk((union pml_node *)inln->body, &ctx, NULL, NULL,
+			       resolve_node);
+		if (rv < 0)
+			return -1;
+		inln->isconst = PML_EXPR_IS_PCONST(node);
+		return 0;
+	} else {
+		pml_ast_err(ast, "Invalid node type for resolution: %d\n",
+			    node->base.type);
+		return -1;
+	}
+}
 
 
 int pml_const_eval(struct pml_ast *ast, union pml_expr_u *e, uint64_t *v)

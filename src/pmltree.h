@@ -15,6 +15,7 @@
 struct pml_symtab {
 	struct list		list;
 	struct htab		tab;
+	uint64_t		nxtaddr;
 };
 
 
@@ -116,9 +117,14 @@ enum {
 	/* expression is constant if parameters are constant */
 	/* for inline functions. */
 	PML_EFLAG_PCONST = 2,
+
+	PML_EFLAG_VARLEN = 4,
 };
 #define PML_EXPR_IS_CONST(ep) \
 	((((union pml_expr_u *)ep)->expr.eflags & PML_EFLAG_CONST) != 0)
+#define PML_EXPR_IS_PCONST(ep) \
+	((((union pml_expr_u *)ep)->expr.eflags & \
+	  	(PML_EFLAG_CONST|PML_EFLAG_PCONST)) != 0)
 struct pml_expr_base {
 	int			type;
 	struct list		ln;
@@ -230,10 +236,10 @@ struct pml_print {
 
 enum {
 	PML_REF_UNKNOWN,
-	PML_REF_GVAR,
-	PML_REF_LVAR,
+	PML_REF_VAR,
 	PML_REF_PKTFLD,
 	PML_REF_NS_CONST,
+	PML_REF_UNKNOWN_NS_ELEM,	/* temporary */
 };
 struct pml_locator {
 	int			type;
@@ -364,7 +370,7 @@ int pml_func_add_param(struct pml_function *func, struct pml_variable *var);
 union pml_expr_u *pml_binop_alloc(int op, union pml_expr_u *left, 
 		                  union pml_expr_u *right);
 union pml_expr_u *pml_unop_alloc(int op, union pml_expr_u *ex);
-struct pml_variable *pml_var_alloc(char *name, int width,
+struct pml_variable *pml_var_alloc(char *name, int width, int vtype,
 				   union pml_expr_u *init);
 struct pml_call *pml_call_alloc(struct pml_ast *ast, struct pml_function *func,
 				struct pml_list *args);
@@ -377,9 +383,12 @@ struct pml_function *pml_ast_lookup_func(struct pml_ast *ast, char *name);
 
 int pml_locator_extend_name(struct pml_locator *l, char *name, size_t len);
 
-int pml_const_eval(struct pml_ast *ast, union pml_expr_u *e, uint64_t *v);
+int pml_locator_resolve_nsref(struct pml_locator *l);
 
 int pml_resolve_refs(struct pml_ast *ast, union pml_node *node);
+
+int pml_const_eval(struct pml_ast *ast, union pml_expr_u *e, uint64_t *v);
+
 
 /* Lexical analyzer definitions */
 

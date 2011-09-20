@@ -390,12 +390,14 @@ id_out:
 idlist(IL) ::= . { IL = (struct pml_list *)pmln_alloc(PMLTT_LIST); }
 idlist(IL) ::= someids(IL2). { IL = IL2; }
 someids(IL) ::= ID(V). {
-	struct pml_variable *v = pml_var_alloc((char *)V.u.raw.data, 8, NULL);
+	struct pml_variable *v = pml_var_alloc((char *)V.u.raw.data, 8, 
+					       PML_VTYPE_LOCAL, NULL);
 	IL = (struct pml_list *)pmln_alloc(PMLTT_LIST);
 	l_ins(&IL->list, &v->ln);
 }
 someids(IL) ::= someids(IL2) COMMA ID(V). {
-	struct pml_variable *v = pml_var_alloc((char *)V.u.raw.data, 8, NULL);
+	struct pml_variable *v = pml_var_alloc((char *)V.u.raw.data, 8,
+					       PML_VTYPE_LOCAL, NULL);
 	l_ins(&IL2->list, &v->ln);
 	IL = IL2;
 }
@@ -407,16 +409,14 @@ gvar(G) ::= CONST ID(I) ASSIGN expr(E). {
 			    (char *)I.u.raw.data);
 		ast->error = 1;
 	}
-	G = pml_var_alloc((char *)I.u.raw.data, 8, E); 
-	G->vtype = PML_VTYPE_CONST;
+	G = pml_var_alloc((char *)I.u.raw.data, 8, PML_VTYPE_CONST, E); 
 }
 gvar(G) ::= VAR ID(I) SEMICOLON. {
-	G = pml_var_alloc((char *)I.u.raw.data, 8, NULL); 
-	G->vtype = PML_VTYPE_GLOBAL;
+	G = pml_var_alloc((char *)I.u.raw.data, 8, PML_VTYPE_GLOBAL, NULL); 
 }
 gvar(G) ::= VAR ID(I) LBRACKET NUM(N) RBRACKET. {
-	G = pml_var_alloc((char *)I.u.raw.data, N.u.num, NULL);
-	G->vtype = PML_VTYPE_GLOBAL;
+	G = pml_var_alloc((char *)I.u.raw.data, N.u.num, PML_VTYPE_GLOBAL,
+			  NULL);
 }
 gvar(G) ::= VAR ID(I) ASSIGN expr(E). {
 	if (!PML_EXPR_IS_CONST(E)) {
@@ -424,12 +424,10 @@ gvar(G) ::= VAR ID(I) ASSIGN expr(E). {
 			    (char *)I.u.raw.data);
 		ast->error = 1;
 	}
-	G = pml_var_alloc((char *)I.u.raw.data, 8, E); 
-	G->vtype = PML_VTYPE_GLOBAL;
+	G = pml_var_alloc((char *)I.u.raw.data, 8, PML_VTYPE_GLOBAL, E); 
 }
 gvar(G) ::= VAR ID(I) LBRACKET NUM(N) RBRACKET ASSIGN value(VAL).{
-	G = pml_var_alloc((char *)I.u.raw.data, N.u.num, VAL);
-	G->vtype = PML_VTYPE_GLOBAL;
+	G = pml_var_alloc((char *)I.u.raw.data, N.u.num, PML_VTYPE_GLOBAL, VAL);
 }
 
 /* Rules */
@@ -761,14 +759,21 @@ value(V) ::= ATAT locname(L). {
 }
 
 locator(V) ::= locname(N). {
-	/* TODO: substitute constant expression if warranted */
-	/* TODO: set value type and expression type */
+	if (pml_locator_resolve_nsref(N) < 0) {
+		if (N->reftype == PML_REF_UNKNOWN_NS_ELEM) {
+			pml_ast_err(ast, "unable to resolve namespace reference"
+					 " '%s'\n", N->name);
+		}
+	}
 	V = N;
 }
 locator(V) ::= locname(N) LBRACKET expr(O) COMMA expr(L) RBRACKET. {
-	/* TODO: set value type and expression type */
-	/* TODO: substitute constant expression if warranted */
-	/* TODO: check type of PK, O, L */
+	if (pml_locator_resolve_nsref(N) < 0) {
+		if (N->reftype == PML_REF_UNKNOWN_NS_ELEM) {
+			pml_ast_err(ast, "unable to resolve namespace reference"
+					 " '%s'\n", N->name);
+		}
+	}
 	N->off = O;
 	N->len = L;
 	V = N;
@@ -782,8 +787,8 @@ locname(L1) ::= pktname(P) DOT locstr(L0). {
 		ast->error = 1;
 	}
 	pmln_free((union pml_node *)L0);
-	/* TODO: resolve packet field to ensure it is a field */
 	L1 = P;
+	L1->reftype = PML_REF_UNKNOWN_NS_ELEM;
 }
 
 locstr(L1) ::= locstr(L0) DOT ID(TOK). {
@@ -794,6 +799,7 @@ locstr(L1) ::= locstr(L0) DOT ID(TOK). {
 	}
 	free(TOK.u.raw.data);
 	L1 = L0;
+	L1->reftype = PML_REF_UNKNOWN_NS_ELEM;
 }
 locstr(L) ::= ID(TOK). { 
 	L = (struct pml_locator *)pmln_alloc(PMLTT_LOCATOR);
@@ -803,15 +809,15 @@ locstr(L) ::= ID(TOK). {
 pktname(L) ::= AT ID(TOK) LBRACE expr(PK) COMMA expr(IDX) RBRACE. {
 	L = (struct pml_locator *)pmln_alloc(PMLTT_LOCATOR);
 	L->name = (char *)TOK.u.raw.data;
-	L->reftype = PML_REF_PKTFLD;
 	L->pkt = PK;
 	L->idx = IDX;
+	L->reftype = PML_REF_UNKNOWN_NS_ELEM;
 }
 pktname(L) ::= AT ID(TOK) LBRACE expr(PK) RBRACE. {
 	L = (struct pml_locator *)pmln_alloc(PMLTT_LOCATOR);
 	L->name = (char *)TOK.u.raw.data;
-	L->reftype = PML_REF_PKTFLD;
 	L->pkt = PK;
+	L->reftype = PML_REF_UNKNOWN_NS_ELEM;
 }
 
 numval(N) ::= NUM(TOK). {
