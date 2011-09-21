@@ -44,6 +44,9 @@ int main(int argc, char *argv[])
 	pmllex_destroy(scanner);
 	pml_free(parser);
 
+	if (pml_ast_resolve(&tree) < 0)
+		err("parse error during resolution: %s\n", tree.errbuf);
+
 	pml_ast_print(&tree);
 
 	pml_ast_clear(&tree);

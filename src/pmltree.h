@@ -211,7 +211,6 @@ struct pml_assign {
 	int			type;
 	struct list		ln;
 
-	int			conv;	/* byte order conversion */
 	struct pml_locator *	loc;
 	union pml_expr_u *	expr;
 };
@@ -386,6 +385,8 @@ int pml_locator_extend_name(struct pml_locator *l, char *name, size_t len);
 int pml_locator_resolve_nsref(struct pml_locator *l);
 
 int pml_resolve_refs(struct pml_ast *ast, union pml_node *node);
+
+int pml_ast_resolve(struct pml_ast *ast);
 
 int pml_const_eval(struct pml_ast *ast, union pml_expr_u *e, uint64_t *v);
 
