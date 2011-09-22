@@ -1,4 +1,5 @@
 #include "pmltree.h"
+#include "stdproto.h"
 
 extern void PMLTrace(FILE *trace, char *pfx);
 
@@ -10,6 +11,7 @@ int main(int argc, char *argv[])
 	struct pml_ast tree;
 	struct pml_lex_val none, extra;
 
+	register_std_proto();
 	pml_lexv_init(&none);
 	if (pmllex_init(&scanner))
 		errsys("pmllex_init:");

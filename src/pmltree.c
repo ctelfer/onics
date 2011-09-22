@@ -1430,9 +1430,6 @@ int pml_ast_resolve(struct pml_ast *ast)
 {
 	struct list *n;
 
-	l_for_each(n, &ast->vars.list)
-		if (pml_resolve_refs(ast, l_to_node(n)) < 0)
-			return 1;
 	l_for_each(n, &ast->funcs.list)
 		if (pml_resolve_refs(ast, l_to_node(n)) < 0)
 			return -1;

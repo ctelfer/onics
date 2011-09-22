@@ -44,9 +44,11 @@ ${BINDIR}/testpmllex: testpmllex.c ../src/lex.pml.o
 		${DEFS} ${OPTS} ${INCS} ${LIBS}
 
 ${BINDIR}/testpmlparse: testpmlparse.c ../src/lex.pml.o ../src/pml.o \
-	../src/pmltree.o ../src/util.o ../src/ns.o
+	../src/pmltree.o ../src/util.o ../src/ns.o ../src/stdproto.o \
+	../src/protoparse.o
 	${CC} -o ../bin/testpmlparse testpmlparse.c ../src/lex.pml.o \
 		../src/pml.o ../src/pmltree.o ../src/util.o ../src/ns.o \
+		../src/stdproto.o ../src/protoparse.o \
 		${DEFS} ${OPTS} ${INCS} ${LIBS}
 
 ../src/lex.pml.o: ../src/pml.l
