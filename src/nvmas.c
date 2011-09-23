@@ -14,6 +14,7 @@
 #include "netvm.h"
 #include "netvm_prog.h"
 #include "netvm_op_macros.h"
+#include "util.h"
 
 #define MAXSTR 256
 
@@ -77,6 +78,7 @@ struct nvmop Operations[] = {
 	{ "popto",  NETVM_OC_POPTO,  1, ARGW },
 	{ "push",   NETVM_OC_PUSH,   1, ARGW },
 	{ "pushhi", NETVM_OC_PUSHHI, 1, ARGW },
+	{ "orhi",   NETVM_OC_ORHI,   1, ARGW },
 	{ "zpush",  NETVM_OC_ZPUSH,  1, ARGW },
 	{ "dup",    NETVM_OC_DUP,    1, ARGW },
 	{ "swap",   NETVM_OC_SWAP,   1, ARGW },
@@ -584,7 +586,7 @@ int inst2str(const struct netvm_inst *ni, char *s, size_t len, uint inum)
 	if ((op->argmask & ARGZ) != 0) *ap++ = ni->z;
 	if ((op->argmask & ARGW) != 0) {
 		if ((op->argmask & BRREL) != 0) {
-			*ap++ = sign_extend(ni->w, 32) + inum;
+			*ap++ = sxt64(ni->w, 32) + inum;
 			str_copy(a0p, "@", sizeof(a0p));
 		} else {
 			*ap++ = ni->w;

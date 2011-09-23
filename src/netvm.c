@@ -40,7 +40,7 @@ void netvm_get_pd(struct netvm *vm, struct netvm_prp_desc *pd, int onstack)
 		pd->idx = (val >> NETVM_PD_IDX_OFF) & NETVM_PD_IDX_MASK;
 		pd->field = (val >> NETVM_PD_FLD_OFF) & NETVM_PD_FLD_MASK;
 		val = (val >> NETVM_PD_OFF_OFF) & NETVM_PD_OFF_MASK;
-		pd->offset = sign_extend(val, 32);
+		pd->offset = sxt64(val, 32);
 	} else {
 		pd->pktnum = inst->y & ~NETVM_SEG_ISPKT;
 		pd->idx = (inst->z >> NETVM_PPD_IDX_OFF) & NETVM_PPD_IDX_MASK;
@@ -171,6 +171,16 @@ static void ni_pushhi(struct netvm *vm)
 {
 	struct netvm_inst *inst = &vm->inst[vm->pc];
 	S_PUSH(vm, (uint64_t)inst->w << 32);
+}
+
+
+static void ni_orhi(struct netvm *vm)
+{
+	uint64_t val;
+	struct netvm_inst *inst = &vm->inst[vm->pc];
+	S_POP(vm, val);
+	val |= (uint64_t)inst->w << 32;
+	S_PUSH(vm, (val | ((uint64_t)inst->w << 32)));
 }
 
 
@@ -368,7 +378,7 @@ void netvm_p2stk(struct netvm *vm, byte_t *p, int width)
 	}
 
 	if ((width & 0x80) != 0)
-		val = sign_extend(val, ((width & 0x7F) * 8));
+		val = sxt64(val, ((width & 0x7F) * 8));
 
 	S_PUSH(vm, val);
 }
@@ -746,7 +756,7 @@ static void ni_bri(struct netvm *vm)
 	struct netvm_inst *inst = &vm->inst[vm->pc];
 	uint64_t off = inst->w;
 
-	off = sign_extend(off, 32);
+	off = sxt64(off, 32);
 
 	/* should be verified before start */
 	abort_unless(vm->pc + off <= vm->ninst);
@@ -1254,6 +1264,7 @@ netvm_op g_netvm_ops[NETVM_OC_MAX + 1] = {
 	ni_popto,		/* POPTO */
 	ni_push,		/* PUSH */
 	ni_pushhi,		/* PUSHHI */
+	ni_orhi,		/* ORHI */
 	ni_zpush,		/* ZPUSH */
 	ni_dup,			/* DUP */
 	ni_swap,		/* SWAP */
@@ -1424,7 +1435,7 @@ int netvm_validate(struct netvm *vm)
 			if (inst->op == NETVM_OC_JMPI)
 				newpc = inst->w;
 			else
-				newpc = sign_extend(inst->w, 32) + i;
+				newpc = sxt64(inst->w, 32) + i;
 			/* ok to overflow number of instructions by 1 */
 		        /* implied halt instruction */
 			if (newpc > vm->ninst)

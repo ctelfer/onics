@@ -54,27 +54,6 @@ static int dbgabrt()
   } while (0)
 
 
-#define swap16(v) ( (((uint16_t)(v) << 8) & 0xFF00) | \
-		    (((uint16_t)(v) >> 8) & 0xFF) )
-
-#define swap32(v) ( (((uint32_t)(v) << 24) & 0xFF000000u) | \
-		    (((uint32_t)(v) << 8) & 0xFF0000u)    | \
-		    (((uint32_t)(v) >> 8) & 0xFF00u)      | \
-		    (((uint32_t)(v) >> 24) & 0xFFu) )
-
-#define swap64(v) ( (((uint64_t)(v) & 0xFF) << 56) | \
-		    (((uint64_t)(v) >> 56) & 0xFF) | \
-		    (((uint64_t)(v) & 0xFF00) << 40) | \
-		    (((uint64_t)(v) >> 40) & 0xFF00) | \
-		    (((uint64_t)(v) & 0xFF0000) << 24) | \
-		    (((uint64_t)(v) >> 24) & 0xFF0000) | \
-		    (((uint64_t)(v) & 0xFF000000u) << 8) | \
-		    (((uint64_t)(v) >> 8) & 0xFF000000u) )
-
-#define sign_extend(v, nbits) \
-	((uint64_t)(v) | ((uint64_t)0 - ((v) & (1 << ((nbits) - 1)))))
-
-
 /* Get a protocol descriptor */
 void netvm_get_pd(struct netvm *vm, struct netvm_prp_desc *pd, int onstack);
 

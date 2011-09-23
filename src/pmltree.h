@@ -107,7 +107,7 @@ enum {
 	PML_ETYPE_UINT,
 	PML_ETYPE_SINT,
 	PML_ETYPE_BYTESTR,
-	PML_ETYPE_MASKSTR,
+	PML_ETYPE_MASKVAL,
 };
 
 enum {
@@ -239,6 +239,7 @@ enum {
 	PML_REF_PKTFLD,
 	PML_REF_NS_CONST,
 	PML_REF_UNKNOWN_NS_ELEM,	/* temporary */
+	PML_REF_LITERAL,
 };
 struct pml_locator {
 	int			type;
@@ -254,6 +255,7 @@ struct pml_locator {
 	union pml_expr_u *	off;
 	union pml_expr_u *	len;
 	union {
+		struct pml_literal *	litref;
 		struct pml_variable *	varref;
 		struct ns_elem *	nsref;
 	} u;
@@ -302,7 +304,6 @@ struct pml_function {
 	struct pml_symtab	vars;
 	union pml_node *	body;  /* expr for pred, list for func */
 	int			isconst; /* inline is const if params are */
-	uint			rtype;
 	size_t			width;
 };
 
@@ -376,19 +377,24 @@ struct pml_call *pml_call_alloc(struct pml_ast *ast, struct pml_function *func,
 
 void pml_bytestr_set_static(struct pml_bytestr *b, void *data, size_t len);
 void pml_bytestr_set_dynamic(struct pml_bytestr *b, void *data, size_t len);
+int pml_bytestr_copy(struct pml_bytestr *b, const void *data, size_t len);
 void pml_bytestr_free(struct pml_bytestr *b);
 
 struct pml_function *pml_ast_lookup_func(struct pml_ast *ast, char *name);
 
 int pml_locator_extend_name(struct pml_locator *l, char *name, size_t len);
 
+/* Resolve a namespace reference to a PML expression. */
+/* Returns -1 if there was an internal error. */
+/* Returns 0 if the locator could not be resolved. */
+/* Returns 1 if the locator was resolved. */
 int pml_locator_resolve_nsref(struct pml_locator *l);
 
 int pml_resolve_refs(struct pml_ast *ast, union pml_node *node);
 
 int pml_ast_resolve(struct pml_ast *ast);
 
-int pml_const_eval(struct pml_ast *ast, union pml_expr_u *e, uint64_t *v);
+int pml_const_eval(union pml_expr_u *e, uint64_t *v);
 
 
 /* Lexical analyzer definitions */

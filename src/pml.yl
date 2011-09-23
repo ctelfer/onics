@@ -404,11 +404,6 @@ someids(IL) ::= someids(IL2) COMMA ID(V). {
 
 
 gvar(G) ::= CONST ID(I) ASSIGN expr(E). {
-	if (!PML_EXPR_IS_CONST(E)) {
-		pml_ast_err(ast, "Constant '%s' expression is not constant.\n",
-			    (char *)I.u.raw.data);
-		ast->error = 1;
-	}
 	G = pml_var_alloc((char *)I.u.raw.data, 8, PML_VTYPE_CONST, E); 
 }
 gvar(G) ::= VAR ID(I) SEMICOLON. {
@@ -758,22 +753,8 @@ value(V) ::= ATAT locname(L). {
 	V = (union pml_expr_u *)v;
 }
 
-locator(V) ::= locname(N). {
-	if (pml_locator_resolve_nsref(N) < 0) {
-		if (N->reftype == PML_REF_UNKNOWN_NS_ELEM) {
-			pml_ast_err(ast, "unable to resolve namespace reference"
-					 " '%s'\n", N->name);
-		}
-	}
-	V = N;
-}
+locator(V) ::= locname(N). { V = N; }
 locator(V) ::= locname(N) LBRACKET expr(O) COMMA expr(L) RBRACKET. {
-	if (pml_locator_resolve_nsref(N) < 0) {
-		if (N->reftype == PML_REF_UNKNOWN_NS_ELEM) {
-			pml_ast_err(ast, "unable to resolve namespace reference"
-					 " '%s'\n", N->name);
-		}
-	}
 	N->off = O;
 	N->len = L;
 	V = N;

@@ -238,6 +238,7 @@ enum {
 	NETVM_OC_POPTO,		/* discard all but last 'w' in stack frame */
 	NETVM_OC_PUSH,		/* pushes 'w' onto stack */
 	NETVM_OC_PUSHHI,	/* pushes 'w << 32' onto stack */
+	NETVM_OC_ORHI,		/* [v] binary or 'w << 32' with top of stack */
 	NETVM_OC_ZPUSH,		/* pushes 'w' 0s onto the stack */
 	NETVM_OC_DUP,		/* dups 'w' from the top of the stack */
 	NETVM_OC_SWAP,		/* swap stack pos 0 and 'w' from SP down */
