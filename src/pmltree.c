@@ -1104,6 +1104,13 @@ int pmlt_walk(union pml_node *np, void *ctx, pml_walk_f pre, pml_walk_f in,
 				return rv;
 		}
 
+		if (p->idx != NULL) {
+			rv = pmlt_walk((union pml_node *)p->idx, ctx, pre, in,
+				       post);
+			if (rv < 0)
+				return rv;
+		}
+
 		if (p->off != NULL) {
 			rv = pmlt_walk((union pml_node *)p->off, ctx, pre, in,
 				       post);
