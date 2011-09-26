@@ -304,38 +304,20 @@ decllist ::= decllist decl. /* nothing to do: resolved below. */
 decllist ::= . /* nothing to do */
 
 decl ::= funcdecl(F). {
-	if (pml_ast_add_func(ast, F) < 0) {
-		pml_ast_err(ast, "Duplicate function: %s\n", F->name);
-		ast->error = 1;
+	if (pml_ast_add_func(ast, F) < 0)
 		pmln_free((union pml_node *)F);
-	}
 }
 decl ::= inlinedecl(F). {
-	struct pml_expr_base *pe;
-	if (pml_ast_add_func(ast, F) < 0) {
-		pml_ast_err(ast, "Duplicate function: %s\n", F->name);
-		ast->error = 1;
+	if (pml_ast_add_func(ast, F) < 0)
 		pmln_free((union pml_node *)F);
-	}
-	/* A inline func's return value is constant if its expr is constant */
-	pe = (struct pml_expr_base *)F->body;
-	if (pe->etype != PML_ETYPE_UINT && pe->etype != PML_ETYPE_SINT) {
-		pml_ast_err(ast, "Non-scalar expression for inline %s "
-				 "(type = %d)\n",
-			    F->name, pe->etype);
-		ast->error = 1;
-		pmln_free((union pml_node *)F);
-	}
 }
 decl ::= gvar(V). {
-	if (pml_ast_add_var(ast, V) < 0) {
-		pml_ast_err(ast, "Duplicate variable: %s\n", V->name);
-		ast->error = 1;
+	if (pml_ast_add_var(ast, V) < 0)
 		pmln_free((union pml_node *)V);
-	}
 }
-decl ::= rule(A). {
-	l_enq(&ast->rules, &A->ln);
+decl ::= rule(R). {
+	if (pml_ast_add_rule(ast, R) < 0)
+		pmln_free((union pml_node *)R);
 }
 
 funcdecl(F) ::= FUNC ID(N) LPAREN idlist(P) RPAREN LBRACE 
@@ -353,7 +335,6 @@ funcdecl(F) ::= FUNC ID(N) LPAREN idlist(P) RPAREN LBRACE
 		if (pml_func_add_param(F, p) < 0) {
 			pml_ast_err(ast, "Duplicate variable name: %s\n",
 			            p->name);
-			ast->error = 1;
 			goto fd_out;
 		}
 	}
@@ -377,7 +358,6 @@ inlinedecl(I) ::= INLINE ID(N) LPAREN idlist(P) RPAREN LBRACE expr(E) RBRACE. {
 		if (pml_func_add_param(I, p) < 0) {
 			pml_ast_err(ast, "Duplicate variable name: %s\n",
 			            p->name);
-			ast->error = 1;
 			goto id_out;
 		}
 	}
@@ -403,25 +383,23 @@ someids(IL) ::= someids(IL2) COMMA ID(V). {
 }
 
 
-gvar(G) ::= CONST ID(I) ASSIGN expr(E). {
-	G = pml_var_alloc((char *)I.u.raw.data, 8, PML_VTYPE_CONST, E); 
+gvar(G) ::= CONST ID(I) ASSIGN expr(E) SEMICOLON. {
+	G = pml_var_alloc((char *)I.u.raw.data, 0, PML_VTYPE_CONST, E); 
 }
 gvar(G) ::= VAR ID(I) SEMICOLON. {
-	G = pml_var_alloc((char *)I.u.raw.data, 8, PML_VTYPE_GLOBAL, NULL); 
+	G = pml_var_alloc((char *)I.u.raw.data, 0, PML_VTYPE_GLOBAL, NULL); 
 }
-gvar(G) ::= VAR ID(I) LBRACKET NUM(N) RBRACKET. {
+gvar(G) ::= VAR ID(I) LBRACKET NUM(N) RBRACKET SEMICOLON. {
 	G = pml_var_alloc((char *)I.u.raw.data, N.u.num, PML_VTYPE_GLOBAL,
 			  NULL);
 }
-gvar(G) ::= VAR ID(I) ASSIGN expr(E). {
-	if (!PML_EXPR_IS_CONST(E)) {
+gvar(G) ::= VAR ID(I) ASSIGN expr(E) SEMICOLON. {
+	if (!PML_EXPR_IS_CONST(E))
 		pml_ast_err(ast, "Var '%s' initializer is not constant.\n",
 			    (char *)I.u.raw.data);
-		ast->error = 1;
-	}
 	G = pml_var_alloc((char *)I.u.raw.data, 8, PML_VTYPE_GLOBAL, E); 
 }
-gvar(G) ::= VAR ID(I) LBRACKET NUM(N) RBRACKET ASSIGN value(VAL).{
+gvar(G) ::= VAR ID(I) LBRACKET NUM(N) RBRACKET ASSIGN value(VAL) SEMICOLON.{
 	G = pml_var_alloc((char *)I.u.raw.data, N.u.num, PML_VTYPE_GLOBAL, VAL);
 }
 
@@ -505,7 +483,6 @@ pktpat(PP) ::= PPBEGIN expr(E) PPEND. { PP = E; }
 
 expr(E) ::= orexpr(OE). { E = OE; }
 
-/* TODO: add type checking for compound expressions */
 orexpr(E) ::= orexpr(LHS) OR andexpr(RHS). {
 	E = pml_binop_alloc(PMLOP_OR, LHS, RHS); 
 }
@@ -532,10 +509,8 @@ cmpexpr(E) ::= borexpr(LHS) matchop(OP) IPV4ADDR(A) DIV NUM(L). {
 
 	pml_bytestr_set_static(&v->u.maskval.val, A.u.v4addr, 4);
 
-	if (L.u.num > 32) {
+	if (L.u.num > 32)
 		pml_ast_err(ast, "IPv4 address mask > 32 bits in length\n");
-		ast->error = 1;
-	}
 	i = 0;
 	rem = L.u.num;
 	while (rem > 8) {
@@ -561,10 +536,8 @@ cmpexpr(E) ::= borexpr(LHS) matchop(OP) IPV6ADDR(A) DIV NUM(L). {
 
 	pml_bytestr_set_static(&v->u.maskval.val, A.u.v6addr, 16);
 
-	if (L.u.num > 128) {
+	if (L.u.num > 128)
 		pml_ast_err(ast, "IPv6 address mask > 128 bits in length.\n");
-		ast->error = 1;
-	}
 	i = 0;
 	rem = L.u.num;
 	while (rem > 8) {
@@ -606,10 +579,10 @@ cmpop(OP) ::= LT. { OP = PMLOP_LT; }
 cmpop(OP) ::= GT. { OP = PMLOP_GT; }
 cmpop(OP) ::= LEQ. { OP = PMLOP_LEQ; }
 cmpop(OP) ::= GEQ. { OP = PMLOP_GEQ; }
-cmpop(OP) ::= SLT. { OP = PMLOP_SLT; }
-cmpop(OP) ::= SGT. { OP = PMLOP_SGT; }
-cmpop(OP) ::= SLEQ. { OP = PMLOP_SLEQ; }
-cmpop(OP) ::= SGEQ. { OP = PMLOP_SGEQ; }
+cmpop(OP) ::= ULT. { OP = PMLOP_ULT; }
+cmpop(OP) ::= UGT. { OP = PMLOP_UGT; }
+cmpop(OP) ::= ULEQ. { OP = PMLOP_ULEQ; }
+cmpop(OP) ::= UGEQ. { OP = PMLOP_UGEQ; }
 
 borexpr(E) ::= borexpr(LHS) BOR bxorexpr(RHS). {
 	E = pml_binop_alloc(PMLOP_BOR, LHS, RHS); 
@@ -667,10 +640,8 @@ call(C) ::= ID(N) LPAREN exprlist(A) RPAREN. {
 	struct pml_function *f;
 	char *name = (char *)N.u.raw.data;
 	f = pml_ast_lookup_func(ast, name); 
-	if (f == NULL) {
+	if (f == NULL)
 		pml_ast_err(ast, "Undefined function: %s\n", name);
-		ast->error = 1;
-	}
 	free(name);
 	C = pml_call_alloc(ast, f, A);
 }
@@ -679,10 +650,8 @@ call(C) ::= ID(N) LPAREN RPAREN. {
 	struct pml_list *args;
 	char *name = (char *)N.u.raw.data;
 	f = pml_ast_lookup_func(ast, name);
-	if (f == NULL) {
+	if (f == NULL)
 		pml_ast_err(ast, "Undefined function: %s\n", name);
-		ast->error = 1;
-	}
 	free(name);
 	args = (struct pml_list *)pmln_alloc(PMLTT_LIST);
 	C = pml_call_alloc(ast, f, args);
@@ -763,10 +732,8 @@ locator(V) ::= locname(N) LBRACKET expr(O) COMMA expr(L) RBRACKET. {
 locname(L) ::= pktname(P). { L = P; }
 locname(L1) ::= locstr(L0). { L1 = L0; }
 locname(L1) ::= pktname(P) DOT locstr(L0). {
-	if (pml_locator_extend_name(P, L0->name, strlen(L0->name)) < 0) {
+	if (pml_locator_extend_name(P, L0->name, strlen(L0->name)) < 0)
 		pml_ast_err(ast, "Out of memory for string.\n");
-		ast->error = 1;
-	}
 	pmln_free((union pml_node *)L0);
 	L1 = P;
 	L1->reftype = PML_REF_UNKNOWN_NS_ELEM;
@@ -774,10 +741,8 @@ locname(L1) ::= pktname(P) DOT locstr(L0). {
 
 locstr(L1) ::= locstr(L0) DOT ID(TOK). {
 	if (pml_locator_extend_name(L0, (char *)TOK.u.raw.data, 
-				    TOK.u.raw.len) < 0) {
+				    TOK.u.raw.len) < 0)
 		pml_ast_err(ast, "Out of memory for string.\n");
-		ast->error = 1;
-	}
 	free(TOK.u.raw.data);
 	L1 = L0;
 	L1->reftype = PML_REF_UNKNOWN_NS_ELEM;

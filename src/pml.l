@@ -71,6 +71,7 @@ dnum		0|[1-9][0-9]*
 
 "func"		{ return PMLTOK_FUNC; }
 "inline"	{ return PMLTOK_INLINE; }
+"const"		{ return PMLTOK_CONST; }
 "not"		{ return PMLTOK_NOT; }
 "and"		{ return PMLTOK_AND; }
 "or"		{ return PMLTOK_OR; }
@@ -87,10 +88,10 @@ dnum		0|[1-9][0-9]*
 ">"		{ return PMLTOK_GT; }
 "<="		{ return PMLTOK_LEQ; }
 ">="		{ return PMLTOK_GEQ; }
-"<-"		{ return PMLTOK_SLT; }
-">-"		{ return PMLTOK_SGT; }
-"<=-"		{ return PMLTOK_SLEQ; }
-">=-"		{ return PMLTOK_SGEQ; }
+"<+"		{ return PMLTOK_ULT; }
+">+"		{ return PMLTOK_UGT; }
+"<=+"		{ return PMLTOK_ULEQ; }
+">=+"		{ return PMLTOK_UGEQ; }
 
 "=~"		{ return PMLTOK_MATCH; }
 "!~"		{ return PMLTOK_NOMATCH; }

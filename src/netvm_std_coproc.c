@@ -6,6 +6,7 @@
 #include "netvm_std_coproc.h"
 #include "netvm_op_macros.h"
 #include "pktbuf.h"
+#include "util.h"
 
 /* --------- Xpkt Coprocessor --------- */
 

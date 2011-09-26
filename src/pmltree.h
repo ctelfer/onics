@@ -65,10 +65,10 @@ enum {
 	PMLOP_GT,
 	PMLOP_LEQ,
 	PMLOP_GEQ,
-	PMLOP_SLT,
-	PMLOP_SGT,
-	PMLOP_SLEQ,
-	PMLOP_SGEQ,
+	PMLOP_ULT,
+	PMLOP_UGT,
+	PMLOP_ULEQ,
+	PMLOP_UGEQ,
 	PMLOP_BOR,
 	PMLOP_BXOR,
 	PMLOP_BAND,
@@ -104,8 +104,7 @@ union pml_expr_u;
 
 enum {
 	PML_ETYPE_UNKNOWN,
-	PML_ETYPE_UINT,
-	PML_ETYPE_SINT,
+	PML_ETYPE_SCALAR,
 	PML_ETYPE_BYTESTR,
 	PML_ETYPE_MASKVAL,
 };
@@ -120,6 +119,9 @@ enum {
 
 	PML_EFLAG_VARLEN = 4,
 };
+#define PML_EXPR_IS_SCALAR(ep) \
+	(((union pml_expr_u *)ep)->expr.etype == PML_ETYPE_UINT || \
+	 ((union pml_expr_u *)ep)->expr.etype == PML_ETYPE_SINT)
 #define PML_EXPR_IS_CONST(ep) \
 	((((union pml_expr_u *)ep)->expr.eflags & PML_EFLAG_CONST) != 0)
 #define PML_EXPR_IS_PCONST(ep) \
@@ -286,7 +288,8 @@ struct pml_variable {
 	char *			name;
 
 	union pml_expr_u *	init;
-	uint			vtype;
+	ushort			vtype;
+	ushort			etype;
 	size_t			width;
 	uint64_t		addr;
 };
@@ -362,6 +365,7 @@ struct pml_function *pml_ast_lookup_func(struct pml_ast *ast, char *name);
 int pml_ast_add_func(struct pml_ast *ast, struct pml_function *func);
 struct pml_variable *pml_ast_lookup_var(struct pml_ast *ast, char *name);
 int pml_ast_add_var(struct pml_ast *ast, struct pml_variable *var);
+int pml_ast_add_rule(struct pml_ast *ast, struct pml_rule *rule);
 
 struct pml_variable *pml_func_lookup_param(struct pml_function *func, 
 					   char *name);
@@ -391,8 +395,6 @@ int pml_locator_extend_name(struct pml_locator *l, char *name, size_t len);
 int pml_locator_resolve_nsref(struct pml_locator *l);
 
 int pml_resolve_refs(struct pml_ast *ast, union pml_node *node);
-
-int pml_ast_resolve(struct pml_ast *ast);
 
 int pml_const_eval(union pml_expr_u *e, uint64_t *v);
 
