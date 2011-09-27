@@ -652,7 +652,7 @@ static void binop(struct netvm *vm, int op, uint64_t v1, uint64_t v2)
 	case NETVM_OC_SHRA:
 	case NETVM_OC_SHRAI:
 		amt = v2 & 0x3F;
-		out = (v1 >> amt) | -((v1 & 0x80000000) >> amt);
+		out = (v1 >> amt) | -((v1 & ((uint64_t)1 << 63)) >> amt);
 		break;
 	case NETVM_OC_AND:
 	case NETVM_OC_ANDI:

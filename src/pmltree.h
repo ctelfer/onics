@@ -307,6 +307,8 @@ struct pml_function {
 	struct pml_symtab	vars;
 	union pml_node *	body;  /* expr for pred, list for func */
 	int			isconst; /* inline is const if params are */
+	size_t			pstksz;
+	size_t			vstksz;
 	size_t			width;
 };
 
@@ -319,6 +321,7 @@ struct pml_rule {
 
 	union pml_expr_u *	pattern;
 	struct pml_list *	stmts;
+	size_t			vstksz;
 };
 
 
@@ -392,12 +395,9 @@ int pml_locator_extend_name(struct pml_locator *l, char *name, size_t len);
 /* Returns -1 if there was an internal error. */
 /* Returns 0 if the locator could not be resolved. */
 /* Returns 1 if the locator was resolved. */
-int pml_locator_resolve_nsref(struct pml_locator *l);
+int pml_locator_resolve_nsref(struct pml_ast *ast, struct pml_locator *l);
 
 int pml_resolve_refs(struct pml_ast *ast, union pml_node *node);
-
-int pml_const_eval(union pml_expr_u *e, uint64_t *v);
-
 
 /* Lexical analyzer definitions */
 

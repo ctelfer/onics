@@ -187,3 +187,23 @@ void hexdump(FILE *out, ulong addr, byte_t *p, ulong len)
 		fprintf(out, "|\n");
 	}
 }
+
+
+uint64_t be64val(void *vp, size_t len)
+{
+	uint64_t x = 0;
+	byte_t *p = vp;
+	switch(len) {
+	case 0: break;
+	default:
+	case 8: x = *p++;
+	case 7: x = (x << 8) | *p++;
+	case 6: x = (x << 8) | *p++;
+	case 5: x = (x << 8) | *p++;
+	case 4: x = (x << 8) | *p++;
+	case 3: x = (x << 8) | *p++;
+	case 2: x = (x << 8) | *p++;
+	case 1: x = (x << 8) | *p++;
+	}
+	return x;
+}
