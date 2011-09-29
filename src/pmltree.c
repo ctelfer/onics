@@ -830,7 +830,7 @@ void pmlt_print(union pml_node *np, uint depth)
 		indent(depth);
 		printf("Scalar %s -- width %d: %ld (%lu,0x%lx)\n",
 		       efs(p, estr), (unsigned)p->width, 
-		       (long)p->u.scalar, (unsigned long)p->u.scalar,
+		       (long)p->u.scalar, (ulong)p->u.scalar,
 		       (long)p->u.scalar);
 	} break;
 
@@ -857,7 +857,7 @@ void pmlt_print(union pml_node *np, uint depth)
 		struct pml_variable *p = &np->variable;
 		indent(depth);
 		printf("Variable: %s [%s; width=%lu, addr=%lu]\n", p->name,
-		       vts(p), (unsigned long)p->width, (unsigned long)p->addr);
+		       vts(p), (ulong)p->width, (ulong)p->addr);
 		if (p->init != NULL) {
 			indent(depth+1);
 			printf("Initialization value -- \n");
@@ -1021,7 +1021,7 @@ void pmlt_print(union pml_node *np, uint depth)
 		       		"Function" : 
 				"Inline Function",
 			(p->isconst) ? "(const)" : "",
-			p->name, p->arity, (unsigned long)p->width);
+			p->name, p->arity, (ulong)p->width);
 
 		indent(depth);
 		printf("Parameters -- \n");
@@ -2173,15 +2173,64 @@ static int getofflen(struct pml_global_state *gs, struct pml_stack_frame *fr,
 }
 
 
+static int e_const(struct pml_global_state *gs, struct pml_stack_frame *fr,
+		   struct pml_locator *l, struct pml_retval *r)
+{
+	uint64_t off = 0, len = 0;
+	struct pml_retval lr;
+	struct pml_variable *v = l->u.varref;
+
+	abort_unless(l->off == NULL || PML_EXPR_IS_CONST(l->off));
+	abort_unless(l->len == NULL || PML_EXPR_IS_CONST(l->len));
+
+	if (v->etype == PML_ETYPE_SCALAR) {
+
+		abort_unless(l->off == NULL && l->len == NULL);
+		if (pml_eval(gs, fr, (union pml_node*)v->init, r) < 0)
+			return -1;
+
+	} else if (v->etype == PML_ETYPE_BYTESTR ||
+		   v->etype == PML_ETYPE_MASKVAL) { 
+
+		if (pml_eval(gs, fr, (union pml_node*)v->init, &lr) < 0)
+			return -1;
+		if (getofflen(gs, fr, l, lr.bytes.len, &off, &len) < 0)
+			return -1;
+		abort_unless(v->etype == PML_ETYPE_BYTESTR ||
+				(lr.mask.data != NULL && 
+				 lr.mask.len == lr.bytes.len));
+		if (len > lr.bytes.len || off > lr.bytes.len - len) {
+			pml_ast_err(gs->ast,
+				    "field overflow locator for '%s': "
+				    "[off=%lu,len=%lu,field=%lu bytes]\n",
+				    l->name, (ulong)off, (ulong)len,
+				    (ulong)lr.bytes.len);
+			return -1;
+		}
+		r->etype = v->etype;
+		r->bytes.data = lr.bytes.data + off;
+		r->bytes.len = len;
+		if (v->etype == PML_ETYPE_MASKVAL) { 
+			r->mask.data = lr.mask.data + off;
+			r->mask.len = len;
+		}
+
+	} else {
+		abort_unless(0);
+	}
+	return 0;
+}
+
+
 static int e_locator(struct pml_global_state *gs, struct pml_stack_frame *fr,
 		     union pml_node *node, struct pml_retval *r)
 {
 	struct pml_locator *l = (struct pml_locator *)node;
 	uint64_t off = 0, len = 8;
-	struct pml_retval lr;
 
 	if (l->reftype == PML_REF_VAR) {
 		struct pml_variable *v = l->u.varref;
+
 		abort_unless(l->pkt == NULL);
 		abort_unless(l->idx == NULL);
 		abort_unless(v->vtype == PML_VTYPE_CONST ||
@@ -2189,14 +2238,11 @@ static int e_locator(struct pml_global_state *gs, struct pml_stack_frame *fr,
 		             v->vtype == PML_VTYPE_LOCAL);
 
 		if (v->vtype == PML_VTYPE_CONST) {
-			abort_unless(l->etype == PML_ETYPE_SCALAR);
-			abort_unless(l->off == NULL);
-			abort_unless(l->len == NULL);
-			if (pml_eval(gs, fr, (union pml_node*)v->init, &lr) < 0)
-				return -1;
-			r->etype = PML_ETYPE_SCALAR;
-			r->val = val64(&lr);
+
+			return e_const(gs, fr, l, r);
+
 		} else if (v->vtype == PML_VTYPE_GLOBAL) {
+
 			if (getofflen(gs, fr, l, v->width, &off, &len) < 0)
 				return -1;
 			if (off > v->width || v->width - off < len) {
@@ -2204,9 +2250,8 @@ static int e_locator(struct pml_global_state *gs, struct pml_stack_frame *fr,
 					    "eval: access to global '%s' is "
 					    "out of bounds: [off=%lu,len=%lu,"
 					    "varlen=%lu]\n",
-					    (unsigned long)off, 
-					    (unsigned long)len, 
-					    (unsigned long)v->width);
+					    (ulong)off, (ulong)len, 
+					    (ulong)v->width);
 				return -1;
 			}
 			if (l->etype == PML_ETYPE_SCALAR) {
@@ -2220,11 +2265,12 @@ static int e_locator(struct pml_global_state *gs, struct pml_stack_frame *fr,
 				r->bytes.data = gs->gmem + v->addr + off;
 				r->bytes.len = len;
 			}
+
 		} else {
+
 			abort_unless(v->vtype == PML_VTYPE_LOCAL);
 			abort_unless(l->etype == PML_ETYPE_SCALAR);
-			abort_unless(l->off == NULL);
-			abort_unless(l->len == NULL);
+			abort_unless(l->off == NULL && l->len == NULL);
 			abort_unless(fr);
 			if (fr->ssz < 8 || fr->ssz - 8 < v->addr) {
 				pml_ast_err(gs->ast,
@@ -2237,15 +2283,19 @@ static int e_locator(struct pml_global_state *gs, struct pml_stack_frame *fr,
 			r->val = *(uint64_t *)(fr->stack + v->addr);
 		}
 	} else if (l->reftype == PML_REF_PKTFLD) {
+
 		/* TODO */
 		pml_ast_err(gs->ast, "eval: Packet fields unimplemented\n");
 		return -1;
+
 	} else if (l->reftype == PML_REF_LITERAL) {
+
 		return pml_eval(gs, fr, (union pml_node *)l->u.litref, r);
+
 	} else {
-		pml_ast_err(gs->ast, "eval: Invalid reftype in locator: %d\n",
-			    l->reftype);
-		return -1;
+
+		abort_unless(0);
+
 	}
 
 	return 0;
