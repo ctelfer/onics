@@ -127,6 +127,9 @@ enum {
 #define PML_EXPR_IS_PCONST(ep) \
 	((((union pml_expr_u *)ep)->expr.eflags & \
 	  	(PML_EFLAG_CONST|PML_EFLAG_PCONST)) != 0)
+#define PML_EXPR_IS_LITERAL(ep) \
+	(((union pml_expr_u *)ep)->expr.type >= PMLTT_SCALAR && \
+	 ((union pml_expr_u *)ep)->expr.type <= PMLTT_MASKVAL)
 struct pml_expr_base {
 	int			type;
 	struct list		ln;
@@ -162,6 +165,29 @@ struct pml_literal {
 		struct pml_bytestr	bytestr;
 		struct pml_maskval	maskval;
 	} u;
+};
+
+
+enum {
+	PML_VTYPE_UNKNOWN, 
+	PML_VTYPE_CONST,
+	PML_VTYPE_GLOBAL,
+	PML_VTYPE_LOCAL,
+};
+
+
+struct pml_variable {
+	/* pml_sym_base fields */
+	int			type;
+	struct list		ln;
+	struct hnode		hn;
+	char *			name;
+
+	union pml_expr_u *	init;
+	ushort			vtype;
+	ushort			etype;
+	size_t			width;
+	uint64_t		addr;
 };
 
 
@@ -209,32 +235,6 @@ struct pml_while {
 };
 
 
-struct pml_assign {
-	int			type;
-	struct list		ln;
-
-	struct pml_locator *	loc;
-	union pml_expr_u *	expr;
-};
-
-
-struct pml_return {
-	int			type;
-	struct list		ln;
-
-	union pml_expr_u *	expr;
-};
-
-
-struct pml_print {
-	int			type;
-	struct list		ln;
-
-	char *			fmt;
-	struct pml_list *	args;	/* expressions */
-};
-
-
 enum {
 	PML_REF_UNKNOWN,
 	PML_REF_VAR,
@@ -264,34 +264,37 @@ struct pml_locator {
 };
 
 
+struct pml_assign {
+	int			type;
+	struct list		ln;
+
+	struct pml_locator *	loc;
+	union pml_expr_u *	expr;
+};
+
+
+struct pml_return {
+	int			type;
+	struct list		ln;
+
+	union pml_expr_u *	expr;
+};
+
+
+struct pml_print {
+	int			type;
+	struct list		ln;
+
+	char *			fmt;
+	struct pml_list *	args;	/* expressions */
+};
+
+
 struct pml_sym {
 	int			type;
 	struct list		ln;
 	struct hnode		hn;
 	char *			name;
-};
-
-
-enum {
-	PML_VTYPE_UNKNOWN, 
-	PML_VTYPE_CONST,
-	PML_VTYPE_GLOBAL,
-	PML_VTYPE_LOCAL,
-};
-
-
-struct pml_variable {
-	/* pml_sym_base fields */
-	int			type;
-	struct list		ln;
-	struct hnode		hn;
-	char *			name;
-
-	union pml_expr_u *	init;
-	ushort			vtype;
-	ushort			etype;
-	size_t			width;
-	uint64_t		addr;
 };
 
 
@@ -391,6 +394,17 @@ struct pml_function *pml_ast_lookup_func(struct pml_ast *ast, char *name);
 
 int pml_locator_extend_name(struct pml_locator *l, char *name, size_t len);
 
+/* 
+   Walk an abstract syntax tree.  
+   Call 'pre' before processing each node, 'in' between subnodes, and 
+   'post' after all subnodes are visited.  If the callbacks return < 0,
+   abort processing.  If they return > 1 stop visiting the current node
+   (and subnodes) but continue on the traversal.  If the return value is
+   0, then continue processing.
+ */
+int pmlt_walk(union pml_node *np, void *ctx, pml_walk_f pre, pml_walk_f in,
+	      pml_walk_f post);
+
 /* Resolve a namespace reference to a PML expression. */
 /* Returns -1 if there was an internal error. */
 /* Returns 0 if the locator could not be resolved. */
@@ -398,6 +412,8 @@ int pml_locator_extend_name(struct pml_locator *l, char *name, size_t len);
 int pml_locator_resolve_nsref(struct pml_ast *ast, struct pml_locator *l);
 
 int pml_resolve_refs(struct pml_ast *ast, union pml_node *node);
+
+int pml_ast_optimize(struct pml_ast *ast);
 
 /* Lexical analyzer definitions */
 

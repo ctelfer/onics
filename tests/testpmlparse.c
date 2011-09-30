@@ -41,13 +41,27 @@ int main(int argc, char *argv[])
 	if (!tree.done)
 		err("File did not reduce to a complete tree\n");
 
+	printf("\n\n########\n");
 	printf("Done parsing, destroying scanner and parser\n");
+	printf("########\n");
 
 	pmllex_destroy(scanner);
 	pml_free(parser);
 
 	pml_ast_print(&tree);
 
+	printf("\n\n########\n");
+	printf("Optimizing tree:\n");
+	printf("########\n");
+
+	if (pml_ast_optimize(&tree) < 0)
+		err("Error optimizing PML tree: %s\n", tree.errbuf);
+	printf("Success:\n");
+	pml_ast_print(&tree);
+
+	printf("\n\n########\n");
+	printf("Clearing tree:\n");
+	printf("########\n");
 	pml_ast_clear(&tree);
 
 	return 0;

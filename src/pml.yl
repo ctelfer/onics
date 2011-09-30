@@ -157,6 +157,13 @@ var Count;
   var name[width] = <value>; # global only
 */
 
+/* 
+ * ----- TODO: -----
+ * Proper return value checking for pmln_alloc();
+ * ----------------- 
+ */
+
+
 /* ----- Basic Lemon Declarations ----- */
 
 %name PML
@@ -469,6 +476,7 @@ stmt(S) ::= RETURN expr(E) SEMICOLON.  {
 stmt(S) ::= PRINT STRING(TV) SEMICOLON. {
 	struct pml_print *p = (struct pml_print *)pmln_alloc(PMLTT_PRINT);
 	p->fmt = (char *)TV.u.raw.data;
+	p->args = (struct pml_list *)pmln_alloc(PMLTT_LIST);
 	S = (union pml_node *)p;
 }
 

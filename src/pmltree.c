@@ -1107,6 +1107,8 @@ int pmlt_walk(union pml_node *np, void *ctx, pml_walk_f pre, pml_walk_f in,
 		rv = (*pre)(np, ctx);
 		if (rv < 0)
 			return rv;
+		else if (rv > 0)
+			return 0;
 	}
 
 	switch (np->base.type) {
@@ -1118,6 +1120,8 @@ int pmlt_walk(union pml_node *np, void *ctx, pml_walk_f pre, pml_walk_f in,
 			rv = pmlt_walk(l_to_node(e), ctx, pre, in, post);
 			if (rv < 0)
 				return rv;
+			else if (rv > 0)
+				return 0;
 		}
 	} break;
 
@@ -1128,6 +1132,8 @@ int pmlt_walk(union pml_node *np, void *ctx, pml_walk_f pre, pml_walk_f in,
 				       post);
 			if (rv < 0)
 				return rv;
+			else if (rv > 0)
+				return 0;
 		}
 	} break;
 
@@ -1136,6 +1142,8 @@ int pmlt_walk(union pml_node *np, void *ctx, pml_walk_f pre, pml_walk_f in,
 		rv = pmlt_walk((union pml_node *)p->arg1, ctx, pre, in, post);
 		if (rv < 0)
 			return rv;
+		else if (rv > 0)
+			return 0;
 	} break;
 
 	case PMLTT_BINOP: {
@@ -1144,16 +1152,22 @@ int pmlt_walk(union pml_node *np, void *ctx, pml_walk_f pre, pml_walk_f in,
 		rv = pmlt_walk((union pml_node *)p->arg1, ctx, pre, in, post);
 		if (rv < 0)
 			return rv;
+		else if (rv > 0)
+			return 0;
 
 		if (in != NULL) {
 			rv = (*in)((union pml_node *)p, ctx);
 			if (rv < 0)
 				return rv;
+			else if (rv > 0)
+				return 0;
 		}
 
 		rv = pmlt_walk((union pml_node *)p->arg2, ctx, pre, in, post);
 		if (rv < 0)
 			return rv;
+		else if (rv > 0)
+			return 0;
 	} break;
 
 	case PMLTT_CALL: {
@@ -1161,6 +1175,8 @@ int pmlt_walk(union pml_node *np, void *ctx, pml_walk_f pre, pml_walk_f in,
 		rv = pmlt_walk((union pml_node *)p->args, ctx, pre, in, post);
 		if (rv < 0)
 			return rv;
+		else if (rv > 0)
+			return 0;
 	} break;
 
 	case PMLTT_IF: {
@@ -1169,16 +1185,22 @@ int pmlt_walk(union pml_node *np, void *ctx, pml_walk_f pre, pml_walk_f in,
 		rv = pmlt_walk((union pml_node *)p->test, ctx, pre, in, post);
 		if (rv < 0)
 			return rv;
+		else if (rv > 0)
+			return 0;
 
 		rv = pmlt_walk((union pml_node *)p->tbody, ctx, pre, in, post);
 		if (rv < 0)
 			return rv;
+		else if (rv > 0)
+			return 0;
 
 		if (p->fbody != NULL) {
 			rv = pmlt_walk((union pml_node *)p->fbody, ctx, pre, in,
 				       post);
 			if (rv < 0)
 				return rv;
+			else if (rv > 0)
+				return 0;
 		}
 	} break;
 
@@ -1188,10 +1210,14 @@ int pmlt_walk(union pml_node *np, void *ctx, pml_walk_f pre, pml_walk_f in,
 		rv = pmlt_walk((union pml_node *)p->test, ctx, pre, in, post);
 		if (rv < 0)
 			return rv;
+		else if (rv > 0)
+			return 0;
 
 		rv = pmlt_walk((union pml_node *)p->body, ctx, pre, in, post);
 		if (rv < 0)
 			return rv;
+		else if (rv > 0)
+			return 0;
 	} break;
 
 	case PMLTT_LOCATOR:
@@ -1203,6 +1229,8 @@ int pmlt_walk(union pml_node *np, void *ctx, pml_walk_f pre, pml_walk_f in,
 				       post);
 			if (rv < 0)
 				return rv;
+			else if (rv > 0)
+				return 0;
 		}
 
 		if (p->idx != NULL) {
@@ -1210,6 +1238,8 @@ int pmlt_walk(union pml_node *np, void *ctx, pml_walk_f pre, pml_walk_f in,
 				       post);
 			if (rv < 0)
 				return rv;
+			else if (rv > 0)
+				return 0;
 		}
 
 		if (p->off != NULL) {
@@ -1217,6 +1247,8 @@ int pmlt_walk(union pml_node *np, void *ctx, pml_walk_f pre, pml_walk_f in,
 				       post);
 			if (rv < 0)
 				return rv;
+			else if (rv > 0)
+				return 0;
 		}
 
 		if (p->len != NULL) {
@@ -1224,6 +1256,8 @@ int pmlt_walk(union pml_node *np, void *ctx, pml_walk_f pre, pml_walk_f in,
 				       post);
 			if (rv < 0)
 				return rv;
+			else if (rv > 0)
+				return 0;
 		}
 	} break;
 
@@ -1233,10 +1267,14 @@ int pmlt_walk(union pml_node *np, void *ctx, pml_walk_f pre, pml_walk_f in,
 		rv = pmlt_walk((union pml_node *)p->loc, ctx, pre, in, post);
 		if (rv < 0)
 			return rv;
+		else if (rv > 0)
+			return 0;
 
 		rv = pmlt_walk((union pml_node *)p->expr, ctx, pre, in, post);
 		if (rv < 0)
 			return rv;
+		else if (rv > 0)
+			return 0;
 	} break;
 
 	case PMLTT_RETURN: {
@@ -1245,6 +1283,8 @@ int pmlt_walk(union pml_node *np, void *ctx, pml_walk_f pre, pml_walk_f in,
 		rv = pmlt_walk((union pml_node *)p->expr, ctx, pre, in, post);
 		if (rv < 0)
 			return rv;
+		else if (rv > 0)
+			return 0;
         } break;
 
 	case PMLTT_PRINT: {
@@ -1253,6 +1293,8 @@ int pmlt_walk(union pml_node *np, void *ctx, pml_walk_f pre, pml_walk_f in,
 		rv = pmlt_walk((union pml_node *)p->args, ctx, pre, in, post);
 		if (rv < 0)
 			return rv;
+		else if (rv > 0)
+			return 0;
 	} break;
 
 	case PMLTT_FUNCTION:
@@ -1264,17 +1306,23 @@ int pmlt_walk(union pml_node *np, void *ctx, pml_walk_f pre, pml_walk_f in,
 			rv = pmlt_walk(l_to_node(n), ctx, pre, in, post);
 			if (rv < 0)
 				return rv;
+			else if (rv > 0)
+				return 0;
 		}
 
 		l_for_each_safe(n, x, &p->vars.list) {
 			rv = pmlt_walk(l_to_node(n), ctx, pre, in, post);
 			if (rv < 0)
 				return rv;
+			else if (rv > 0)
+				return 0;
 		}
 
 		rv = pmlt_walk((union pml_node *)p->body, ctx, pre, in, post);
 		if (rv < 0)
 			return rv;
+		else if (rv > 0)
+			return 0;
 	} break;
 
 	case PMLTT_RULE: {
@@ -1285,11 +1333,15 @@ int pmlt_walk(union pml_node *np, void *ctx, pml_walk_f pre, pml_walk_f in,
 				       in, post);
 			if (rv < 0)
 				return rv;
+			else if (rv > 0)
+				return 0;
 		}
 
 		rv = pmlt_walk((union pml_node *)p->stmts, ctx, pre, in, post);
 		if (rv < 0)
 			return rv;
+		else if (rv > 0)
+			return 0;
 	} break;
 
 	default:
@@ -2352,7 +2404,7 @@ static pml_eval_f evaltab[] = {
 static int pml_eval(struct pml_global_state *gs, struct pml_stack_frame *fr, 
 		    union pml_node *node, struct pml_retval *r)
 {
-	abort_unless(gs && fr && r);
+	abort_unless(gs && r);
 	if (node == NULL || node->base.type < 0 || 
 	    node->base.type > PMLTT_RULE) {
 		pml_ast_err(gs->ast, "Invalid node given to pml_eval()\n");
@@ -2360,6 +2412,231 @@ static int pml_eval(struct pml_global_state *gs, struct pml_stack_frame *fr,
 	}
 
 	return (*evaltab[node->base.type])(gs, fr, node, r);
+}
+
+
+static int pml_opt_cexpr(union pml_expr_u *e, void *astp, union pml_expr_u **ne)
+{
+	struct pml_global_state gs;
+	struct pml_retval r;
+	struct pml_literal *lit = NULL;
+	int rv;
+
+	*ne = NULL;
+
+	if (e != NULL && PML_EXPR_IS_CONST(e) && !PML_EXPR_IS_LITERAL(e)) {
+		init_global_state(&gs, astp, 0);
+		rv = pml_eval(&gs, NULL, (union pml_node *)e, &r);
+		if (rv < 0)
+			return -1;
+		switch(r.etype) {
+		case PML_ETYPE_SCALAR:
+			lit = (struct pml_literal *)pmln_alloc(PMLTT_SCALAR);
+			lit->etype = PML_ETYPE_SCALAR;
+			lit->eflags = PML_EFLAG_CONST|PML_EFLAG_PCONST;
+			lit->width = 8;
+			lit->u.scalar = r.val;
+			break;
+
+		case PML_ETYPE_BYTESTR:
+			lit = (struct pml_literal *)pmln_alloc(PMLTT_BYTESTR);
+			lit->etype = PML_ETYPE_BYTESTR;
+			lit->eflags = PML_EFLAG_CONST|PML_EFLAG_PCONST;
+			rv = pml_bytestr_copy(&lit->u.bytestr, r.bytes.data,
+					      r.bytes.len);
+			if (rv < 0)
+				goto errout;
+			lit->width = r.bytes.len;
+			break;
+
+		case PML_ETYPE_MASKVAL:
+			lit = (struct pml_literal *)pmln_alloc(PMLTT_MASKVAL);
+			lit->etype = PML_ETYPE_MASKVAL;
+			lit->eflags = PML_EFLAG_CONST|PML_EFLAG_PCONST;
+			rv = pml_bytestr_copy(&lit->u.maskval.val, 
+					      r.bytes.data, r.bytes.len);
+			if (rv < 0)
+				goto errout;
+			rv = pml_bytestr_copy(&lit->u.maskval.mask, 
+					      r.mask.data, r.mask.len);
+			if (rv < 0)
+				goto errout;
+			lit->width = r.bytes.len;
+			break;
+		}
+		*ne = (union pml_expr_u *)lit;
+	}
+
+	return 0;
+
+errout:
+	pmln_free((union pml_node *)lit);
+	pml_ast_err(astp, "Out of memory during constant optimization\n");
+	return -1;
+}
+
+
+/* optimize an expression pointed to by a union pml_expr_u * pointer */
+static int pml_opt_p_cexpr(union pml_expr_u **e, void *astp)
+{
+	union pml_expr_u *ne;
+	if (pml_opt_cexpr(*e, astp, &ne) < 0)
+		return -1;
+	if (ne != NULL) {
+		pmln_free((union pml_node *)*e);
+		*e = ne;
+	}
+	return 0;
+}
+
+
+/* optimize an expression pointed to by a union pml_node * pointer */
+static int pml_opt_np_cexpr(union pml_node **e, void *astp)
+{
+	union pml_expr_u *ne;
+	if (pml_opt_cexpr((union pml_expr_u *)*e, astp, &ne) < 0)
+		return -1;
+	if (ne != NULL) {
+		pmln_free(*e);
+		*e = (union pml_node *)ne;
+	}
+	return 0;
+}
+
+
+/* optimize an expression pointed to by a union pml_expr_u * pointer */
+static int pml_opt_l_cexpr(union pml_expr_u *e, void *astp)
+{
+	struct list *prev;
+	union pml_expr_u *ne;
+	if (pml_opt_cexpr(e, astp, &ne) < 0)
+		return -1;
+	if (ne != NULL) {
+		prev = e->expr.ln.prev;
+		l_rem(&e->expr.ln);
+		l_ins(prev, &ne->expr.ln);
+		pmln_free((union pml_node *)e);
+	}
+	return 0;
+}
+
+
+static int pml_cexpr_walker(union pml_node *node, void *astp)
+{
+	struct list *n, *x;
+
+	switch(node->base.type) {
+
+	case PMLTT_VAR: {
+		struct pml_variable *v = (struct pml_variable *)node;
+		if (v->init != NULL) {
+			if (pml_opt_p_cexpr(&v->init, astp) < 0)
+				return -1;
+		}
+	} break;
+
+	case PMLTT_BINOP:
+	case PMLTT_UNOP: {
+		struct pml_op *op = (struct pml_op *)node;
+		if (pml_opt_p_cexpr(&op->arg1, astp) < 0)
+			return -1;
+		if (op->type == PMLTT_BINOP) {
+			if (pml_opt_p_cexpr(&op->arg2, astp) < 0)
+				return -1;
+		}
+	} break;
+
+	case PMLTT_CALL: {
+		struct pml_call *c = (struct pml_call *)node;
+		l_for_each_safe(n, x, &c->args->list) {
+			if (pml_opt_l_cexpr((union pml_expr_u *)l_to_node(n), 
+					   astp) < 0)
+				return -1;
+		}
+	} break;
+
+	case PMLTT_IF: {
+		struct pml_if *pif = (struct pml_if *)node;
+		if (pml_opt_p_cexpr(&pif->test, astp) < 0)
+			return -1;
+	} break;
+
+	case PMLTT_WHILE: {
+		struct pml_while *w = (struct pml_while *)node;
+		if (pml_opt_p_cexpr(&w->test, astp) < 0)
+			return -1;
+	} break;
+
+	case PMLTT_LOCATOR:
+	case PMLTT_LOCADDR: {
+		struct pml_locator *l = (struct pml_locator *)node;
+		if (pml_opt_p_cexpr(&l->pkt, astp) < 0)
+			return -1;
+		if (pml_opt_p_cexpr(&l->idx, astp) < 0)
+			return -1;
+		if (pml_opt_p_cexpr(&l->off, astp) < 0)
+			return -1;
+		if (pml_opt_p_cexpr(&l->len, astp) < 0)
+			return -1;
+	} break;
+
+	case PMLTT_ASSIGN: {
+		struct pml_assign *a = (struct pml_assign *)node;
+		if (pml_opt_p_cexpr(&a->expr, astp) < 0)
+			return -1;
+	} break;
+
+	case PMLTT_PRINT: {
+		struct pml_print *p = (struct pml_print *)node;
+		l_for_each_safe(n, x, &p->args->list) {
+			if (pml_opt_l_cexpr((union pml_expr_u *)l_to_node(n),
+					   astp) < 0)
+				return -1;
+		}
+	} break;
+
+	case PMLTT_INLINE: {
+		struct pml_function *f = (struct pml_function *)node;
+		if (pml_opt_np_cexpr(&f->body, astp) < 0)
+			return -1;
+	} break;
+
+	case PMLTT_RULE: {
+		struct pml_rule *r = (struct pml_rule *)node;
+		if (pml_opt_p_cexpr(&r->pattern, astp) < 0)
+			return -1;
+	} break;
+
+	default:
+		return 0;
+	}
+	return 0;
+}
+
+
+int pml_ast_optimize(struct pml_ast *ast)
+{
+	struct list *n;
+	int rv = 0;
+
+	abort_unless(ast);
+	l_for_each(n, &ast->vars.list) {
+		rv = pmlt_walk(l_to_node(n), ast, pml_cexpr_walker, NULL, NULL);
+		if (rv < 0)
+			goto out;
+	}
+	l_for_each(n, &ast->funcs.list) {
+		rv = pmlt_walk(l_to_node(n), ast, pml_cexpr_walker, NULL, NULL);
+		if (rv < 0)
+			goto out;
+	}
+	l_for_each(n, &ast->rules) {
+		rv = pmlt_walk(l_to_node(n), ast, pml_cexpr_walker, NULL, NULL);
+		if (rv < 0)
+			goto out;
+	}
+out:
+	return rv;
 }
 
 
