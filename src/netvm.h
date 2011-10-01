@@ -17,6 +17,46 @@ struct netvm_inst {
 };
 
 
+/*
+ * Segments
+ *
+ * The Netvm supports separate memory segments and regards packets as
+ * being a special type of memory segment.  A memory segment is denoted
+ * by an 8-bit number where the high order bit determines whether the
+ * lower 7 bits index a regular memory segment or packet.  (0 means mem,
+ * and 1 means packet).  NETVM_SEG_ISPKT is the bitmask to apply to
+ * a segment number to test this.
+ */
+#define	NETVM_SEG_ISPKT		0x80
+
+/*
+ *
+ * Unified Address Space
+ *
+ * Certain operations (ldua, stua, cmp, pcmp, mcmp) accept addresses in a
+ * unified address space format.  This format is a single 64-bit address
+ * that can refer to any memory segment or packet buffer.  The format is:
+ *
+ * MSB                      LSB
+ *  [seg desc: 8  address: 56]
+ * 
+ * The segment descriptor is a memory segment index with the NETVM_SEG_ISPKT
+ * bit (bit 7 in the 8-bit address) cleared or a packet number with the
+ * NETVM_SEG_ISPKT bit set.
+ *
+ * If memory must be accessed using the full 64-bit address space (can only
+ * be for memory segments), then that memory must be accessed using an
+ * instruction with a full 64-bit address.  This really should only be an
+ * issue for some platform where I/O address space is mapped into a memory
+ * segment and the high order bits are significant for some reason.
+ */
+
+#define NETVM_UA_SEG_OFF	56
+#define NETVM_UA_SEG_HI_OFF	24
+#define NETVM_UADDR(ispkt, idx, addr) \
+	((uint64_t)(ispkt) << 63 | (uint64_t)(idx) << 56 | (addr))
+
+
 /* 
  * Some instructions require metadata about a packet and/or it's
  * parse fields.  Such instructions take a protocol descriptor either
@@ -183,7 +223,6 @@ struct netvm_coproc {
 #define NETVM_SEG_RDWR		3
 #define NETVM_SEG_MO		4	/* useable in matchonly mode */
 #define NETVM_SEG_PMASK		7
-#define	NETVM_SEG_ISPKT		128
 
 
 struct netvm_mseg {
@@ -231,14 +270,15 @@ struct netvm {
  * rxaddr - address of regular expression in memory
  * rxlen - length of regular expression in memory
  * cp - coprocessor identifier
+ * ua - a unified address space addresss (see above).  May refer to a
+ *      packet or memory segment.
  */
 
 enum {
 	NETVM_OC_POP,		/* discards top 'w' entries of stack */
 	NETVM_OC_POPTO,		/* discard all but last 'w' in stack frame */
 	NETVM_OC_PUSH,		/* pushes 'w' onto stack */
-	NETVM_OC_PUSHHI,	/* pushes 'w << 32' onto stack */
-	NETVM_OC_ORHI,		/* [v] binary or 'w << 32' with top of stack */
+	NETVM_OC_ORHI,		/* [v] binary OR 'w << 32' with top of stack */
 	NETVM_OC_ZPUSH,		/* pushes 'w' 0s onto the stack */
 	NETVM_OC_DUP,		/* dups 'w' from the top of the stack */
 	NETVM_OC_SWAP,		/* swap stack pos 0 and 'w' from SP down */
@@ -260,38 +300,21 @@ enum {
 	NETVM_OC_LDPFI,		/* load field from proto parse (packed pdesc) */
 
 	/*
-	 * For these 2 load operations, x must be in [1,8] or [129,136]
+	 * For these 5 load operations, x must be in [1,8] or [129,136]
 	 * If x is in [129,136], the result will be sign extended to 64 bits 
-	 * for a value of x-128 bytes.  The 'y' field refers either to a
-	 * memory segment.  If the NETVM_SEG_ISPKT bit is set, then the load
-	 * comes from a packet:
-	 *  - if the instruction is LDI, then the instruction encodes a
-	 *    packet descriptor.
-	 *  - if the instruction is LD and 'z' == 0 the next stack value
-	 *    encodes a packet descriptor (including the packet number).
-	 *  - if the instruction is LD and 'z' != 0, then 'y' encodes the
-	 *    packet number and the stack value is a raw packet address.
-	 * Otherwise, 'y' refers to a memory segment and the stack value
-	 * (LD) or 'w' (LDI) encodes an offset from the base of the memory
-	 * segment.  This same convention is used for the ST and STI 
-	 * operations below.  Regardless of x or y values, LD/ST
-	 * always pop one stack value and push one stack value, while 
-	 * LDI/STI always push one stack value.
+	 * for a value of x-128 bytes.   The same address conventions are
+	 * followed on the ST, STI, STU, STPD, STPDI, instructions.
 	 */
-	NETVM_OC_LD,		/* [addr/pdesc] x bytes from mem seg y */
+	NETVM_OC_LD,		/* [addr] load x bytes from addr in seg y */
+				/*    full 64-bit address supported */
 	NETVM_OC_LDI,		/* load x bytes from mem seg y @ addr w */
+	NETVM_OC_LDU,		/* [ua] load x bytes from ua */
+	NETVM_OC_LDPD,		/* [pdesc] x bytes from the pkt desc location */
+	NETVM_OC_LDPDI,		/* x bytes from the (packed) desc location */
 
-	/* 
-	 * For the following 3 operations, and for MOVE below:  x = a1 seg, 
-	 * y = a2 seg, and z = mask seg (MSKCMP only).  As with LD/ST, the 
-	 * NETVM_SEG_ISPKT indicates that the segment is the a packet
-	 * region.  However, unlike those instructions, there is no packet
-	 * descriptor to provide finer access to the fields of the packet.
-	 * One must use the LDPF(I) operation to derive said offsets.
-	 */
-	NETVM_OC_CMP,		/* [a1,a2,len] compare bytes in mem */
-	NETVM_OC_PCMP,		/* [a1,a2,pfx,len] compare bits via prefix */
-	NETVM_OC_MSKCMP,	/* [a1,a2,mka,len] compare bytes via mask */
+	NETVM_OC_CMP,		/* [ua1,ua2,len] compare bytes in mem */
+	NETVM_OC_PCMP,		/* [ua1,ua2,pfx,len] compare bits via prefix */
+	NETVM_OC_MSKCMP,	/* [ua1,ua2,umka,len] compare bytes via mask */
 
 	/* Arithmatic operations */
 	NETVM_OC_NOT,		/* [v] logcal not (1 or 0) */
@@ -384,18 +407,15 @@ enum {
 				/*   bp to bp-1 value.  leave the top 'w' */
 				/*   vals from the stack on the top of stack */
 
-	/* 
-	 * See NETVM_OC_LD(I) for information on how these instructions are
-	 * encoded.
-	 */
-	NETVM_OC_ST,		/* [v,addr] store x bytes of v to addr seg y */
+	NETVM_OC_ST,		/* [v,a1] store x bytes of v to a1 in seg y */
+				/*    full 64-bit address supported */
 	NETVM_OC_STI,		/* [v] store x bytes of v to w in seg y */
+	NETVM_OC_STU,		/* [v,uaddr] store x bytes of v to uaddr */
+	NETVM_OC_STPD,		/* [v,pdesc] store x bytes of v at pdesc */
+	NETVM_OC_STPDI,		/* [v] store x bytes of v at (packed) pdesc */
 
-	/* 
-	 * See NETVM_OC_CMP for information on how this instruction is
-	 * encoded.
-	 */
-	NETVM_OC_MOVE,		/* [sa,da,len] move len bytes from sa to da */
+	NETVM_OC_MOVE,		/* [ua1,ua2,len] move len bytes from */
+				/*    ua1 to ua2.  (note unified addresses) */
 
 	/* packet specific operations */
 	NETVM_OC_PKSWAP,	/* [p1,p2] swap packets p1 and p2  */

@@ -61,8 +61,7 @@ void netvm_get_pd(struct netvm *vm, struct netvm_prp_desc *pd, int onstack);
 struct prparse *netvm_find_header(struct netvm *vm, struct netvm_prp_desc *pd,
 				  int onstack);
 
-void netvm_get_prp_ptr(struct netvm *vm, struct netvm_inst *inst, int onstack, 
-		       int width, byte_t **p);
+void netvm_get_prp_ptr(struct netvm *vm, int onstack, int width, byte_t **p);
 
 void netvm_get_seg_ptr(struct netvm *vm, uint8_t seg, uint64_t addr, int iswr, 
 		       uint64_t len, byte_t **p);
@@ -72,6 +71,9 @@ void netvm_get_mem_ptr(struct netvm *vm, uint8_t seg, uint64_t addr, int iswr,
 
 void netvm_get_pkt_ptr(struct netvm *vm, uint8_t pkt, uint64_t addr, int iswr, 
 		       uint64_t len, byte_t **p);
+
+void netvm_get_uaddr_ptr(struct netvm *vm, uint64_t uaddr, int iswr,
+		         uint64_t len, byte_t **p);
 
 void netvm_p2stk(struct netvm *vm, byte_t *p, int width);
 

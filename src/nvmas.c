@@ -60,9 +60,7 @@ struct nvmop {
 #define ARGZ 4
 #define ARGW 8
 #define PDONLY 0x10
-#define PDOPT  0x20
-#define BRREL  0x40
-#define ZOPT   0x80
+#define BRREL  0x20
 #define MAXARGS 5
 #define MAXTOKS (MAXARGS+1)
 #define IDCHARS "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ" \
@@ -77,7 +75,6 @@ struct nvmop Operations[] = {
 	{ "pop",    NETVM_OC_POP,    1, ARGW },
 	{ "popto",  NETVM_OC_POPTO,  1, ARGW },
 	{ "push",   NETVM_OC_PUSH,   1, ARGW },
-	{ "pushhi", NETVM_OC_PUSHHI, 1, ARGW },
 	{ "orhi",   NETVM_OC_ORHI,   1, ARGW },
 	{ "zpush",  NETVM_OC_ZPUSH,  1, ARGW },
 	{ "dup",    NETVM_OC_DUP,    1, ARGW },
@@ -89,9 +86,12 @@ struct nvmop Operations[] = {
 	{ "pushfr", NETVM_OC_PUSHFR, 1, ARGW },
 	{ "popfr",  NETVM_OC_POPFR,  2, ARGX|ARGY },
 	{ "ldpf",   NETVM_OC_LDPF,   0, 0 },
-	{ "ldpfi",  NETVM_OC_LDPFI,  4, ARGY|ARGZ|ARGW|PDONLY },
+	{ "ldpfi",  NETVM_OC_LDPFI,  3, ARGY|ARGZ|ARGW|PDONLY },
 	{ "ld",     NETVM_OC_LD,     2, ARGX|ARGY },
-	{ "ldi",    NETVM_OC_LDI,    4, ARGX|ARGY|ARGZ|ARGW|ZOPT|PDOPT },
+	{ "ldi",    NETVM_OC_LDI,    3, ARGX|ARGY|ARGW },
+	{ "ldu",    NETVM_OC_LDU,    1, ARGX },
+	{ "ldpd",   NETVM_OC_LDPD,   1, ARGX },
+	{ "ldpdi",  NETVM_OC_LDPDI,  4, ARGX|ARGY|ARGZ|ARGW|PDONLY },
 	{ "cmp",    NETVM_OC_CMP,    0, 0 },
 	{ "pcmp",   NETVM_OC_PCMP,   0, 0 },
 	{ "mskcmp", NETVM_OC_MSKCMP, 0, 0 },
@@ -159,7 +159,10 @@ struct nvmop Operations[] = {
 	{ "call",   NETVM_OC_CALL,   1, ARGW },
 	{ "ret",    NETVM_OC_RET,    1, ARGW },
 	{ "st",     NETVM_OC_ST,     2, ARGX|ARGY },
-	{ "sti",    NETVM_OC_STI,    4, ARGX|ARGY|ARGZ|ARGW|ZOPT|PDOPT },
+	{ "sti",    NETVM_OC_STI,    3, ARGX|ARGY|ARGW },
+	{ "stu",    NETVM_OC_STU,    1, ARGX },
+	{ "stpd",   NETVM_OC_STPD,   1, ARGX },
+	{ "stpdi",  NETVM_OC_STPDI,  4, ARGX|ARGY|ARGZ|ARGW|PDONLY },
 	{ "move",   NETVM_OC_MOVE,   0, 0 },
 	{ "pkswap", NETVM_OC_PKSWAP, 0, 0 },
 	{ "pknew",  NETVM_OC_PKNEW,  0, 0 },
@@ -173,11 +176,11 @@ struct nvmop Operations[] = {
 	{ "pkfxd",  NETVM_OC_PKFXD,  0, 0 },
 	{ "pkfxdi", NETVM_OC_PKFXDI, 1, ARGX },
 	{ "pkpup",  NETVM_OC_PKPUP,  0, 0 },
-	{ "pkpupi", NETVM_OC_PKPUPI, 4, ARGY|ARGZ|ARGW|PDONLY },
+	{ "pkpupi", NETVM_OC_PKPUPI, 3, ARGY|ARGZ|ARGW|PDONLY },
 	{ "pkfxl",  NETVM_OC_PKFXL,  0, 0 },
-	{ "pkfxli", NETVM_OC_PKFXLI, 4, ARGY|ARGZ|ARGW|PDONLY },
+	{ "pkfxli", NETVM_OC_PKFXLI, 3, ARGY|ARGZ|ARGW|PDONLY },
 	{ "pkfxc",  NETVM_OC_PKFXC,  0, 0 },
-	{ "pkfxci", NETVM_OC_PKFXCI, 4, ARGY|ARGZ|ARGW|PDONLY },
+	{ "pkfxci", NETVM_OC_PKFXCI, 3, ARGY|ARGZ|ARGW|PDONLY },
 	{ "pkins",  NETVM_OC_PKINS,  1, ARGX },
 	{ "pkcut",  NETVM_OC_PKCUT,  1, ARGX },
 	{ "pkadj",  NETVM_OC_PKADJ,  0, 0 },
@@ -432,8 +435,7 @@ static int pdf2int(char *s, char **e, char nxtc, struct htab *ct, ulong *v)
 
 /* example: *0:tcp:0:0[3] */
 /* example: *0:0x0103:0:0[4] */
-static int read_pdesc(char *s, int multiseg, struct netvm_inst *ni,
-		      struct htab *ct)
+static int read_pdesc(char *s, struct netvm_inst *ni, struct htab *ct)
 {
 	int rv;
 	uchar pktnum, index, field;
@@ -461,7 +463,7 @@ static int read_pdesc(char *s, int multiseg, struct netvm_inst *ni,
 		return rv;
 	offset = v & NETVM_PPD_OFF_MASK;
 
-	ni->y = pktnum | (multiseg ? NETVM_SEG_ISPKT : 0);
+	ni->y = pktnum | NETVM_SEG_ISPKT;
 	ni->z = (index << NETVM_PPD_IDX_OFF) | (field << NETVM_PPD_FLD_OFF);
 	ni->w = (ppt << NETVM_PPD_PPT_OFF) | (offset << NETVM_PPD_OFF_OFF);
 
@@ -489,7 +491,7 @@ int str2inst(const char *s, struct htab *ct, uint inum, struct netvm_inst *ni)
 
 	if ((nt == 2 && toks[1].data[0] == '*') ||
 	    (nt == 3 && toks[2].data[0] == '*')) {
-		if (op->nargs != nt + 2)
+		if (op->nargs != nt + 1)
 			return ERR_NARG;
 		r = toks + 1;
 		if ((op->argmask & ARGX) != 0) {
@@ -497,11 +499,10 @@ int str2inst(const char *s, struct htab *ct, uint inum, struct netvm_inst *ni)
 				return rv;
 			ni->x = v;
 		}
-		rv = read_pdesc(r->data + 1, op->argmask & PDOPT, ni, ct);
+		rv = read_pdesc(r->data + 1, ni, ct);
 		if (rv != 0)
 			return rv;
-	} else if ((nt - 1 == op->nargs) ||
-		   (((op->argmask & ZOPT) != 0) && (nt == op->nargs))) {
+	} else if (nt - 1 == op->nargs) {
 		r = toks + 1;
 		if ((op->argmask & ARGX) != 0) {
 			if ((rv = intarg(r++, ct, &v)) != 0)
@@ -513,12 +514,7 @@ int str2inst(const char *s, struct htab *ct, uint inum, struct netvm_inst *ni)
 				return rv;
 			ni->y = v;
 		}
-
-		/* in a very few instructions, Z is an optional argument.   */
-		/* if so, it defaults to 0 (but this should not be used):   */
-		/* The Z should really only be omitted when it isn't needed */
-		if (((op->argmask & ARGZ) != 0) &&
-		    (((op->argmask & ZOPT) == 0) || (nt - 1 == op->nargs))) {
+		if ((op->argmask & ARGZ) != 0) {
 			if ((rv = intarg(r++, ct, &v)) != 0)
 				return rv;
 			ni->z = v;
@@ -577,8 +573,7 @@ int inst2str(const struct netvm_inst *ni, char *s, size_t len, uint inum)
 	s += 10;
 	len -= 10;
 	
-	if (((op->argmask & PDONLY) != 0) ||
-	    (((op->argmask & PDOPT) != 0) && ((ni->y & NETVM_SEG_ISPKT) != 0)))
+	if ((op->argmask & PDONLY) != 0)
 		return pdesc2str(ni, s, len, (op->argmask & ARGX));
 
 	if ((op->argmask & ARGX) != 0) *ap++ = ni->x;
