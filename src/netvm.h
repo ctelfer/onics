@@ -296,6 +296,12 @@ enum {
 				/*     value.  If 'x' and 'y' then keep the */
 				/*     top stack value, restore the old BP, */
 				/*     and push the saved val onto the stack */
+
+				/* For LDPF and LDPFI, if 'x' is set then */
+				/* generate a unified address by setting the */
+				/* packet number and ISPKT bit in the high */
+				/* byte.  (note: not all fields are offsets */
+				/* from the packet start.  use accordingly). */
 	NETVM_OC_LDPF,		/* [pdesc] load field from proto parse */
 	NETVM_OC_LDPFI,		/* load field from proto parse (packed pdesc) */
 

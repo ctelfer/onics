@@ -281,7 +281,7 @@ static void ni_ldpf(struct netvm *vm)
 	struct prparse *prp;
 	uint oidx;
 	long off;
-	uint64_t vmoff;
+	uint64_t val;
 
 	prp = netvm_find_header(vm, &pd0, (inst->op == NETVM_OC_LDPF));
 	if (vm->error)
@@ -295,28 +295,28 @@ static void ni_ldpf(struct netvm *vm)
 
 	switch (pd0.field) {
 	case NETVM_PRP_HLEN:
-		S_PUSH(vm, prp_hlen(prp));
+		val = prp_hlen(prp);
 		break;
 	case NETVM_PRP_PLEN:
-		S_PUSH(vm, prp_plen(prp));
+		val = prp_plen(prp);
 		break;
 	case NETVM_PRP_TLEN:
-		S_PUSH(vm, prp_tlen(prp));
+		val = prp_tlen(prp);
 		break;
 	case NETVM_PRP_LEN:
-		S_PUSH(vm, prp_totlen(prp));
+		val = prp_totlen(prp);
 		break;
 	case NETVM_PRP_ERR:
-		S_PUSH(vm, prp->error);
+		val = prp->error;
 		break;
 	case NETVM_PRP_TYPE:
-		S_PUSH(vm, prp->type);
+		val = prp->type;
 		break;
 	case NETVM_PRP_PIDX:
 		/* count number of headers until start of packet */
 		for (off = 0; !prp_list_end(prp); prp = prp_prev(prp))
 			++off;
-		S_PUSH(vm, off);
+		val = off;
 		break;
 	default:
 		abort_unless(pd0.field >= NETVM_PRP_OFF_BASE);
@@ -326,11 +326,19 @@ static void ni_ldpf(struct netvm *vm)
 		}
 		off = prp->offs[oidx];
 		if (off != PRP_OFF_INVALID)
-			vmoff = off + pd0.offset;
+			val = off + pd0.offset;
 		else
-			vmoff = NETVM_PF_INVALID;
-		S_PUSH(vm, vmoff);
+			val = NETVM_PF_INVALID;
 	}
+
+	/* if 'x' is 1, then the instruction should generate a unified */
+	/* address by including the packet number and ISPKT bit in the */
+	/* high order byte. */
+	if (inst->x) {
+		uint64_t seg = (NETVM_SEG_ISPKT | pd0.pktnum);
+		val = val | seg << NETVM_UA_SEG_OFF;
+	}
+	S_PUSH(vm, val);
 }
 
 

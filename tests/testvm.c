@@ -320,17 +320,17 @@ struct meminit meqsi[] = {
 struct netvm_inst vm_prog_maskeq[] = {
 	/* 0 */ NETVM_PDIOP(LDPFI, 0, 0, PPT_PCLASS_NET, 0, NETVM_PRP_SOFF, 0),
 	/* 1 */ NETVM_OP(EQI, 0, 0, 0, NETVM_PF_INVALID),
-	/* 2 */ NETVM_BRIF_F(9), 
+	/* 2 */ NETVM_BRIF_F(8), 
 
 	/* Compare 1st _SIZE bytes of pkt 0's network header */ 
-	/* 3 */ NETVM_PDIOP(LDPFI, 0, 0, PPT_PCLASS_NET, 0, NETVM_PRP_SOFF, 0),
-	/* 4 */ NETVM_OP(ORHI, 0, 0, 0, (NETVM_SEG_ISPKT<<NETVM_UA_SEG_HI_OFF)),
-	/* 5 */ NETVM_OP(PUSH, 0, 0, 0, MEQ_VAL_OFFSET), 
-	/* 6 */ NETVM_OP(ORHI, 0, 0, 0, (ROSEG << NETVM_UA_SEG_HI_OFF)),
-	/* 7 */ NETVM_OP(PUSH, 0, 0, 0, MEQ_MASK_OFFSET), 
-	/* 8 */ NETVM_OP(ORHI, 0, 0, 0, (ROSEG << NETVM_UA_SEG_HI_OFF)),
-	/* 9 */ NETVM_OP(PUSH, 0, 0, 0, MEQ_MASK_SIZE), 
-	/* 10*/ NETVM_OP(MSKCMP, 0, 0, 0, 0),
+	/* use 'x' bit of LDPFI to make the SOFF get generated in UA form */
+	/* 3 */ NETVM_PDIOP(LDPFI, 1, 0, PPT_PCLASS_NET, 0, NETVM_PRP_SOFF, 0),
+	/* 4 */ NETVM_OP(PUSH, 0, 0, 0, MEQ_VAL_OFFSET), 
+	/* 5 */ NETVM_OP(ORHI, 0, 0, 0, (ROSEG << NETVM_UA_SEG_HI_OFF)),
+	/* 6 */ NETVM_OP(PUSH, 0, 0, 0, MEQ_MASK_OFFSET), 
+	/* 7 */ NETVM_OP(ORHI, 0, 0, 0, (ROSEG << NETVM_UA_SEG_HI_OFF)),
+	/* 8 */ NETVM_OP(PUSH, 0, 0, 0, MEQ_MASK_SIZE), 
+	/* 9 */ NETVM_OP(MSKCMP, 0, 0, 0, 0),
 };
 
 
