@@ -2089,14 +2089,6 @@ static int e_binop(struct pml_global_state *gs, struct pml_stack_frame *fr,
 		break;
 	case PMLOP_GEQ: r->val = (int64_t)left >= (int64_t)right;
 		break;
-	case PMLOP_ULT: r->val = left < right;
-		break;
-	case PMLOP_UGT: r->val = left > right;
-		break;
-	case PMLOP_ULEQ: r->val = left <= right;
-		break;
-	case PMLOP_UGEQ: r->val = left >= right;
-		break;
 	case PMLOP_BOR: r->val = left | right;
 		break;
 	case PMLOP_BXOR: r->val = left ^ right;
@@ -2127,11 +2119,6 @@ static int e_binop(struct pml_global_state *gs, struct pml_stack_frame *fr,
 		break;
 	case PMLOP_SHR: r->val = left >> (right & 63);
 		break;
-	case PMLOP_SRA: {
-		uint64_t amt = right & 63;
-		r->val = left >> amt;
-		r->val |= -((left & 0x8000000000000000llu) >> amt);
-	} break;
 	default:
 		abort_unless(0);
 	}

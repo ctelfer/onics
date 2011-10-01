@@ -587,10 +587,6 @@ cmpop(OP) ::= LT. { OP = PMLOP_LT; }
 cmpop(OP) ::= GT. { OP = PMLOP_GT; }
 cmpop(OP) ::= LEQ. { OP = PMLOP_LEQ; }
 cmpop(OP) ::= GEQ. { OP = PMLOP_GEQ; }
-cmpop(OP) ::= ULT. { OP = PMLOP_ULT; }
-cmpop(OP) ::= UGT. { OP = PMLOP_UGT; }
-cmpop(OP) ::= ULEQ. { OP = PMLOP_ULEQ; }
-cmpop(OP) ::= UGEQ. { OP = PMLOP_UGEQ; }
 
 borexpr(E) ::= borexpr(LHS) BOR bxorexpr(RHS). {
 	E = pml_binop_alloc(PMLOP_BOR, LHS, RHS); 
@@ -633,7 +629,6 @@ shiftexpr(E) ::= uexpr(U). { E = U; }
 
 shiftop(OP) ::= SHL. { OP = PMLOP_SHL; }
 shiftop(OP) ::= SHR. { OP = PMLOP_SHR; }
-shiftop(OP) ::= SHRA. { OP = PMLOP_SRA; }
 
 uexpr(E) ::= NOT pexpr(PE). { E = pml_unop_alloc(PMLOP_NOT, PE); }
 uexpr(E) ::= BINV pexpr(PE). { E = pml_unop_alloc(PMLOP_BINV, PE); }
