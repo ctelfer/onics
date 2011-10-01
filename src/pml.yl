@@ -329,13 +329,13 @@ decl ::= rule(R). {
 
 funcdecl(F) ::= FUNC ID(N) LPAREN idlist(P) RPAREN LBRACE 
                 stmts(S) RBRACE. {
-	struct list *t; 
+	struct list *t, *x; 
 	struct pml_variable *p;
 
 	F = (struct pml_function *)pmln_alloc(PMLTT_FUNCTION);
 	F->name = (char *)N.u.raw.data;
 
-	l_for_each(t, &P->list) {
+	l_for_each_safe(t, x, &P->list) {
 		F->arity += 1;
 		p = container(t, struct pml_variable, ln);
 		l_rem(&p->ln);
@@ -352,13 +352,13 @@ fd_out:
 }
 
 inlinedecl(I) ::= INLINE ID(N) LPAREN idlist(P) RPAREN LBRACE expr(E) RBRACE. {
-	struct list *t; 
+	struct list *t, *x;
 	struct pml_variable *p;
 
 	I = (struct pml_function *)pmln_alloc(PMLTT_INLINE);
 	I->name = (char *)N.u.raw.data;
 
-	l_for_each(t, &P->list) {
+	l_for_each_safe(t, x, &P->list) {
 		I->arity += 1;
 		p = container(t, struct pml_variable, ln);
 		l_rem(&p->ln);
@@ -377,15 +377,15 @@ id_out:
 idlist(IL) ::= . { IL = (struct pml_list *)pmln_alloc(PMLTT_LIST); }
 idlist(IL) ::= someids(IL2). { IL = IL2; }
 someids(IL) ::= ID(V). {
-	struct pml_variable *v = pml_var_alloc((char *)V.u.raw.data, 8, 
+	struct pml_variable *v = pml_var_alloc((char *)V.u.raw.data, 0, 
 					       PML_VTYPE_LOCAL, NULL);
 	IL = (struct pml_list *)pmln_alloc(PMLTT_LIST);
 	l_ins(&IL->list, &v->ln);
 }
 someids(IL) ::= someids(IL2) COMMA ID(V). {
-	struct pml_variable *v = pml_var_alloc((char *)V.u.raw.data, 8,
+	struct pml_variable *v = pml_var_alloc((char *)V.u.raw.data, 0,
 					       PML_VTYPE_LOCAL, NULL);
-	l_ins(&IL2->list, &v->ln);
+	l_enq(&IL2->list, &v->ln);
 	IL = IL2;
 }
 

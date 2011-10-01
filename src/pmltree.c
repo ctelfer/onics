@@ -749,7 +749,7 @@ static const char *eflag_strs[] = {
 };
 
 
-static const char *efs(void *p, char s[16])
+static const char *efs(void *p, char s[80])
 {
 	struct pml_expr_base *e = p;
 	abort_unless(p);
@@ -757,7 +757,7 @@ static const char *efs(void *p, char s[16])
 				    PML_EFLAG_PCONST|
 				    PML_EFLAG_VARLEN)) == 0);
 
-	snprintf(s, 16, "[%s; width=%lu]", eflag_strs[e->eflags], 
+	snprintf(s, 80, "[%s; width=%lu]", eflag_strs[e->eflags], 
 		 e->width);
 	return s;
 }
@@ -801,7 +801,7 @@ const char *rts(struct pml_locator *l)
 /* Basically a pre-order printing traversal of the tree */
 void pmlt_print(union pml_node *np, uint depth)
 {
-	char estr[16];
+	char estr[80];
 
 	if (np == NULL) {
 		indent(depth);
@@ -1016,12 +1016,12 @@ void pmlt_print(union pml_node *np, uint depth)
 		struct pml_function *p = &np->function;
 		struct list *n;
 		indent(depth);
-		printf("%s: %s%s with %d arguments, return width %lu\n", 
+		printf("%s%s: %s() -- %d args, %d vars, return width=%lu\n",
 		       (np->base.type == PMLTT_FUNCTION) ? 
 		       		"Function" : 
 				"Inline Function",
-			(p->isconst) ? "(const)" : "",
-			p->name, p->arity, (ulong)p->width);
+			(p->isconst) ? " [const] " : "",
+			p->name, p->arity, (int)p->vstksz, (ulong)p->width);
 
 		indent(depth);
 		printf("Parameters -- \n");
@@ -1498,8 +1498,9 @@ int pml_locator_resolve_nsref(struct pml_ast *ast, struct pml_locator *l)
 struct pml_resolve_ctx {
 	/* at most 3 var symbol tables to consider:  params, vars, global */
 	struct pml_symtab *symtabs[3];
-	int nst;
+	int ntab;
 	int vtidx;
+	int ptidx;
 	struct pml_ast *ast;
 };
 
@@ -1510,7 +1511,7 @@ static struct pml_variable *rlookup(struct pml_resolve_ctx *ctx,
 	int i;
 	union pml_node *node;
 
-	for (i = 0; i < ctx->nst; ++i) {
+	for (i = 0; i < ctx->ntab; ++i) {
 		node = symtab_lookup(ctx->symtabs[i], name);
 		if (node != NULL) {
 			abort_unless(node->base.type == PMLTT_VAR);
@@ -1560,6 +1561,8 @@ static int resolve_locator(struct pml_resolve_ctx *ctx, struct pml_locator *l)
 		l->u.varref = v;
 		if (v->vtype == PML_VTYPE_CONST)
 			l->eflags |= (PML_EFLAG_CONST|PML_EFLAG_PCONST);
+		else if (ti == ctx->ptidx)
+			l->eflags |= PML_EFLAG_PCONST;
 		l->width = v->width;
 		return 0;
 	}
@@ -1671,7 +1674,7 @@ static int resolve_node(union pml_node *node, void *ctxp)
 		struct list *n;
 		f = c->func;
 		if ((f->type == PMLTT_INLINE) && f->isconst) {
-			c->eflags |= PML_EFLAG_PCONST;
+			c->eflags |= PML_EFLAG_CONST;
 			l_for_each(n, &c->args->list) {
 				if (!PML_EXPR_IS_PCONST(l_to_node(n))) {
 					c->eflags &= ~PML_EFLAG_PCONST;
@@ -1756,8 +1759,9 @@ int pml_resolve_refs(struct pml_ast *ast, union pml_node *node)
 		struct pml_rule *rule = (struct pml_rule *)node;
 		ctx.symtabs[0] = &rule->vars;
 		ctx.symtabs[1] = &ast->vars;
-		ctx.nst = 2;
+		ctx.ntab = 2;
 		ctx.vtidx = 0;
+		ctx.ptidx = -1;
 		rv = pmlt_walk((union pml_node *)rule->pattern, &ctx, NULL,
 			       NULL, resolve_node);
 		if (rv < 0)
@@ -1773,8 +1777,9 @@ int pml_resolve_refs(struct pml_ast *ast, union pml_node *node)
 		ctx.symtabs[0] = &func->params;
 		ctx.symtabs[1] = &func->vars;
 		ctx.symtabs[2] = &ast->vars;
-		ctx.nst = 3;
+		ctx.ntab = 3;
 		ctx.vtidx = 1;
+		ctx.ptidx = 0;
 		rv = pmlt_walk((union pml_node *)func->body, &ctx, NULL,
 			       NULL, resolve_node);
 		if (rv < 0)
@@ -1788,13 +1793,15 @@ int pml_resolve_refs(struct pml_ast *ast, union pml_node *node)
 		struct pml_expr_base *pe;
 		ctx.symtabs[0] = &inln->params;
 		ctx.symtabs[1] = &ast->vars;
-		ctx.nst = 2;
+		ctx.ntab = 2;
+		ctx.ptidx = 0;
 		ctx.vtidx = -1; /* no local variables in inlines */
 		rv = pmlt_walk((union pml_node *)inln->body, &ctx, NULL, NULL,
 			       resolve_node);
 		if (rv < 0)
 			return -1;
-		inln->isconst = PML_EXPR_IS_PCONST(node);
+		inln->pstksz = inln->params.nxtaddr * sizeof(uint64_t);
+		inln->isconst = PML_EXPR_IS_PCONST(inln->body);
 		pe = (struct pml_expr_base *)inln->body;
 		if (pe->etype != PML_ETYPE_SCALAR) {
 			pml_ast_err(ast, "Non-scalar expression for inline %s "
@@ -1806,8 +1813,9 @@ int pml_resolve_refs(struct pml_ast *ast, union pml_node *node)
 	} else if (node->base.type == PMLTT_VAR) {
 		struct pml_variable *var = (struct pml_variable *)node;
 		ctx.symtabs[0] = &ast->vars;
-		ctx.nst = 1;
+		ctx.ntab = 1;
 		ctx.vtidx = -1;
+		ctx.ptidx = -1;
 		rv = pmlt_walk((union pml_node *)var->init, &ctx, NULL,
 			       NULL, resolve_node);
 		if (rv < 0)
@@ -2332,7 +2340,8 @@ static int e_locator(struct pml_global_state *gs, struct pml_stack_frame *fr,
 				return -1;
 			}
 			r->etype = PML_ETYPE_SCALAR;
-			r->val = *(uint64_t *)(fr->stack + v->addr);
+			r->val = *(uint64_t *)(fr->stack + 
+					       v->addr * sizeof(uint64_t));
 		}
 	} else if (l->reftype == PML_REF_PKTFLD) {
 
