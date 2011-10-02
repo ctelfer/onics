@@ -25,8 +25,10 @@ struct pml_ast {
 	unsigned long		line;
 	struct pml_symtab	vars;
 	struct pml_symtab	funcs;
-	struct list		rules;
-	char			errbuf[80];
+	struct list		b_rules;
+	struct list		p_rules;
+	struct list		e_rules;
+	char			errbuf[256];
 };
 
 
@@ -311,10 +313,18 @@ struct pml_function {
 };
 
 
+enum {
+	PML_RULE_BEGIN,
+	PML_RULE_PACKET,
+	PML_RULE_END,
+};
+
+
 struct pml_rule {
 	int			type;
 	struct list		ln;
 
+	int			trigger;
 	struct pml_symtab	vars;
 
 	union pml_expr_u *	pattern;

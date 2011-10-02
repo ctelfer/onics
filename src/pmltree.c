@@ -140,7 +140,9 @@ int pml_ast_init(struct pml_ast *ast)
 		symtab_destroy(&ast->vars);
 		return -1;
 	}
-	l_init(&ast->rules);
+	l_init(&ast->b_rules);
+	l_init(&ast->p_rules);
+	l_init(&ast->e_rules);
 	str_copy(ast->errbuf, "", sizeof(ast->errbuf));
 	return 0;
 }
@@ -149,15 +151,29 @@ int pml_ast_init(struct pml_ast *ast)
 void pml_ast_clear(struct pml_ast *ast)
 {
 	struct list *n, *x;
+
 	ast->error = 0;
 	ast->done = 0;
 	ast->line = 0;
+
 	symtab_destroy(&ast->vars);
 	symtab_destroy(&ast->funcs);
-	l_for_each_safe(n, x, &ast->rules) {
+
+	l_for_each_safe(n, x, &ast->b_rules) {
 		pmln_free(l_to_node(n));
 	}
-	abort_unless(l_isempty(&ast->rules));
+	abort_unless(l_isempty(&ast->b_rules));
+
+	l_for_each_safe(n, x, &ast->p_rules) {
+		pmln_free(l_to_node(n));
+	}
+	abort_unless(l_isempty(&ast->p_rules));
+
+	l_for_each_safe(n, x, &ast->e_rules) {
+		pmln_free(l_to_node(n));
+	}
+	abort_unless(l_isempty(&ast->e_rules));
+
 	str_copy(ast->errbuf, "", sizeof(ast->errbuf));
 }
 
@@ -222,10 +238,23 @@ int pml_ast_add_var(struct pml_ast *ast, struct pml_variable *var)
 
 int pml_ast_add_rule(struct pml_ast *ast, struct pml_rule *rule)
 {
+	abort_unless(rule->trigger >= PML_RULE_BEGIN &&
+		     rule->trigger <= PML_RULE_END);
 	if (pml_resolve_refs(ast, (union pml_node *)rule) < 0)
 		return -1;
-	l_enq(&ast->rules, &rule->ln);
-
+	switch(rule->trigger) {
+	case PML_RULE_BEGIN:
+		abort_unless(rule->pattern == NULL);
+		l_enq(&ast->b_rules, &rule->ln);
+		break;
+	case PML_RULE_PACKET:
+		l_enq(&ast->p_rules, &rule->ln);
+		break;
+	case PML_RULE_END:
+		abort_unless(rule->pattern == NULL);
+		l_enq(&ast->e_rules, &rule->ln);
+		break;
+	}
 	return 0;
 }
 
@@ -424,6 +453,7 @@ union pml_node *pmln_alloc(int pmltt)
 		p->pattern = NULL;
 		p->stmts = NULL;
 		p->vstksz = 0;
+		p->trigger = PML_RULE_PACKET;
 	} break;
 
 	default: {
@@ -798,6 +828,32 @@ const char *rts(struct pml_locator *l)
 }
 
 
+static const char *rule_trigger_strs[] = {
+	"begin", "packet", "end"
+};
+const char *rulestr(struct pml_rule *r)
+{
+	abort_unless(r && r->trigger >= PML_RULE_BEGIN &&
+		     r->trigger <= PML_RULE_END);
+	return rule_trigger_strs[r->trigger];
+}
+
+
+static const char *op_strs[] = {
+	"logical OR", "logical AND", "match", "notmatch", "rex match",
+	"rex not match", "equals", "not equals", "less than", "greater than",
+	"less or equal to", "greater or equal to", "binary OR", "binary XOR",
+	"binary AND", "add", "subtract", "multiply", "divide", "modulus",
+	"shift left", "shift right", "logical NOT", "binary compliment",
+	"negative"
+};
+const char *opstr(struct pml_op *op)
+{
+	abort_unless(op && op->op >= PMLOP_OR && op->op <= PMLOP_NEG);
+	return op_strs[op->op];
+}
+
+
 /* Basically a pre-order printing traversal of the tree */
 void pmlt_print(union pml_node *np, uint depth)
 {
@@ -868,7 +924,7 @@ void pmlt_print(union pml_node *np, uint depth)
 	case PMLTT_UNOP: {
 		struct pml_op *p = &np->op;
 		indent(depth);
-		printf("Unary Operation: %d %s\n", p->op, efs(p, estr));
+		printf("Unary Operation: '%s' %s\n", opstr(p), efs(p, estr));
 
 		indent(depth);
 		printf("Operand -- \n");
@@ -878,7 +934,7 @@ void pmlt_print(union pml_node *np, uint depth)
 	case PMLTT_BINOP: {
 		struct pml_op *p = &np->op;
 		indent(depth);
-		printf("Binary Operation: %d %s\n", p->op, efs(p, estr));
+		printf("Binary Operation: '%s' %s\n", opstr(p), efs(p, estr));
 
 		indent(depth);
 		printf("Left Operand -- \n");
@@ -1042,14 +1098,17 @@ void pmlt_print(union pml_node *np, uint depth)
 		struct pml_rule *p = &np->rule;
 		struct list *n;
 		indent(depth);
-		printf("Rule\n");
+		printf("Rule: (%s)\n", rulestr(p));
 
 		indent(depth);
-		if (p->pattern == NULL) {
-			printf("Empty pattern\n");
-		} else {
-			printf("Pattern -- \n");
-			pmlt_print((union pml_node *)p->pattern, depth+1);
+		if (p->trigger == PML_RULE_PACKET) {
+			if (p->pattern == NULL) {
+				printf("Empty pattern\n");
+			} else {
+				printf("Pattern -- \n");
+				pmlt_print((union pml_node *)p->pattern,
+					   depth+1);
+			}
 		}
 
 		indent(depth);
@@ -1086,9 +1145,19 @@ void pml_ast_print(struct pml_ast *ast)
 	l_for_each(n, &ast->funcs.list)
 		pmlt_print(l_to_node(n), 1);
 	printf("-----------\n");
-	printf("Rules\n");
+	printf("Begin Rules\n");
 	printf("-----------\n");
-	l_for_each(n, &ast->rules)
+	l_for_each(n, &ast->b_rules)
+		pmlt_print(l_to_node(n), 1);
+	printf("-----------\n");
+	printf("Packet Rules\n");
+	printf("-----------\n");
+	l_for_each(n, &ast->p_rules)
+		pmlt_print(l_to_node(n), 1);
+	printf("-----------\n");
+	printf("End Rules\n");
+	printf("-----------\n");
+	l_for_each(n, &ast->e_rules)
 		pmlt_print(l_to_node(n), 1);
 	printf("-----------\n");
 }
@@ -1601,16 +1670,19 @@ static int binop_typecheck(struct pml_ast *ast, struct pml_op *op)
 	case PMLOP_MATCH:
 	case PMLOP_NOTMATCH:
 		if (a1->etype != PML_ETYPE_BYTESTR) {
-			pml_ast_err(ast, "Left argument of a match operation "
-					 "must be a byte string: %s instead\n",
-				    ets(a1));
+			pml_ast_err(ast,
+				    "%s: Left argument of a match operation "
+				    "must be a byte string: %s instead\n",
+				    opstr(op), ets(a1));
 			return -1;
 		}
 		if (a1->etype != PML_ETYPE_BYTESTR &&
 		    a2->etype != PML_ETYPE_MASKVAL) {
-			pml_ast_err(ast, "Right argument of a match operation "
-					 "must be a byte string or masked "
-					 "string: %s instead\n", ets(a2));
+			pml_ast_err(ast, 
+				    "%s: Right argument of a match operation "
+				    "must be a byte string or masked "
+				    "string: %s instead\n", 
+				    opstr(op), ets(a2));
 			return -1;
 		}
 		break;
@@ -1834,10 +1906,11 @@ int pml_resolve_refs(struct pml_ast *ast, union pml_node *node)
 			}
 			if (var->init->expr.etype != var->etype) {
 				pml_ast_err(ast,
-					    "Variable %s initialization "
+					    "Variable '%s' %s initialization "
 					    "expression does not match "
-					    "variable type (%s vs %s)\n",
-					    etype_strs[var->etype], 
+					    "variable type (init is %s)\n",
+					    var->name,
+					    etype_strs[var->etype],
 					    ets(var->init));
 				return -1;
 			}
@@ -2626,7 +2699,17 @@ int pml_ast_optimize(struct pml_ast *ast)
 		if (rv < 0)
 			goto out;
 	}
-	l_for_each(n, &ast->rules) {
+	l_for_each(n, &ast->b_rules) {
+		rv = pmlt_walk(l_to_node(n), ast, pml_cexpr_walker, NULL, NULL);
+		if (rv < 0)
+			goto out;
+	}
+	l_for_each(n, &ast->p_rules) {
+		rv = pmlt_walk(l_to_node(n), ast, pml_cexpr_walker, NULL, NULL);
+		if (rv < 0)
+			goto out;
+	}
+	l_for_each(n, &ast->e_rules) {
 		rv = pmlt_walk(l_to_node(n), ast, pml_cexpr_walker, NULL, NULL);
 		if (rv < 0)
 			goto out;

@@ -69,6 +69,8 @@ dnum		0|[1-9][0-9]*
 	return parse_ipv6_addr(yyscanner, yytext); 
 }
 
+"BEGIN"		{ return PMLTOK_BEGIN; }
+"END"		{ return PMLTOK_END; }
 "func"		{ return PMLTOK_FUNC; }
 "inline"	{ return PMLTOK_INLINE; }
 "const"		{ return PMLTOK_CONST; }

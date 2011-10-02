@@ -404,7 +404,7 @@ gvar(G) ::= VAR ID(I) ASSIGN expr(E) SEMICOLON. {
 	if (!PML_EXPR_IS_CONST(E))
 		pml_ast_err(ast, "Var '%s' initializer is not constant.\n",
 			    (char *)I.u.raw.data);
-	G = pml_var_alloc((char *)I.u.raw.data, 8, PML_VTYPE_GLOBAL, E); 
+	G = pml_var_alloc((char *)I.u.raw.data, 0, PML_VTYPE_GLOBAL, E); 
 }
 gvar(G) ::= VAR ID(I) LBRACKET NUM(N) RBRACKET ASSIGN value(VAL) SEMICOLON.{
 	G = pml_var_alloc((char *)I.u.raw.data, N.u.num, PML_VTYPE_GLOBAL, VAL);
@@ -415,12 +415,28 @@ rule(R) ::= pktpat(P) stmtlist(SL). {
 	R = (struct pml_rule *)pmln_alloc(PMLTT_RULE);
 	R->pattern = P;
 	R->stmts = SL;
+	R->trigger = PML_RULE_PACKET;
+}
+
+rule(R) ::= BEGIN stmtlist(SL). {
+	R = (struct pml_rule *)pmln_alloc(PMLTT_RULE);
+	R->pattern = NULL;
+	R->stmts = SL;
+	R->trigger = PML_RULE_BEGIN;
+}
+
+rule(R) ::= END stmtlist(SL). {
+	R = (struct pml_rule *)pmln_alloc(PMLTT_RULE);
+	R->pattern = NULL;
+	R->stmts = SL;
+	R->trigger = PML_RULE_END;
 }
 
 rule(R) ::= stmtlist(SL). {
 	R = (struct pml_rule *)pmln_alloc(PMLTT_RULE);
 	R->pattern = NULL;
 	R->stmts = SL;
+	R->trigger = PML_RULE_PACKET;
 }
 
 
