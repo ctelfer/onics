@@ -1578,12 +1578,20 @@ int pml_locator_resolve_nsref(struct pml_ast *ast, struct pml_locator *l)
 }
 
 
+struct loop_node {
+	struct list		ln;
+	struct pml_while *	loop;
+};
+
+
 struct pml_resolve_ctx {
 	/* at most 3 var symbol tables to consider:  params, vars, global */
 	struct pml_symtab *symtabs[3];
 	int ntab;
 	int vtidx;
 	int ptidx;
+	struct pml_function *livefunc;
+	struct list loopstack;
 	struct pml_ast *ast;
 };
 
@@ -1716,7 +1724,47 @@ static int binop_typecheck(struct pml_ast *ast, struct pml_op *op)
 }
 
 
-static int resolve_node(union pml_node *node, void *ctxp)
+static int resolve_node_pre(union pml_node *node, void *ctxp)
+{
+	struct pml_resolve_ctx *ctx = ctxp;
+
+	if (node->base.type == PMLTT_WHILE) {
+		struct loop_node *n;
+
+		n = malloc(sizeof(*n));
+		if (n == NULL) {
+			pml_ast_err(ctx->ast, "out of memory for loop stack\n");
+			return -1;
+		}
+		n->loop = (struct pml_while *)node;
+		l_push(&ctx->loopstack, &n->ln);
+
+	} else if (node->base.type == PMLTT_CFMOD) {
+		struct pml_cfmod *m = (struct pml_cfmod *)&node->cfmod;
+
+		if (m->cftype == PML_CFM_RETURN) {
+			if (ctx->livefunc == NULL) {
+				pml_ast_err(ctx->ast, 
+					    "return statement outside of "
+					    " a function\n");
+				return -1;
+			}
+		} else if (m->cftype == PML_CFM_BREAK ||
+			   m->cftype == PML_CFM_CONTINUE) {
+			if (l_isempty(&ctx->loopstack)) {
+				pml_ast_err(ctx->ast, 
+					    "'%s' statement outside of "
+					    " a loop\n", cfmstr(m));
+				return -1;
+			}
+		}
+	} 
+
+	return 0;
+}
+
+
+static int resolve_node_post(union pml_node *node, void *ctxp)
 {
 	struct pml_resolve_ctx *ctx = ctxp;
 
@@ -1806,6 +1854,12 @@ static int resolve_node(union pml_node *node, void *ctxp)
 		}
 	} break;
 
+	case PMLTT_WHILE: {
+		struct list *n = l_pop(&ctx->loopstack);
+		abort_unless(n);
+		free(n);
+	} break;
+
 	case PMLTT_ASSIGN: {
 		struct pml_assign *a = (struct pml_assign *)node;
 		if ((a->loc->reftype != PML_REF_VAR) && 
@@ -1834,58 +1888,68 @@ static int resolve_node(union pml_node *node, void *ctxp)
 }
 
 
+static int resolve_node(struct pml_resolve_ctx *ctx, union pml_node *node)
+{
+	return pmlt_walk(node, ctx, resolve_node_pre, NULL,
+			 resolve_node_post);
+}
+
+
 int pml_resolve_refs(struct pml_ast *ast, union pml_node *node)
 {
 	struct pml_resolve_ctx ctx;
-	int rv;
+	struct list *n;
+	int rv = 0;
 
 	ctx.ast = ast;
+	ctx.livefunc = NULL;
+	l_init(&ctx.loopstack);
 
 	if (node->base.type == PMLTT_RULE) {
 		struct pml_rule *rule = (struct pml_rule *)node;
+
 		ctx.symtabs[0] = &rule->vars;
 		ctx.symtabs[1] = &ast->vars;
 		ctx.ntab = 2;
 		ctx.vtidx = 0;
 		ctx.ptidx = -1;
-		rv = pmlt_walk((union pml_node *)rule->pattern, &ctx, NULL,
-			       NULL, resolve_node);
+		rv = resolve_node(&ctx, (union pml_node *)rule->pattern);
 		if (rv < 0)
-			return -1;
-		rv = pmlt_walk((union pml_node *)rule->stmts, &ctx, NULL,
-			       NULL, resolve_node);
+			goto out;
+		rv = resolve_node(&ctx, (union pml_node *)rule->stmts);
 		if (rv < 0)
-			return -1;
+			goto out;
 		rule->vstksz = rule->vars.nxtaddr;
-		return 0;
+
 	} else if (node->base.type == PMLTT_FUNCTION) {
 		struct pml_function *func = (struct pml_function *)node;
+
 		ctx.symtabs[0] = &func->params;
 		ctx.symtabs[1] = &func->vars;
 		ctx.symtabs[2] = &ast->vars;
 		ctx.ntab = 3;
 		ctx.vtidx = 1;
 		ctx.ptidx = 0;
-		rv = pmlt_walk((union pml_node *)func->body, &ctx, NULL,
-			       NULL, resolve_node);
+		ctx.livefunc = func;
+		rv = resolve_node(&ctx, (union pml_node *)func->body);
 		if (rv < 0)
-			return -1;
+			goto out;
 		func->pstksz = func->params.nxtaddr * sizeof(uint64_t);
 		func->vstksz = func->vars.nxtaddr * sizeof(uint64_t) -
 			       func->pstksz;
-		return 0;
+
 	} else if (node->base.type == PMLTT_INLINE) {
 		struct pml_function *inln = (struct pml_function *)node;
 		struct pml_expr_base *pe;
+
 		ctx.symtabs[0] = &inln->params;
 		ctx.symtabs[1] = &ast->vars;
 		ctx.ntab = 2;
 		ctx.ptidx = 0;
 		ctx.vtidx = -1; /* no local variables in inlines */
-		rv = pmlt_walk((union pml_node *)inln->body, &ctx, NULL, NULL,
-			       resolve_node);
+		rv = resolve_node(&ctx, (union pml_node *)inln->body);
 		if (rv < 0)
-			return -1;
+			goto out;
 		inln->pstksz = inln->params.nxtaddr * sizeof(uint64_t);
 		inln->isconst = PML_EXPR_IS_PCONST(inln->body);
 		pe = (struct pml_expr_base *)inln->body;
@@ -1893,19 +1957,19 @@ int pml_resolve_refs(struct pml_ast *ast, union pml_node *node)
 			pml_ast_err(ast, "Non-scalar expression for inline %s "
 					 "(type = %d)\n",
 				    inln->name, pe->etype);
-			return -1;
+			goto out;
 		}
-		return 0;
+
 	} else if (node->base.type == PMLTT_VAR) {
 		struct pml_variable *var = (struct pml_variable *)node;
+
 		ctx.symtabs[0] = &ast->vars;
 		ctx.ntab = 1;
 		ctx.vtidx = -1;
 		ctx.ptidx = -1;
-		rv = pmlt_walk((union pml_node *)var->init, &ctx, NULL,
-			       NULL, resolve_node);
+		rv = resolve_node(&ctx, (union pml_node *)var->init);
 		if (rv < 0)
-			return -1;
+			goto out;
 
 		if (var->init != NULL) {
 			if (!PML_EXPR_IS_CONST(var->init)) {
@@ -1916,7 +1980,7 @@ int pml_resolve_refs(struct pml_ast *ast, union pml_node *node)
 						? "global"
 						: "const"),
 					    var->name);
-				return -1;
+				goto out;
 			}
 			if (var->init->expr.etype != var->etype) {
 				pml_ast_err(ast,
@@ -1926,15 +1990,22 @@ int pml_resolve_refs(struct pml_ast *ast, union pml_node *node)
 					    var->name,
 					    etype_strs[var->etype],
 					    ets(var->init));
-				return -1;
+				goto out;
 			}
 		}
-		return 0;
+
 	} else {
+
 		pml_ast_err(ast, "Invalid node type for resolution: %d\n",
 			    node->base.type);
-		return -1;
+		goto out;
+
 	}
+
+out:
+	while ((n = l_pop(&ctx.loopstack)) != NULL)
+		free(n);
+	return rv;
 }
 
 
