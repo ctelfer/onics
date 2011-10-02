@@ -46,7 +46,7 @@ enum {
 	PMLTT_LOCATOR,
 	PMLTT_LOCADDR,
 	PMLTT_ASSIGN,
-	PMLTT_RETURN,
+	PMLTT_CFMOD,
 	PMLTT_PRINT,
 	PMLTT_FUNCTION,
 	PMLTT_INLINE,
@@ -270,9 +270,20 @@ struct pml_assign {
 };
 
 
-struct pml_return {
+enum {
+	PML_CFM_UNKNOWN,
+	PML_CFM_RETURN,
+	PML_CFM_BREAK,
+	PML_CFM_CONTINUE,
+	PML_CFM_NEXTRULE,
+	PML_CFM_NEXTPKT,
+	PML_CFM_DROP,
+
+};
+struct pml_cfmod {
 	int			type;
 	struct list		ln;
+	int			cftype;
 
 	union pml_expr_u *	expr;
 };
@@ -352,7 +363,7 @@ union pml_node {
 	struct pml_if		ifstmt;
 	struct pml_while	whilestmt;
 	struct pml_assign	assign;
-	struct pml_return	retact;
+	struct pml_cfmod	cfmod;
 	struct pml_print	print;
 	struct pml_list		list;
 	struct pml_function	function;

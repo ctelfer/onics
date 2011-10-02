@@ -246,6 +246,8 @@ var Count;
 
 %type type { int }
 
+%type cfmkw { int }
+
 %type orexpr { union pml_expr_u * } 
 %destructor orexpr { pmln_free((union pml_node *)$$); }
 
@@ -484,10 +486,23 @@ stmt(S) ::= IF LPAREN expr(E) RPAREN stmtlist(SLT) ELSE stmtlist(SLF). {
 }
 
 stmt(S) ::= RETURN expr(E) SEMICOLON.  {
-	struct pml_return *r = (struct pml_return *)pmln_alloc(PMLTT_RETURN);
-	r->expr = E;
-	S = (union pml_node *)r;
+	struct pml_cfmod *m = (struct pml_cfmod *)pmln_alloc(PMLTT_CFMOD);
+	m->cftype = PML_CFM_RETURN;
+	m->expr = E;
+	S = (union pml_node *)m;
 }
+
+stmt(S) ::= cfmkw(C) SEMICOLON. {
+	struct pml_cfmod *m = (struct pml_cfmod *)pmln_alloc(PMLTT_CFMOD);
+	m->cftype = C;
+	S = (union pml_node *)m;
+}
+
+cfmkw(C) ::= BREAK. { C = PML_CFM_BREAK; }
+cfmkw(C) ::= CONTINUE. { C = PML_CFM_CONTINUE; }
+cfmkw(C) ::= NEXTRULE. { C = PML_CFM_NEXTRULE; }
+cfmkw(C) ::= NEXTPKT. { C = PML_CFM_NEXTPKT; }
+cfmkw(C) ::= DROP. { C = PML_CFM_DROP; }
 
 stmt(S) ::= PRINT STRING(TV) SEMICOLON. {
 	struct pml_print *p = (struct pml_print *)pmln_alloc(PMLTT_PRINT);

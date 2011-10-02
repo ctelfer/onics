@@ -81,6 +81,11 @@ dnum		0|[1-9][0-9]*
 "if"		{ return PMLTOK_IF; }
 "else"		{ return PMLTOK_ELSE; }
 "return"	{ return PMLTOK_RETURN; }
+"break"		{ return PMLTOK_BREAK; }
+"continue"	{ return PMLTOK_CONTINUE; }
+"nextrule"	{ return PMLTOK_NEXTRULE; }
+"nextpkt"	{ return PMLTOK_NEXTPKT; }
+"drop"		{ return PMLTOK_DROP; }
 "var"		{ return PMLTOK_VAR; }
 "print"		{ return PMLTOK_PRINT; }
 

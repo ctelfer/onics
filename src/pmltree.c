@@ -406,10 +406,11 @@ union pml_node *pmln_alloc(int pmltt)
 		p->expr = NULL;
 	} break;
 
-	case PMLTT_RETURN: {
-		struct pml_return *p = &np->retact;
+	case PMLTT_CFMOD: {
+		struct pml_cfmod *p = &np->cfmod;
 		p->type = pmltt;
 		l_init(&p->ln);
+		p->cftype = PML_CFM_UNKNOWN;
 		p->expr = NULL;
         } break;
 
@@ -549,8 +550,8 @@ void pmln_free(union pml_node *node)
 		pmln_free((union pml_node *)p->expr);
 	} break;
 
-	case PMLTT_RETURN: {
-		struct pml_return *p = &node->retact;
+	case PMLTT_CFMOD: {
+		struct pml_cfmod *p = &node->cfmod;
 		pmln_free((union pml_node *)p->expr);
 	} break;
 
@@ -808,7 +809,7 @@ static const char *ets(void *p) {
 static const char *vtype_strs[] = {
 	"unknown", "const", "global", "local"
 };
-const char *vts(struct pml_variable *v)
+static const char *vts(struct pml_variable *v)
 {
 	abort_unless(v && v->vtype >= PML_VTYPE_UNKNOWN &&
 		     v->vtype <= PML_VTYPE_LOCAL);
@@ -820,7 +821,7 @@ static const char *rtype_strs[] = {
 	"unknown", "variable", "packet field", "proto const",
 	"unknown namespace elem"
 };
-const char *rts(struct pml_locator *l)
+static const char *rts(struct pml_locator *l)
 {
 	abort_unless(l && l->reftype >= PML_REF_UNKNOWN &&
 		     l->reftype <= PML_REF_UNKNOWN_NS_ELEM);
@@ -847,10 +848,22 @@ static const char *op_strs[] = {
 	"shift left", "shift right", "logical NOT", "binary compliment",
 	"negative"
 };
-const char *opstr(struct pml_op *op)
+static const char *opstr(struct pml_op *op)
 {
 	abort_unless(op && op->op >= PMLOP_OR && op->op <= PMLOP_NEG);
 	return op_strs[op->op];
+}
+
+
+static const char *cfm_strs[] = {
+	"unknown", "return", "break", "continue", "nextrule", "nextpkt",
+	"drop"
+};
+static const char *cfmstr(struct pml_cfmod *m)
+{
+	abort_unless(m && m->cftype >= PML_CFM_UNKNOWN && 
+		     m->cftype <= PML_CFM_DROP);
+	return cfm_strs[m->cftype];
 }
 
 
@@ -1020,7 +1033,7 @@ void pmlt_print(union pml_node *np, uint depth)
 		if (p->idx != NULL) {
 			indent(depth);
 			printf("Header Index -- \n");
-			pmlt_print((union pml_node *)p->pkt, depth+1);
+			pmlt_print((union pml_node *)p->idx, depth+1);
 		}
 
 		if (p->off != NULL) {
@@ -1048,11 +1061,12 @@ void pmlt_print(union pml_node *np, uint depth)
 		}
 	} break;
 
-	case PMLTT_RETURN: {
-		struct pml_return *p = &np->retact;
+	case PMLTT_CFMOD: {
+		struct pml_cfmod *p = &np->cfmod;
 		indent(depth);
-		printf("Function return wth value --\n");
-		pmlt_print((union pml_node *)p->expr, depth+1);
+		printf("Control Flow Modification: '%s'\n", cfmstr(p));
+		if (p->expr != NULL)
+			pmlt_print((union pml_node *)p->expr, depth+1);
 
         } break;
 
@@ -1346,8 +1360,8 @@ int pmlt_walk(union pml_node *np, void *ctx, pml_walk_f pre, pml_walk_f in,
 			return 0;
 	} break;
 
-	case PMLTT_RETURN: {
-		struct pml_return *p = &np->retact;
+	case PMLTT_CFMOD: {
+		struct pml_cfmod *p = &np->cfmod;
 
 		rv = pmlt_walk((union pml_node *)p->expr, ctx, pre, in, post);
 		if (rv < 0)
@@ -2461,7 +2475,7 @@ static pml_eval_f evaltab[] = {
 	e_locator,		/* PMLTT_LOCATOR */
 	e_locaddr,		/* PMLTT_LOCADDR */
 	unimplemented,		/* PMLTT_ASSIGN */
-	unimplemented,		/* PMLTT_RETURN */
+	unimplemented,		/* PMLTT_CFMOD */
 	unimplemented,		/* PMLTT_PRINT */
 	unimplemented,		/* PMLTT_FUNCTION */
 	unimplemented,		/* PMLTT_INLINE */
