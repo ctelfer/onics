@@ -240,6 +240,22 @@ enum {
 	PML_REF_UNKNOWN_NS_ELEM,	/* temporary */
 	PML_REF_LITERAL,
 };
+enum {
+	PML_RPF_NONE,
+	PML_RPF_LEN,
+	PML_RPF_HLEN,
+	PML_RPF_PLEN,
+	PML_RPF_TLEN,
+	PML_RPF_ERROR,
+	PML_RPF_PPT,
+	PML_RPF_INDEX,
+	PML_RPF_HEADER,
+	PML_RPF_PAYLOAD,
+	PML_RPF_TRAILER,
+	PML_RPF_FIRST = PML_RPF_LEN,
+	PML_RPF_LAST = PML_RPF_TRAILER,
+};
+#define PML_RPF_IS_BYTESTR(f) ((f) >= PML_RPF_HEADER && (f) <= PML_RPF_TRAILER)
 struct pml_locator {
 	int			type;
 	struct list		ln;
@@ -249,6 +265,7 @@ struct pml_locator {
 
 	char *			name;
 	int			reftype;
+	int			rpfld;	/* reserved packet field */
 	union pml_expr_u *	pkt;	/* packet number */
 	union pml_expr_u *	idx;	/* header index */
 	union pml_expr_u *	off;

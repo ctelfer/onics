@@ -389,6 +389,7 @@ union pml_node *pmln_alloc(int pmltt)
 			p->width = 8;
 		}
 		p->reftype = PML_REF_UNKNOWN;
+		p->rpfld = PML_RPF_NONE;
 		p->type = pmltt;
 		l_init(&p->ln);
 		p->name = NULL;
@@ -867,6 +868,17 @@ static const char *cfmstr(struct pml_cfmod *m)
 }
 
 
+static const char *rpfld_strs[] = {
+	"none", "len", "hlen", "plen", "tlen", "error", "ppt",
+	"index", "header", "payload", "trailer",
+};
+static const char *rpfstr(int field)
+{
+	abort_unless(field >= PML_RPF_NONE && field <= PML_RPF_LAST);
+	return rpfld_strs[field];
+}
+
+
 /* Basically a pre-order printing traversal of the tree */
 void pmlt_print(union pml_node *np, uint depth)
 {
@@ -1018,7 +1030,11 @@ void pmlt_print(union pml_node *np, uint depth)
 			pmlt_print((union pml_node *)p->u.varref, depth+1);
 		} else if (p->reftype == PML_REF_PKTFLD) {
 			indent(depth);
-			printf("Packet field --\n");
+			if (p->rpfld == PML_RPF_NONE)
+				printf("Packet field\n");
+			else
+				printf("Reserved packet field (%s)\n",
+				       rpfstr(p->rpfld));
 		} else if (p->reftype == PML_REF_NS_CONST) {
 			indent(depth);
 			printf("Protocol Constant --\n");
@@ -1441,6 +1457,17 @@ int pmlt_walk(union pml_node *np, void *ctx, pml_walk_f pre, pml_walk_f in,
 }
 
 
+static int find_reserved_pktfld(const char *field)
+{
+	int i;
+	(void)rpfstr;
+	for (i = PML_RPF_FIRST; i <= PML_RPF_LAST; ++i)
+		if (strcmp(field, rpfld_strs[i]) == 0)
+			return i;
+	return PML_RPF_NONE;
+}
+
+
 int pml_locator_resolve_nsref(struct pml_ast *ast, struct pml_locator *l)
 {
 	struct ns_elem *e;
@@ -1454,11 +1481,31 @@ int pml_locator_resolve_nsref(struct pml_ast *ast, struct pml_locator *l)
 	int rv;
 	struct pml_global_state gs;
 	struct pml_retval r;
+	char *name = NULL, *cp;
+	int rpf = PML_RPF_NONE;
 
 	abort_unless(l && l->name);
 
-	e = ns_lookup(NULL, l->name);
-	if (e == NULL)
+	name = l->name;
+	if ((cp = strrchr(l->name, '.')) != NULL) {
+		size_t blen = cp - l->name;
+		++cp;
+		if ((rpf = find_reserved_pktfld(cp)) != PML_RPF_NONE) {
+			if ((name = malloc(blen + 1)) == NULL) {
+				pml_ast_err(ast,
+					    "out of memory duplicating "
+					    "packet field name\n");
+				return -1;
+			}
+			memcpy(name, l->name, blen);
+			name[blen] = '\0';
+		}
+	}
+
+	e = ns_lookup(NULL, name);
+	if (rpf != PML_RPF_NONE)
+		free(name);
+	if (e == NULL || (rpf != PML_RPF_NONE && e->type != NST_NAMESPACE))
 		return 0;
 
 	switch (e->type) {
@@ -1466,11 +1513,24 @@ int pml_locator_resolve_nsref(struct pml_ast *ast, struct pml_locator *l)
 		l->u.nsref = e;
 		ns = (struct ns_namespace *)e;
 		l->reftype = PML_REF_PKTFLD;
-		if ((ns->flags & NSF_VARLEN) != 0) {
-			l->width = 0;
-			l->eflags |= PML_EFLAG_VARLEN;
+		if (rpf != PML_RPF_NONE) {
+			l->rpfld = rpf;
+			if (PML_RPF_IS_BYTESTR(rpf)) {
+				l->etype = PML_ETYPE_BYTESTR;
+				l->width = 0;
+				l->eflags |= PML_EFLAG_VARLEN;
+			} else {
+				l->etype = PML_ETYPE_SCALAR;
+				l->width = 8;
+			}
 		} else {
-			l->width = ns->len;
+			l->etype = PML_ETYPE_BYTESTR;
+			if (NSF_IS_VARLEN(ns->flags)) {
+				l->width = 0;
+				l->eflags |= PML_EFLAG_VARLEN;
+			} else {
+				l->width = ns->len;
+			}
 		}
 		break;
 
@@ -1478,11 +1538,17 @@ int pml_locator_resolve_nsref(struct pml_ast *ast, struct pml_locator *l)
 		l->u.nsref = e;
 		pf = (struct ns_pktfld *)e;
 		l->reftype = PML_REF_PKTFLD;
-		if ((pf->flags & NSF_VARLEN) != 0) {
-			l->width = 0;
-			l->eflags |= PML_EFLAG_VARLEN;
+		if (NSF_IS_INBITS(pf->flags)) {
+			l->etype = PML_ETYPE_SCALAR;
+			l->width = 8;
 		} else {
-			l->width = pf->len;
+			l->etype = PML_ETYPE_BYTESTR;
+			if (NSF_IS_VARLEN(pf->flags)) {
+				l->width = 0;
+				l->eflags |= PML_EFLAG_VARLEN;
+			} else {
+				l->width = pf->len;
+			}
 		}
 		break;
 
