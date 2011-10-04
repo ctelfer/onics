@@ -19,6 +19,13 @@
 #define PPT_TO_LIDX(ppt) ((ppt) & 0x3)
 
 
+/* purely to set a breakpoint during debugging */
+int netvm_dbgabrt()
+{
+	return 1;
+}
+
+
 int netvm_valid_width(int width)
 {
 	return ((width & 0x7F) > 0) && 

@@ -68,6 +68,31 @@ static int is_expr(void *nodep)
 }
 
 
+static int init_global_state(struct pml_global_state *gs, struct pml_ast *ast,
+			     size_t gsz)
+{
+	abort_unless(gs);
+	if (gsz == 0) {
+		gs->gmem = NULL;
+	} else {
+		gs->gmem = calloc(1, gsz);
+		if (gs->gmem == NULL)
+			return -1;
+	}
+	gs->gsz = gsz;
+	gs->ast = ast;
+	return 0;
+}
+
+
+static void clear_global_state(struct pml_global_state *gs)
+{
+	free(gs->gmem);
+	gs->gmem = NULL;
+	gs->gsz = 0;
+}
+
+
 static int symtab_init(struct pml_symtab *t)
 {
 	struct hnode **bins;
@@ -1574,9 +1599,10 @@ int pml_locator_resolve_nsref(struct pml_ast *ast, struct pml_locator *l)
 			return -1;
 		bs = (struct ns_bytestr *)e;
 		off = 0;
-		init_global_state(&gs, ast, 0);
 		if (l->off != NULL) {
+			init_global_state(&gs, ast, 0);
 			rv = pml_eval(&gs, NULL, (union pml_node *)l->off, &r);
+			clear_global_state(&gs);
 			if (rv < 0)
 				return -1;
 			off = val64(&r);
@@ -1585,7 +1611,9 @@ int pml_locator_resolve_nsref(struct pml_ast *ast, struct pml_locator *l)
 			return -1;
 		len = bs->value.len;
 		if (l->len != NULL) {
+			init_global_state(&gs, ast, 0);
 			rv = pml_eval(&gs, NULL, (union pml_node *)l->len, &r);
+			clear_global_state(&gs);
 			if (rv < 0)
 				return -1;
 			len = val64(&r);
@@ -2124,31 +2152,6 @@ oomerr:
 }
 
 
-static int init_global_state(struct pml_global_state *gs, struct pml_ast *ast,
-			     size_t gsz)
-{
-	abort_unless(gs);
-	if (gsz == 0) {
-		gs->gmem = NULL;
-	} else {
-		gs->gmem = calloc(1, gsz);
-		if (gs->gmem == NULL)
-			return -1;
-	}
-	gs->gsz = gsz;
-	gs->ast = ast;
-	return 0;
-}
-
-
-static void clear_global_state(struct pml_global_state *gs)
-{
-	free(gs->gmem);
-	gs->gmem = NULL;
-	gs->gsz = 0;
-}
-
-
 static uint64_t val64(struct pml_retval *v)
 {
 	abort_unless(v);
@@ -2647,6 +2650,7 @@ static int pml_opt_cexpr(union pml_expr_u *e, void *astp, union pml_expr_u **ne)
 	if (e != NULL && PML_EXPR_IS_CONST(e) && !PML_EXPR_IS_LITERAL(e)) {
 		init_global_state(&gs, astp, 0);
 		rv = pml_eval(&gs, NULL, (union pml_node *)e, &r);
+		clear_global_state(&gs);
 		if (rv < 0)
 			return -1;
 		switch(r.etype) {
