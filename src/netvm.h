@@ -372,14 +372,18 @@ enum {
 	NETVM_OC_UGTI,		/* [v] v1 > w (unsigned) */
 	NETVM_OC_UGE,		/* [v1,v2] v1 >= v2 (unsigned) */
 	NETVM_OC_UGEI,		/* [v] v1 >= w (unsigned) */
+	NETVM_OC_MIN,		/* [v1,v2] signed min(v1,v2) */
+	NETVM_OC_MAX,		/* [v1,v2] signed max(v1,v2) */
+	NETVM_OC_UMIN,		/* [v1,v2] unsigned min(v1,v2) */
+	NETVM_OC_UMAX,		/* [v1,v2] unsigned max(v1,v2) */
 
 	NETVM_OC_GETCPT,	/* [cp] push the type of co-processor 'cp' */
 				/*    push NETVM_CPT_NONE if it doesn't exist */
 	NETVM_OC_CPOPI,		/* [cp params] call coprocessor x w/op y. */
 
-	NETVM_OC_BRI,		/* PC += w (must be > 0 in matchonly) */
-	NETVM_OC_BNZI,		/* [c] PC += v if c is non-zero (ditto) */
-	NETVM_OC_BZI,		/* [c] PC += v if c is zero (ditto) */
+	NETVM_OC_BRI,		/* PC += (signed)w (must be > 0 in matchonly) */
+	NETVM_OC_BNZI,		/* [c] PC += w if c is non-zero (ditto) */
+	NETVM_OC_BZI,		/* [c] PC += w if c is zero (ditto) */
 	NETVM_OC_JMPI,		/* branch to absolute address w */
 	NETVM_OC_HALT,		/* halt program */
 	NETVM_OC_MAX_MATCH = NETVM_OC_HALT,
@@ -457,7 +461,7 @@ enum {
 	NETVM_OC_PKADJ,		/* [amt,pdesc] adjust offset 'field' by */
 	                        /*   amt (signed) bytes in parse */
 
-	NETVM_OC_MAX = NETVM_OC_PKADJ
+	NETVM_OC_MAXOP = NETVM_OC_PKADJ
 /* 
 * Still to consider:
 *

@@ -69,7 +69,7 @@ void print_vmret(int vmrv, int ec, uint pc, uint64_t rc)
 	if (vmrv == 0) {
 		fprintf(stderr, "VM provided no return value\n");
 	} else if (vmrv == 1) {
-		fprintf(stderr, "VM returned value %x\n", (uint)rc);
+		fprintf(stderr, "VM returned value %llu\n", (ulonglong)rc);
 	} else if (vmrv == -1) {
 		fprintf(stderr, "VM returned error @%u: %s\n", pc, netvm_estr(ec));
 	} else {

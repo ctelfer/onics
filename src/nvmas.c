@@ -68,7 +68,7 @@ struct nvmop {
 #define WS	" \n\t"
 #define LABELCHARS IDCHARS
 #define ARGCHARS "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ" \
-		 "0123456789_*[]@:."
+		 "0123456789_*[]@:.-"
 
 
 struct nvmop Operations[] = {
@@ -143,6 +143,10 @@ struct nvmop Operations[] = {
 	{ "ugti",   NETVM_OC_UGTI,   1, ARGW },
 	{ "uge",    NETVM_OC_UGE,    0, 0 },
 	{ "ugei",   NETVM_OC_UGEI,   1, ARGW },
+	{ "min",    NETVM_OC_MIN,    0, 0 },
+	{ "max",    NETVM_OC_MAX,    0, 0 },
+	{ "umin",   NETVM_OC_UMIN,   0, 0 },
+	{ "umax",   NETVM_OC_UMAX,   0, 0 },
 	{ "getcpt", NETVM_OC_GETCPT, 0, 0 },
 	{ "cpopi",  NETVM_OC_CPOPI,  4, ARGX|ARGY|ARGZ|ARGW },
 	{ "bri",    NETVM_OC_BRI,    1, ARGW|BRREL },
@@ -392,6 +396,7 @@ static int tokenize(char *s, struct raw toks[], uint maxtoks, int csep)
 static int intarg(const struct raw *r, struct htab *ct, ulong *v)
 {
 	char *cp;
+	int negval = 0;
 
 	if (r->data[0] == '@') {
 		if (isdigit(r->data[1])) {
@@ -406,10 +411,17 @@ static int intarg(const struct raw *r, struct htab *ct, ulong *v)
 		if (ct == NULL || !find_const(ct, r->data, v))
 			return ERR_UNKSYM;
 	} else {
+		cp = (char *)r->data;
+		if (cp[0] == '-') {
+			negval = 1;
+			++cp;
+		}
 		abort_unless(r->len > 0);
-		*v = strtoul(r->data, &cp, 0);
+		*v = strtoul(cp, &cp, 0);
 		if (cp != (char *)r->data + r->len)
 			return ERR_BADNUM;
+		if (negval)
+			*v = -*v;
 	}
 
 	return 0;

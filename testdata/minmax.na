@@ -1,0 +1,12 @@
+.entry start 0
+	push	50
+	push	40
+	max
+	push	-30
+	orhi	0xFFFFFFFF
+	min
+	push	1
+	umax
+	push	20
+	umin
+

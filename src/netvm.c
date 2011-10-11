@@ -723,6 +723,18 @@ static void binop(struct netvm *vm, int op, uint64_t v1, uint64_t v2)
 	case NETVM_OC_UGEI:
 		out = v1 >= v2;
 		break;
+	case NETVM_OC_MIN:
+		out = ((int64_t)v1 < (int64_t)v2) ? v1 : v2;
+		break;
+	case NETVM_OC_MAX:
+		out = ((int64_t)v1 > (int64_t)v2) ? v1 : v2;
+		break;
+	case NETVM_OC_UMIN:
+		out = v1 < v2 ? v1 : v2;
+		break;
+	case NETVM_OC_UMAX:
+		out = v1 > v2 ? v1 : v2;
+		break;
 	default:
 		out = 0;
 		abort_unless(0);
@@ -1301,7 +1313,7 @@ static void ni_pkadj(struct netvm *vm)
 }
 
 
-netvm_op g_netvm_ops[NETVM_OC_MAX + 1] = {
+netvm_op g_netvm_ops[NETVM_OC_MAXOP + 1] = {
 	ni_pop,			/* POP */
 	ni_popto,		/* POPTO */
 	ni_push,		/* PUSH */
@@ -1379,6 +1391,11 @@ netvm_op g_netvm_ops[NETVM_OC_MAX + 1] = {
 	ni_binopi,		/* UGTI */
 	ni_binop,		/* UGE */
 	ni_binopi,		/* UGEI */
+
+	ni_binop,		/* MIN */
+	ni_binop,		/* MAX */
+	ni_binop,		/* UMIN */
+	ni_binop,		/* UMAX */
 
 	ni_getcpt,		/* GETCPT */
 	ni_cpop,		/* CPOPI */
@@ -1468,7 +1485,7 @@ int netvm_validate(struct netvm *vm)
 	if (!vm || !vm->stack || !vm->inst || (vm->ninst < 1) || 
 	    (vm->ninst > MAXINST))
 		return NETVM_ERR_UNINIT;
-	maxi = vm->matchonly ? NETVM_OC_MAX_MATCH : NETVM_OC_MAX;
+	maxi = vm->matchonly ? NETVM_OC_MAX_MATCH : NETVM_OC_MAXOP;
 	for (i = 0; i < vm->ninst; i++) {
 		inst = &vm->inst[i];
 		if (inst->op > maxi)
