@@ -357,7 +357,7 @@ inlinedecl(I) ::= INLINE ID(N) LPAREN idlist(P) RPAREN LBRACE expr(E) RBRACE. {
 	struct list *t, *x;
 	struct pml_variable *p;
 
-	I = (struct pml_function *)pmln_alloc(PMLTT_INLINE);
+	I = (struct pml_function *)pmln_alloc(PMLTT_FUNCTION);
 	I->name = (char *)N.u.raw.data;
 
 	l_for_each_safe(t, x, &P->list) {
@@ -372,6 +372,7 @@ inlinedecl(I) ::= INLINE ID(N) LPAREN idlist(P) RPAREN LBRACE expr(E) RBRACE. {
 	}
 	pmln_free((union pml_node *)P);
 	I->body = (union pml_node *)E;
+	I->flags |= PML_FF_INLINE;
 
 id_out:
 }

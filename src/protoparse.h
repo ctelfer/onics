@@ -277,7 +277,7 @@ void prp_free_region(struct prparse *prp);
  */
 int prp_copy(struct prparse *nprp, struct prparse *oprp);
 
-/* re-parse and update the fields in 'prp'.  (but not its children */
+/* re-parse and update the fields in 'prp'.  (but not its children) */
 /* returns error field as a matter of convenience */
 uint prp_update(struct prparse *prp, byte_t *buf);
 

@@ -212,7 +212,7 @@ static struct prparse *eth_parse(struct prparse *pprp, byte_t *buf,
 			*nextppt = PPT_ARP;
 			break;
 		case ETHTYPE_VLAN:
-			if (prp_totlen(prp) <  (poff - prp_soff(prp) + 4)) {
+			if (prp_totlen(prp) < (poff - prp_soff(prp) + 4)) {
 				prp->error = PRP_ERR_TOOSMALL;
 				*nextppt = PPT_INVALID;
 				return prp;

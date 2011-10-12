@@ -16,42 +16,6 @@
 #define SYMTABSIZE    256
 
 
-struct pml_stack_frame {
-	uint8_t *	stack;
-	size_t		ssz;
-	size_t		psz;
-	union {
-		struct pml_node_base *	node;
-		struct pml_rule *	rule;
-		struct pml_function *	func;
-	} u;
-};
-
-
-struct pml_global_state {
-	struct pml_ast *ast;
-	uint8_t *	gmem;
-	size_t		gsz;
-};
-
-
-struct pml_retval {
-	int		etype;
-	struct raw	bytes;
-	struct raw	mask;
-	uint64_t	val;
-};
-
-
-typedef int (*pml_eval_f)(struct pml_global_state *gs,
-			  struct pml_stack_frame *fr, union pml_node *node,
-			  struct pml_retval *v);
-
-
-static int init_global_state(struct pml_global_state *gs, struct pml_ast *ast,
-			     size_t gsz);
-static int pml_eval(struct pml_global_state *gs, struct pml_stack_frame *fr, 
-		    union pml_node *node, struct pml_retval *v);
 static uint64_t val64(struct pml_retval *v);
 
 
@@ -68,7 +32,7 @@ static int is_expr(void *nodep)
 }
 
 
-static int init_global_state(struct pml_global_state *gs, struct pml_ast *ast,
+int init_global_state(struct pml_global_state *gs, struct pml_ast *ast,
 			     size_t gsz)
 {
 	abort_unless(gs);
@@ -85,7 +49,7 @@ static int init_global_state(struct pml_global_state *gs, struct pml_ast *ast,
 }
 
 
-static void clear_global_state(struct pml_global_state *gs)
+void clear_global_state(struct pml_global_state *gs)
 {
 	free(gs->gmem);
 	gs->gmem = NULL;
@@ -173,6 +137,75 @@ int pml_ast_init(struct pml_ast *ast)
 }
 
 
+static struct pml_idef stdintr[] = {
+	{ "pnew", 3, 0, NULL, { "pnum", "hdrm", "len" } },
+
+	{ "pdel", 2, 0, NULL, { "pnum" } },
+
+	{ "pswap", 2, 0, NULL, { "pnum1", "pnum2" } },
+
+	{ "pcopy", 2, 0, NULL, { "pnsrc", "pndst" } },
+
+	{ "pinsu", 3, 0, NULL, { "pnum", "off", "len" } },
+
+	{ "pinsd", 3, 0, NULL, { "pnum", "off", "len" } },
+
+	{ "pcutu", 3, 0, NULL, { "pnum", "off", "len" } },
+
+	{ "pcutu", 3, 0, NULL, { "pnum", "off", "len" } },
+
+	{ "happend", 3, 0, NULL, { "pnum", "ppt", "hlen" } },
+
+	{ "hchop", 1, 0, NULL, { "pnum" } },
+
+	{ "hpush", 3, 0, NULL, { "pnum", "ppt", "plen" } },
+
+	{ "hpop", 1, 0, NULL, { "pnum" } },
+
+	{ "hadj", 3, 0, NULL, { "ploc", "oidx", "amt" } },
+
+	{ "fixdlt", 1, 0, NULL, { "pnum" } },
+
+	{ "reparse", 1, 0, NULL, { "pnum" } },
+
+	{ "fixlen", 1, 0, NULL, { "ploc" } },
+
+	{ "fixlens", 1, 0, NULL, { "pnum" } },
+
+	{ "fixcksum", 1, 0, NULL, { "ploc" } },
+
+	{ "fixcksums", 1, 0, NULL, { "pnum" } },
+
+	{ "nbset", 1, PML_FF_PCONST|PML_FF_INLINE, NULL, { "num" } },
+
+	{ "fbsetl", 1, PML_FF_PCONST|PML_FF_INLINE, NULL, { "num" } },
+
+	{ "fbsetr", 1, PML_FF_PCONST|PML_FF_INLINE, NULL, { "num" } },
+
+	{ "log2", 1, PML_FF_PCONST|PML_FF_INLINE, NULL, { "num" } },
+
+	{ "clog2", 1, PML_FF_PCONST|PML_FF_INLINE, NULL, { "num" } },
+
+	{ "min", 2, PML_FF_PCONST|PML_FF_INLINE, NULL, { "num1", "num2" } },
+
+	{ "max", 2, PML_FF_PCONST|PML_FF_INLINE, NULL, { "num1", "num2" } },
+};
+
+
+int pml_ast_add_std_intrinsics(struct pml_ast *ast)
+{
+	int i;
+	int rv;
+	abort_unless(ast);
+	for (i = 0; i < array_length(stdintr); ++i) {
+		rv = pml_ast_add_intrinsic(ast, &stdintr[i]);
+		if (rv < 0)
+			return rv;
+	}
+	return 0;
+}
+
+
 void pml_ast_clear(struct pml_ast *ast)
 {
 	struct list *n, *x;
@@ -232,6 +265,57 @@ int pml_ast_add_func(struct pml_ast *ast, struct pml_function *func)
 		return -1;
 
 	return 0;
+}
+
+
+int pml_ast_add_intrinsic(struct pml_ast *ast, struct pml_idef *intr)
+{
+	char *ncpy;
+	struct pml_function *f = NULL;
+	struct pml_variable *v;
+	int i;
+
+	abort_unless(intr && intr->name && intr->arity >= 0 && ast);
+	abort_unless((intr->flags & 
+			~(PML_FF_INLINE|PML_FF_INTRINSIC|PML_FF_PCONST)) == 0);
+	
+
+	if (symtab_lookup(&ast->funcs, intr->name) != NULL)
+		pml_ast_err(ast, "Duplicate function: %s\n", intr->name);
+		return -1;
+
+	f = (struct pml_function *)pmln_alloc(PMLTT_FUNCTION);
+	if (f == NULL)
+		goto enomem;
+	if ((f->name = strdup(intr->name)) == NULL)
+		goto enomem;
+	for (i = 0; i < intr->arity; ++i) {
+		abort_unless(intr->pnames[i]);
+		if ((ncpy = strdup(intr->pnames[i])) == NULL)
+			goto enomem;
+		v = pml_var_alloc(ncpy, 0, PML_VTYPE_LOCAL, NULL);
+		if (v == NULL) {
+			free(ncpy);
+			goto enomem;
+		}
+		if (pml_func_add_param(f, v) < 0) {
+			pmln_free((union pml_node *)f);
+			return -1;
+		}
+	}
+	f->arity = intr->arity;
+	f->ieval = intr->eval;
+	f->flags = intr->flags | PML_FF_INTRINSIC;
+
+	abort_unless(symtab_add(&ast->funcs, (struct pml_sym *)f) >= 0);
+
+	return 0;
+
+enomem:
+	pml_ast_err(ast, "pml_ast_add_intrinsic: (%s) out of memory\n",
+		    intr->name);
+	pmln_free((union pml_node *)f);
+	return -1;
 }
 
 
@@ -448,8 +532,7 @@ union pml_node *pmln_alloc(int pmltt)
 		p->args = NULL;
 	} break;
 
-	case PMLTT_FUNCTION:
-	case PMLTT_INLINE: {
+	case PMLTT_FUNCTION: {
 		struct pml_function *p = &np->function;
 		l_init(&p->ln);
 		ht_ninit(&p->hn, "", p);
@@ -462,12 +545,13 @@ union pml_node *pmln_alloc(int pmltt)
 			free(np);
 			return NULL;
 		}
-		p->isconst = 0;
+		p->flags = 0;
 		p->width = 8;
 		p->type = pmltt;
 		p->name = NULL;
 		p->arity = 0;
 		p->body = NULL;
+		p->ieval = NULL;
 		p->pstksz = 0;
 		p->vstksz = 0;
 	} break;
@@ -587,8 +671,7 @@ void pmln_free(union pml_node *node)
 		pmln_free((union pml_node *)p->args);
 	} break;
 
-	case PMLTT_FUNCTION:
-	case PMLTT_INLINE: {
+	case PMLTT_FUNCTION: {
 		struct pml_function *p = &node->function;
 		ht_rem(&p->hn);
 		free(p->name);
@@ -675,7 +758,7 @@ struct pml_call *pml_call_alloc(struct pml_ast *ast, struct pml_function *func,
 
 	/* a call is a constant expression if the function is an inline */
 	/* and if the arguments to the function are all constant */
-	if (func->type == PMLTT_INLINE && func->isconst) {
+	if (PML_FUNC_IS_PCONST(func)) {
 		c->eflags = PML_EFLAG_CONST;
 		l_for_each(n, &args->list) {
 			struct pml_expr_base *b = 
@@ -903,6 +986,34 @@ static const char *rpfstr(int field)
 	return rpfld_strs[field];
 }
 
+static char *funcstr(struct pml_function *f, char s[80])
+{
+	int nflags = 0;
+	abort_unless(f->type == PMLTT_FUNCTION);
+	str_copy(s, "Function", 80);
+	if (f->flags) {
+		str_cat(s, "[", 80);
+		if (PML_FUNC_IS_INLINE(f)) {
+			str_cat(s, "inline", 80);
+			++nflags;
+		}
+		if (PML_FUNC_IS_INTRINSIC(f)) {
+			if (nflags > 0)
+				str_cat(s, ", ", 80);
+			str_cat(s, "intrinsic", 80);
+			++nflags;
+		}
+		if (PML_FUNC_IS_PCONST(f)) {
+			if (nflags > 0)
+				str_cat(s, ", ", 80);
+			str_cat(s, "pconst", 80);
+			++nflags;
+		}
+		str_cat(s, "]", 80);
+	}
+	return s;
+}
+
 
 /* Basically a pre-order printing traversal of the tree */
 void pmlt_print(union pml_node *np, uint depth)
@@ -1122,17 +1233,13 @@ void pmlt_print(union pml_node *np, uint depth)
 		}
 	} break;
 
-	case PMLTT_FUNCTION:
-	case PMLTT_INLINE: {
+	case PMLTT_FUNCTION: {
 		struct pml_function *p = &np->function;
 		struct list *n;
 		indent(depth);
-		printf("%s%s: %s() -- %d args, %d vars, return width=%lu\n",
-		       (np->base.type == PMLTT_FUNCTION) ? 
-		       		"Function" : 
-				"Inline Function",
-			(p->isconst) ? " [const] " : "",
-			p->name, p->arity, (int)p->vstksz, (ulong)p->width);
+		printf("%s: %s() -- %d args, %d vars, return width=%lu\n",
+		       funcstr(p, estr), p->name, p->arity, (int)p->vstksz,
+		       (ulong)p->width);
 
 		indent(depth);
 		printf("Parameters -- \n");
@@ -1146,6 +1253,8 @@ void pmlt_print(union pml_node *np, uint depth)
 			pmlt_print(l_to_node(n), depth+1);
 		}
 
+		indent(depth);
+		printf("Body -- \n");
 		pmlt_print(p->body, depth+1);
 	} break;
 
@@ -1223,12 +1332,13 @@ int pmlt_walk(union pml_node *np, void *ctx, pml_walk_f pre, pml_walk_f in,
 {
 	int rv = 0;
 	struct list *x;
+	byte_t xstk[PML_WALK_XSTKLEN];
 
 	if (np == NULL)
 		return 0;
 	
 	if (pre != NULL) {
-		rv = (*pre)(np, ctx);
+		rv = (*pre)(np, ctx, xstk);
 		if (rv < 0)
 			return rv;
 		else if (rv > 0)
@@ -1280,7 +1390,7 @@ int pmlt_walk(union pml_node *np, void *ctx, pml_walk_f pre, pml_walk_f in,
 			return 0;
 
 		if (in != NULL) {
-			rv = (*in)((union pml_node *)p, ctx);
+			rv = (*in)((union pml_node *)p, ctx, xstk);
 			if (rv < 0)
 				return rv;
 			else if (rv > 0)
@@ -1421,8 +1531,7 @@ int pmlt_walk(union pml_node *np, void *ctx, pml_walk_f pre, pml_walk_f in,
 			return 0;
 	} break;
 
-	case PMLTT_FUNCTION:
-	case PMLTT_INLINE: {
+	case PMLTT_FUNCTION: {
 		struct pml_function *p = &np->function;
 		struct list *n;
 
@@ -1473,7 +1582,7 @@ int pmlt_walk(union pml_node *np, void *ctx, pml_walk_f pre, pml_walk_f in,
 	}
 
 	if (post != NULL) {
-		rv = (*post)(np, ctx);
+		rv = (*post)(np, ctx, xstk);
 		if (rv < 0)
 			return rv;
 	}
@@ -1672,12 +1781,6 @@ int pml_locator_resolve_nsref(struct pml_ast *ast, struct pml_locator *l)
 }
 
 
-struct loop_node {
-	struct list		ln;
-	struct pml_while *	loop;
-};
-
-
 struct pml_resolve_ctx {
 	/* at most 3 var symbol tables to consider:  params, vars, global */
 	struct pml_symtab *symtabs[3];
@@ -1685,7 +1788,7 @@ struct pml_resolve_ctx {
 	int vtidx;
 	int ptidx;
 	struct pml_function *livefunc;
-	struct list loopstack;
+	struct pml_while *innerloop;
 	struct pml_ast *ast;
 };
 
@@ -1818,21 +1921,14 @@ static int binop_typecheck(struct pml_ast *ast, struct pml_op *op)
 }
 
 
-static int resolve_node_pre(union pml_node *node, void *ctxp)
+static int resolve_node_pre(union pml_node *node, void *ctxp, void *xstk)
 {
 	struct pml_resolve_ctx *ctx = ctxp;
 
 	if (node->base.type == PMLTT_WHILE) {
-		struct loop_node *n;
-
-		n = malloc(sizeof(*n));
-		if (n == NULL) {
-			pml_ast_err(ctx->ast, "out of memory for loop stack\n");
-			return -1;
-		}
-		n->loop = (struct pml_while *)node;
-		l_push(&ctx->loopstack, &n->ln);
-
+		struct pml_while **oinner = xstk;
+		*oinner = ctx->innerloop;
+		ctx->innerloop = (struct pml_while *)node;
 	} else if (node->base.type == PMLTT_CFMOD) {
 		struct pml_cfmod *m = (struct pml_cfmod *)&node->cfmod;
 
@@ -1845,7 +1941,7 @@ static int resolve_node_pre(union pml_node *node, void *ctxp)
 			}
 		} else if (m->cftype == PML_CFM_BREAK ||
 			   m->cftype == PML_CFM_CONTINUE) {
-			if (l_isempty(&ctx->loopstack)) {
+			if (ctx->innerloop == NULL) {
 				pml_ast_err(ctx->ast, 
 					    "'%s' statement outside of "
 					    " a loop\n", cfmstr(m));
@@ -1858,7 +1954,7 @@ static int resolve_node_pre(union pml_node *node, void *ctxp)
 }
 
 
-static int resolve_node_post(union pml_node *node, void *ctxp)
+static int resolve_node_post(union pml_node *node, void *ctxp, void *xstk)
 {
 	struct pml_resolve_ctx *ctx = ctxp;
 
@@ -1901,7 +1997,7 @@ static int resolve_node_post(union pml_node *node, void *ctxp)
 		struct pml_function *f;
 		struct list *n;
 		f = c->func;
-		if ((f->type == PMLTT_INLINE) && f->isconst) {
+		if (PML_FUNC_IS_PCONST(f)) {
 			c->eflags |= PML_EFLAG_CONST;
 			l_for_each(n, &c->args->list) {
 				if (!PML_EXPR_IS_PCONST(l_to_node(n))) {
@@ -1949,9 +2045,8 @@ static int resolve_node_post(union pml_node *node, void *ctxp)
 	} break;
 
 	case PMLTT_WHILE: {
-		struct list *n = l_pop(&ctx->loopstack);
-		abort_unless(n);
-		free(n);
+		struct pml_while **oinner = xstk;
+		ctx->innerloop = *oinner;
 	} break;
 
 	case PMLTT_ASSIGN: {
@@ -1992,12 +2087,11 @@ static int resolve_node(struct pml_resolve_ctx *ctx, union pml_node *node)
 int pml_resolve_refs(struct pml_ast *ast, union pml_node *node)
 {
 	struct pml_resolve_ctx ctx;
-	struct list *n;
 	int rv = 0;
 
 	ctx.ast = ast;
 	ctx.livefunc = NULL;
-	l_init(&ctx.loopstack);
+	ctx.innerloop = NULL;
 
 	if (node->base.type == PMLTT_RULE) {
 		struct pml_rule *rule = (struct pml_rule *)node;
@@ -2015,7 +2109,8 @@ int pml_resolve_refs(struct pml_ast *ast, union pml_node *node)
 			goto out;
 		rule->vstksz = rule->vars.nxtaddr;
 
-	} else if (node->base.type == PMLTT_FUNCTION) {
+	} else if (node->base.type == PMLTT_FUNCTION &&
+		   !PML_FUNC_IS_INLINE((struct pml_function *)node)) {
 		struct pml_function *func = (struct pml_function *)node;
 
 		ctx.symtabs[0] = &func->params;
@@ -2032,10 +2127,11 @@ int pml_resolve_refs(struct pml_ast *ast, union pml_node *node)
 		func->vstksz = func->vars.nxtaddr * sizeof(uint64_t) -
 			       func->pstksz;
 
-	} else if (node->base.type == PMLTT_INLINE) {
+	} else if (node->base.type == PMLTT_FUNCTION) {
 		struct pml_function *inln = (struct pml_function *)node;
 		struct pml_expr_base *pe;
 
+		abort_unless(PML_FUNC_IS_INLINE(inln));
 		ctx.symtabs[0] = &inln->params;
 		ctx.symtabs[1] = &ast->vars;
 		ctx.ntab = 2;
@@ -2045,7 +2141,8 @@ int pml_resolve_refs(struct pml_ast *ast, union pml_node *node)
 		if (rv < 0)
 			goto out;
 		inln->pstksz = inln->params.nxtaddr * sizeof(uint64_t);
-		inln->isconst = PML_EXPR_IS_PCONST(inln->body);
+		if (PML_EXPR_IS_PCONST(inln->body))
+			inln->flags |= PML_FF_PCONST;
 		pe = (struct pml_expr_base *)inln->body;
 		if (pe->etype != PML_ETYPE_SCALAR) {
 			pml_ast_err(ast, "Non-scalar expression for inline %s "
@@ -2097,8 +2194,6 @@ int pml_resolve_refs(struct pml_ast *ast, union pml_node *node)
 	}
 
 out:
-	while ((n = l_pop(&ctx.loopstack)) != NULL)
-		free(n);
 	return rv;
 }
 
@@ -2122,8 +2217,7 @@ static struct pml_stack_frame *stkalloc(struct pml_ast *ast,
 	if (fr == NULL)
 		goto oomerr;
 
-	if (node->base.type == PMLTT_FUNCTION || 
-	    node->base.type == PMLTT_INLINE) {
+	if (node->base.type == PMLTT_FUNCTION) {
 		struct pml_function *p = (struct pml_function *)node;
 		fr->psz = p->pstksz;
 		fr->ssz = p->pstksz + p->vstksz;
@@ -2413,7 +2507,10 @@ static int e_call(struct pml_global_state *gs, struct pml_stack_frame *fr,
 		*pp++ = val64(&lr);
 	}
 
-	rv = pml_eval(gs, nfr, f->body, &lr);
+	if (PML_FUNC_IS_INTRINSIC(f))
+		rv = (*f->ieval)(gs, nfr, (union pml_node *)f, &lr);
+	else
+		rv = pml_eval(gs, nfr, f->body, &lr);
 	if (rv < 0)
 		goto out;
 	r->val = val64(&lr);
@@ -2618,14 +2715,13 @@ static pml_eval_f evaltab[] = {
 	unimplemented,		/* PMLTT_CFMOD */
 	unimplemented,		/* PMLTT_PRINT */
 	unimplemented,		/* PMLTT_FUNCTION */
-	unimplemented,		/* PMLTT_INLINE */
 	unimplemented,		/* PMLTT_RULE */
 };
 
 
 /* TODO: make error reporting separate from AST error reporting */
-static int pml_eval(struct pml_global_state *gs, struct pml_stack_frame *fr, 
-		    union pml_node *node, struct pml_retval *r)
+int pml_eval(struct pml_global_state *gs, struct pml_stack_frame *fr, 
+	     union pml_node *node, struct pml_retval *r)
 {
 	abort_unless(gs && r);
 	if (node == NULL || node->base.type < 0 || 
@@ -2745,7 +2841,7 @@ static int pml_opt_l_cexpr(union pml_expr_u *e, void *astp)
 }
 
 
-static int pml_cexpr_walker(union pml_node *node, void *astp)
+static int pml_cexpr_walker(union pml_node *node, void *astp, void *xstk)
 {
 	struct list *n, *x;
 
@@ -2819,10 +2915,12 @@ static int pml_cexpr_walker(union pml_node *node, void *astp)
 		}
 	} break;
 
-	case PMLTT_INLINE: {
+	case PMLTT_FUNCTION: {
 		struct pml_function *f = (struct pml_function *)node;
-		if (pml_opt_np_cexpr(&f->body, astp) < 0)
-			return -1;
+		if (PML_FUNC_IS_INLINE(f)) {
+			if (pml_opt_np_cexpr(&f->body, astp) < 0)
+				return -1;
+		}
 	} break;
 
 	case PMLTT_RULE: {

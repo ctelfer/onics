@@ -11,6 +11,21 @@
 #include <stdint.h>
 #include "pml.h"
 
+/* forward declarations */
+union pml_node;
+struct pml_global_state;
+struct pml_stack_frame;
+struct pml_retval;
+
+/* Tree walker */
+#define PML_WALK_XSTKLEN	256
+typedef int pml_walk_f(union pml_node *node, void *ctx, void *xstk);
+
+/* subtree evaluation */
+typedef int (*pml_eval_f)(struct pml_global_state *gs,
+			  struct pml_stack_frame *fr, union pml_node *node,
+			  struct pml_retval *v);
+
 
 struct pml_symtab {
 	struct list		list;
@@ -323,6 +338,14 @@ struct pml_sym {
 };
 
 
+enum {
+	PML_FF_INLINE = 1,	/* inline function */
+	PML_FF_INTRINSIC = 2,
+	PML_FF_PCONST = 4,	/* inline function is const if params are */
+};
+#define PML_FUNC_IS_INLINE(f)		((f)->flags & PML_FF_INLINE)
+#define PML_FUNC_IS_PCONST(f)		((f)->flags & PML_FF_PCONST)
+#define PML_FUNC_IS_INTRINSIC(f)	((f)->flags & PML_FF_INTRINSIC)
 struct pml_function {
 	/* pml_sym_base fields */
 	int			type;
@@ -333,8 +356,10 @@ struct pml_function {
 	uint			arity;		/* number of arguments */
 	struct pml_symtab	params;
 	struct pml_symtab	vars;
-	union pml_node *	body;  /* expr for pred, list for func */
-	int			isconst; /* inline is const if params are */
+	union pml_node *	body;	/* expr for pred, list for func */
+	pml_eval_f		ieval;	/* call to eval intrinsic */
+
+	int			flags;
 	size_t			pstksz;
 	size_t			vstksz;
 	size_t			width;
@@ -389,7 +414,43 @@ union pml_node {
 };
 
 
-typedef int pml_walk_f(union pml_node *node, void *ctx);
+/* PML expression (and maybe statement) evaluation */
+struct pml_stack_frame {
+	uint8_t *	stack;
+	size_t		ssz;
+	size_t		psz;
+	union {
+		struct pml_node_base *	node;
+		struct pml_rule *	rule;
+		struct pml_function *	func;
+	} u;
+};
+
+
+struct pml_global_state {
+	struct pml_ast *ast;
+	uint8_t *	gmem;
+	size_t		gsz;
+};
+
+
+struct pml_retval {
+	int		etype;
+	struct raw	bytes;
+	struct raw	mask;
+	uint64_t	val;
+};
+
+
+/* structure definition for an intrinsic function to add */
+#define PML_MAXIARGS		4
+struct pml_idef {
+	char *			name;
+	int			arity;
+	int			flags;
+	pml_eval_f		eval;
+	char *			pnames[PML_MAXIARGS];
+};
 
 
 union pml_node *pmln_alloc(int pmltt);
@@ -397,11 +458,13 @@ void pmln_free(union pml_node *node);
 void pmln_print(union pml_node *node, uint depth);
 
 int pml_ast_init(struct pml_ast *ast);
+int pml_ast_add_std_intrinsics(struct pml_ast *ast);
 void pml_ast_clear(struct pml_ast *ast);
 void pml_ast_err(struct pml_ast *ast, const char *fmt, ...);
 void pml_ast_print(struct pml_ast *ast);
 struct pml_function *pml_ast_lookup_func(struct pml_ast *ast, char *name);
 int pml_ast_add_func(struct pml_ast *ast, struct pml_function *func);
+int pml_ast_add_intrinsic(struct pml_ast *ast, struct pml_idef *intr);
 struct pml_variable *pml_ast_lookup_var(struct pml_ast *ast, char *name);
 int pml_ast_add_var(struct pml_ast *ast, struct pml_variable *var);
 int pml_ast_add_rule(struct pml_ast *ast, struct pml_rule *rule);
@@ -447,6 +510,12 @@ int pml_locator_resolve_nsref(struct pml_ast *ast, struct pml_locator *l);
 int pml_resolve_refs(struct pml_ast *ast, union pml_node *node);
 
 int pml_ast_optimize(struct pml_ast *ast);
+
+int init_global_state(struct pml_global_state *gs, struct pml_ast *ast,
+		      size_t gsz);
+void clear_global_state(struct pml_global_state *gs);
+int pml_eval(struct pml_global_state *gs, struct pml_stack_frame *fr, 
+	     union pml_node *node, struct pml_retval *v);
 
 /* Lexical analyzer definitions */
 
