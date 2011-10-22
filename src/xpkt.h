@@ -65,6 +65,13 @@ static NETTOOLS_INLINE uint32_t xpkt_data_len(struct xpkt *x)
 }
 
 
+static NETTOOLS_INLINE uint16_t xpkt_tag_size(struct xpkt_tag_hdr *xth)
+{
+	abort_unless(xth);
+	return 4 + xth->nwords * 4;
+}
+
+
 /* Unpack an xpkt header from network byte order */
 void xpkt_unpack_hdr(struct xpkthdr *xh);
 
@@ -192,20 +199,20 @@ int xpkt_del_tag(struct xpkt *x, byte_t tag, int idx, int pulldown);
 #define XPKT_TAG_APPINFO	128	/* first non-basic tag type */
 
 
-#define XPKT_TAG_NOP_NWORDS		1
+#define XPKT_TAG_NOP_NWORDS		0
 struct xpkt_tag_nop {
 	byte_t			type;	/* 0 */
-	byte_t			nwords; /* 1 */
+	byte_t			nwords; /* 0 */
 	uint16_t		zero;	/* 0 */
 };
 
 void xpkt_tag_nop_init(struct xpkt_tag_nop *t);
 
 
-#define XPKT_TAG_TIMESTAMP_NWORDS	3
+#define XPKT_TAG_TIMESTAMP_NWORDS	2
 struct xpkt_tag_ts {
 	byte_t			type;	/* 1 */
-	byte_t			nwords; /* 3 */
+	byte_t			nwords; /* 2 */
 	uint16_t		zero;	/* 0 */
 	uint32_t		sec;
 	uint32_t		nsec;
@@ -214,10 +221,10 @@ struct xpkt_tag_ts {
 void xpkt_tag_ts_init(struct xpkt_tag_ts *t, uint32_t sec, uint32_t nsec);
 
 
-#define XPKT_TAG_SNAPINFO_NWORDS	2
+#define XPKT_TAG_SNAPINFO_NWORDS	1
 struct xpkt_tag_snapinfo {
 	byte_t			type;	/* 2 */
-	byte_t			nwords; /* 2 */
+	byte_t			nwords; /* 1 */
 	uint16_t		zero;	/* 0 */
 	uint32_t		wirelen;
 };
@@ -225,11 +232,11 @@ struct xpkt_tag_snapinfo {
 void xpkt_tag_si_init(struct xpkt_tag_snapinfo *t, uint32_t wirelen);
 
 
-#define XPKT_TAG_INIFACE_NWORDS		1
-#define XPKT_TAG_OUTIFACE_NWORDS	1
+#define XPKT_TAG_INIFACE_NWORDS		0
+#define XPKT_TAG_OUTIFACE_NWORDS	0
 struct xpkt_tag_iface {
 	byte_t			type;	/* 3|4 */
-	byte_t			nwords; /* 1 */
+	byte_t			nwords; /* 0 */
 	uint16_t		iface;
 };
 
@@ -237,10 +244,10 @@ void xpkt_tag_iif_init(struct xpkt_tag_iface *t, uint16_t iface);
 void xpkt_tag_oif_init(struct xpkt_tag_iface *t, uint16_t iface);
 
 
-#define XPKT_TAG_FLOW_NWORDS		3
+#define XPKT_TAG_FLOW_NWORDS		2
 struct xpkt_tag_flowid {
 	byte_t			type;	/* 5 */
-	byte_t			nwords; /* 3 */
+	byte_t			nwords; /* 2 */
 	uint16_t		zero;	/* 0 */
 	uint64_t		flowid;
 };
@@ -248,10 +255,10 @@ struct xpkt_tag_flowid {
 void xpkt_tag_flowid_init(struct xpkt_tag_flowid *t, uint64_t id);
 
 
-#define XPKT_TAG_CLASS_NWORDS		3
+#define XPKT_TAG_CLASS_NWORDS		2
 struct xpkt_tag_class {
 	byte_t			type;	/* 6 */
-	byte_t			nwords; /* 3 */
+	byte_t			nwords; /* 2 */
 	uint16_t		zero;	/* 0 */
 	uint64_t		tag;
 };
@@ -259,10 +266,10 @@ struct xpkt_tag_class {
 void xpkt_tag_class_init(struct xpkt_tag_class *t, uint64_t tag);
 
 
-#define XPKT_TAG_PARSEINFO_NWORDS	3
+#define XPKT_TAG_PARSEINFO_NWORDS	2
 struct xpkt_tag_parseinfo {
 	byte_t			type;	/* 6 */
-	byte_t			nwords; /* 3 */
+	byte_t			nwords; /* 2 */
 	uint16_t		proto;
 	uint32_t		off;
 	uint32_t		len;
@@ -274,9 +281,9 @@ void xpkt_tag_pi_init(struct xpkt_tag_parseinfo *t, uint16_t proto,
 
 struct xpkt_tag_appinfo {
 	byte_t			type;	/* 6 */
-	byte_t			nwords; /* 3 */
+	byte_t			nwords; /* 0+ */
 	uint16_t		subtype;
-	byte_t			data[254 * 4];
+	byte_t			data[255 * 4];
 };
 
 /* nw is the number of words of data in the tag */

@@ -353,7 +353,7 @@ void prp_free_parse(struct prparse *prp)
 	     next = prp_next_in_region(next, prp))
 		next->region = prp->region;
 	l_rem(&prp->node);
-	(*prp->ops->free) (prp);
+	(*prp->ops->free)(prp);
 }
 
 
@@ -404,7 +404,7 @@ void prp_free_region(struct prparse *prp)
 		if (parse_in_region(trav, prp)) {
 			abort_unless(trav->ops && trav->ops->free);
 			l_rem(&trav->node);
-			(*trav->ops->free) (trav);
+			(*trav->ops->free)(trav);
 		}
 		trav = hold;
 	}

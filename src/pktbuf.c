@@ -732,9 +732,9 @@ int pkb_add_tag(struct pktbuf *pkb, struct xpkt_tag_hdr *xth)
 		return -1; 
 
 	/* none of these can overflow:  long is 32 bits and tlen is 16, and */
-	/* nwords is 8.  */
+	/* xpkt_tag_size will return <= 1024.  */
 	mlen = pkb->xpkt->hdr.tlen * 4 + XPKT_HLEN;
-	mlen += xth->nwords * 4;
+	mlen += xpkt_tag_size(xth);
 
 	if (mlen > pkb->xsize)
 		return -1;

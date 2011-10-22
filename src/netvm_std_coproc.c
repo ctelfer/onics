@@ -95,9 +95,9 @@ void xpktcp_rdtag(struct netvm *vm, struct netvm_coproc *cp, int cpi)
 	FATAL(vm, NETVM_ERR_NOPKT, !(pkb = vm->packets[td.pktnum]));
 	xth = pkb_find_tag(pkb, td.type, td.index);
 	FATAL(vm, NETVM_ERR_BADCPOP, (xth == NULL));
-	memcpy(xcp->tag, xth, xth->nwords * 4);
+	memcpy(xcp->tag, xth, xpkt_tag_size(xth));
 	/* The tag must be in packed form for the VM */
-	xpkt_pack_tags((uint32_t *)xcp->tag, xth->nwords * 4);
+	xpkt_pack_tags((uint32_t *)xcp->tag, xpkt_tag_size(xth));
 }
 
 

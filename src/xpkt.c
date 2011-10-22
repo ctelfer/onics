@@ -164,7 +164,7 @@ int xpkt_unpack_tags(uint32_t *tags, uint16_t tlen)
 	tend = tags + tlen;
 	while (tags < tend) {
 		xth = (struct xpkt_tag_hdr *)tags;
-		if (tags + xth->nwords > tend)
+		if (xth->nwords + 1 > tend - tags)
 			return -1;
 		if (xth->type == XPKT_TAG_INVALID)
 			return -2;
@@ -172,14 +172,11 @@ int xpkt_unpack_tags(uint32_t *tags, uint16_t tlen)
 			/* check for proper length for tag */
 			if (xth->nwords != tagops[xth->type].nwords)
 				return -3;
-		} else {
-			if (xth->nwords == 0)
-				return -3;
 		}
 		xth->xhword = ntoh16(xth->xhword);
 		if (xth->type < XPKT_TAG_NUM_TYPES)
 			(*tagops[xth->type].unpack)(xth);
-		tags += xth->nwords;
+		tags += xth->nwords + 1;
 	}
 
 	return 0;
@@ -202,7 +199,7 @@ int xpkt_validate_tags(uint32_t *tags, uint16_t tlen)
 
 		xth = (struct xpkt_tag_hdr *)tags;
 
-		if (s < xth->nwords)
+		if (s < xth->nwords + 1)
 			return -1;
 
 		if (xth->type == XPKT_TAG_INVALID)
@@ -223,11 +220,8 @@ int xpkt_validate_tags(uint32_t *tags, uint16_t tlen)
 			rv = (*tagops[xth->type].validate)(xth);
 			if (rv < 0)
 				return -1;
-		} else {
-			if (xth->nwords == 0)
-				return -1;
 		}
-		tags += xth->nwords;
+		tags += xth->nwords + 1;
 	}
 
 	return 0;
@@ -245,10 +239,10 @@ void xpkt_pack_tags(uint32_t *tags, uint16_t tlen)
 	while (tags < tend) {
 		xth = (struct xpkt_tag_hdr *)tags;
 		xth->xhword = hton16(xth->xhword);
-		abort_unless(tags + xth->nwords <= tend);
+		abort_unless(xth->nwords + 1 <= tend - tags);
 		if (xth->type < XPKT_TAG_NUM_TYPES)
 			(*tagops[xth->type].pack)(xth);
-		tags += xth->nwords;
+		tags += xth->nwords + 1;
 	}
 }
 
@@ -263,24 +257,22 @@ struct xpkt_tag_hdr *xpkt_next_tag(struct xpkt *x, struct xpkt_tag_hdr *cur)
 	if (cur == NULL) {
 		if (x->hdr.tlen > 0) {
 		        cur = (struct xpkt_tag_hdr *)x->tags;
-			abort_unless(cur->nwords > 0);
-			abort_unless(x->hdr.tlen >= cur->nwords);
+			abort_unless(x->hdr.tlen >= cur->nwords + 1);
 			return cur;
 		}
 		return NULL;
 	}
 
-	abort_unless(cur->nwords > 0);
-
 	toff = (uint32_t*)cur - x->tags;
-	if (cur->nwords + toff >= x->hdr.tlen) {
-		abort_unless(cur->nwords + toff == x->hdr.tlen);
+	abort_unless(toff < x->hdr.tlen);
+	if (cur->nwords + 1 >= x->hdr.tlen - toff) {
+		abort_unless(cur->nwords + 1 == x->hdr.tlen - toff);
 		return NULL;
 	}
 
-	cur = (struct xpkt_tag_hdr *)((uint32_t *)cur + cur->nwords);
-	abort_unless(cur->nwords > 0);
-	abort_unless(x->hdr.tlen >= cur->nwords + ((uint32_t *)cur - x->tags));
+	cur = (struct xpkt_tag_hdr *)((uint32_t *)cur + cur->nwords + 1);
+	abort_unless(x->hdr.tlen - ((uint32_t *)cur - x->tags) >= 
+		     cur->nwords + 1);
 	return cur;
 }
 
@@ -341,22 +333,26 @@ int xpkt_add_tag(struct xpkt *x, struct xpkt_tag_hdr *xth, int moveup)
 			return -1;
 		if (!tagops[xth->type].maydup && xpkt_find_tag(x, xth->type, 0))
 			return -1;
-	} else {
-		if (xth->nwords == 0)
-			return -1;
 	}
 
+	/* check for overflow of packet or tag length fields */
+	if ((x->hdr.len + xpkt_tag_size(xth) < x->hdr.len) || 
+	    (x->hdr.tlen + xth->nwords + 1 < x->hdr.tlen))
+		return -1;
+
 	if (moveup) {
-		tl = xth->nwords * 4;
+		tl = xpkt_tag_size(xth);
 		lo = (byte_t *)x + XPKT_HLEN + x->hdr.tlen * 4;
 		hi = lo + tl;
 		memmove(hi, lo, xpkt_data_len(x));
 		memcpy(lo, xth, tl);
-		x->hdr.tlen += xth->nwords;
+		x->hdr.tlen += xth->nwords + 1;
 		x->hdr.len += tl;
 
 	} else {
-		tl = xth->nwords;
+		/* first fit search for a sequence of nops big enough for */
+		/* the new tag */
+		tl = xth->nwords + 1;
 		for (trav = xpkt_next_tag(x, NULL)  ;
                      (trav != NULL)                 ;
 		     trav = xpkt_next_tag(x, trav)) {
@@ -390,16 +386,16 @@ int xpkt_del_tag(struct xpkt *x, byte_t type, int idx, int pulldown)
 		return -1;
 
 	if (pulldown) {
-		n = xth->nwords * 4;
+		n = xpkt_tag_size(xth);
 		memmove(xth, (byte_t *)xth + n,
 			x->hdr.len - ((byte_t*)xth - (byte_t *)x + n));
-		x->hdr.tlen -= xth->nwords;
+		x->hdr.tlen -= xth->nwords + 1;
 		x->hdr.len -= n;
 	} else {
-		n = xth->nwords;
+		n = xth->nwords + 1;
 		while (n > 0) {
 			xth->type = XPKT_TAG_NOP;
-			xth->nwords = 1;
+			xth->nwords = 0;
 			xth->xhword = 0;
 			xth++;
 			--n;
@@ -501,6 +497,6 @@ void xpkt_tag_ai_init(struct xpkt_tag_appinfo *t, uint16_t subtype, uint32_t *p,
 	}
 
 	t->type = XPKT_TAG_APPINFO;
-	t->nwords = nw + 1;
+	t->nwords = nw;
 	t->subtype = subtype;
 }
