@@ -117,7 +117,7 @@ int main(int argc, char *argv[])
 	parse_args(argc, argv);
 	switch ((dlt = pcap_datalink(g_pcap))) {
 	case DLT_EN10MB:
-		dltype = DLT_ETHERNET2;
+		dltype = PRID_ETHERNET2;
 		break;
 	default:
 		err("unsupported datalink type: %d", dlt);

@@ -10,7 +10,7 @@
 
 #define MAXLINE 256
 
-uint g_dlt = DLT_NONE;
+uint g_dlt = PRID_INVALID;
 ulong g_lineno = 0;
 ulong g_pktno = 1;
 FILE *g_file = NULL;
@@ -118,7 +118,7 @@ void write_packet(struct pktbuf *pkb)
 	struct xpkt *x;
 	int rv;
 
-	if (g_dlt == DLT_NONE) {
+	if (g_dlt == PRID_INVALID) {
 		if (nb < XPKT_HLEN)
 			err("Packet %lu is a runt", g_pktno);
 		x = (struct xpkt *)pkb->buf;
@@ -130,9 +130,6 @@ void write_packet(struct pktbuf *pkb)
 			err("Packet %lu's xpkt length doesn't match bytes read"
 			    ": header val = %lu, bytes read = %lu\n",
 			    g_pktno, x->hdr.len, nb);
-		if ((x->hdr.dltype < DLT_MIN) || (x->hdr.dltype > DLT_MAX))
-			err("Invalid datalink type (%x) in packet %lu\n",
-			    x->hdr.dltype, g_pktno);
 		if ((rv = xpkt_unpack_tags(x->tags, x->hdr.tlen)) < 0)
 			err("Error unpacking tags in packet %lu: %d\n",
 			    g_pktno, rv);

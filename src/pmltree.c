@@ -154,11 +154,11 @@ static struct pml_idef stdintr[] = {
 
 	{ "pcutu", 3, 0, NULL, { "pnum", "off", "len" } },
 
-	{ "happend", 3, 0, NULL, { "pnum", "ppt", "hlen" } },
+	{ "happend", 3, 0, NULL, { "pnum", "prid", "hlen" } },
 
 	{ "hchop", 1, 0, NULL, { "pnum" } },
 
-	{ "hpush", 3, 0, NULL, { "pnum", "ppt", "plen" } },
+	{ "hpush", 3, 0, NULL, { "pnum", "prid", "plen" } },
 
 	{ "hpop", 1, 0, NULL, { "pnum" } },
 
@@ -977,7 +977,7 @@ static const char *cfmstr(struct pml_cfmod *m)
 
 
 static const char *rpfld_strs[] = {
-	"none", "len", "hlen", "plen", "tlen", "error", "ppt",
+	"none", "len", "hlen", "plen", "tlen", "error", "prid",
 	"index", "header", "payload", "trailer",
 };
 static const char *rpfstr(int field)

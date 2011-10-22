@@ -16,8 +16,6 @@
 #include "netvm_op_macros.h"
 
 #define MAXINST         0x7ffffffe
-#define PPT_TO_LIDX(ppt) ((ppt) & 0x3)
-
 
 /* purely to set a breakpoint during debugging */
 int netvm_dbgabrt()
@@ -41,7 +39,7 @@ void netvm_get_pd(struct netvm *vm, struct netvm_prp_desc *pd, int onstack)
 	uint64_t val;
 	if (onstack) {
 		S_POP(vm, val);
-		pd->ptype = (val >> NETVM_PD_PPT_OFF) & NETVM_PD_PPT_MASK;
+		pd->prid = (val >> NETVM_PD_PRID_OFF) & NETVM_PD_PRID_MASK;
 		pd->pktnum = (val >> NETVM_PD_PKT_OFF) & NETVM_PD_PKT_MASK;
 		pd->pktnum &= ~NETVM_SEG_ISPKT;
 		pd->idx = (val >> NETVM_PD_IDX_OFF) & NETVM_PD_IDX_MASK;
@@ -52,7 +50,8 @@ void netvm_get_pd(struct netvm *vm, struct netvm_prp_desc *pd, int onstack)
 		pd->pktnum = inst->y & ~NETVM_SEG_ISPKT;
 		pd->idx = (inst->z >> NETVM_PPD_IDX_OFF) & NETVM_PPD_IDX_MASK;
 		pd->field = (inst->z & NETVM_PPD_FLD_MASK);
-		pd->ptype = (inst->w >> NETVM_PPD_PPT_OFF) & NETVM_PPD_PPT_MASK;
+		pd->prid = (inst->w >> NETVM_PPD_PRID_OFF) &
+			    NETVM_PPD_PRID_MASK;
 		pd->offset = inst->w & NETVM_PPD_OFF_MASK;
 	}
 }
@@ -60,7 +59,7 @@ void netvm_get_pd(struct netvm *vm, struct netvm_prp_desc *pd, int onstack)
 
 /* 
  * find header based on packet number, header type, and index.  So (3,8,1) 
- * means find the 2nd (0-based counting) TCP (PPT_TCP == 8) header in the 4th
+ * means find the 2nd (0-based counting) TCP (PRID_TCP == 8) header in the 4th
  * packet.
  */
 struct prparse *netvm_find_header(struct netvm *vm, struct netvm_prp_desc *pd,
@@ -80,14 +79,16 @@ struct prparse *netvm_find_header(struct netvm *vm, struct netvm_prp_desc *pd,
 	if (!(pkb = vm->packets[pd->pktnum]))
 		VMERRRET(vm, NETVM_ERR_NOPKT, NULL);
 
-	if (PPT_IS_PCLASS(pd->ptype)) {
-		uint lidx = PPT_TO_LIDX(pd->ptype);
+	if (PRID_IS_PCLASS(pd->prid)) {
+		int lidx = pkb_get_lidx(pd->prid);
+		if (lidx < 0)
+			VMERRRET(vm, NETVM_ERR_LAYER, NULL);
 		return pkb->layers[lidx];
 	}
 
 	prp = &pkb->prp;
 	do {
-		if ((pd->ptype == PPT_ANY) || (pd->ptype == prp->type)) {
+		if ((pd->prid == PRID_ANY) || (pd->prid == prp->prid)) {
 			if (n == pd->idx)
 				return prp;
 			++n;
@@ -316,8 +317,8 @@ static void ni_ldpf(struct netvm *vm)
 	case NETVM_PRP_ERR:
 		val = prp->error;
 		break;
-	case NETVM_PRP_TYPE:
-		val = prp->type;
+	case NETVM_PRP_PRID:
+		val = prp->prid;
 		break;
 	case NETVM_PRP_PIDX:
 		/* count number of headers until start of packet */
@@ -1035,7 +1036,7 @@ static void ni_pknew(struct netvm *vm)
 		return;
 
 	FATAL(vm, NETVM_ERR_PKTNUM, pd0.pktnum >= NETVM_MAXPKTS);
-	/* NOTE: ptype must be a PKDL_* value, not a PPT_* value */
+	/* NOTE: prid must be a PKDL_* value, not a PRID_* value */
 	pnew = pkb_create(pd0.offset);
 	FATAL(vm, NETVM_ERR_NOMEM, !pnew);
 	pkb_free(vm->packets[pd0.pktnum]);
@@ -1101,9 +1102,9 @@ static void ni_pkppsh(struct netvm *vm)
 	FATAL(vm, NETVM_ERR_NOPKT, !(pkb = vm->packets[pd0.pktnum]));
 	/* XXX is this the right error? */
 	if (inst->x) {	/* outer push */
-		FATAL(vm, NETVM_ERR_NOMEM, pkb_wrapprp(pkb, pd0.ptype) < 0);
+		FATAL(vm, NETVM_ERR_NOMEM, pkb_wrapprp(pkb, pd0.prid) < 0);
 	} else {		/* inner push */
-		FATAL(vm, NETVM_ERR_NOMEM, pkb_pushprp(pkb, pd0.ptype) < 0);
+		FATAL(vm, NETVM_ERR_NOMEM, pkb_pushprp(pkb, pd0.prid) < 0);
 	}
 }
 

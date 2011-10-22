@@ -5,9 +5,9 @@
 #include <limits.h>
 
 
-static struct proto_parser *_pp_lookup(uint type);
+static struct proto_parser *_pp_lookup(uint prid);
 static struct prparse *none_parse(struct prparse *pprp, byte_t *buf, 
-				  uint *nextppt);
+				  uint *nextprid);
 static struct prparse *none_add(ulong off, ulong len, ulong hlen, ulong plen,
 				byte_t *buf, int mode);
 
@@ -16,16 +16,16 @@ static struct proto_parser_ops none_proto_parser_ops = {
 	none_add,
 };
 
-struct proto_parser dlt_proto_parsers[PPT_PER_PF];
-struct proto_parser net_proto_parsers[PPT_PER_PF];
-struct proto_parser inet_proto_parsers[PPT_PER_PF];
-struct proto_parser pp_proto_parsers[PPT_PER_PF] = {
-	{PPT_NONE, 1, &none_proto_parser_ops},
+struct proto_parser dlt_proto_parsers[PRID_PER_PF];
+struct proto_parser net_proto_parsers[PRID_PER_PF];
+struct proto_parser inet_proto_parsers[PRID_PER_PF];
+struct proto_parser pp_proto_parsers[PRID_PER_PF] = {
+	{PRID_NONE, 1, &none_proto_parser_ops},
 };
 
 
 
-int pp_register(unsigned type, struct proto_parser_ops *ppo)
+int pp_register(unsigned prid, struct proto_parser_ops *ppo)
 {
 	struct proto_parser *pp;
 
@@ -34,7 +34,7 @@ int pp_register(unsigned type, struct proto_parser_ops *ppo)
 		return -1;
 	}
 
-	pp = _pp_lookup(type);
+	pp = _pp_lookup(prid);
 	if (!pp) {
 		errno = EINVAL;
 		return -1;
@@ -45,7 +45,7 @@ int pp_register(unsigned type, struct proto_parser_ops *ppo)
 		return -1;
 	}
 
-	pp->type = type;
+	pp->prid = prid;
 	pp->ops = ppo;
 	pp->valid = 1;
 
@@ -53,40 +53,40 @@ int pp_register(unsigned type, struct proto_parser_ops *ppo)
 }
 
 
-static struct proto_parser *_pp_lookup(uint type)
+static struct proto_parser *_pp_lookup(uint prid)
 {
-	switch (PPT_FAMILY(type)) {
-	case PPT_PF_INET:
-		return &inet_proto_parsers[PPT_PROTO(type)];
-	case PPT_PF_NET:
-		return &net_proto_parsers[PPT_PROTO(type)];
-	case PPT_PF_DLT:
-		return &dlt_proto_parsers[PPT_PROTO(type)];
-	case PPT_PF_PP:
-		if (PPT_PROTO(type) >= PPT_PF_PP_RESERVED)
+	switch (PRID_FAMILY(prid)) {
+	case PRID_PF_INET:
+		return &inet_proto_parsers[PRID_PROTO(prid)];
+	case PRID_PF_NET:
+		return &net_proto_parsers[PRID_PROTO(prid)];
+	case PRID_PF_DLT:
+		return &dlt_proto_parsers[PRID_PROTO(prid)];
+	case PRID_PF_RES:
+		if (PRID_PROTO(prid) >= PRID_PF_RES)
 			return NULL;
 		else
-			return &pp_proto_parsers[PPT_PROTO(type)];
+			return &pp_proto_parsers[PRID_PROTO(prid)];
 	default:
 		return NULL;
 	}
 }
 
 
-const struct proto_parser *pp_lookup(uint ppt)
+const struct proto_parser *pp_lookup(uint prid)
 {
-	const struct proto_parser *pp = _pp_lookup(ppt);
+	const struct proto_parser *pp = _pp_lookup(prid);
 	if (pp && !pp->valid)
 		pp = NULL;
 	return pp;
 }
 
 
-int pp_unregister(uint type)
+int pp_unregister(uint prid)
 {
 	struct proto_parser *pp;
 
-	pp = _pp_lookup(type);
+	pp = _pp_lookup(prid);
 	if (!pp) {
 		errno = EINVAL;
 		return -1;
@@ -121,14 +121,14 @@ static struct prparse_ops none_prparse_ops = {
 
 
 static struct prparse *none_parse(struct prparse *pprp, byte_t *buf,
-				  uint *nextppt)
+				  uint *nextprid)
 {
 	struct prparse *prp;
 
 	abort_unless(pprp);
-	abort_unless(nextppt);
+	abort_unless(nextprid);
 
-	*nextppt = PPT_INVALID;
+	*nextprid = PRID_INVALID;
 	prp = none_add(prp_poff(pprp), prp_plen(pprp), 0, prp_plen(pprp), 
 		       buf, PRP_ADD_FILL);
 	if (prp != NULL) {
@@ -142,7 +142,7 @@ static struct prparse *none_parse(struct prparse *pprp, byte_t *buf,
 static void none_init(struct prparse *prp, ulong off, ulong len, ulong hlen, 
 		      ulong plen)
 {
-	prp->type = PPT_NONE;
+	prp->prid = PRID_NONE;
 	prp->error = 0;
 	prp->ops = &none_prparse_ops;
 	l_init(&prp->node);
@@ -237,15 +237,15 @@ void prp_init_parse(struct prparse *base, ulong len)
 }
 
 
-int prp_parse_packet(struct prparse *base, byte_t *buf, uint ippt)
+int prp_parse_packet(struct prparse *base, byte_t *buf, uint iprid)
 {
 	struct prparse *prp;
 	const struct proto_parser *pp;
-	uint nextppt;
+	uint nextprid;
 	int errval;
 
-	abort_unless(base && base->type == PPT_NONE);
-	pp = pp_lookup(ippt);
+	abort_unless(base && base->prid == PRID_NONE);
+	pp = pp_lookup(iprid);
 	if (!pp) {
 		errno = EINVAL;
 		return -1;
@@ -253,33 +253,33 @@ int prp_parse_packet(struct prparse *base, byte_t *buf, uint ippt)
 
 	prp = base;
 	do {
-		nextppt = PPT_INVALID;
-		if (!(prp = (*pp->ops->parse)(prp, buf, &nextppt))) {
+		nextprid = PRID_INVALID;
+		if (!(prp = (*pp->ops->parse)(prp, buf, &nextprid))) {
 			errval = errno;
 			goto err;
 		}
 		/* don't continue parsing if the lengths are screwed up */
 		if ((prp->error & PRP_ERR_HLENMASK) || !prp_plen(prp))
 			break;
-		pp = pp_lookup(nextppt);
+		pp = pp_lookup(nextprid);
 	} while (pp);
 
 	return 0;
 
- err:
+err:
 	prp_clear(base);
 	errno = errval;
 	return -1;
 }
 
 
-int prp_add(unsigned ppt, struct prparse *pprp, byte_t *buf, int mode)
+int prp_add(unsigned prid, struct prparse *pprp, byte_t *buf, int mode)
 {
 	const struct proto_parser *pp;
 	ulong off, len, plen, hlen;
 	struct prparse *prp, *next = NULL;
 
-	pp = pp_lookup(ppt);
+	pp = pp_lookup(prid);
 	if (!pp || !pprp) {
 		errno = EINVAL;
 		return -1;

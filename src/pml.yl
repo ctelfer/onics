@@ -743,12 +743,12 @@ value(V) ::= ATAT locname(L). {
 		struct ns_namespace *ns = (struct ns_namespace *)ne;
 		v = (struct pml_literal *)pmln_alloc(PMLTT_SCALAR);
 		v->width = 8;
-		v->u.scalar = ns->ppt;
+		v->u.scalar = ns->prid;
 	} else if (ne->type != NST_PKTFLD) {
 		struct ns_pktfld *pf = (struct ns_pktfld *)ne;
 		v = (struct pml_literal *)pmln_alloc(PMLTT_SCALAR);
 		v->width = 8;
-		v->u.scalar = pf->ppt;
+		v->u.scalar = pf->prid;
 	} else {
 		pml_ast_err(ast, "@location '%s' is neither a namespace "
 				 "or a packet field\n", L->name);

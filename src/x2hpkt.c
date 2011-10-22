@@ -3,6 +3,7 @@
 #include <limits.h>
 #include <cat/optparse.h>
 #include <cat/err.h>
+#include "prid.h"
 #include "util.h"
 #include "pktbuf.h"
 #include "ns.h"
@@ -105,6 +106,35 @@ ulong get_offset(struct ns_pktfld *pf, struct prparse *prp)
 }
 
 
+static const char *errstrs[7] = {
+	"runt", 
+	"header length", 
+	"length field",
+	"checksum",
+	"option length",
+	"option field",
+	"protocol field"
+};
+void printerr(uint err)
+{
+	int first = 1;
+	int i;
+	if (err) {
+		printf("#    Errors [0x%0x]: ", err);
+		for (i = 0; i <= PRP_ERR_MAXBIT; ++i) {
+			if (err & (1 << i)) {
+				if (!first)
+					fputs(", ", stdout);
+				else
+					first = 0;
+				fputs(errstrs[i], stdout);
+			}
+		}
+		fputc('\n', stdout);
+	}
+}
+
+
 #define MAXLINE		256
 #define MAXPFX		16
 void print_ns(struct ns_namespace *ns, struct prparse *prp, ulong soff,
@@ -128,6 +158,7 @@ void print_ns(struct ns_namespace *ns, struct prparse *prp, ulong soff,
 			fputs(line, stdout);
 			fputc('\n', stdout);
 		}
+		printerr(prp->error);
 		printsep();
 	}
 
@@ -163,12 +194,12 @@ void print_parse(struct prparse *prp, ulong soff, ulong feoff, ulong deoff,
 	char line[MAXLINE];
 	struct ns_namespace *ns;
 
-	ns = ns_lookup_by_type(NULL, prp->type);
+	ns = ns_lookup_by_prid(NULL, prp->prid);
 	if (ns == NULL) {
-		if ( prp->type == PPT_NONE )
+		if ( prp->prid == PRID_NONE )
 			snprintf(line, MAXPFX, "# DATA: ");
 		else
-			snprintf(line, MAXPFX, "# PPT-%u: ", prp->type);
+			snprintf(line, MAXPFX, "# PRID-%u: ", prp->prid);
 		print_unparsed(soff, deoff, line);
 	} else if (print_fields) {
 		print_ns(ns, prp, soff, feoff, line);

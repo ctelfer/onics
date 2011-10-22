@@ -3,47 +3,14 @@
 #include <cat/cat.h>
 #include <cat/cattypes.h>
 #include <cat/list.h>
-
-#define PPT_PROTO(ppt)		((ppt) & 0xFF)
-#define PPT_FAMILY(ppt)		(((ppt) >> 8) & 0xFF)
-#define PPT_BUILD(pf, proto)	((((pf) & 0xFF) << 8) | ((proto) & 0xFF))
-
-/* Protocol Families */
-#define PPT_PF_INET		0
-#define PPT_PF_NET		1
-#define PPT_PF_DLT		2
-#define PPT_PF_PP		255
-#define PPT_PER_PF		256
+#include "prid.h"
 
 /*
-   A PPT_NONE type parse just represents a parsed region of a buffer that
+   A PRID_NONE type parse just represents a parsed region of a buffer that
    is its own unit.  (e.g. a packet, a SSL record, etc..)  The header
    and trailer represents unused slack space in the region.  It gets updated
    on any header adjustment for enclosed parses.
-   
-   Parse types for family _PP indices 128-255 are reserved 
-   "meta parse types".  They stand for entire classes of packets.
 */
-#define PPT_NONE                PPT_BUILD(PPT_PF_PP, 0)
-#define PPT_PF_PP_RESERVED	128
-#define PPT_PCLASS_LINK		PPT_BUILD(PPT_PF_PP, 128)
-#define PPT_PCLASS_TUNNEL	PPT_BUILD(PPT_PF_PP, 129)
-#define PPT_PCLASS_NET		PPT_BUILD(PPT_PF_PP, 130)
-#define PPT_PCLASS_XPORT	PPT_BUILD(PPT_PF_PP, 131)
-#define PPT_USER1		PPT_BUILD(PPT_PF_PP, 192)
-#define PPT_USER2		PPT_BUILD(PPT_PF_PP, 193)
-#define PPT_USER3		PPT_BUILD(PPT_PF_PP, 194)
-#define PPT_USER4		PPT_BUILD(PPT_PF_PP, 195)
-#define PPT_USER5		PPT_BUILD(PPT_PF_PP, 196)
-#define PPT_USER6		PPT_BUILD(PPT_PF_PP, 197)
-#define PPT_USER7		PPT_BUILD(PPT_PF_PP, 198)
-#define PPT_USER8		PPT_BUILD(PPT_PF_PP, 199)
-#define PPT_ANY			PPT_BUILD(PPT_PF_PP, 254)
-#define PPT_INVALID             PPT_BUILD(PPT_PF_PP, 255)
-
-#define PPT_IS_PCLASS(ppt) \
-  (((ppt) & PPT_BUILD(PPT_PF_PP, 252)) == PPT_BUILD(PPT_PF_PP, 128))
-
 
 #define PRP_ERR_TOOSMALL        0x0001
 #define PRP_ERR_HLEN            0x0002
@@ -52,6 +19,7 @@
 #define PRP_ERR_OPTLEN          0x0010
 #define PRP_ERR_OPTERR          0x0020
 #define PRP_ERR_INVALID         0x0040	/* invalid combination of options */
+#define PRP_ERR_MAXBIT		6
 
 #define PRP_ERR_HLENMASK        (PRP_ERR_TOOSMALL|PRP_ERR_HLEN)
 
@@ -81,26 +49,26 @@ struct prparse;
 
 struct proto_parser_ops {
 	struct prparse *	(*parse)(struct prparse *pprp, byte_t *buf,
-					 uint *nextppt);
+					 uint *nextprid);
 
 	struct prparse *	(*add)(ulong off, ulong len, ulong hlen, 
 				       ulong plen, byte_t *buf, int mode);
 };
 
 struct proto_parser {
-	uint			type;
+	uint			prid;
 	uint			valid;
 	struct proto_parser_ops *ops;
 };
 
 /* install a protocol parser to handle a particular protocol type */
-int pp_register(uint type, struct proto_parser_ops *ops);
+int pp_register(uint prid, struct proto_parser_ops *ops);
 
-/* Get a protocol parser by type */
-const struct proto_parser *pp_lookup(uint type);
+/* Get a protocol parser by protocol ID */
+const struct proto_parser *pp_lookup(uint prid);
 
-/* unregister a protocol type */
-int pp_unregister(uint type);
+/* unregister a protocol by protocol ID */
+int pp_unregister(uint prid);
 
 
 
@@ -167,7 +135,7 @@ struct prparse_ops {
 
 
 struct prparse {
-	uint			type;
+	uint			prid;
 	uint			error;
 	struct prparse_ops *	ops;
 	struct list		node;
@@ -246,19 +214,19 @@ int prp_region_empty(struct prparse *reg);
 /* will take up exactly the space between parent and child.  If the 'buf' */
 /* parameter is not NULL the operation will also create a default header */
 /* and trailer in the buffer at the offsets indicated by the parse. */
-int prp_add(uint ppt, struct prparse *prp, byte_t *buf, int mode);
+int prp_add(uint prid, struct prparse *prp, byte_t *buf, int mode);
 
 
-/* Initializes a fresh parse of PPT_NONE.  This can be used to create the */
+/* Initializes a fresh parse of PRID_NONE.  This can be used to create the */
 /* base for a full parse. */
 void prp_init_parse(struct prparse *base, ulong len);
 
-/* Given an initialized protocol parse header for a buffer (PPT_NONE) and */
-/* an initial protocol parse type, parse the packet and add to the list */
+/* Given an initialized protocol parse header for a buffer (PRID_NONE) and */
+/* an initial protocol id, parse the packet and add to the list */
 /* of PRPs.  Returns -1 on an allocation error.  Otherwise, parse errors */
 /* (which may be acceptable for certain applications) are stored in the */
 /* error fields of the generated parses. */
-int prp_parse_packet(struct prparse *base, byte_t *buf, uint firstppt);
+int prp_parse_packet(struct prparse *base, byte_t *buf, uint firstprid);
 
 /* Free a complete parse tree.  prp->region == NULL  This does not free. */
 /* the base parse itself. (i.e. the root region) */

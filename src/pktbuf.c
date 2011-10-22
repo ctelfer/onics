@@ -4,9 +4,8 @@
 #include <string.h>
 #include <cat/pcache.h>
 #include <cat/io.h>
+#include "prid.h"
 #include "pktbuf.h"
-#include "dltypes.h"
-#include "stdproto.h"
 
 const size_t pkb_xpkt_pool_size = 1024 - sizeof(cat_pcpad_t);
 #define PKB_MAX_DATA_LEN  (65536 + 2048 - sizeof(cat_pcpad_t))
@@ -23,43 +22,23 @@ struct pcache pkb_xpkt_pool;
 struct pcache pkb_data_pools[array_length(pkb_data_pool_sizes)];
 
 
-#define DLT_INVALID_PAD		-1
 #define DLT_NONE_PAD		0
 #define DLT_ETHERNET2_PAD	2
 
-int dloffs[DLT_MAX+1] = {
-	DLT_INVALID_PAD,
+int dloffs[PRID_PROTO(PRID_DLT_MAX)+1] = {
 	DLT_NONE_PAD,
 	DLT_ETHERNET2_PAD,
 };
 
-
-static int dlt_valid(uint16_t dltype)
-{
-	return (dltype >= DLT_MIN) && (dltype <= DLT_MAX);
-}
-
 /* Returns the pad offset for this DL type -- usually 0-3 */
 /* ONLY call with a valid dltype or it will abort. */
-static int dlt_offset(uint16_t dltype)
+static int dlt_offset(uint16_t prid)
 {
-	int offset = -1;
-	if (dltype <= DLT_MAX) 
-		offset = dloffs[dltype];
-	abort_unless(offset >= 0);
-	return offset;
-}
-
-
-uint16_t dlt2ppt(uint16_t dlt)
-{
-	return PPT_BUILD(PPT_PF_DLT, dlt);
-}
-
-
-uint16_t ppt2dlt(uint16_t ppt)
-{
-	return PPT_PROTO(ppt);
+	if ((PRID_FAMILY(prid) == PRID_PF_DLT) && 
+	    (PRID_PROTO(prid) >= PRID_DLT_MIN) &&
+	    (PRID_PROTO(prid) <= PRID_DLT_MAX))
+		return dloffs[PRID_PROTO(prid)];
+	return 0;
 }
 
 
@@ -138,7 +117,7 @@ void pkb_reset(struct pktbuf *pkb)
 
 	xh = &pkb->xpkt->hdr;
 	xh->len = XPKT_HLEN;
-	xh->dltype = DLT_NONE;
+	xh->dltype = PRID_INVALID;
 	xh->tlen = 0;
 }
 
@@ -294,7 +273,7 @@ int pkb_file_read(struct pktbuf **pkbp, FILE *fp)
 	if ((nr = fread(&xh, 1, XPKT_HLEN, fp)) < XPKT_HLEN)
 		return (nr == 0) ? 0 : -1;
 	xpkt_unpack_hdr(&xh);
-	if ((xpkt_validate_hdr(&xh) < 0) || !dlt_valid(xh.dltype)) {
+	if (xpkt_validate_hdr(&xh) < 0) {
 		errno = EIO;
 		return -1;
 	}
@@ -365,7 +344,7 @@ int pkb_fd_read(struct pktbuf **pkbp, int fd)
 	if ((nr = io_read(fd, &xh, sizeof(XPKT_HLEN))) < XPKT_HLEN)
 		return (nr == 0) ? 0 : -1;
 	xpkt_unpack_hdr(&xh);
-	if ((xpkt_validate_hdr(&xh) < 0) || !dlt_valid(xh.dltype)) {
+	if (xpkt_validate_hdr(&xh) < 0) {
 		errno = EIO;
 		return -1;
 	}
@@ -530,15 +509,15 @@ int pkb_fd_write(struct pktbuf *pkb, int fd)
 int pkb_parse(struct pktbuf *pkb)
 {
 	struct prparse *prp;
-	uint ppt;
+	uint prid;
 
 	abort_unless(pkb);
 
 	if ((pkb->flags & PKB_F_PARSED))
 		return -1;
 
-	ppt = dlt2ppt(pkb->xpkt->hdr.dltype);
-	if (prp_parse_packet(&pkb->prp, pkb->buf, ppt) < 0)
+	prid = pkb->xpkt->hdr.dltype;
+	if (prp_parse_packet(&pkb->prp, pkb->buf, prid) < 0)
 		return -1;
 
 	for (prp=prp_next(&pkb->prp); !prp_list_end(prp); prp=prp_next(prp))
@@ -567,39 +546,32 @@ int pkb_is_parsed(struct pktbuf *pkb)
 }
 
 
-static int islink(int ppt)
+static int islink(int prid)
 {
-	return ppt == PPT_ETHERNET2;
+	return PRID_FAMILY(prid) == PRID_PF_DLT;
 }
 
 
-static int istunnel(int ppt)
+static int istunnel(int prid)
 {
 	return 0;
 }
 
 
-static int isnet(int ppt)
+static int isnet(int prid)
 {
-	switch (ppt) {
-	case PPT_IPV4:
-	case PPT_IPV6:
-	case PPT_ARP:
-		return 1;
-	default:
-		return 0;
-	}
-	return (ppt == PPT_IPV4) || (ppt == PPT_IPV6) || (ppt == PPT_ARP);
+	return PRID_FAMILY(prid) == PRID_PF_NET;
 }
 
 
-static int isxport(int ppt)
+static int isxport(int prid)
 {
-	switch (ppt) {
-	case PPT_ICMP:
-	case PPT_ICMP6:
-	case PPT_UDP:
-	case PPT_TCP:
+	/* NOTE: not all inet protocols are transport protocols. */
+	switch (prid) {
+	case PRID_ICMP:
+	case PRID_ICMP6:
+	case PRID_UDP:
+	case PRID_TCP:
 		return 1;
 	default:
 		return 0;
@@ -614,16 +586,16 @@ void pkb_set_layer(struct pktbuf *pkb, struct prparse *prp, int layer)
 	if (layer >= 0) {
 		pkb->layers[layer] = prp;
 	} else {
-		if (islink(prp->type)) {
+		if (islink(prp->prid)) {
 			if (!pkb->layers[PKB_LAYER_DL])
 				pkb->layers[PKB_LAYER_DL] = prp;
-		} else if (istunnel(prp->type)) {
+		} else if (istunnel(prp->prid)) {
 			if (!pkb->layers[PKB_LAYER_TUN])
 				pkb->layers[PKB_LAYER_TUN] = prp;
-		} else if (isnet(prp->type)) {
+		} else if (isnet(prp->prid)) {
 			if (!pkb->layers[PKB_LAYER_NET])
 				pkb->layers[PKB_LAYER_NET] = prp;
-		} else if (isxport(prp->type)) {
+		} else if (isxport(prp->prid)) {
 			if (!pkb->layers[PKB_LAYER_XPORT])
 				pkb->layers[PKB_LAYER_XPORT] = prp;
 		}
@@ -640,27 +612,27 @@ void pkb_clr_layer(struct pktbuf *pkb, int layer)
 
 void pkb_fix_dltype(struct pktbuf *pkb)
 {
-	uint16_t dltype = DLT_NONE;
+	uint16_t dltype = PRID_INVALID;
 	if (pkb->layers[PKB_LAYER_DL] != NULL) {
-		dltype = ppt2dlt(pkb->layers[PKB_LAYER_DL]->type);
-		abort_unless(dltype != DLT_INVALID);
+		dltype = pkb->layers[PKB_LAYER_DL]->prid;
+		abort_unless(dltype != PRID_INVALID);
 	}
 	pkb->xpkt->hdr.dltype = dltype;
 }
 
 
-int pkb_pushprp(struct pktbuf *pkb, int ppt)
+int pkb_pushprp(struct pktbuf *pkb, int prid)
 {
-	if (prp_add(ppt, prp_prev(&pkb->prp), pkb->buf, PRP_ADD_FILL) < 0)
+	if (prp_add(prid, prp_prev(&pkb->prp), pkb->buf, PRP_ADD_FILL) < 0)
 		return -1;
 	pkb_set_layer(pkb, prp_prev(&pkb->prp), -1);
 	return 0;
 }
 
 
-int pkb_wrapprp(struct pktbuf *pkb, int ppt)
+int pkb_wrapprp(struct pktbuf *pkb, int prid)
 {
-	if (prp_add(ppt, &pkb->prp, pkb->buf, PRP_ADD_FILL) < 0)
+	if (prp_add(prid, &pkb->prp, pkb->buf, PRP_ADD_FILL) < 0)
 		return -1;
 	pkb_set_layer(pkb, prp_next(&pkb->prp), -1);
 	return 0;
@@ -751,3 +723,12 @@ int pkb_del_tag(struct pktbuf *pkb, byte_t type, int idx)
 	return xpkt_del_tag(pkb->xpkt, type, idx, 1);
 }
 
+
+int pkb_get_lidx(uint prid)
+{
+	if (!PRID_IS_PCLASS(prid))
+		return -1;
+	/* packet buffer layers correspond one-to-one with in order */
+	/* with protocol classes */
+	return prid - PRID_PCLASS_MIN;
+}

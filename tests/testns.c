@@ -2,6 +2,7 @@
 #include <cat/cat.h>
 #include <cat/err.h>
 #include <string.h>
+#include "prid.h"
 #include "ns.h"
 #include "stdproto.h"
 #include "util.h"
@@ -60,20 +61,20 @@ unsigned long extract(byte_t * p, struct ns_pktfld *f)
 #define arr2raw(a,r) (r.data = a, r.len = sizeof(a), &r)
 
 struct ns_namespace myipns =
-	NS_NAMESPACE_I("ip", NULL, PPT_NONE, PPT_NONE, NULL, NULL, 0);
+	NS_NAMESPACE_I("ip", NULL, PRID_NONE, PRID_NONE, NULL, NULL, 0);
 
 struct ns_elem *portsarr[32] = { 0 };
 struct ns_namespace tcpports =
-	NS_NAMESPACE_I("ports", NULL, PPT_TCP, PPT_PCLASS_XPORT, NULL, portsarr,
+	NS_NAMESPACE_I("ports", NULL, PRID_TCP, PRID_PCLASS_XPORT, NULL, portsarr,
 			array_length(portsarr));
 struct ns_elem *oddarr[2] = { 0 };
 struct ns_namespace oddrange =
-	NS_NAMESPACE_I("oddrange", NULL, PPT_TCP, PPT_PCLASS_XPORT, NULL, 
+	NS_NAMESPACE_I("oddrange", NULL, PRID_TCP, PRID_PCLASS_XPORT, NULL, 
 			oddarr, array_length(oddarr));
 
-struct ns_scalar sshport = NS_UINT16_I("ssh", NULL, PPT_TCP, 22);
-struct ns_scalar oddlo = NS_UINT16_I("low", NULL, PPT_TCP, 80);
-struct ns_scalar oddhi = NS_UINT16_I("high", NULL, PPT_TCP, 92);
+struct ns_scalar sshport = NS_UINT16_I("ssh", NULL, PRID_TCP, 22);
+struct ns_scalar oddlo = NS_UINT16_I("low", NULL, PRID_TCP, 80);
+struct ns_scalar oddhi = NS_UINT16_I("high", NULL, PRID_TCP, 92);
 
 
 int main(int argc, char *argv[])

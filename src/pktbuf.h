@@ -5,7 +5,6 @@
 #include <cat/cat.h>
 #include <cat/list.h>
 #include "protoparse.h"
-#include "dltypes.h"
 #include "xpkt.h"
 
 enum {
@@ -48,13 +47,13 @@ struct pktbuf *pkb_copy(struct pktbuf *old);
 /* free a packet buffer */
 void pkb_free(struct pktbuf *pkb);
 
-/* Set the offset field in the packet buffer */
+/* Get the offset field in the packet buffer */
 ulong pkb_get_off(struct pktbuf *pkb);
 
-/* Set the offset field in the packet buffer */
+/* Get the length field in the packet buffer */
 ulong pkb_get_len(struct pktbuf *pkb);
 
-/* Set the offset field in the packet buffer */
+/* get the protocol ID identifying the outermost protocol of the packet */
 uint16_t pkb_get_dltype(struct pktbuf *pkb);
 
 /* Get the total size of the buffer */
@@ -159,5 +158,9 @@ int pkb_add_tag(struct pktbuf *pkb, struct xpkt_tag_hdr *xth);
 
 /* remove a tag from a packet buffer */
 int pkb_del_tag(struct pktbuf *pkb, byte_t type, int idx);
+
+/* convert a protocol class into a packet buffer layer index */
+/* returns -1 if no such index */
+int pkb_get_lidx(uint prid);
 
 #endif /* __pktbuf_h */

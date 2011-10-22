@@ -105,7 +105,7 @@ int main(int argc, char *argv[])
 	}
 	first_dltype = pkb_get_dltype(p);
 	switch (first_dltype) {
-	case DLT_ETHERNET2:
+	case PRID_ETHERNET2:
 		pcap_dlt = DLT_EN10MB;
 		break;
 	default:

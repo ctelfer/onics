@@ -112,7 +112,7 @@ struct ns_elem *ns_lookup(struct ns_namespace *ns, const char *name)
 }
 
 
-struct ns_namespace *ns_lookup_by_type(struct ns_namespace *ns, uint ppt)
+struct ns_namespace *ns_lookup_by_prid(struct ns_namespace *ns, uint prid)
 {
 	struct ns_elem **elem = NULL, **end;
 
@@ -125,7 +125,7 @@ struct ns_namespace *ns_lookup_by_type(struct ns_namespace *ns, uint ppt)
 			break;
 		if ((*elem)->type == NST_NAMESPACE) {
 			ns = (struct ns_namespace *)*elem;
-			if (ns->ppt == ppt)
+			if (ns->prid == prid)
 				return ns;
 		}
 	}
@@ -152,9 +152,9 @@ static int pf_get_offlen(struct ns_pktfld *pf, struct prparse *prp,
 			if ((pf->len >= prp->noff) || 
 			    (prp->offs[pf->len] == PRP_OFF_INVALID))
 				return -1;
-			if (prp->offs[pf->len] <= prp->offs[pf->oidx])
+			if (prp->offs[pf->len] <= prp->offs[pf->oidx] + pf->off)
 				return -1;
-			nb = prp->offs[pf->len] <= prp->offs[pf->oidx];
+			nb = prp->offs[pf->len] - (prp->offs[pf->oidx] + pf->off);
 			*len = nb;
 		} else {
 			nb = pf->len;
@@ -231,7 +231,7 @@ static int getnum(struct ns_pktfld *pf, byte_t *pkt, struct prparse *prp,
 
 	abort_unless(pf != NULL && pkt != NULL && prp != NULL && v != NULL);
 
-	abort_unless(prp->type == pf->ppt);
+	abort_unless(prp->prid == pf->prid);
 
 	if (pf_get_offlen(pf, prp, &off, &len) < 0)
 		return -1;
@@ -298,7 +298,7 @@ int ns_fmt_ipv4a(struct ns_elem *elem, byte_t *pkt, struct prparse *prp,
 		return -1;
 	pf = (struct ns_pktfld *)elem;
 
-	abort_unless(prp->type == pf->ppt);
+	abort_unless(prp->prid == pf->prid);
 
 	if (pf_get_offlen(pf, prp, &off, &len) < 0)
 		return -1;
@@ -338,7 +338,7 @@ int ns_fmt_ipv6a(struct ns_elem *elem, byte_t *pkt, struct prparse *prp,
 
 	pf = (struct ns_pktfld *)elem;
 
-	abort_unless(prp->type == pf->ppt);
+	abort_unless(prp->prid == pf->prid);
 
 	if (pf_get_offlen(pf, prp, &off, &len) < 0)
 		return -1;
@@ -377,7 +377,7 @@ int ns_fmt_etha(struct ns_elem *elem, byte_t *pkt, struct prparse *prp,
 
 	pf = (struct ns_pktfld *)elem;
 
-	abort_unless(prp->type == pf->ppt);
+	abort_unless(prp->prid == pf->prid);
 
 	if (pf_get_offlen(pf, prp, &off, &len) < 0)
 		return -1;

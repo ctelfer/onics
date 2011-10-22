@@ -23,7 +23,7 @@
 
 # comment
 .include "filename"
-.define PPT_TCP		0x0006
+.define PRID_TCP		0x0006
 .define RWSEG		0
 .define RWPERMS 	3
 .segment RWSEG RWPERMS  1024
@@ -36,7 +36,7 @@ label:	add
 	jmpi, @label
 	bzi, 3
 	cpop 0, 0, z, w
-	pkfxli *PKTN:PPT.INDEX.FIELD[OFFSET]
+	pkfxli *PKTN:PRID.INDEX.FIELD[OFFSET]
 */
 
 struct clopt options[] = { 
@@ -451,7 +451,7 @@ static int read_pdesc(char *s, struct netvm_inst *ni, struct htab *ct)
 {
 	int rv;
 	uchar pktnum, index, field;
-	uint ppt, offset;
+	uint prid, offset;
 	ulong v;
 
 	if ((rv = pdf2int(s, &s, ':', ct, &v)) != 0)
@@ -461,7 +461,7 @@ static int read_pdesc(char *s, struct netvm_inst *ni, struct htab *ct)
 
 	if ((rv = pdf2int(s+1, &s, ':', ct, &v)) != 0)
 		return rv;
-	ppt = v & NETVM_PPD_PPT_MASK;
+	prid = v & NETVM_PPD_PRID_MASK;
 
 	if ((rv = pdf2int(s+1, &s, ':', ct, &v)) != 0)
 		return rv;
@@ -477,7 +477,7 @@ static int read_pdesc(char *s, struct netvm_inst *ni, struct htab *ct)
 
 	ni->y = pktnum | NETVM_SEG_ISPKT;
 	ni->z = (index << NETVM_PPD_IDX_OFF) | (field << NETVM_PPD_FLD_OFF);
-	ni->w = (ppt << NETVM_PPD_PPT_OFF) | (offset << NETVM_PPD_OFF_OFF);
+	ni->w = (prid << NETVM_PPD_PRID_OFF) | (offset << NETVM_PPD_OFF_OFF);
 
 	return 0;
 }
@@ -554,13 +554,13 @@ int str2inst(const char *s, struct htab *ct, uint inum, struct netvm_inst *ni)
 static int pdesc2str(const struct netvm_inst *ni, char *s, size_t len, int xa)
 {
 	char pfx[16] = "";
-	uint ppt = (ni->w >> NETVM_PPD_PPT_OFF) & NETVM_PPD_PPT_MASK;
+	uint prid = (ni->w >> NETVM_PPD_PRID_OFF) & NETVM_PPD_PRID_MASK;
 
 	if (xa)
 		str_fmt(pfx, sizeof(pfx), "%02x, ", ni->x);
 
 	/* example: *0:0x0103.0.0[3] */
-	str_fmt(s, len, "%s*%u:%u.%u.%u[%u]", pfx, ni->y, ppt, 
+	str_fmt(s, len, "%s*%u:%u.%u.%u[%u]", pfx, ni->y, prid, 
 		(ni->z >> NETVM_PPD_IDX_OFF) & NETVM_PPD_IDX_MASK,
 		(ni->z >> NETVM_PPD_FLD_OFF) & NETVM_PPD_FLD_MASK,
 		(ni->w >> NETVM_PPD_OFF_OFF) & NETVM_PPD_OFF_MASK);

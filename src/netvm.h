@@ -1,7 +1,7 @@
 #ifndef __netvm_h
 #define __netvm_h
 #include "tcpip_hdrs.h"
-#include "stdproto.h"
+#include "prid.h"
 #include "pktbuf.h"
 
 struct netvm;			/* forward declaration */
@@ -66,7 +66,7 @@ struct netvm_inst {
  * Instruction protocol descriptor form:
  *      y = packet number
  * 	z = prp index:4 prp field:4
- *	w = (ppt * 65536) + offset
+ *	w = (prid * 65536) + offset
  *
  * Offset is unsigned and < 2**16.  Also, only the lower 7 bits of the
  * packet number are considered as the NETVM_SEG_ISPKT bit may be set
@@ -74,21 +74,21 @@ struct netvm_inst {
  * segments for LD/ST operations.  (see below)
  * 
  * Stack protocol descriptor form:
- *      MSB                                                LSB
- *      PPT: 16  pkt number:4  prp index:4  field:8  offset:32
+ *      MSB                                                 LSB
+ *      PRID: 16  pkt number:4  prp index:4  field:8  offset:32
  *
  * Stack offset is 32-bit 2s compliment signed integer.  This allows negative
  * offsets without a 64-bit field.
  *
  */
 
-#define NETVM_STK_PDESC(pkt, ppt, idx, fld, off)  \
+#define NETVM_STK_PDESC(pkt, prid, idx, fld, off)  \
 	((pkt) | NETVM_SEG_ISPKT), (((idx)& 0xF)<< 4)| ((fld) & 0xF), \
-	(((ppt) << 16) | ((off) & 0xFFFF))
+	(((prid) << 16) | ((off) & 0xFFFF))
 
-#define NETVM_PD_PPT_OFF	48
-#define NETVM_PD_PPT_LEN	16
-#define NETVM_PD_PPT_MASK	0xffff
+#define NETVM_PD_PRID_OFF	48
+#define NETVM_PD_PRID_LEN	16
+#define NETVM_PD_PRID_MASK	0xffff
 #define NETVM_PD_PKT_OFF	44
 #define NETVM_PD_PKT_LEN	4
 #define NETVM_PD_PKT_MASK	0xf
@@ -106,21 +106,21 @@ struct netvm_inst {
 #define NETVM_PPD_IDX_MASK	0xF
 #define NETVM_PPD_FLD_OFF	0
 #define NETVM_PPD_FLD_MASK	0xF
-#define NETVM_PPD_PPT_OFF	16
-#define NETVM_PPD_PPT_MASK	0xFFFF
+#define NETVM_PPD_PRID_OFF	16
+#define NETVM_PPD_PRID_MASK	0xFFFF
 #define NETVM_PPD_OFF_OFF	0
 #define NETVM_PPD_OFF_MASK	0xFFFF
 
-#define NETVM_PDESC(pkt, ppt, idx, fld, off) \
+#define NETVM_PDESC(pkt, prid, idx, fld, off) \
   ((((uint64_t)(pkt) & NETVM_PD_PKT_MASK) << NETVM_PD_PKT_OFF)|\
-   (((uint64_t)(ppt) & NETVM_PD_PPT_MASK) << NETVM_PD_PPT_OFF)|\
+   (((uint64_t)(prid) & NETVM_PD_PRID_MASK) << NETVM_PD_PRID_OFF)|\
    (((uint64_t)(idx) & NETVM_PD_IDX_MASK) << NETVM_PD_IDX_OFF)|\
    (((uint64_t)(fld) & NETVM_PD_FLD_MASK) << NETVM_PD_FLD_OFF)|\
    (((uint64_t)(off) & NETVM_PD_OFF_MASK) << NETVM_PD_OFF_OFF))
 
-#define NETVM_PDESC_HI(pkt, ppt, idx, fld) \
+#define NETVM_PDESC_HI(pkt, prid, idx, fld) \
   ((((uint32_t)(pkt) & NETVM_PD_PKT_MASK) << (NETVM_PD_PKT_OFF - 32))|\
-   (((uint32_t)(ppt) & NETVM_PD_PPT_MASK) << (NETVM_PD_PPT_OFF - 32))|\
+   (((uint32_t)(prid) & NETVM_PD_PRID_MASK) << (NETVM_PD_PRID_OFF - 32))|\
    (((uint32_t)(idx) & NETVM_PD_IDX_MASK) << (NETVM_PD_IDX_OFF - 32))|\
    (((uint32_t)(fld) & NETVM_PD_FLD_MASK) << (NETVM_PD_FLD_OFF - 32)))
 
@@ -128,7 +128,7 @@ struct netvm_prp_desc {
 	uint8_t			pktnum;	/* which packet entry */
 	uint8_t			idx;	/* 0 == 1st prp, 1 == 2nd prp,... */
 	uint8_t			field;	/* NETVM_PRP_* or prp field id */
-	uint16_t		ptype;	/* PPT_*;  PPT_NONE == absolute idx */
+	uint16_t		prid;	/* PRID_*;  PRID_NONE == absolute idx */
 	uint64_t		offset;	/* offset into packet for LD/STPKT */
 					/* or proto field index for PRFLD */
 };
@@ -148,7 +148,7 @@ enum {
 	NETVM_PRP_TLEN,
 	NETVM_PRP_LEN,
 	NETVM_PRP_ERR,
-	NETVM_PRP_TYPE,
+	NETVM_PRP_PRID,
 	NETVM_PRP_PIDX,
 	NETVM_PRP_OFF_BASE,
 
@@ -441,8 +441,8 @@ enum {
 
 	NETVM_OC_PKDEL,		/* [pkn] delete packet */
 	NETVM_OC_PKDELI,	/* delete packet 'x' */
-	NETVM_OC_PKFXD,		/* [pkn] set dltype from PPT_ of 2nd prp */
-	NETVM_OC_PKFXDI,	/* set dltype of pkt 'x' from PPT_ of 2nd prp */
+	NETVM_OC_PKFXD,		/* [pkn] set dltype to PRID_ of 2nd prp */
+	NETVM_OC_PKFXDI,	/* set dltype of pkt 'x' to PRID_ of 2nd prp */
 	NETVM_OC_PKPUP,		/* [pdesc] update parse fields (stack pdesc) */
 	NETVM_OC_PKPUPI,	/* update the parse fields (packed pdesc) */
 	NETVM_OC_PKFXL,		/* [pdesc] fix length fields in the packet */
@@ -484,8 +484,8 @@ enum {
 
 #define NETVM_OP(OPCODE, x, y, z, w)\
 	{ NETVM_OC_##OPCODE, (x), (y), (z), (w) }
-#define NETVM_PDIOP(OPCODE, x, pkt, ppt, idx, fld, off) \
-	{ NETVM_OC_##OPCODE, (x), NETVM_STK_PDESC(pkt, ppt, idx, fld, off) }
+#define NETVM_PDIOP(OPCODE, x, pkt, prid, idx, fld, off) \
+	{ NETVM_OC_##OPCODE, (x), NETVM_STK_PDESC(pkt, prid, idx, fld, off) }
 
 #define NETVM_BR_F(amt) NETVM_OP(BRI, 0, 0, 0, NETVM_BRF(amt))
 #define NETVM_BR_B(amt) NETVM_OP(BRI, 0, 0, 0, NETVM_BRB(amt))

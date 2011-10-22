@@ -44,7 +44,7 @@ struct ns_namespace {
 	ushort			flags;
 	struct ns_namespace *	parent;
 	const char *		name;
-	uint			ppt;
+	uint			prid;
 	uint			pclass;
 	uint			oidx;
 	ulong			len;
@@ -55,20 +55,20 @@ struct ns_namespace {
 };
 
 #define NS_NAMESPACE_ROOT(elem, nelem) \
-	{ NST_NAMESPACE, 0, NULL, "", PPT_NONE, PPT_NONE, 0, 0, 0, NULL, \
+	{ NST_NAMESPACE, 0, NULL, "", PRID_NONE, PRID_NONE, 0, 0, 0, NULL, \
 	  (elem), (nelem) }
 
-#define NS_NAMESPACE_I(name, par, ppt, pc, desc, elems, nelem)\
-	{ NST_NAMESPACE, (NSF_VARLEN), (par), (name), (ppt), (pc), PRP_OI_SOFF,\
-	  PRP_OI_EOFF, (desc), &ns_fmt_hdr, (elems), (nelem) }
+#define NS_NAMESPACE_I(name, par, prid, pc, desc, elems, nelem)\
+	{ NST_NAMESPACE, (NSF_VARLEN), (par), (name), (prid), (pc),\
+	  PRP_OI_SOFF, PRP_OI_EOFF, (desc), &ns_fmt_hdr, (elems), (nelem) }
 
-#define NS_NAMESPACE_IDX_I(name, par, ppt, pc, oidx, len, desc, elems, nelem)\
-	{ NST_NAMESPACE, 0, (par), (name), (ppt), (pc), (oidx), \
+#define NS_NAMESPACE_IDX_I(name, par, prid, pc, oidx, len, desc, elems, nelem)\
+	{ NST_NAMESPACE, 0, (par), (name), (prid), (pc), (oidx), \
 	  (len), (desc), &ns_fmt_hdr, (elems), (nelem) }
 
-#define NS_NAMESPACE_VARLEN_I(name, par, ppt, pc, oidx, eidx, desc, elems, \
+#define NS_NAMESPACE_VARLEN_I(name, par, prid, pc, oidx, eidx, desc, elems, \
 		nelem)\
-	{ NST_NAMESPACE, (NSF_VARLEN), (par), (name), (ppt), (pc), (oidx), \
+	{ NST_NAMESPACE, (NSF_VARLEN), (par), (name), (prid), (pc), (oidx), \
 	  (eidx), (desc), &ns_fmt_hdr, (elems), (nelem) }
 
 
@@ -77,7 +77,7 @@ struct ns_pktfld {
 	ushort			flags;
 	struct ns_namespace *	parent;
 	const char *		name;
-	uint			ppt;
+	uint			prid;
 	uint			oidx;		/* offset index */
 	ulong			off;		/* in bytes */
 	ulong			len;		/* len in bits or bytes/oidx */
@@ -85,71 +85,71 @@ struct ns_pktfld {
 	ns_format_f		fmt;
 };
 
-#define NS_BITFIELD_I(name, par, ppt, off, bitoff, len, desc, fmtf) \
+#define NS_BITFIELD_I(name, par, prid, off, bitoff, len, desc, fmtf) \
 	{ NST_PKTFLD, (NSF_INBITS | ((bitoff) << NSF_BITOFF_SHF)), \
-	  (par), (name), (ppt), PRP_OI_SOFF, (off), (len), (desc), (fmtf) }
+	  (par), (name), (prid), PRP_OI_SOFF, (off), (len), (desc), (fmtf) }
 
-#define NS_BYTEFIELD_I(name, par, ppt, off, len, desc, fmtf) \
+#define NS_BYTEFIELD_I(name, par, prid, off, len, desc, fmtf) \
 	{ NST_PKTFLD, 0, \
-	  (par), (name), (ppt), PRP_OI_SOFF, (off), (len), (desc), (fmtf) }
+	  (par), (name), (prid), PRP_OI_SOFF, (off), (len), (desc), (fmtf) }
 
-#define NS_BITFIELD_IDX_I(name, par, ppt, oidx, off, bitoff, len, desc, fmtf) \
+#define NS_BITFIELD_IDX_I(name, par, prid, oidx, off, bitoff, len, desc, fmtf) \
 	{ NST_PKTFLD, (NSF_INBITS | ((bitoff) << NSF_BITOFF_SHF)), \
-	  (par), (name), (ppt), (oidx), (off), (len), (desc), (fmtf) }
+	  (par), (name), (prid), (oidx), (off), (len), (desc), (fmtf) }
 
-#define NS_BYTEFIELD_IDX_I(name, par, ppt, oidx, off, len, desc, fmtf) \
+#define NS_BYTEFIELD_IDX_I(name, par, prid, oidx, off, len, desc, fmtf) \
 	{ NST_PKTFLD, 0, \
-	  (par), (name), (ppt), (oidx), (off), (len), (desc), (fmtf) }
+	  (par), (name), (prid), (oidx), (off), (len), (desc), (fmtf) }
 
-#define NS_BYTEFIELD_VARLEN_I(name, par, ppt, oidx, off, eidx, desc, fmtf) \
+#define NS_BYTEFIELD_VARLEN_I(name, par, prid, oidx, off, eidx, desc, fmtf) \
 	{ NST_PKTFLD, (NSF_VARLEN), \
-	  (par), (name), (ppt), (oidx), (off), (eidx), (desc), (fmtf) }
+	  (par), (name), (prid), (oidx), (off), (eidx), (desc), (fmtf) }
 
 struct ns_scalar {
 	ushort			type;
 	ushort			flags;
 	struct ns_namespace *	parent;
 	const char *		name;
-	uint			ppt;
+	uint			prid;
 	long			value;
 };
 
-#define NS_INT8_I(name, par, ppt, val) \
+#define NS_INT8_I(name, par, prid, val) \
 	{ NST_SCALAR, (NSF_ISSIGNED|(1 << NSF_WIDTH_SHF)),\
-	  (par), (name), (ppt), (val) }
-#define NS_INT16_I(name, par, ppt, val) \
+	  (par), (name), (prid), (val) }
+#define NS_INT16_I(name, par, prid, val) \
 	{ NST_SCALAR, (NSF_ISSIGNED|(2 << NSF_WIDTH_SHF)),\
-	  (par), (name), (ppt), (val) }
-#define NS_INT32_I(name, par, ppt, val) \
+	  (par), (name), (prid), (val) }
+#define NS_INT32_I(name, par, prid, val) \
 	{ NST_SCALAR, (NSF_ISSIGNED|(4 << NSF_WIDTH_SHF)),\
-	  (par), (name), (ppt), (val) }
-#define NS_INT64_I(name, par, ppt, val) \
+	  (par), (name), (prid), (val) }
+#define NS_INT64_I(name, par, prid, val) \
 	{ NST_SCALAR, (NSF_ISSIGNED|(8 << NSF_WIDTH_SHF)),\
-	  (par), (name), (ppt), (val) }
-#define NS_UINT8_I(name, par, ppt, val) \
-	{ NST_SCALAR, (1 << NSF_WIDTH_SHF), (par), (name), (ppt), (long)(val) }
-#define NS_UINT16_I(name, par, ppt, val) \
-	{ NST_SCALAR, (2 << NSF_WIDTH_SHF), (par), (name), (ppt), (long)(val) }
-#define NS_UINT32_I(name, par, ppt, val) \
-	{ NST_SCALAR, (4 << NSF_WIDTH_SHF), (par), (name), (ppt), (long)(val) }
-#define NS_UINT64_I(name, par, ppt, val) \
-	{ NST_SCALAR, (8 << NSF_WIDTH_SHF), (par), (name), (ppt), (long)(val) }
+	  (par), (name), (prid), (val) }
+#define NS_UINT8_I(name, par, prid, val) \
+	{ NST_SCALAR, (1 << NSF_WIDTH_SHF), (par), (name), (prid), (long)(val) }
+#define NS_UINT16_I(name, par, prid, val) \
+	{ NST_SCALAR, (2 << NSF_WIDTH_SHF), (par), (name), (prid), (long)(val) }
+#define NS_UINT32_I(name, par, prid, val) \
+	{ NST_SCALAR, (4 << NSF_WIDTH_SHF), (par), (name), (prid), (long)(val) }
+#define NS_UINT64_I(name, par, prid, val) \
+	{ NST_SCALAR, (8 << NSF_WIDTH_SHF), (par), (name), (prid), (long)(val) }
 
 
 struct ns_bytestr {
 	ushort			type;
 	ushort			flags;
 	struct ns_namespace *	parent;
-	uint			ppt;
+	uint			prid;
 	const char *		name;
 	struct raw		value;
 };
 
-#define NS_BYTESTR_I(name, par, ppt, arr) \
-	{ NST_BYTESTR, (par), (name), (ppt), { (str), array_length(str) } } 
-#define NS_ASCIISTR_I(name, par, ppt, str) NS_BYTESTR_I(name, par, ppt, str)
-#define NS_BYTESTR_I_LEN(name, par, ppt, arr, len) \
-	{ NST_BYTESTR, (par), (name), (ppt), { (arr), (len) } } 
+#define NS_BYTESTR_I(name, par, prid, arr) \
+	{ NST_BYTESTR, (par), (name), (prid), { (str), array_length(str) } } 
+#define NS_ASCIISTR_I(name, par, prid, str) NS_BYTESTR_I(name, par, prid, str)
+#define NS_BYTESTR_I_LEN(name, par, prid, arr, len) \
+	{ NST_BYTESTR, (par), (name), (prid), { (arr), (len) } } 
 
 
 struct ns_maskstr {
@@ -157,23 +157,23 @@ struct ns_maskstr {
 	ushort			flags;
 	struct ns_namespace *	parent;
 	const char *		name;
-	uint			ppt;
+	uint			prid;
 	struct raw		value;
 	struct raw		mask;
 };
 
-#define NS_MASKSTR_I(name, par, ppt, val, mask) \
-	{ NST_MASKSTR, (par), (name), (ppt), { (val), array_length(val) }, \
+#define NS_MASKSTR_I(name, par, prid, val, mask) \
+	{ NST_MASKSTR, (par), (name), (prid), { (val), array_length(val) }, \
 	  { (mask), array_length(val) } } 
-#define NS_MASKSTR_I_LEN(name, par, ppt, val, mask, len) \
-	{ NST_MASKSTR, (par), (name), (ppt), { (val), (len) }, \
+#define NS_MASKSTR_I_LEN(name, par, prid, val, mask, len) \
+	{ NST_MASKSTR, (par), (name), (prid), { (val), (len) }, \
 	  { (mask), (len) } }
 
 
 int ns_add_elem(struct ns_namespace *ns, struct ns_elem *e);
 void ns_rem_elem(struct ns_elem *e);
 struct ns_elem *ns_lookup(struct ns_namespace *ns, const char *name);
-struct ns_namespace *ns_lookup_by_type(struct ns_namespace *ns, uint ppt);
+struct ns_namespace *ns_lookup_by_prid(struct ns_namespace *ns, uint prid);
 
 
 

@@ -1,3 +1,4 @@
+#include "prid.h"
 #include "pmltree.h"
 #include "stdproto.h"
 

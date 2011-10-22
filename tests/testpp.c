@@ -1,31 +1,31 @@
 #include <stdio.h>
+#include "prid.h"
 #include "pktbuf.h"
 #include "protoparse.h"
-#include "stdproto.h"
 #include "tcpip_hdrs.h"
 
-const char *pnames(uint ppt)
+const char *pnames(uint prid)
 {
-	switch (ppt) {
-	case PPT_NONE:
+	switch (prid) {
+	case PRID_NONE:
 		return "Packet";
-	case PPT_INVALID:
+	case PRID_INVALID:
 		return "Invalid Header";
-	case PPT_ETHERNET2:
+	case PRID_ETHERNET2:
 		return "Ethernet2";
-	case PPT_ARP:
+	case PRID_ARP:
 		return "ARP";
-	case PPT_IPV4:
+	case PRID_IPV4:
 		return "IP";
-	case PPT_IPV6:
+	case PRID_IPV6:
 		return "IPv6";
-	case PPT_ICMP:
+	case PRID_ICMP:
 		return "ICMP";
-	case PPT_ICMP6:
+	case PRID_ICMP6:
 		return "ICMPv6";
-	case PPT_UDP:
+	case PRID_UDP:
 		return "UDP";
-	case PPT_TCP:
+	case PRID_TCP:
 		return "TCP";
 	default:
 		return "unknown";
@@ -46,7 +46,7 @@ int main(int argc, char *argv[])
 		if (pkb_parse(p) < 0)
 			errsys("Error parsing packet");
 		++npkt;
-		if (pkb_get_dltype(p) != DLT_ETHERNET2) {
+		if (pkb_get_dltype(p) != PRID_ETHERNET2) {
 			printf("Unknown data type for packet %u\n", npkt);
 			continue;
 		}
@@ -54,7 +54,7 @@ int main(int argc, char *argv[])
 		for (nprp = 1, t = prp_next(prp); !prp_list_end(t);
 		     t = prp_next(t), ++nprp) {
 			printf("%4u:\tHeader %u -- %s\n", npkt, nprp,
-			       pnames(t->type));
+			       pnames(t->prid));
 			if (t->error == 0) {
 				printf("\t\tNo errors\n");
 			} else {
