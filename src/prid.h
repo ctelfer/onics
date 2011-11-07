@@ -18,7 +18,7 @@
    or special cases like 'no type', 'invalid' or 'any' (for matching).
 */
 #define PRID_NONE               PRID_BUILD(PRID_PF_RES, 0)
-#define PRID_PF_RES_RESERVED	128
+#define PRID_META_MIN_PROTO	128
 #define PRID_PCLASS_LINK	PRID_BUILD(PRID_PF_RES, 128)
 #define PRID_PCLASS_TUNNEL	PRID_BUILD(PRID_PF_RES, 129)
 #define PRID_PCLASS_NET		PRID_BUILD(PRID_PF_RES, 130)

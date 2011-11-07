@@ -6,13 +6,19 @@
 
 
 static struct proto_parser *_pp_lookup(uint prid);
-static struct prparse *none_parse(struct prparse *pprp, byte_t *buf, 
-				  uint *nextprid);
-static struct prparse *none_add(ulong off, ulong len, ulong hlen, ulong plen,
-				byte_t *buf, int mode);
+static struct prparse *none_parse(struct prparse *reg, byte_t *buf, 
+				  ulong off, ulong maxlen);
+static int none_nxtcld(struct prparse *reg, byte_t *buf, struct prparse *cld,
+		       uint *prid, ulong *off, ulong *maxlen);
+static int none_getspec(struct prparse *prp, int enclose, struct prpspec *ps);
+static int none_add(struct prparse *reg, byte_t *buf, struct prpspec *ps,
+		    int enclose);
+				
 
 static struct proto_parser_ops none_proto_parser_ops = {
 	none_parse,
+	none_nxtcld,
+	none_getspec,
 	none_add,
 };
 
@@ -63,7 +69,7 @@ static struct proto_parser *_pp_lookup(uint prid)
 	case PRID_PF_DLT:
 		return &dlt_proto_parsers[PRID_PROTO(prid)];
 	case PRID_PF_RES:
-		if (PRID_PROTO(prid) >= PRID_PF_RES)
+		if (PRID_PROTO(prid) >= PRID_META_MIN_PROTO)
 			return NULL;
 		else
 			return &pp_proto_parsers[PRID_PROTO(prid)];
@@ -120,27 +126,8 @@ static struct prparse_ops none_prparse_ops = {
 };
 
 
-static struct prparse *none_parse(struct prparse *pprp, byte_t *buf,
-				  uint *nextprid)
-{
-	struct prparse *prp;
-
-	abort_unless(pprp);
-	abort_unless(nextprid);
-
-	*nextprid = PRID_INVALID;
-	prp = none_add(prp_poff(pprp), prp_plen(pprp), 0, prp_plen(pprp), 
-		       buf, PRP_ADD_FILL);
-	if (prp != NULL) {
-		prp->region = pprp;
-		l_ins(&pprp->node, &prp->node);
-	}
-	return prp;
-}
-
-
-static void none_init(struct prparse *prp, ulong off, ulong len, ulong hlen, 
-		      ulong plen)
+static void none_init(struct prparse *prp, ulong off, ulong hlen, ulong plen, 
+		      ulong tlen)
 {
 	prp->prid = PRID_NONE;
 	prp->error = 0;
@@ -149,9 +136,9 @@ static void none_init(struct prparse *prp, ulong off, ulong len, ulong hlen,
 	prp->region = NULL;
 	prp->noff = PRP_OI_MIN_NUM;
 	prp_soff(prp) = off;
-	prp_eoff(prp) = prp_soff(prp) + len;
 	prp_poff(prp) = prp_soff(prp) + hlen;
 	prp_toff(prp) = prp_poff(prp) + plen;
+	prp_eoff(prp) = prp_toff(prp) + tlen;
 
 	abort_unless(prp_soff(prp) <= prp_poff(prp));
 	abort_unless(prp_poff(prp) <= prp_toff(prp));
@@ -159,21 +146,84 @@ static void none_init(struct prparse *prp, ulong off, ulong len, ulong hlen,
 }
 
 
-static struct prparse *none_add(ulong off, ulong len, ulong hlen, ulong plen,
-				byte_t *buf, int mode)
+static struct prparse *none_new(struct prpspec *ps)
 {
 	struct prparse *prp;
-
-	if (mode != PRP_ADD_FILL)
-		return NULL;
-
 	prp = malloc(sizeof(*prp));
 	if (!prp)
 		return NULL;
-
-	none_init(prp, off, len, hlen, plen);
-
+	none_init(prp, ps->off, ps->hlen, ps->plen, ps->tlen);
 	return prp;
+}
+
+
+static struct prparse *none_parse(struct prparse *reg, byte_t *buf,
+				  ulong off, ulong maxlen)
+{
+	struct prparse *prp;
+	struct prpspec ps;
+
+	abort_unless(reg);
+	(void)buf;
+
+	ps.prid = PRID_NONE;
+	ps.off = off;
+	ps.hlen = 0;
+	ps.plen = maxlen;
+	ps.tlen = 0;
+	prp = none_new(&ps);
+	if (prp != NULL) {
+		prp->region = reg;
+		prp_insert_parse(reg, prp);
+	}
+	return prp;
+}
+
+
+static int none_nxtcld(struct prparse *reg, byte_t *buf, struct prparse *cld,
+		       uint *prid, ulong *off, ulong *maxlen)
+{
+	(void)reg;
+	(void)buf;
+	(void)cld;
+	(void)prid;
+	(void)off;
+	(void)maxlen;
+	return 0;
+}
+
+
+static int none_getspec(struct prparse *prp, int enclose, struct prpspec *ps)
+{
+	ps->prid = PRID_NONE;
+	if (enclose) {
+		ps->off = prp_soff(prp);
+		ps->hlen = 0;
+		ps->plen = prp_totlen(prp);
+		ps->tlen = 0;
+	} else {
+		ps->off = prp_poff(prp);
+		ps->hlen = 0;
+		ps->plen = prp_plen(prp);
+		ps->tlen = 0;
+	}
+
+
+	return 0;
+}
+
+
+static int none_add(struct prparse *reg, byte_t *buf, struct prpspec *ps,
+		    int enclose)
+{
+	struct prparse *prp;
+	(void)buf;
+	(void)enclose;
+	prp = none_new(ps);
+	if (!prp)
+		return -1;
+	prp_add_insert(reg, prp, enclose);
+	return 0;
 }
 
 
@@ -196,8 +246,14 @@ static int none_fixcksum(struct prparse *prp, byte_t *buf)
 
 static struct prparse *none_copy(struct prparse *oprp)
 {
-	return none_add(prp_soff(oprp), prp_totlen(oprp), prp_hlen(oprp),
-			prp_plen(oprp), NULL, PRP_ADD_FILL);
+	struct prpspec ps;
+	ps.prid = PRID_NONE;
+	ps.off = prp_soff(oprp);
+	ps.hlen = prp_hlen(oprp);
+	ps.plen = prp_plen(oprp);
+	ps.tlen = prp_tlen(oprp);
+	return none_new(&ps);
+			
 }
 
 
@@ -233,35 +289,82 @@ int prp_region_empty(struct prparse *reg)
 void prp_init_parse(struct prparse *base, ulong len)
 {
 	abort_unless(base && (len >= 0));
-	none_init(base, 0, len, 0, 0);
+	none_init(base, 0, 0, len, 0);
 }
 
 
-int prp_parse_packet(struct prparse *base, byte_t *buf, uint iprid)
+void prp_insert_parse(struct prparse *from, struct prparse *toins)
 {
-	struct prparse *prp;
-	const struct proto_parser *pp;
-	uint nextprid;
-	int errval;
+	struct prparse *last = from, *next;
+	/* search for first node in list with a starting offset */
+	/* greater than or equal to the offset of this prparse */
+	for (next = prp_next(last);
+	     !prp_list_end(next) && prp_soff(next) < prp_soff(toins);
+	     last = next, next = prp_next(next)) ;
+	l_ins(&last->node, &toins->node);
+}
 
-	abort_unless(base && base->prid == PRID_NONE);
-	pp = pp_lookup(iprid);
-	if (!pp) {
+
+int prp_parse_packet(struct prparse *base, byte_t *buf, uint nprid)
+{
+	struct prparse *prp, *last, *reg;
+	const struct proto_parser *pp;
+	int errval, rv;
+	ulong off, maxlen, noff;
+
+	pp = pp_lookup(nprid);
+	if (!base || base->prid != PRID_NONE || !pp) {
 		errno = EINVAL;
 		return -1;
 	}
 
+	off = prp_poff(base);
+	maxlen = prp_plen(base);
 	prp = base;
+
 	do {
-		nextprid = PRID_INVALID;
-		if (!(prp = (*pp->ops->parse)(prp, buf, &nextprid))) {
+		last = prp;
+		if (!(prp = (*pp->ops->parse)(last, buf, off, maxlen))) {
 			errval = errno;
 			goto err;
 		}
+		prp_insert_parse(last, prp);
+
 		/* don't continue parsing if the lengths are screwed up */
 		if ((prp->error & PRP_ERR_HLENMASK) || !prp_plen(prp))
 			break;
-		pp = pp_lookup(nextprid);
+
+		reg = NULL;
+		rv = (*pp->ops->nxtcld)(prp, buf, NULL, &nprid, &noff, &maxlen);
+		if (!rv) {
+			/* if the new parse does not have a child, then */
+			/* start going up the enclosing regions testing */
+			/* for a new child in each region passing the */
+			/* new parse to provide the position information */
+			/* for determining the presence of a new child. */
+			reg = prp->region;
+			while (!prp_is_base(prp)) {
+				pp = pp_lookup(reg->prid);
+				abort_unless(pp);
+				rv = (*pp->ops->nxtcld)(reg, buf, prp, &nprid,
+							&noff, &maxlen);
+				if (rv)
+					break;
+				reg = reg->region;
+			}
+		}
+
+		if (!rv) {
+			/* sanity check to ensure termination */
+			/* sibling parses may not start at the same offset */
+			/* TODO: determine similar restrictions for child */
+			/* regions to ensure termination. */
+			abort_unless(reg == NULL || noff > off);
+			off = noff;
+			pp = pp_lookup(nprid);
+		} else {
+			pp = NULL;
+		}
 	} while (pp);
 
 	return 0;
@@ -273,58 +376,53 @@ err:
 }
 
 
-int prp_add(unsigned prid, struct prparse *pprp, byte_t *buf, int mode)
+int prp_get_spec(uint prid, struct prparse *prp, int enclose,
+		 struct prpspec *ps)
 {
 	const struct proto_parser *pp;
-	ulong off, len, plen, hlen;
-	struct prparse *prp, *next = NULL;
+	if (!prp || !ps) {
+		errno = EINVAL;
+		return -1;
+	}
 
 	pp = pp_lookup(prid);
-	if (!pp || !pprp) {
-		errno = EINVAL;
+	if (!pp) {
+		errno = ENOTSUP;
 		return -1;
 	}
 
-	off = prp_poff(pprp);
-	len = prp_plen(pprp);
-	if (mode == PRP_ADD_FILL) {
-		hlen = 0;
-		plen = 0;
-	} else if (mode == PRP_ADD_WRAP) {
-		ulong t;
-		if (prp_region_empty(pprp)) {
-			errno = EINVAL;
-			return -1;
-		}
-		next = prp_next(pprp);
-		t = prp_soff(next);
-		hlen = t - off;
-		off = t;
-		plen = prp_totlen(next);
-	} else if (mode == PRP_ADD_WRAPFILL) {
-		next = prp_next(pprp);
-		/* ensure list is non-empty and both prev and next are in the */
-		/* same region.  The prev parse must enclose the next parse */
-		if ((next == pprp) || (next->region != pprp)) {
-			errno = EINVAL;
-			return -1;
-		}
-		hlen = prp_soff(next) - off;
-		plen = prp_totlen(next);
-	} else {
-		errno = EINVAL;
-		return -1;
-	}
+	return (*pp->ops->getspec)(prp, enclose, ps);
+}
 
-	prp = (*pp->ops->add)(off, len, hlen, plen, buf, mode);
-	if (prp == NULL)
-		return -1;
-	prp->region = pprp;
-	if (next != NULL)
-		next->region = prp;
 
-	l_ins(&pprp->node, &prp->node);
+int prp_add(struct prparse *reg, byte_t *buf, struct prpspec *ps, int enclose)
+{
+	const struct proto_parser *pp;
+	ulong len;
+
+	if (!reg || !ps || (ps->off == PRP_OFF_INVALID) ||
+	    (pp = pp_lookup(ps->prid)) == NULL)
+		goto errout;
+
+	/* carefully bounds check the offset and length fields */
+	abort_unless(ps->off <= PRP_OFF_MAX);
+	if (ps->hlen > PRP_OFF_MAX - ps->off)
+		goto errout;
+	len = ps->off + ps->hlen;
+	if (ps->plen > PRP_OFF_MAX - len)
+		goto errout;
+	len += ps->plen;
+	if (ps->tlen > PRP_OFF_MAX - len)
+		goto errout;
+	if ((*pp->ops->add)(reg, buf, ps, enclose) < 0)
+		goto errout;
+
 	return 0;
+
+errout:
+	errno = EINVAL;
+	return -1;
+
 }
 
 
@@ -793,4 +891,27 @@ int prp_adj_unused(struct prparse *reg)
 	}
 
 	return 0;
+}
+
+
+void prp_add_insert(struct prparse *reg, struct prparse *prp, int enclose)
+{
+	struct prparse *trav;
+	prp->region = reg;
+
+	/* inserts at earliest possition in list for its offset */
+	/* within the region */
+	prp_insert_parse(reg, prp);
+
+	if (enclose) {
+		/* for all parses in the region that are enclosed in the */
+		/* new parse (offset/length-wise), make them point to */
+		/* the new parse as their region.  */
+		for (trav = prp_next_in_region(prp, reg);
+		     trav != NULL;
+		     trav = prp_next_in_region(trav, reg)) {
+			if (prp_eoff(trav) <= prp_eoff(prp))
+				trav->region = prp;
+		}
+	}
 }

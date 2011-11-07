@@ -623,7 +623,10 @@ void pkb_fix_dltype(struct pktbuf *pkb)
 
 int pkb_pushprp(struct pktbuf *pkb, int prid)
 {
-	if (prp_add(prid, prp_prev(&pkb->prp), pkb->buf, PRP_ADD_FILL) < 0)
+	struct prpspec ps;
+	if (prp_get_spec(prid, prp_prev(&pkb->prp), 0, &ps) < 0)
+		return -1;
+	if (prp_add(prp_prev(&pkb->prp), pkb->buf, &ps, 0) < 0)
 		return -1;
 	pkb_set_layer(pkb, prp_prev(&pkb->prp), -1);
 	return 0;
@@ -632,7 +635,12 @@ int pkb_pushprp(struct pktbuf *pkb, int prid)
 
 int pkb_wrapprp(struct pktbuf *pkb, int prid)
 {
-	if (prp_add(prid, &pkb->prp, pkb->buf, PRP_ADD_FILL) < 0)
+	struct prpspec ps;
+	if (prp_empty(&pkb->prp)) /* nothing to wrap */
+		return -1;
+	if (prp_get_spec(prid, prp_next(&pkb->prp), 1, &ps) < 0)
+		return -1;
+	if (prp_add(&pkb->prp, pkb->buf, &ps, 1) < 0)
 		return -1;
 	pkb_set_layer(pkb, prp_next(&pkb->prp), -1);
 	return 0;

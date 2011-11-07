@@ -23,36 +23,29 @@
 
 #define PRP_ERR_HLENMASK        (PRP_ERR_TOOSMALL|PRP_ERR_HLEN)
 
-#define PRP_ADD_FILL               1	/* push inner (fill completely) */
-#define PRP_ADD_WRAP               2	/* push outer (wrap tightly) */
-#define PRP_ADD_WRAPFILL           3	/* push in middle (exact fit) */
-/*
-create semantics -- fill
-  -- off is start of new proto parse
-  -- len is total length to work with
-  -- hlen, plen, ignored
-
-create semantics -- wrap
-  -- off is start of payload of wrapped parse
-  -- len is ignored
-  -- hlen is max header length
-  -- plen is length of wrapped parse
-
-create semantics -- set
-  -- off is start of new proto parse
-  -- len is hlen + plen + tlen (derives tlen)
-  -- hlen is exact header length
-  -- plen is exact payload length (wrapped region length)
-*/
-
 struct prparse;
 
-struct proto_parser_ops {
-	struct prparse *	(*parse)(struct prparse *pprp, byte_t *buf,
-					 uint *nextprid);
+struct prpspec {
+	uint			prid;
+	ulong			off;
+	ulong			hlen;
+	ulong			plen;
+	ulong			tlen;
+};
 
-	struct prparse *	(*add)(ulong off, ulong len, ulong hlen, 
-				       ulong plen, byte_t *buf, int mode);
+struct proto_parser_ops {
+	struct prparse *	(*parse)(struct prparse *reg, byte_t *buf,
+					 ulong off, ulong maxlen);
+
+	int			(*nxtcld)(struct prparse *reg, byte_t *buf,
+					  struct prparse *cld, uint *prid,
+					  ulong *off, ulong *maxlen);
+
+	int			(*getspec)(struct prparse *prp, int enclose,
+					   struct prpspec *ps);
+
+	int			(*add)(struct prparse *reg, byte_t *buf, 
+				       struct prpspec *ps, int enclose);
 };
 
 struct proto_parser {
@@ -132,6 +125,7 @@ struct prparse_ops {
 #define PRP_OI_MIN_NUM 4
 #define PRP_OI_EXTRA PRP_OI_MIN_NUM
 #define PRP_OFF_INVALID ((ulong)-1)
+#define PRP_OFF_MAX (((ulong)-1) - 1)
 
 
 struct prparse {
@@ -156,8 +150,9 @@ struct prparse {
 #define prp_trailer(prp, buf, type) ((type *)((byte_t *)(buf)+ prp_toff(prp)))
 #define prp_prev(prp) container((prp)->node.prev, struct prparse, node)
 #define prp_next(prp) container((prp)->node.next, struct prparse, node)
-#define prp_list_head(prp) ((prp)->region == NULL)
-#define prp_list_end(prp) ((prp)->region == NULL)
+#define prp_is_base(prp) ((prp)->region == NULL)
+#define prp_list_head(prp) prp_is_base(prp)
+#define prp_list_end(prp) prp_is_base(prp)
 #define prp_empty(prp) (l_isempty(&(prp)->node))
 
 /* Find the next parse in the specified region or return NULL if none */
@@ -204,22 +199,12 @@ struct prparse *prp_next_in_region(struct prparse *from, struct prparse *reg);
 /* returns 1 if a region contains no parses that refer to it */
 int prp_region_empty(struct prparse *reg);
 
-/* Create a new header in a parsed packet.  The "mode" determines how this */
-/* header is created.  if mode == PRP_ADD_FILL, then 'prp' must be the */
-/* innermost header and the new header will fill inside the curent one. If */
-/* the mode is PRP_ADD_WRAP, then 'prp' must be the outer 'NONE' header and */
-/* the new header will wrap all the other protocol headers.  Finally, if */
-/* mode is PRP_ADD_WRAPFILL, then the 'prp' must be a header with free space */
-/* between it and its child (based on the offsets above).  The new header */
-/* will take up exactly the space between parent and child.  If the 'buf' */
-/* parameter is not NULL the operation will also create a default header */
-/* and trailer in the buffer at the offsets indicated by the parse. */
-int prp_add(uint prid, struct prparse *prp, byte_t *buf, int mode);
-
-
 /* Initializes a fresh parse of PRID_NONE.  This can be used to create the */
 /* base for a full parse. */
 void prp_init_parse(struct prparse *base, ulong len);
+
+/* Insert a parse into the parse list */
+void prp_insert_parse(struct prparse *from, struct prparse *toins);
 
 /* Given an initialized protocol parse header for a buffer (PRID_NONE) and */
 /* an initial protocol id, parse the packet and add to the list */
@@ -227,6 +212,24 @@ void prp_init_parse(struct prparse *base, ulong len);
 /* (which may be acceptable for certain applications) are stored in the */
 /* error fields of the generated parses. */
 int prp_parse_packet(struct prparse *base, byte_t *buf, uint firstprid);
+
+/* Populate a default parse specification based on either enclosing */
+/* the given parse or inserting the spec within the payload of the */
+/* parse. The 'enclose' parameter.  If the function returns 0, then */
+/* the spec is poulated with values appropriate to pass to prp_add(). */
+int prp_get_spec(uint prid, struct prparse *prp, int enclose,
+		 struct prpspec *ps);
+
+/* Create a new header in a parsed packet.  The prpspec specifies the */
+/* type and location of the header.  'reg' is the enclosing region for */
+/* the parse.  Note that means one can not use this to generate an */
+/* outermost parse. If the 'buf parameter is not NULL the operation */
+/* will also create a 'default' packet format in the buffer at the */
+/* offsets indicated by the prpspec.  If enclose is non-zero, then the */
+/* operation will search for all parses in 'reg' that fall within the new */
+/* parse's region and reassign them to refer to the new parse as their */
+/* region */
+int prp_add(struct prparse *reg, byte_t *buf, struct prpspec *ps, int enclose);
 
 /* Free a complete parse tree.  prp->region == NULL  This does not free. */
 /* the base parse itself. (i.e. the root region) */
@@ -279,5 +282,11 @@ int prp_adj_plen(struct prparse *prp, long amt);	/* adjust C+D */
 /* A byte is "used" if it falls within some parse within the region or */
 /* a dependent sub region. */
 int prp_adj_unused(struct prparse *prp);
+
+
+/* Internal call for use by protocol parse libraries to insert a newly */
+/* created parse into a region and set it appropriately.  (for prp_add() */
+/* calls.) */
+void prp_add_insert(struct prparse *reg, struct prparse *toadd, int enclose);
 
 #endif /* __protoparse_h */

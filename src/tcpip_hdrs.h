@@ -113,6 +113,8 @@ struct ipv4h {
 #define IPH_MFMASK              0x2000
 #define IPH_FRAGOFFMASK         0x1FFF
 #define IPH_FRAGOFF(fragoff)    (((fragoff) & IPH_FRAGOFFMASK) << 3)
+#define IPH_MINLEN		20
+#define IPH_MAXLEN		60
 
 #define IPPROT_V6_HOPOPT        0
 #define IPPROT_ICMP             1
@@ -300,6 +302,8 @@ struct tcph {
 };
 #define TCPH_HLEN(tcph)         (((tcph).doff >> 2) & ~3)
 #define TCPH_ECNN(tcph)         ((tcph).doff & 1)
+#define TCPH_MINLEN		20
+#define TCPH_MAXLEN		20
 #define TCPF_FIN                0x01
 #define TCPF_SYN                0x02
 #define TCPF_RST                0x04
@@ -335,6 +339,7 @@ struct udph {
 	uint16_t		len;
 	uint16_t		cksum;
 };
+#define UDPH_LEN		8
 
 
 
@@ -390,6 +395,7 @@ struct icmph {
 		uint32_t unused;
 	} u;
 };
+#define ICMPH_LEN		8
 
 /* ICMP type values */
 #define ICMPT_ECHO_REPLY        0
@@ -434,6 +440,7 @@ struct ipv6h {
 	struct ipv6addr		daddr;
 };
 /* Assumes network byte order */
+#define IPV6H_LEN		40
 #define IPV6H_PVERSION(ipv6hp)  (*(byte_t *)(ipv6hp) >> 4)
 #define IPV6H_VERSION(prtcfl)   ((prtcfl) >> 28)
 #define IPV6H_TCLASS(prtcfl)    (((prtcfl) >> 20) & 0xFF)
@@ -446,10 +453,13 @@ struct icmp6h {
 	uint16_t		cksum;
 	uint8_t			data[4];
 };
+#define ICMP6H_LEN		8
+
 #define ICMP6T_DEST_UNREACH     1
 #define ICMP6T_PKT_TOO_BIG      2
 #define ICMP6T_TIME_EXCEEDED    3
 #define ICMP6T_PARAM_PROB       4
+#define ICMP6T_IS_ERR(t)	(((t) & 0x80) == 0)
 #define ICMP6T_ECHO_REQUEST     128
 #define ICMP6T_ECHO_REPLY       129
 #define ICMP6T_LQUERY           130

@@ -8,6 +8,7 @@
 #include <cat/pack.h>
 #include <string.h>
 #include <stdlib.h>
+#include <errno.h>
 
 extern struct prparse_ops eth_prparse_ops;
 extern struct prparse_ops arp_prparse_ops;
@@ -39,8 +40,10 @@ struct ip_parse {
 
 struct ipv6_parse {
 	struct prparse prp;
-	uint8_t nexth;
+	ulong nexthoff;
 	ulong jlenoff;
+	ulong ahoff;
+	ulong fraghoff;
 };
 
 
@@ -61,30 +64,8 @@ static void resetxfields(struct prparse *prp)
 /* NB:  right now we are using emalloc() fpr header allocation, but we */
 /* may not do that in the future.  When that happens, we need to change */
 /* newprp, crtprp, and freeprp */
-static struct prparse *newprp(size_t sz, uint prid, struct prparse *pprp,
-			      struct prparse_ops *ops, uint nxfields)
-{
-	struct prparse *prp;
-	abort_unless(sz >= sizeof(struct prparse));
-	prp = emalloc(sz);
-	prp->prid = prid;
-	prp->error = 0;
-	prp_soff(prp) = prp_poff(pprp);
-	prp_eoff(prp) = prp_toff(pprp);
-	prp_poff(prp) = prp_soff(prp);
-	prp_toff(prp) = prp_eoff(prp);
-	prp->noff = PRP_OI_MIN_NUM + nxfields;
-	prp->ops = ops;
-	/* all of the default protocol parsers nest layers within layers  */
-	/* this won't be true for all protocol parsers */
-	prp->region = pprp;
-	l_ins(&pprp->node, &prp->node);
-	resetxfields(prp);
-	return prp;
-}
-
-static struct prparse *crtprp(size_t sz, uint prid, long off, long hlen,
-			      long plen, long tlen, struct prparse_ops *ops,
+static struct prparse *crtprp(size_t sz, uint prid, ulong off, ulong hlen,
+			      ulong plen, ulong tlen, struct prparse_ops *ops,
 			      uint nxfields)
 {
 	struct prparse *prp;
@@ -114,14 +95,28 @@ static NETTOOLS_INLINE void freeprp(struct prparse *prp)
 
 
 static struct prparse *default_parse(struct prparse *pprp, byte_t *buf,
-				     uint *nextprid)
+				     ulong off, ulong maxlen)
 {
 	return NULL;
 }
 
 
-static struct prparse *default_add(long off, long len, long hlen, long plen,
-				   byte_t *buf, int mode)
+static int default_nxtcld(struct prparse *reg, byte_t *buf, struct prparse *cld,
+			  uint *prid, ulong *off, ulong *maxlen)
+{
+	return 0;
+}
+
+
+static int default_getspec(struct prparse *prp, int enclose, struct prpspec *ps)
+{
+	errno = ENOTSUP;
+	return -1;
+}
+
+
+static struct prparse *default_add(struct prparse *reg, byte_t *buf,
+				   struct prpspec *ps, int enclose)
 {
 	return NULL;
 }
@@ -148,10 +143,37 @@ static int default_fixcksum(struct prparse *prp, byte_t *buf)
 static void default_free(struct prparse *prp)
 {
 	/* presently unused */
+	(void)default_getspec;
 	(void)default_add;
 	(void)default_parse;
 	(void)default_update;
 	freeprp(prp);
+}
+
+
+static int hdr_getspec(struct prparse *prp, int enclose, struct prpspec *ps,
+		       uint prid, uint hlen)
+{
+	ps->prid = prid;
+	ps->tlen = 0;
+	if (enclose) {
+		if (prp_soff(prp) < hlen) {
+			errno = ENOSPC;
+			return -1;
+		}
+		ps->off = prp_soff(prp) - hlen;
+		ps->hlen = hlen;
+		ps->plen = prp_totlen(prp);
+	} else {
+		if (prp_plen(prp) < hlen) {
+			errno = ENOSPC;
+			return -1;
+		}
+		ps->off = prp_poff(prp);
+		ps->hlen = hlen;
+		ps->plen = prp_plen(prp) - hlen;
+	}
+	return 0;
 }
 
 
@@ -175,107 +197,117 @@ static struct prparse *default_copy(struct prparse *oprp)
 
 
 /* -- ops for Ethernet type -- */
-static struct prparse *eth_parse(struct prparse *pprp, byte_t *buf,
-				 uint *nextprid)
+static void eth_update(struct prparse *prp, byte_t *buf);
+
+static struct prparse *eth_parse(struct prparse *reg, byte_t *buf,
+				 ulong off, ulong maxlen)
 {
 	struct prparse *prp;
-	ushort etype;
-	byte_t *p;
-	ulong poff;
-	uint vidx;
 
-	abort_unless(pprp && nextprid);
-
-	prp = newprp(sizeof(struct eth_parse), PRID_ETHERNET2, pprp, 
-		     &eth_prparse_ops, PRP_ETH_NXFIELDS);
+	prp = crtprp(sizeof(struct eth_parse), PRID_ETHERNET2, off, 0,
+		     maxlen, 0, &eth_prparse_ops, PRP_ETH_NXFIELDS);
 	if (!prp)
 		return NULL;
-	if (prp_totlen(prp) < ETHHLEN) {
-		prp->error = PRP_ERR_TOOSMALL;
-		*nextprid = PRID_INVALID;
-		return prp;
-	}
 
-	poff = prp_soff(prp) + ETHHLEN;
-	p = prp_header(prp, buf, byte_t) + ETHHLEN - 2;
-	vidx = PRP_ETHFLD_VLAN0;
-	do {
-		unpack(p, 2, "h", &etype);
-		switch (etype) {
-		case ETHTYPE_IP:
-			*nextprid = PRID_IPV4;
-			break;
-		case ETHTYPE_IPV6:
-			*nextprid = PRID_IPV6;
-			break;
-		case ETHTYPE_ARP:
-			*nextprid = PRID_ARP;
-			break;
-		case ETHTYPE_VLAN:
-			if (prp_totlen(prp) < (poff - prp_soff(prp) + 4)) {
-				prp->error = PRP_ERR_TOOSMALL;
-				*nextprid = PRID_INVALID;
-				return prp;
-			}
-			if (vidx < (PRP_OI_EXTRA + PRP_ETH_NXFIELDS)) {
-				prp->offs[vidx] = poff;
-				vidx += 1;
-			}
-			p += 4;
-			poff += 4;
-			break;
-		default:
-			*nextprid = PRID_INVALID;
-		}
-	} while (etype == ETHTYPE_VLAN);
-
-	prp_poff(prp) = poff;
-	prp->offs[PRP_ETHFLD_ETYPE] = poff - 2;
+	prp->region = reg;
+	eth_update(prp, buf);
 
 	return prp;
 }
 
 
-static struct prparse *eth_add(ulong off, ulong len, ulong hlen, ulong plen,
-			       byte_t *buf, int mode)
+int eth_nxtcld(struct prparse *reg, byte_t *buf, struct prparse *cld,
+	       uint *prid, ulong *off, ulong *maxlen)
 {
-	struct prparse *prp;
+	byte_t *p;
+	uint16_t etype;
 
-	abort_unless(off >= 0 && len >= 0 && hlen >= 0 && plen >= 0);
-	abort_unless(plen <= len);
+	if (cld != NULL || reg->error != 0)
+		return 0;
 
-	if (mode == PRP_ADD_FILL) {
-		if (len < ETHHLEN)
-			return NULL;
-		plen = len - ETHHLEN;
-		hlen = ETHHLEN;
-	} else if (mode == PRP_ADD_WRAP) {
-		if (hlen < ETHHLEN)
-			return NULL;
-		hlen = ETHHLEN;
-		off -= ETHHLEN;
-		len = plen + hlen;
-	} else {
-		abort_unless(len - plen >= hlen);
-		abort_unless(mode == PRP_ADD_WRAPFILL);
-		if (hlen < ETHHLEN)
-			return NULL;
-	}
-	prp = crtprp(sizeof(struct prparse), PRID_ETHERNET2, off, hlen, plen, 0,
-		     &eth_prparse_ops, 0);
-	if (prp && buf) {
-		memset(buf + off, 0, prp_hlen(prp));
+	abort_unless(buf);
+	abort_unless(reg->offs[PRP_ETHFLD_ETYPE] <= prp_totlen(reg) - 2);
+	p = buf + reg->offs[PRP_ETHFLD_ETYPE];
+	unpack(p, 2, "h", &etype);
+	switch (etype) {
+	case ETHTYPE_IP:
+		*prid = PRID_IPV4;
+		break;
+	case ETHTYPE_IPV6:
+		*prid = PRID_IPV6;
+		break;
+	case ETHTYPE_ARP:
+		*prid = PRID_ARP;
+		break;
+	default:
+		return 0;
 	}
 
-	return prp;
+	*off = prp_poff(reg);
+	*maxlen = prp_plen(reg);
+	return 1;
+}
+
+
+static int eth_getspec(struct prparse *prp, int enclose, struct prpspec *ps)
+{
+	return hdr_getspec(prp, enclose, ps, PRID_ETHERNET2, ETHHLEN);
+}
+
+
+static int eth_add(struct prparse *reg, byte_t *buf, struct prpspec *ps,
+		   int enclose)
+{
+	struct prparse *prp, *cld;
+	uint16_t etype;
+	byte_t *p;
+
+	abort_unless(reg && ps && ps->prid == PRID_ETHERNET2);
+	if (ps->hlen < ETHHLEN) {
+		errno = EINVAL;
+		return -1;
+	}
+
+	prp = crtprp(sizeof(struct prparse), PRID_ETHERNET2, 
+		     ps->off, ps->hlen, ps->plen, ps->tlen,
+		     &eth_prparse_ops, PRP_ETH_NXFIELDS);
+	if (!prp)
+		return -1;
+
+	prp_add_insert(reg, prp, enclose);
+	if (buf && prp_hlen(prp) >= ETHHLEN) {
+		memset(buf + ps->off, 0, prp_hlen(prp));
+		prp->offs[PRP_ETHFLD_ETYPE] = prp_poff(prp) - 2;
+		if (enclose) {
+			etype = 0;
+			cld = prp_next_in_region(prp, prp);
+			if (cld != NULL) {
+				switch (cld->prid) {
+				case PRID_IPV4:
+					etype = ETHTYPE_IP;
+					break;
+				case PRID_IPV6:
+					etype = ETHTYPE_IPV6;
+					break;
+				case PRID_ARP:
+					etype = ETHTYPE_ARP;
+					break;
+				}
+				p = buf + prp_poff(prp) - 2;
+				pack(p, 2, "h", etype);
+			}
+		}
+	}
+
+	return 0;
 }
 
 
 static void eth_update(struct prparse *prp, byte_t *buf)
 {
-	ulong poff;
 	ushort etype;
 	byte_t *p;
+	ulong poff;
 	uint vidx;
 
 	prp->error = 0;
@@ -285,14 +317,10 @@ static void eth_update(struct prparse *prp, byte_t *buf)
 		prp->error |= PRP_ERR_TOOSMALL;
 		return;
 	}
-	if (prp_hlen(prp) < ETHHLEN) {
-		prp->error |= PRP_ERR_HLEN;
-		return;
-	}
 
-	poff = prp_soff(prp) + ETHHLEN;
 	p = prp_header(prp, buf, byte_t) + ETHHLEN - 2;
 	vidx = PRP_ETHFLD_VLAN0;
+	poff = prp_soff(prp) + ETHHLEN;
 	do {
 		unpack(p, 2, "h", &etype);
 		if (etype == ETHTYPE_VLAN) {
@@ -317,38 +345,23 @@ static void eth_update(struct prparse *prp, byte_t *buf)
 
 /* -- ops for ARP type -- */
 static byte_t ethiparpstr[6] = {0, 1, 8, 0, 6, 4 };
+static void arp_update(struct prparse *prp, byte_t *buf);
 
-static struct prparse *arp_parse(struct prparse *pprp, byte_t *buf,
-				 uint *nextprid)
+static struct prparse *arp_parse(struct prparse *reg, byte_t *buf,
+				 ulong off, ulong maxlen)
 {
 	struct prparse *prp;
-	struct arph *arp;
 
-	abort_unless(pprp && nextprid);
+	abort_unless(reg && buf);
 
-	prp = newprp(sizeof(struct arp_parse), PRID_ARP, pprp, &arp_prparse_ops,
-		     PRP_ARP_NXFIELDS);
+	prp = crtprp(sizeof(struct arp_parse), PRID_ARP, off, 0, maxlen, 0,
+		     &arp_prparse_ops, PRP_ARP_NXFIELDS);
 	if (!prp)
 		return NULL;
-	*nextprid = PRID_INVALID;
 
-	if (prp_totlen(prp) < 8) {
-		prp->error = PRP_ERR_TOOSMALL;
-	} else {
-		prp_poff(prp) = prp_soff(prp) + 8;
-		/* check for short ether-ip ARP packet */
-		arp = prp_header(prp, buf, struct arph);
-		if (arp->hwlen * 2 + arp->prlen * 2 > prp_plen(prp)) {
-			prp->error |= PRP_ERR_LENGTH;
-			return prp;
-		} else if (arp->hwlen * 2 + arp->prlen * 2 < prp_plen(prp)) {
-			prp_eoff(prp) = prp_toff(prp) = 
-				prp_poff(prp) + arp->hwlen * 2 + arp->prlen * 2;
-		}
-		if (!memcmp(ethiparpstr, arp, sizeof(ethiparpstr))) {
-			prp->offs[PRP_ARPFLD_ETHARP] = prp_soff(prp);
-		}
-	}
+	prp->region = reg;
+	arp_update(prp, buf);
+
 	return prp;
 }
 
@@ -366,13 +379,66 @@ static void arp_update(struct prparse *prp, byte_t *buf)
 	prp_poff(prp) = prp_soff(prp) + 8;
 	resetxfields(prp);
 	arp = prp_header(prp, buf, struct arph);
-	if (arp->hwlen * 2 + arp->prlen * 2 != prp_plen(prp)) {
+	if (arp->hwlen * 2 + arp->prlen * 2 > prp_plen(prp)) {
 		prp->error |= PRP_ERR_LENGTH;
 		return;
 	} 
-	if (!memcmp(ethiparpstr, arp, sizeof(ethiparpstr))) {
+	prp_eoff(prp) = prp_toff(prp) = 
+		prp_poff(prp) + arp->hwlen * 2 + arp->prlen * 2;
+	if (!memcmp(ethiparpstr, arp, sizeof(ethiparpstr)))
 		prp->offs[PRP_ARPFLD_ETHARP] = prp_soff(prp);
+}
+
+
+static int arp_getspec(struct prparse *prp, int enclose, struct prpspec *ps)
+{
+	ps->prid = PRID_ARP;
+	ps->tlen = 0;
+	if (enclose) {
+		errno = EINVAL;
+		return -1;
+	} else {
+		if (prp_plen(prp) < 28) {
+			errno = ENOSPC;
+			return -1;
+		}
+		ps->off = prp_poff(prp);
+		ps->hlen = 8;
+		ps->plen = prp_plen(prp) - 8;
 	}
+	return 0;
+}
+
+
+static int arp_add(struct prparse *reg, byte_t *buf, struct prpspec *ps,
+		   int enclose)
+			       
+{
+	struct prparse *prp;
+	struct arph *arp;
+	
+	if (ps->hlen != 8) {
+		errno = EINVAL;
+		return -1;
+	}
+	prp = crtprp(sizeof(struct arp_parse), PRID_ARP, ps->off, 8,
+		     ps->plen, ps->tlen, &arp_prparse_ops, PRP_ARP_NXFIELDS);
+	if (!prp)
+		return -1;
+
+	prp_add_insert(reg, prp, enclose);
+	if (buf) {
+		memset(buf + ps->off, 0, prp_totlen(prp));
+		if (prp_plen(prp) >= 20) {
+			prp_toff(prp) = prp_eoff(prp) = prp_poff(prp) + 20;
+			prp->offs[PRP_ARPFLD_ETHARP] = prp_soff(prp);
+			arp = prp_header(prp, buf, struct arph);
+			pack(&arp, 8, "hhbbh", ARPT_ETHERNET, ETHTYPE_IP, 6, 4,
+			     ARPOP_REQUEST);
+		}
+	}
+
+	return 0;
 }
 
 
@@ -384,30 +450,6 @@ static int arp_fixlen(struct prparse *prp, byte_t *buf)
 }
 
 
-static struct prparse *arp_add(ulong off, ulong len, ulong hlen, ulong plen,
-			       byte_t *buf, int mode)
-{
-	struct prparse *prp;
-	struct arph *arp;
-	abort_unless(off >= 0 && len >= 0 && hlen >= 0 && plen >= 0);
-	abort_unless(plen <= len);
-	if ((mode != PRP_ADD_FILL) || (len < 8))
-		return NULL;
-	prp = crtprp(sizeof(struct arp_parse), PRID_ARP, off, 8, len - 8, 0,
-		     &arp_prparse_ops, PRP_ARP_NXFIELDS);
-	if (prp && buf) {
-		memset(buf + off, 0, prp_totlen(prp));
-		if (prp_plen(prp) >= 20) {
-			prp_toff(prp) = prp_eoff(prp) = prp_poff(prp) + 20;
-			prp->offs[PRP_ARPFLD_ETHARP] = prp_soff(prp);
-			arp = prp_header(prp, buf, struct arph);
-			pack(&arp, 8, "hhbbh", ARPT_ETHERNET, ETHTYPE_IP, 6, 4,
-			     ARPOP_REQUEST);
-		}
-	}
-	return prp;
-}
-
 static struct prparse *arp_copy(struct prparse *oprp)
 {
 	return simple_copy(oprp, sizeof(struct arp_parse));
@@ -415,6 +457,8 @@ static struct prparse *arp_copy(struct prparse *oprp)
 
 
 /* -- ops for IPV4 type -- */
+static void ipv4_update(struct prparse *prp, byte_t *buf);
+
 static int ipv4_parse_opt(struct prparse *prp, byte_t *op, size_t olen)
 {
 	byte_t *osave = op;
@@ -494,140 +538,140 @@ err:
 }
 
 
-static struct prparse *ipv4_parse(struct prparse *pprp, byte_t *buf,
-				  uint *nextprid)
+static struct prparse *ipv4_parse(struct prparse *reg, byte_t *buf,
+				  ulong off, ulong maxlen)
 {
 	struct prparse *prp;
-	struct ipv4h *ip;
-	int hlen, tlen;
-	ushort iplen;
-	uint16_t sum;
 
-	prp = newprp(sizeof(struct ip_parse), PRID_IPV4, pprp, &ipv4_prparse_ops,
-		     PRP_IP_NXFIELDS);
+	prp = crtprp(sizeof(struct ip_parse), PRID_IPV4, off, 0, maxlen, 0,
+		     &ipv4_prparse_ops, PRP_IP_NXFIELDS);
 	if (!prp)
 		return NULL;
 
-	ip = prp_header(prp, buf, struct ipv4h);
-	hlen = IPH_HLEN(*ip);
-	tlen = prp_totlen(prp);
-	if (tlen < 20) {
-		prp->error |= PRP_ERR_TOOSMALL;
-		*nextprid = PRID_INVALID;
-	} else if (hlen > tlen) {
-		prp->error |= PRP_ERR_HLEN;
-		*nextprid = PRID_INVALID;
-	} else {
-		if ((ip->vhl & 0xf0) != 0x40)
-			prp->error |= PRP_ERR_INVALID;
-		prp_poff(prp) = prp_soff(prp) + hlen;
-		unpack(&ip->len, 2, "h", &iplen);
-		if (iplen > prp_totlen(prp))
-			prp->error |= PRP_ERR_LENGTH;
-		/* check whether datagram is smaller than enclosing packet */
-		if (iplen < prp_totlen(prp)) {
-			prp_eoff(prp) = prp_toff(prp) = prp_soff(prp) + iplen;
-		}
-		sum = ~ones_sum(ip, hlen, 0);
-		if (sum != 0) {
-			prp->error |= PRP_ERR_CKSUM;
-			return prp;
-		}
-		if (ip->fragoff != 0) {
-			uint16_t fragoff = ntoh32(ip->fragoff);
-			if ((uint32_t) IPH_FRAGOFF(fragoff) + iplen > 65535)
-				prp->error |= PRP_ERR_INVALID;
-			if ((IPH_RFMASK & fragoff))
-				prp->error |= PRP_ERR_INVALID;
-		}
-		if (hlen > 20) {
-			if (ipv4_parse_opt(prp, (byte_t*)(ip+1), hlen-20) < 0)
-				return prp;
-		}
-		*nextprid = PRID_BUILD(PRID_PF_INET, ip->proto);
-	}
+	prp->region = reg;
+	ipv4_update(prp, buf);
+
 	return prp;
 }
 
 
-static struct prparse *ipv4_add(ulong off, ulong len, ulong hlen, ulong plen,
-				byte_t *buf, int mode)
+int ipv4_nxtcld(struct prparse *reg, byte_t *buf, struct prparse *cld,
+	        uint *prid, ulong *off, ulong *maxlen)
 {
-	struct prparse *prp;
 	struct ipv4h *ip;
 
-	abort_unless(off >= 0 && len >= 0 && hlen >= 0 && plen >= 0);
-	abort_unless(plen <= len);
+	if (cld != NULL || reg->error != 0)
+		return 0;
 
-	if (mode == PRP_ADD_FILL) {
-		if ((len < 20) || (len > 65535))
-			return NULL;
-		hlen = 20;
-		plen = len - 20;
-	} else if (mode == PRP_ADD_WRAP) {
-		if (hlen < 20)
-			return NULL;
-		if (plen > 65515)
-			plen = 65515;
-		hlen = 20;
-		off -= 20;
-	} else {
-		abort_unless(mode == PRP_ADD_WRAPFILL);
-		if ((hlen < 20) || (hlen > 60) || ((hlen & 0x3) != 0) ||
-		    (len != plen + hlen) || (len > 65535))
-			return NULL;
+	abort_unless(buf);
+	ip = prp_header(reg, buf, struct ipv4h);
+	*prid = PRID_BUILD(PRID_PF_INET, ip->proto);
+	*off = prp_poff(reg);
+	*maxlen = prp_plen(reg);
+	return 1;
+}
+
+
+static int ipv4_getspec(struct prparse *prp, int enclose, struct prpspec *ps)
+{
+	return hdr_getspec(prp, enclose, ps, PRID_IPV4, IPH_MINLEN);
+}
+
+
+static int ipv4_add(struct prparse *reg, byte_t *buf, struct prpspec *ps,
+		    int enclose)
+				
+{
+	struct prparse *prp, *cld;
+	struct ipv4h *ip;
+
+	if (ps->hlen < 20 || ps->hlen > 60) {
+		errno = EINVAL;
+		return -1;
 	}
-	prp = crtprp(sizeof(struct ip_parse), PRID_IPV4, off, hlen, plen, 0,
-		     &ipv4_prparse_ops, PRP_IP_NXFIELDS);
-	if (prp && buf) {
+	prp = crtprp(sizeof(struct ip_parse), PRID_IPV4, ps->off, ps->hlen, 
+		     ps->plen, ps->tlen, &ipv4_prparse_ops, PRP_IP_NXFIELDS);
+	if (!prp)
+		return -1;
+
+	prp_add_insert(reg, prp, enclose);
+	if (buf) {
 		ip = prp_header(prp, buf, struct ipv4h);
 		memset(ip, 0, prp_hlen(prp));
-		ip->vhl = 0x40 | (hlen >> 2);
+		ip->vhl = 0x40 | (ps->hlen >> 2);
 		ip->len = hton16(prp_totlen(prp));
-		if (hlen > 20) {
+		if (ps->hlen > IPH_MINLEN) {
 			byte_t *p = (byte_t *)(ip + 1);
-			byte_t *end = p + hlen - 20;
+			byte_t *end = p + ps->hlen - IPH_MINLEN;
 			while (p < end)
 				*p++ = IPOPT_NOP;
 		}
+
+		ip->proto = IPPROT_RESERVED;
+		if (enclose) {
+			cld = prp_next_in_region(prp, prp);
+			if (cld != NULL && 
+			    PRID_FAMILY(cld->prid) == PRID_PF_INET)
+				ip->proto = PRID_PROTO(cld->prid);
+		}
+		ip->cksum = ~ones_sum(ip, IPH_HLEN(*ip), 0);
 	}
 
-	return prp;
+	return 0;
 }
 
 
 static void ipv4_update(struct prparse *prp, byte_t *buf)
 {
-	ushort iplen;
+	ushort sum, iplen, hlen;
 	struct ipv4h *ip;
-	ulong tlen;
+	ulong len, fragoff;
 
 	prp->error = 0;
 	resetxfields(prp);
+
+	len = prp_totlen(prp);
+	if (len < IPH_MINLEN) {
+		prp->error |= PRP_ERR_TOOSMALL;
+		return;
+	}
+
 	ip = prp_header(prp, buf, struct ipv4h);
+	hlen = IPH_HLEN(*ip);
+	if (hlen < IPH_MINLEN || hlen > len)  {
+		prp->error |= PRP_ERR_HLEN;
+		return;
+	}
+	prp_poff(prp) = prp_soff(prp) + hlen;
 
 	if (IPH_VERSION(*ip) != 4)
 		prp->error |= PRP_ERR_INVALID;
 
-	tlen = prp_totlen(prp);
-	if (tlen < 20) {
-		prp->error |= PRP_ERR_TOOSMALL;
+	sum = ~ones_sum(ip, hlen, 0) & 0xFFFF;
+	if (sum != 0) {
+		prp->error |= PRP_ERR_CKSUM;
 		return;
 	}
-	if ((IPH_HLEN(*ip) < 20) || (IPH_HLEN(*ip) != prp_hlen(prp))) {
-		prp->error |= PRP_ERR_HLEN;
-		return;
-	}
+
 	unpack(&ip->len, 2, "h", &iplen);
-	if (tlen != iplen) {
+	if (len < iplen) {
 		prp->error |= PRP_ERR_LENGTH;
 		return;
 	}
-	if (prp_hlen(prp) > 20) {
-		if (ipv4_parse_opt(prp, (byte_t *)(ip+1), prp_hlen(prp)-20)) {
-			return;
-		}
+
+	/* check whether datagram is smaller than enclosing packet */
+	if (iplen < len)
+		prp_eoff(prp) = prp_toff(prp) = prp_soff(prp) + iplen;
+
+	fragoff = ntoh32(ip->fragoff);
+	if (fragoff != 0) {
+		if (IPH_FRAGOFF(fragoff) + iplen > 65535)
+			prp->error |= PRP_ERR_INVALID;
+		if ((IPH_RFMASK & fragoff))
+			prp->error |= PRP_ERR_INVALID;
 	}
+	if ((hlen > IPH_MINLEN) && ((prp->error & PRP_ERR_CKSUM) == 0))
+		ipv4_parse_opt(prp, (byte_t *)(ip + 1), hlen - IPH_MINLEN);
 }
 
 
@@ -641,13 +685,15 @@ static int ipv4_fixlen(struct prparse *prp, byte_t *buf)
 
 	ip = prp_header(prp, buf, struct ipv4h);
 	hlen = prp_hlen(prp);
-	if ((hlen < 20) || (hlen > 60) || (hlen > prp_totlen(prp)))
+	if ((hlen < IPH_MINLEN) || (hlen > IPH_MAXLEN) || 
+	    (hlen > prp_totlen(prp)))
 		return -1;
 	ip->vhl = 0x40 | (hlen >> 2);
 	if (prp_totlen(prp) > 65535)
 		return -1;
 	tlen = prp_totlen(prp);
 	pack(&ip->len, 2, "h", tlen);
+
 	return 0;
 }
 
@@ -660,7 +706,7 @@ static int ipv4_fixcksum(struct prparse *prp, byte_t *buf)
 	abort_unless(prp);
 	ip = prp_header(prp, buf, struct ipv4h);
 	hlen = IPH_HLEN(*ip);
-	if (hlen < 20)
+	if (hlen < IPH_MINLEN)
 		return -1;
 	ip->cksum = 0;
 	ip->cksum = ~ones_sum(ip, IPH_HLEN(*ip), 0);
@@ -681,13 +727,13 @@ static void ipv4_free(struct prparse *prp)
 }
 
 
-static uint16_t pseudo_cksum(struct prparse *prp, byte_t *buf, uint8_t proto)
+static uint16_t pseudo_cksum(struct prparse *prp, struct prparse *ipprp,
+			     byte_t *buf, uint8_t proto)
 {
-	struct prparse *pprp = prp->region;
 	uint16_t sum = 0;
-	if (pprp->prid == PRID_IPV4) {
+	if (ipprp->prid == PRID_IPV4) {
 		struct pseudoh ph;
-		struct ipv4h *ip = prp_header(pprp, buf, struct ipv4h);
+		struct ipv4h *ip = prp_header(ipprp, buf, struct ipv4h);
 		memset(&ph, 0, sizeof(ph));
 		ph.saddr = ip->saddr;
 		ph.daddr = ip->daddr;
@@ -696,94 +742,78 @@ static uint16_t pseudo_cksum(struct prparse *prp, byte_t *buf, uint8_t proto)
 		sum = ones_sum(&ph, 12, 0);
 	} else {
 		struct pseudo6h ph;
-		struct ipv6h *ip6 = prp_header(pprp, buf, struct ipv6h);
-		abort_unless(pprp->prid == PRID_IPV6);
+		struct ipv6h *ip6 = prp_header(ipprp, buf, struct ipv6h);
+		abort_unless(ipprp->prid == PRID_IPV6);
 		memset(&ph, 0, sizeof(ph));
 		ph.saddr = ip6->saddr;
 		ph.daddr = ip6->daddr;
 		ph.proto = proto;
 		ph.totlen = ntoh32(prp_totlen(prp));
-		sum = ones_sum(&ph, 40, 0);
+		sum = ones_sum(&ph, IPV6H_LEN, 0);
 	}
 	return ~ones_sum(prp_header(prp, buf, void), prp_totlen(prp), sum);
 }
 
 
-/* -- parse options for UDP protocol -- */
-static struct prparse *udp_parse(struct prparse *pprp, byte_t *buf,
-				 uint *nextprid)
+static struct prparse *find_ipprp(struct prparse *prp)
 {
-	struct prparse *prp;
-	struct udph *udp;
-	ushort ulen;
-
-	switch (pprp->prid) {
-	case PRID_IPV4:
-	case PRID_IPV6:
-		break;
-	default:
-		return NULL;
-	}
-	prp = newprp(sizeof(*prp), PRID_UDP, pprp, &udp_prparse_ops, 0);
-	if (!prp)
-		return NULL;
-	*nextprid = PRID_INVALID;
-	if (prp_totlen(prp) < 8) {
-		prp->error |= PRP_ERR_TOOSMALL;
-	} else if ((pprp->error & PRP_ERR_LENGTH)) {
-		prp_poff(prp) = prp_soff(prp) + 8;
-		prp->error |= PRP_ERR_LENGTH | PRP_ERR_CKSUM;
-	} else {
-		prp_poff(prp) = prp_soff(prp) + 8;
-		udp = prp_header(prp, buf, struct udph);
-
-		unpack(&udp->len, 2, "h", &ulen);
-		if (prp_totlen(prp) < ulen)
-			prp->error |= PRP_ERR_LENGTH;
-
-		if ((udp->cksum != 0) && (pseudo_cksum(prp, buf, IPPROT_UDP) != 0))
-			prp->error |= PRP_ERR_CKSUM;
-	}
+	while (prp != NULL && prp->prid != PRID_IPV4 && prp->prid != PRID_IPV4)
+		prp = prp->region;
 	return prp;
 }
 
 
-static struct prparse *udp_add(ulong off, ulong len, ulong hlen, ulong plen,
-			       byte_t *buf, int mode)
+/* -- parse options for UDP protocol -- */
+static void udp_update(struct prparse *prp, byte_t *buf);
+
+static struct prparse *udp_parse(struct prparse *reg, byte_t *buf,
+				 ulong off, ulong maxlen)
+{
+	struct prparse *prp;
+
+	prp = crtprp(sizeof(*prp), PRID_UDP, off, 0, maxlen, 0,  
+		     &udp_prparse_ops, 0);
+	if (!prp)
+		return NULL;
+
+	prp->region = reg;
+	udp_update(prp, buf);
+
+	return prp;
+}
+
+
+static int udp_getspec(struct prparse *prp, int enclose, struct prpspec *ps)
+{
+	return hdr_getspec(prp, enclose, ps, PRID_UDP, UDPH_LEN);
+}
+
+
+static int udp_add(struct prparse *reg, byte_t *buf, struct prpspec *ps,
+		   int enclose)
 {
 	struct prparse *prp;
 	struct udph *udp;
 
-	abort_unless(off >= 0 && len >= 0 && hlen >= 0 && plen >= 0);
-	abort_unless(plen <= len);
-
-	if (mode == PRP_ADD_FILL) {
-		if (len < 8)
-			return NULL;
-		hlen = 8;
-		plen = len - 8;
-		if (plen > 65527)
-			return NULL;
-	} else if (mode == PRP_ADD_WRAP) {
-		if (hlen < 8)
-			return NULL;
-		hlen = 8;
-		off -= 8;
-		if (plen > 65527)
-			plen = 65527;
-	} else {
-		abort_unless(mode == PRP_ADD_WRAPFILL);
-		if ((hlen != 8) || (plen > 65527) || (len != hlen + plen))
-			return NULL;
+	(void)enclose;
+	if (ps->hlen != 8) {
+		errno = EINVAL;
+		return -1;
 	}
-	prp = crtprp(sizeof(*prp), PRID_UDP, off, hlen, plen, 0,
-		     &udp_prparse_ops, 0);
-	if (prp && buf) {
+
+	prp = crtprp(sizeof(*prp), PRID_UDP, ps->off, ps->hlen, ps->plen, 
+		     ps->tlen, &udp_prparse_ops, 0);
+	if (!prp)
+		return -1;
+
+	prp_add_insert(reg, prp, enclose);
+	if (buf) {
 		udp = prp_header(prp, buf, struct udph);
 		memset(udp, 0, sizeof(*udp));
-		pack(&udp->len, 2, "h", (ushort) prp_totlen(prp));
+		pack(&udp->len, 2, "h", (ushort)prp_totlen(prp));
 	}
-	return prp;
+
+	return 0;
 }
 
 
@@ -791,20 +821,31 @@ static void udp_update(struct prparse *prp, byte_t *buf)
 {
 	ushort ulen;
 	struct udph *udp;
+	struct prparse *ipprp;
+
 	if (prp_totlen(prp) < 8) {
 		prp->error = PRP_ERR_TOOSMALL;
 		return;
 	}
-	if (prp_hlen(prp) < 8) {
-		prp->error = PRP_ERR_HLEN;
-		return;
-	}
+
+	prp_poff(prp) = prp_soff(prp) + 8;
+
 	udp = prp_header(prp, buf, struct udph);
 	unpack(&udp->len, 2, "h", &ulen);
-	if (prp_totlen(prp) < ulen)
+	if (prp_totlen(prp) < ulen) {
 		prp->error |= PRP_ERR_LENGTH;
-	if ((udp->cksum != 0) && (pseudo_cksum(prp, buf, IPPROT_UDP) != 0))
-		prp->error |= PRP_ERR_CKSUM;
+		return;
+	}
+
+	if (udp->cksum != 0) {
+		ipprp = find_ipprp(prp->region);
+		if ((ipprp == NULL) || (ipprp->error & PRP_ERR_LENGTH)) {
+			prp->error |= PRP_ERR_CKSUM;
+			return;
+		} 
+		if ((pseudo_cksum(prp, ipprp, buf, IPPROT_UDP) & 0xFFFF) != 0)
+			prp->error |= PRP_ERR_CKSUM;
+	}
 }
 
 
@@ -823,18 +864,20 @@ static int udp_fixlen(struct prparse *prp, byte_t *buf)
 static int udp_fixcksum(struct prparse *prp, byte_t *buf)
 {
 	struct udph *udp = prp_header(prp, buf, struct udph);
-	abort_unless(prp->region);
-	if ((prp_hlen(prp) != 8) ||
-	    ((prp->region->prid != PRID_IPV4) &&
-	     (prp->region->prid != PRID_IPV6)))
+	struct prparse *ipprp = find_ipprp(prp->region);
+
+	if ((prp_hlen(prp) != 8) || (ipprp == NULL))
 		return -1;
 	udp->cksum = 0;
-	udp->cksum = pseudo_cksum(prp, buf, IPPROT_UDP);
+	udp->cksum = pseudo_cksum(prp, ipprp, buf, IPPROT_UDP);
+
 	return 0;
 }
 
 
 /* -- TCP functions -- */
+static void tcp_update(struct prparse *prp, byte_t *buf);
+
 static int tcp_parse_opt(struct prparse *prp, struct tcph *tcp, size_t olen)
 {
 	uint oc;
@@ -909,110 +952,104 @@ err:
 }
 
 
-static struct prparse *tcp_parse(struct prparse *pprp, byte_t *buf,
-				 uint *nextprid)
+static struct prparse *tcp_parse(struct prparse *reg, byte_t *buf,
+				 ulong off, ulong maxlen)
 {
 	struct prparse *prp;
-	struct tcph *tcp;
-	int hlen, tlen;
 
-	switch (pprp->prid) {
-	case PRID_IPV4:
-	case PRID_IPV6:
-		break;
-	default:
-		return NULL;
-	}
-
-	prp = newprp(sizeof(struct tcp_parse), PRID_TCP, pprp, &tcp_prparse_ops,
-		     PRP_TCP_NXFIELDS);
+	prp = crtprp(sizeof(struct tcp_parse), PRID_TCP, off, 0, maxlen, 0,
+		     &tcp_prparse_ops, PRP_TCP_NXFIELDS);
 	if (!prp)
 		return NULL;
-	*nextprid = PRID_INVALID;
-	tcp = prp_header(prp, buf, struct tcph);
-	hlen = TCPH_HLEN(*tcp);
-	tlen = prp_totlen(prp);
-	if (tlen < 20) {
-		prp->error |= PRP_ERR_TOOSMALL;
-	} else if (hlen > tlen) {
-		prp->error |= PRP_ERR_HLEN;
-	} else if ((pprp->error & PRP_ERR_LENGTH)) {
-		prp_poff(prp) = prp_soff(prp) + hlen;
-		prp->error |= PRP_ERR_LENGTH | PRP_ERR_CKSUM;
-	} else {
-		prp_poff(prp) = prp_soff(prp) + hlen;
-		if (pseudo_cksum(prp, buf, IPPROT_TCP) != 0)
-			prp->error |= PRP_ERR_CKSUM;
-		if (hlen > 20) {
-			if (tcp_parse_opt(prp, tcp, hlen-20) < 0)
-				return prp;
-		}
-	}
+
+	prp->region = reg;
+	tcp_update(prp, buf);
+
 	return prp;
 }
 
 
-static struct prparse *tcp_add(ulong off, ulong len, ulong hlen, ulong plen,
-			       byte_t *buf, int mode)
+static int tcp_getspec(struct prparse *prp, int enclose, struct prpspec *ps)
 {
-	struct prparse *prp;
+	return hdr_getspec(prp, enclose, ps, PRID_TCP, TCPH_MINLEN);
+}
+
+
+static int tcp_add(struct prparse *reg, byte_t *buf, struct prpspec *ps,
+		   int enclose)
+{
+	struct prparse *prp, *ipprp;
 	struct tcph *tcp;
 
-	abort_unless(off >= 0 && len >= 0 && hlen >= 0 && plen >= 0);
-	abort_unless(plen <= len);
-
-	if (mode == PRP_ADD_FILL) {
-		if (len < 20)
-			return NULL;
-		hlen = 20;
-		plen = len - 20;
-	} else if (mode == PRP_ADD_WRAP) {
-		if (hlen < 20)
-			return NULL;
-		hlen = 20;
-		off -= 20;
-		len = plen + hlen;
-	} else {
-		abort_unless(mode == PRP_ADD_WRAPFILL);
-		if ((hlen < 20) || (hlen > 60) || ((hlen & 3) != 0) ||
-		    (len != hlen + plen))
-			return NULL;
+	(void)enclose;
+	if (ps->hlen < TCPH_MINLEN || ps->hlen > TCPH_MAXLEN) {
+		errno = EINVAL;
+		return -1;
 	}
-	prp = crtprp(sizeof(struct tcp_parse), PRID_TCP, off, hlen, plen, 0,
+
+	prp = crtprp(sizeof(struct tcp_parse), PRID_TCP, 
+		     ps->off, ps->hlen, ps->plen, ps->tlen,
 		     &tcp_prparse_ops, PRP_TCP_NXFIELDS);
-	if (prp && buf) {
+	if (!prp)
+		return -1;
+
+	prp_add_insert(reg, prp, enclose);
+	if (buf) {
 		memset(prp_header(prp, buf, void), 0, prp_hlen(prp));
 		tcp = prp_header(prp, buf, struct tcph);
-		tcp->doff = hlen << 2;
+		tcp->doff = ps->hlen << 2;
+		if (ps->hlen > TCPH_MINLEN) {
+			byte_t *p = (byte_t *)(tcp + 1);
+			byte_t *end = p + ps->hlen - TCPH_MINLEN;
+			while (p < end)
+				*p++ = TCPOPT_NOP;
+		}
+		ipprp = find_ipprp(reg);
+		if ((ipprp == NULL) || (ipprp->error & PRP_ERR_LENGTH)) {
+			prp->error |= PRP_ERR_CKSUM;
+		} else {
+			tcp->cksum = pseudo_cksum(prp, ipprp, buf, IPPROT_TCP);
+		}
 	}
-	return prp;
+
+	return 0;
 }
 
 
 static void tcp_update(struct prparse *prp, byte_t *buf)
 {
+	struct prparse *ipprp;
 	struct tcph *tcp;
 	uint hlen;
+	ulong len;
 
 	prp->error = 0;
 	resetxfields(prp);
-	tcp = prp_header(prp, buf, struct tcph);
-	hlen = TCPH_HLEN(*tcp);
 
-	if (prp_totlen(prp) < 20) {
+	len = prp_totlen(prp);
+	if (len < TCPH_MINLEN) {
 		prp->error = PRP_ERR_TOOSMALL;
 		return;
 	}
-	if ((prp_hlen(prp) < 20) || (prp_hlen(prp) != hlen)) {
-		prp->error = PRP_ERR_HLEN;
+
+	tcp = prp_header(prp, buf, struct tcph);
+	hlen = TCPH_HLEN(*tcp);
+	if (hlen > len) {
+		prp->error |= PRP_ERR_HLEN;
 		return;
 	}
-	if (pseudo_cksum(prp, buf, IPPROT_TCP) != 0)
+	prp_poff(prp) = prp_soff(prp) + hlen;
+
+	ipprp = find_ipprp(prp);
+	if ((ipprp == NULL) || (ipprp->error & PRP_ERR_LENGTH)) {
 		prp->error |= PRP_ERR_CKSUM;
-	if (hlen > 20) {
-		if (tcp_parse_opt(prp, tcp, hlen-20) < 0)
-			return;
+	} else {
+		if ((pseudo_cksum(prp, ipprp, buf, IPPROT_TCP) & 0xFFFF) != 0)
+			prp->error |= PRP_ERR_CKSUM;
 	}
+
+	if ((hlen > TCPH_MINLEN) && (prp->error & PRP_ERR_CKSUM) == 0)
+		tcp_parse_opt(prp, tcp, hlen - TCPH_MINLEN);
 }
 
 
@@ -1024,7 +1061,8 @@ static int tcp_fixlen(struct prparse *prp, byte_t *buf)
 	abort_unless(prp);
 	tcp = prp_header(prp, buf, struct tcph);
 	hlen = prp_hlen(prp);
-	if ((hlen < 20) || (hlen > 60) || (hlen > prp_totlen(prp)))
+	if ((hlen < TCPH_MINLEN) || (hlen > TCPH_MAXLEN) ||
+	    (hlen > prp_totlen(prp)))
 		return -1;
 	tcp->doff = hlen << 2;
 
@@ -1035,15 +1073,15 @@ static int tcp_fixlen(struct prparse *prp, byte_t *buf)
 static int tcp_fixcksum(struct prparse *prp, byte_t *buf)
 {
 	struct tcph *tcp;
+	struct prparse *ipprp = find_ipprp(prp->region);
 
 	abort_unless(prp);
-	abort_unless(prp->region);
 	tcp = prp_header(prp, buf, struct tcph);
-	if ((prp->region->prid != PRID_IPV4) && 
-	    (prp->region->prid != PRID_IPV6))
+	if (ipprp == NULL)
 		return -1;
 	tcp->cksum = 0;
-	tcp->cksum = pseudo_cksum(prp, buf, IPPROT_TCP);
+	tcp->cksum = pseudo_cksum(prp, ipprp, buf, IPPROT_TCP);
+
 	return 0;
 }
 
@@ -1061,79 +1099,81 @@ static void tcp_free(struct prparse *prp)
 
 
 /* -- ICMP Protocol functions -- */
-static struct prparse *icmp_parse(struct prparse *pprp, byte_t *buf,
-				  uint *nextprid)
+static void icmp_update(struct prparse *prp, byte_t *buf);
+
+static struct prparse *icmp_parse(struct prparse *reg, byte_t *buf,
+				  ulong off, ulong maxlen)
 {
 	struct prparse *prp;
-	struct icmph *icmp;
-	uint16_t csum;
 
-	prp = newprp(sizeof(*prp), PRID_ICMP, pprp, &icmp_prparse_ops, 0);
+	prp = crtprp(sizeof(*prp), PRID_ICMP, off, 0, maxlen, 0, 
+		     &icmp_prparse_ops, 0);
 	if (!prp)
 		return NULL;
-	*nextprid = PRID_INVALID;
 
-	if (prp_totlen(prp) < 8) {
-		prp->error |= PRP_ERR_TOOSMALL;
-		goto done;
-	}
-	if ((pprp->error & PRP_ERR_LENGTH)) {
-		prp_poff(prp) = prp_soff(prp) + 8;
-		prp->error |= PRP_ERR_LENGTH;
-		prp->error |= PRP_ERR_CKSUM;
-		goto done;
-	} else {
-		prp_poff(prp) = prp_soff(prp) + 8;
-		icmp = prp_header(prp, buf, struct icmph);
-		csum = ~ones_sum(icmp, prp_totlen(prp), 0);
-		if (csum)
-			prp->error |= PRP_ERR_CKSUM;
-	}
+	prp->region = reg;
+	icmp_update(prp, buf);
+
+	return prp;
+}
+
+
+static int icmp_nxtcld(struct prparse *reg, byte_t *buf, struct prparse *cld,
+		       uint *prid, ulong *off, ulong *maxlen)
+{
+	struct icmph *icmp;
+
+	if (cld != NULL || reg->error != 0)
+		return 0;
+
+	icmp = prp_header(reg, buf, struct icmph);
 	/* types which can have a returned IP header in them */
 	if ((icmp->type == ICMPT_DEST_UNREACH) ||
 	    (icmp->type == ICMPT_TIME_EXCEEDED) ||
 	    (icmp->type == ICMPT_PARAM_PROB) ||
 	    (icmp->type == ICMPT_SRC_QUENCH) ||
 	    (icmp->type == ICMPT_REDIRECT)) {
-		*nextprid = PRID_IPV4;
+		*prid = PRID_IPV4;
+		*off = prp_poff(reg);
+		*maxlen = prp_plen(reg);
+		return 1;
+	} else {
+		return 0;
 	}
-
-done:
-	return prp;
 }
 
 
-static struct prparse *icmp_add(ulong off, ulong len, ulong hlen, ulong plen,
-				byte_t *buf, int mode)
+static int icmp_getspec(struct prparse *prp, int enclose, struct prpspec *ps)
+{
+	return hdr_getspec(prp, enclose, ps, PRID_ICMP, ICMPH_LEN);
+}
+
+
+static int icmp_add(struct prparse *reg, byte_t *buf, struct prpspec *ps,
+		    int enclose)
 {
 	struct prparse *prp;
 	struct icmph *icmp;
 
-	abort_unless(off >= 0 && len >= 0 && hlen >= 0 && plen >= 0);
-	abort_unless(plen <= len);
-
-	if (mode == PRP_ADD_FILL) {
-		if (len < 8)
-			return NULL;
-		hlen = 8;
-		plen = len - 8;
-	} else if (mode == PRP_ADD_WRAP) {
-		if (hlen < 8)
-			return NULL;
-		hlen = 8;
-		off -= 8;
-	} else {
-		abort_unless(mode == PRP_ADD_WRAPFILL);
-		if ((hlen != 8) || (len != hlen + plen))
-			return NULL;
+	if (ps->hlen != ICMPH_LEN) {
+		errno = EINVAL;
+		return -1;
 	}
-	prp = crtprp(sizeof(struct prparse), PRID_ICMP, off, hlen, plen, 0, 
-		     &icmp_prparse_ops, 0);
-	if (prp && buf) {
+
+	prp = crtprp(sizeof(struct prparse), PRID_ICMP, ps->off, ps->hlen,
+		     ps->plen, ps->tlen, &icmp_prparse_ops, 0);
+	if (!prp)
+		return -1;
+
+	prp_add_insert(reg, prp, enclose);
+	if (buf) {
 		icmp = prp_header(prp, buf, struct icmph);
 		memset(icmp, 0, sizeof(*icmp));
+		icmp->type = ICMPT_ECHO_REQUEST;
+		icmp->cksum = ~ones_sum(icmp, prp_totlen(prp), 0);
 	}
-	return prp;
+
+	return 0;
 }
 
 
@@ -1144,14 +1184,11 @@ static void icmp_update(struct prparse *prp, byte_t *buf)
 	prp->error = 0;
 	resetxfields(prp);
 
-	if (prp_totlen(prp) < 8) {
+	if (prp_totlen(prp) < ICMPH_LEN) {
 		prp->error = PRP_ERR_TOOSMALL;
 		return;
 	}
-	if (prp_hlen(prp) < 8) {
-		prp->error = PRP_ERR_HLEN;
-		return;
-	}
+	prp_poff(prp) = prp_soff(prp) + ICMPH_LEN;
 
 	icmp = prp_header(prp, buf, struct icmph);
 	if (ones_sum(icmp, prp_totlen(prp), 0))
@@ -1164,7 +1201,7 @@ static void icmp_update(struct prparse *prp, byte_t *buf)
 static int icmp_fixcksum(struct prparse *prp, byte_t *buf)
 {
 	struct icmph *icmp = prp_header(prp, buf, struct icmph);
-	if ((prp_hlen(prp) != 8) || (prp->region->prid != PRID_IPV4))
+	if (prp_hlen(prp) != ICMPH_LEN)
 		return -1;
 	icmp->cksum = 0;
 	icmp->cksum = ~ones_sum(icmp, prp_totlen(prp), 0);
@@ -1173,13 +1210,19 @@ static int icmp_fixcksum(struct prparse *prp, byte_t *buf)
 
 
 /* -- IPv6 functions -- */
+static void ipv6_update(struct prparse *prp, byte_t *buf);
+
 static int isv6ext(uint8_t proto)
 {
 	/* we consider IPsec protocols their own protocol */
+	/* IPPROT_ESP could go here except that we can't */
+	/* parse past it.  So this function should be called */
+	/* is_v6_parsable_ext() */
 	return (proto == IPPROT_V6_HOPOPT) ||
-	    (proto == IPPROT_V6_ROUTE_HDR) ||
-	    (proto == IPPROT_V6_FRAG_HDR) ||
-	    (proto == IPPROT_V6_DSTOPS) || (proto == IPPROT_AH);
+	       (proto == IPPROT_V6_ROUTE_HDR) ||
+	       (proto == IPPROT_V6_FRAG_HDR) ||
+	       (proto == IPPROT_V6_DSTOPS) || 
+	       (proto == IPPROT_AH);
 }
 
 
@@ -1198,17 +1241,24 @@ static int parse_ipv6_hopopt(struct ipv6_parse *ip6prp, struct ipv6h *ip6,
 			continue;
 		}
 		if (p + p[1] + 2 > end) {	/* padn + all other options */
-			ip6prp->prp.error |= PRP_ERR_OPTLEN;
+			ip6prp->prp.error |= PRP_ERR_OPTLEN | PRP_ERR_HLEN;
 			return -1;
 		}
-		if (*p == 0xC2) {	/* jumbogram option */
-			if ((p[1] != 4) || (ip6->len != 0)
-			    || (ip6prp->jlenoff > 0)
-			    || (((p - (byte_t *) ip6) & 3) != 2)) {
-				ip6prp->prp.error |= PRP_ERR_OPTERR;
+		if (p[0] == 0xC2) {	/* jumbogram option */
+			if (ip6prp->jlenoff > 0) {
+				ip6prp->prp.error |= PRP_ERR_OPTLEN |
+						     PRP_ERR_HLEN;
 				return -1;
 			}
-			ip6prp->jlenoff = p - (byte_t *) ip6;
+			if ((p[1] != 4) || (ip6->len != 0) ||
+			    (ip6prp->jlenoff > 0) ||
+			    (((p - (byte_t *) ip6) & 3) != 2)) {
+				ip6prp->prp.error |= PRP_ERR_OPTERR |
+						     PRP_ERR_HLEN;
+				return -1;
+			}
+			ip6prp->jlenoff = (p - (byte_t *)ip6) + 
+				          prp_soff(&ip6prp->prp);
 		}
 		p += p[1] + 2;
 	}
@@ -1217,9 +1267,9 @@ static int parse_ipv6_hopopt(struct ipv6_parse *ip6prp, struct ipv6h *ip6,
 
 
 static int parse_ipv6_opt(struct ipv6_parse *ip6prp, struct ipv6h *ip6,
-			  long len)
+			  ulong len)
 {
-	size_t xlen = 0;
+	ulong xlen = 0;
 	uint8_t nexth;
 	uint olen;
 	byte_t *p;
@@ -1227,197 +1277,260 @@ static int parse_ipv6_opt(struct ipv6_parse *ip6prp, struct ipv6h *ip6,
 	abort_unless(len >= 0);
 
 	nexth = ip6->nxthdr;
-	p = (byte_t *) ip6 + 40;
+	p = (byte_t *)ip6 + IPV6H_LEN;
+	if (xlen > len - 8) {
+		ip6prp->prp.error |= PRP_ERR_OPTLEN | PRP_ERR_HLEN;
+		return -1;
+	}
 
 	while (isv6ext(nexth)) {
-		if ((xlen + 8 < xlen) || (xlen + 8 > len)) {
-			ip6prp->prp.error |= PRP_ERR_OPTLEN;
-			return -1;
-		}
-		if (nexth == IPPROT_AH)	/* AH is idiotic and useless */
+		if (nexth == IPPROT_AH) { /* AH is idiotic and useless */
 			olen = (p[1] << 2) + 8;
-		else
+			if (ip6prp->ahoff == 0) {
+				ip6prp->ahoff = prp_soff(&ip6prp->prp) + 
+						IPV6H_LEN + xlen;
+			}
+		} else if (nexth == IPPROT_V6_FRAG_HDR) {
+			if (ip6prp->fraghoff != 0) {
+				ip6prp->prp.error |= PRP_ERR_OPTERR | 
+						     PRP_ERR_HLEN;
+				return -1;
+			}
+			ip6prp->fraghoff = prp_soff(&ip6prp->prp) + IPV6H_LEN +
+					   xlen;
+			olen = 8;
+			
+		} else {
 			olen = (p[1] << 3) + 8;
-		if ((xlen + olen < xlen) || (xlen + olen > len)) {
-			ip6prp->prp.error |= PRP_ERR_OPTLEN;
+		}
+		if (olen > len - xlen) {
+			ip6prp->prp.error |= PRP_ERR_OPTLEN | PRP_ERR_HLEN;
 			return -1;
 		}
 		/* hop-by-hop options can only come first */
-		if (nexth == IPPROT_V6_HOPOPT) {
-			if (p != (byte_t *) ip6 + 40) {
-				ip6prp->prp.error |= PRP_ERR_OPTERR;
-			} else {
-				if (parse_ipv6_hopopt(ip6prp, ip6, p, olen) < 0)
-					return -1;
-			}
+		if (nexth == IPPROT_V6_HOPOPT && xlen != 0) {
+			ip6prp->prp.error |= PRP_ERR_OPTERR | PRP_ERR_HLEN;
+			return -1;
 		}
 
-		nexth = p[0];
 		xlen += olen;
 		p += olen;
+		if (xlen > len - 8) {
+			ip6prp->prp.error |= PRP_ERR_OPTLEN | PRP_ERR_HLEN;
+			return -1;
+		}
+		ip6prp->nexthoff = xlen + prp_soff(&ip6prp->prp);
+		nexth = p[0];
 	}
 
-	prp_poff(&ip6prp->prp) = prp_soff(&ip6prp->prp) + 40 + xlen;
-	ip6prp->nexth = nexth;
+	prp_poff(&ip6prp->prp) = prp_soff(&ip6prp->prp) + IPV6H_LEN + xlen;
 
 	return 0;
 }
 
 
-static struct prparse *ipv6_parse(struct prparse *pprp, byte_t *buf,
-				  uint *nextprid)
+static struct prparse *ipv6_parse(struct prparse *reg, byte_t *buf,
+				  ulong off, ulong maxlen)
 {
 	struct prparse *prp;
-	struct ipv6_parse *ip6prp;
-	struct ipv6h *ip6;
-	ushort paylen;
-	ulong tlen;
 
-	prp = newprp(sizeof(struct ipv6_parse), PRID_IPV6, pprp,
+	prp = crtprp(sizeof(struct ipv6_parse), PRID_IPV6, off, 0, maxlen, 0,
 		     &ipv6_prparse_ops, 0);
-	ip6prp = (struct ipv6_parse *)prp;
 	if (!prp)
 		return NULL;
-	*nextprid = PRID_INVALID;
-	ip6prp->nexth = 0;
-	ip6prp->jlenoff = 0;
-	ip6 = prp_header(prp, buf, struct ipv6h);
 
-	if (IPV6H_PVERSION(ip6) != 6) {
-		prp->error |= PRP_ERR_INVALID;
-		goto done;
-	}
+	prp->region = reg;
+	ipv6_update(prp, buf);
 
-	tlen = prp_totlen(prp);
-	if (tlen < 40) {
-		prp->error |= PRP_ERR_TOOSMALL;
-		goto done;
-	}
-
-	unpack(&ip6->len, 2, "h", &paylen);
-	if (tlen < paylen + 40) {
-		prp->error |= PRP_ERR_LENGTH;
-		goto done;
-	}
-
-	if (tlen > paylen + 40) {
-		ulong extra = tlen - paylen - 40;
-		prp_eoff(prp) = prp_toff(prp) = prp_soff(prp) + 40 + paylen;
-		tlen -= extra;
-	}
-
-	/* sets hlen */
-	if (parse_ipv6_opt(ip6prp, ip6, tlen - 40) < 0)
-		goto done;
-
-	if ((paylen == 0) && (ip6prp->jlenoff > 0)) {
-		unsigned long jlen;
-		unpack(prp_payload(prp, buf) + ip6prp->jlenoff, 4, "w", &jlen);
-		if ((jlen != prp_totlen(prp) - 40) || (jlen < 65536))
-			prp->error |= PRP_ERR_LENGTH;
-	} else if (tlen > (uint32_t)paylen + 40) {
-		prp_toff(prp) = prp_soff(prp) + 40 + paylen;
-	}
-	*nextprid = PRID_BUILD(PRID_PF_INET, ip6prp->nexth);
-
-done:
 	return prp;
 }
 
 
-static struct prparse *ipv6_add(ulong off, ulong len, ulong hlen, ulong plen,
-				byte_t *buf, int mode)
+int ipv6_nxtcld(struct prparse *reg, byte_t *buf, struct prparse *cld,
+	        uint *prid, ulong *off, ulong *maxlen)
 {
-	struct prparse *prp;
+	struct ipv6_parse *ip6prp;
+	struct ipv6h *ip6;
+	byte_t *p;
+	ushort foff;
+	uint8_t nexth;
 
-	abort_unless(off >= 0 && len >= 0 && hlen >= 0 && plen >= 0);
-	abort_unless(plen <= len);
+	if (cld != NULL || reg->error != 0)
+		return 0;
 
-	if (mode == PRP_ADD_FILL) {
-		/* TODO support jumbo frames ? */
-		if ((len < 40) || (len > 65575))
-			return NULL;
-		hlen = 40;
-		plen = len - 40;
-	} else if (mode == PRP_ADD_WRAP) {
-		if (hlen < 40)
-			return NULL;
-		if (plen > 65535)
-			len = 65535;
-		hlen = 40;
-		off -= 40;
+	abort_unless(buf);
+	ip6prp = (struct ipv6_parse *)reg;
+	ip6 = prp_header(reg, buf, struct ipv6h);
+
+	/* We treat AH and ESP as their own protocols, not IPv6 options */
+	/* ESP we can't parse past since the next header type is encrypted. */
+	/* But we can parse past AH, and there may be destination options */
+	/* past said header.  In other words, the IPv6 header may extend */
+	/* past the start of the next protocol. Did I mention how little */
+	/* I like AH's design. */
+	if (ip6prp->ahoff == IPPROT_AH) {
+		*prid = PRID_BUILD(PRID_PF_INET, IPPROT_AH);
+		*off = ip6prp->ahoff;
+		*maxlen = prp_totlen(reg) - ip6prp->ahoff;
 	} else {
-		abort_unless(mode == PRP_ADD_WRAPFILL);
-		if ((hlen != 40) || (plen > 65535) || (hlen + plen != len))
-			return NULL;
+		abort_unless(ip6prp->nexthoff >= prp_soff(reg));
+		abort_unless(ip6prp->nexthoff < prp_eoff(reg));
+		nexth = buf[ip6prp->nexthoff];
+		*prid = PRID_BUILD(PRID_PF_INET, nexth);
+		if (ip6prp->fraghoff != 0) {
+			/* we can't parse the next header if we aren't the */
+			/* first fragment. */
+			p = buf + ip6prp->fraghoff + 2;
+			unpack(p, 2, "h", &foff);
+			foff &= ~7;
+			if (foff > 0)
+				return 0;
+		}
+		*off = prp_poff(reg);
+		*maxlen = prp_plen(reg);
 	}
-	prp = crtprp(sizeof(struct ipv6_parse), PRID_IPV6, off, hlen, plen, 0,
-		     &ipv6_prparse_ops, 0);
-	if (prp && buf) {
-		struct ipv6_parse *ip6prp = (struct ipv6_parse *)prp;
-		struct ipv6h *ip6 = prp_header(prp, buf, struct ipv6h);
-		ip6prp->nexth = 0;
+	return 1;
+}
+
+
+static int ipv6_getspec(struct prparse *prp, int enclose, struct prpspec *ps)
+{
+	return hdr_getspec(prp, enclose, ps, PRID_IPV6, IPV6H_LEN);
+}
+
+
+static int ipv6_add(struct prparse *reg, byte_t *buf, struct prpspec *ps,
+		    int enclose)
+{
+	struct prparse *prp, *cld;
+	struct ipv6_parse *ip6prp;
+	struct ipv6h *ip6;
+
+	if (ps->hlen < IPV6H_LEN || ps->plen > 65535) {
+		errno = EINVAL;
+		return -1;
+	}
+
+	prp = crtprp(sizeof(struct ipv6_parse), PRID_IPV6, ps->off, ps->hlen,
+		     ps->plen, ps->tlen, &ipv6_prparse_ops, 0);
+	if (!prp)
+		return -1;
+
+	if (buf) {
+		ip6prp = (struct ipv6_parse *)prp;
+		ip6 = prp_header(prp, buf, struct ipv6h);
+		ip6prp->nexthoff = 6;
 		ip6prp->jlenoff = 0;
+		ip6prp->ahoff = 0;
+		ip6prp->fraghoff = 0;
 		memset(ip6, 0, prp_hlen(prp));
-		*(byte_t *) ip6 = 0x60;
-		ip6->len = hton16(prp_totlen(prp));
+		*(byte_t *)ip6 = 0x60;
+		ip6->len = hton16(prp_plen(prp));
+		ip6->nxthdr = IPPROT_RESERVED;
+		if (enclose) {
+			cld = prp_next_in_region(prp, prp);
+			if (cld != NULL && 
+			    PRID_FAMILY(cld->prid) == PRID_PF_INET)
+				ip6->nxthdr = PRID_PROTO(cld->prid);
+		}
 	}
-	return prp;
+
+	return 0;
 }
 
 
 static void ipv6_update(struct prparse *prp, byte_t *buf)
 {
 	struct ipv6_parse *ip6prp;
-	ushort paylen;
-	ulong tlen;
 	struct ipv6h *ip6;
+	ushort paylen;
+	ulong len, jlen, extra, hbhlen;
+	byte_t *p;
 
 	prp->error = 0;
 	resetxfields(prp);
 	ip6prp = (struct ipv6_parse *)prp;
 	ip6 = prp_header(prp, buf, struct ipv6h);
+	ip6prp->nexthoff = 6;
+	ip6prp->jlenoff = 0;
+	ip6prp->ahoff = 0;
+	ip6prp->fraghoff = 0;
+
+	len = prp_totlen(prp);
+	if (len < IPV6H_LEN) {
+		prp->error = PRP_ERR_TOOSMALL;
+		return;
+	}
 
 	if (IPV6H_PVERSION(ip6) != 6)
 		prp->error |= PRP_ERR_INVALID;
 
-	tlen = prp_totlen(prp);
-	if (tlen < 40) {
-		prp->error = PRP_ERR_TOOSMALL;
-		return;
-	}
-	if (prp_hlen(prp) < 40) {
-		prp->error = PRP_ERR_HLEN;
-		return;
-	}
 	unpack(&ip6->len, 2, "h", &paylen);
-	if (tlen < (uint32_t)paylen + 40) {
+	if (paylen > len - IPV6H_LEN) {
 		prp->error |= PRP_ERR_LENGTH;
 		return;
 	}
 
-	if (parse_ipv6_opt(ip6prp, ip6, tlen - 40) < 0)
-		return;
-
-	if ((paylen == 0) && (ip6prp->jlenoff > 0)) {
-		unsigned long jlen;
-		unpack(prp_payload(prp, buf) + ip6prp->jlenoff, 4, "w", &jlen);
-		if ((jlen != prp_totlen(prp) - 40) || (jlen < 65536))
+	prp_poff(prp) = prp_soff(prp) + IPV6H_LEN;
+	if (paylen == 0 && ip6->nxthdr == IPPROT_V6_HOPOPT) {
+		int rv;
+		if (len < 48) {
+			prp->error |= PRP_ERR_OPTERR | PRP_ERR_HLEN |
+				      PRP_ERR_LENGTH;
+			return;
+		}
+		p = buf + prp_poff(prp);
+		hbhlen = p[1] * 8;
+		if (hbhlen > prp_plen(prp)) {
+			prp->error |= PRP_ERR_OPTERR | PRP_ERR_HLEN |
+				      PRP_ERR_LENGTH;
+			return;
+		}
+		rv = parse_ipv6_hopopt(ip6prp, ip6, (byte_t *)(ip6+1), hbhlen);
+		if (rv < 0 || ip6prp->jlenoff == 0) {
 			prp->error |= PRP_ERR_LENGTH;
+			return;
+		}
+		unpack(buf + ip6prp->jlenoff, 4, "w", &jlen);
+		if (jlen > len - IPV6H_LEN) {
+			prp->error |= PRP_ERR_OPTERR | PRP_ERR_LENGTH;
+			return;
+		}
+		if (jlen < len - IPV6H_LEN) {
+			extra = len - jlen - IPV6H_LEN;
+			prp_eoff(prp) = prp_toff(prp) = 
+				prp_soff(prp) + IPV6H_LEN + jlen;
+			len -= extra;
+		}
+	} else if (paylen < len - IPV6H_LEN) {
+		extra = len - paylen - IPV6H_LEN;
+		prp_eoff(prp) = prp_toff(prp) = prp_soff(prp) + IPV6H_LEN +
+						paylen;
+		len -= extra;
 	}
+
+	/* sets hlen */
+	parse_ipv6_opt(ip6prp, ip6, len - IPV6H_LEN);
 }
 
 
 static int ipv6_fixlen(struct prparse *prp, byte_t *buf)
 {
-	struct ipv6h *ip6;
+	struct ipv6h *ip6 = prp_header(prp, buf, struct ipv6h);
+	struct ipv6_parse *ip6prp = (struct ipv6_parse *)prp;
 	ushort plen;
-	abort_unless(prp);
-	ip6 = prp_header(prp, buf, struct ipv6h);
-	if (prp_plen(prp) > 65535)
-		return -1;
-	plen = prp_plen(prp);
-	pack(&ip6->len, 2, "h", plen);
+
+	abort_unless(prp && buf);
+	if (ip6prp->jlenoff == 0) {
+		if (prp_plen(prp) > 65535)
+			return -1;
+		plen = prp_plen(prp);
+		pack(&ip6->len, 2, "h", plen);
+	} else {
+		plen = 0;
+		pack(&ip6->len, 2, "h", plen);
+		pack(buf + ip6prp->jlenoff, 4, "w", (ulong)prp_plen(prp));
+	}
 	return 0;
 }
 
@@ -1435,78 +1548,82 @@ static void ipv6_free(struct prparse *prp)
 
 
 /* -- ICMPv6 Functions -- */
-static struct prparse *icmp6_parse(struct prparse *pprp, byte_t *buf,
-				   uint *nextprid)
+static void icmp6_update(struct prparse *prp, byte_t *buf);
+
+static struct prparse *icmp6_parse(struct prparse *reg, byte_t *buf,
+				   ulong off, ulong maxlen)
 {
 	struct prparse *prp;
-	struct icmp6h *icmp6;
 
-	prp = newprp(sizeof(*prp), PRID_ICMP6, pprp, &icmpv6_prparse_ops, 0);
+	prp = crtprp(sizeof(*prp), PRID_ICMP6, off, 0, maxlen, 0, 
+		     &icmpv6_prparse_ops, 0);
 	if (!prp)
 		return NULL;
-	*nextprid = PRID_INVALID;
-	if (prp_totlen(prp) < 8) {
-		prp->error |= PRP_ERR_TOOSMALL;
-		goto done;
-	}
-	if ((pprp->error & PRP_ERR_LENGTH)) {
-		prp_poff(prp) = prp_soff(prp) + 8;
-		prp->error |= PRP_ERR_LENGTH;
-		prp->error |= PRP_ERR_CKSUM;
-	} else {
-		abort_unless(pprp->prid == PRID_IPV6);
-		prp_poff(prp) = prp_soff(prp) + 8;
-		if (pseudo_cksum(prp, buf, IPPROT_ICMPV6) != 0)
-			prp->error |= PRP_ERR_CKSUM;
-	}
-	icmp6 = prp_header(pprp, buf, struct icmp6h);
-	if ((icmp6->type == ICMP6T_DEST_UNREACH) ||
-	    (icmp6->type == ICMP6T_PKT_TOO_BIG) ||
-	    (icmp6->type == ICMP6T_TIME_EXCEEDED) ||
-	    (icmp6->type == ICMP6T_PARAM_PROB))
-		*nextprid = PRID_IPV6;
+	prp->region = reg;
+	icmp6_update(prp, buf);
 
- done:
 	return prp;
 }
 
 
-static struct prparse *icmp6_add(ulong off, ulong len, ulong hlen, ulong plen,
-				 byte_t *buf, int mode)
+static int icmp6_nxtcld(struct prparse *reg, byte_t *buf, struct prparse *cld,
+		        uint *prid, ulong *off, ulong *maxlen)
 {
-	struct prparse *prp;
 	struct icmp6h *icmp6;
 
-	abort_unless(off >= 0 && len >= 0 && hlen >= 0 && plen >= 0);
-	abort_unless(plen <= len);
+	if (cld != NULL || reg->error != 0)
+		return 0;
 
-	if (mode == PRP_ADD_FILL) {
-		if (len < 8)
-			return NULL;
-		hlen = 8;
-		plen = len - 8;
-	} else if (mode == PRP_ADD_WRAP) {
-		if (hlen < 8)
-			return NULL;
-		hlen = 8;
-		off -= 8;
+	icmp6 = prp_header(reg, buf, struct icmp6h);
+	if (ICMP6T_IS_ERR(icmp6->type)) {
+		*prid = PRID_IPV6;
+		*off = prp_poff(reg);
+		*maxlen = prp_plen(reg);
+		return 1;
 	} else {
-		abort_unless(mode == PRP_ADD_WRAPFILL);
-		if ((hlen != 8) || (len != hlen + plen))
-			return NULL;
+		return 0;
 	}
-	prp = crtprp(sizeof(struct prparse), PRID_ICMP6, off, hlen, plen, 0,
-		     &icmpv6_prparse_ops, 0);
-	if (prp && buf) {
+}
+
+
+static int icmp6_getspec(struct prparse *prp, int enclose, struct prpspec *ps)
+{
+	return hdr_getspec(prp, enclose, ps, PRID_ICMP6, ICMP6H_LEN);
+}
+
+
+static int icmp6_add(struct prparse *reg, byte_t *buf, struct prpspec *ps,
+		     int enclose)
+{
+	struct prparse *prp, *ipprp;
+	struct icmp6h *icmp6;
+
+	prp = crtprp(sizeof(struct prparse), PRID_ICMP6, ps->off, ps->hlen,
+		     ps->plen, ps->tlen, &icmp_prparse_ops, 0);
+	if (!prp)
+		return -1;
+
+	prp_add_insert(reg, prp, enclose);
+	if (buf) {
 		icmp6 = prp_header(prp, buf, struct icmp6h);
 		memset(icmp6, 0, sizeof(*icmp6));
+		icmp6->type = ICMP6T_ECHO_REQUEST;
+		ipprp = find_ipprp(reg);
+		if ((ipprp == NULL) || (ipprp->error & PRP_ERR_LENGTH)) {
+			prp->error |= PRP_ERR_CKSUM;
+		} else {
+			icmp6->cksum = pseudo_cksum(prp, ipprp, buf, 
+						    IPPROT_ICMPV6);
+		}
 	}
-	return prp;
+
+	return 0;
 }
 
 
 static void icmp6_update(struct prparse *prp, byte_t *buf)
 {
+	struct prparse *ipprp;
 	prp->error = 0;
 	resetxfields(prp);
 
@@ -1514,23 +1631,33 @@ static void icmp6_update(struct prparse *prp, byte_t *buf)
 		prp->error = PRP_ERR_TOOSMALL;
 		return;
 	}
-	if (prp_hlen(prp) < 8) {
-		prp->error = PRP_ERR_HLEN;
-		return;
-	}
-	if (pseudo_cksum(prp, buf, IPPROT_ICMPV6) != 0)
+	prp_poff(prp) = prp_soff(prp) + 8;
+	
+	ipprp = find_ipprp(prp->region);
+	if ((ipprp == NULL) || (ipprp->error & PRP_ERR_LENGTH) ||
+	    (ipprp->prid != PRID_IPV6)) {
 		prp->error |= PRP_ERR_CKSUM;
+	} else {
+		if (ipprp->prid != PRID_IPV6)
+			prp->error |= PRP_ERR_INVALID;
+		if ((pseudo_cksum(prp, ipprp, buf, IPPROT_ICMPV6) & 0xFFFF) != 0)
+			prp->error |= PRP_ERR_CKSUM;
+	}
+
 	/* TODO: check by type? */
 }
 
 
 static int icmp6_fixcksum(struct prparse *prp, byte_t *buf)
 {
+	struct prparse *ipprp;
 	struct icmp6h *icmp6 = prp_header(prp, buf, struct icmp6h);
-	if ((prp_hlen(prp) != 8) || (prp->region->prid != PRID_IPV6))
+	ipprp = find_ipprp(prp->region);
+	if ((ipprp == NULL) || (ipprp->error & PRP_ERR_LENGTH) || 
+	    (ipprp->prid != PRID_IPV6))
 		return -1;
 	icmp6->cksum = 0;
-	icmp6->cksum = pseudo_cksum(prp, buf, IPPROT_ICMPV6);
+	icmp6->cksum = pseudo_cksum(prp, ipprp, buf, IPPROT_ICMPV6);
 	return 0;
 }
 
@@ -1538,6 +1665,8 @@ static int icmp6_fixcksum(struct prparse *prp, byte_t *buf)
 /* -- op structures for default initialization -- */
 struct proto_parser_ops eth_proto_parser_ops = {
 	eth_parse,
+	eth_nxtcld,
+	eth_getspec,
 	eth_add
 };
 
@@ -1551,6 +1680,8 @@ struct prparse_ops eth_prparse_ops = {
 
 struct proto_parser_ops arp_proto_parser_ops = {
 	arp_parse,
+	default_nxtcld,
+	arp_getspec,
 	arp_add
 };
 
@@ -1564,6 +1695,8 @@ struct prparse_ops arp_prparse_ops = {
 
 struct proto_parser_ops ipv4_proto_parser_ops = {
 	ipv4_parse,
+	ipv4_nxtcld,
+	ipv4_getspec,
 	ipv4_add
 };
 
@@ -1577,6 +1710,8 @@ struct prparse_ops ipv4_prparse_ops = {
 
 struct proto_parser_ops ipv6_proto_parser_ops = {
 	ipv6_parse,
+	ipv6_nxtcld,
+	ipv6_getspec,
 	ipv6_add
 };
 
@@ -1590,6 +1725,8 @@ struct prparse_ops ipv6_prparse_ops = {
 
 struct proto_parser_ops icmp_proto_parser_ops = {
 	icmp_parse,
+	icmp_nxtcld,
+	icmp_getspec,
 	icmp_add
 };
 
@@ -1603,6 +1740,8 @@ struct prparse_ops icmp_prparse_ops = {
 
 struct proto_parser_ops icmpv6_proto_parser_ops = {
 	icmp6_parse,
+	icmp6_nxtcld,
+	icmp6_getspec,
 	icmp6_add
 };
 
@@ -1616,6 +1755,8 @@ struct prparse_ops icmpv6_prparse_ops = {
 
 struct proto_parser_ops udp_proto_parser_ops = {
 	udp_parse,
+	default_nxtcld,
+	udp_getspec,
 	udp_add
 };
 
@@ -1629,6 +1770,8 @@ struct prparse_ops udp_prparse_ops = {
 
 struct proto_parser_ops tcp_proto_parser_ops = {
 	tcp_parse,
+	default_nxtcld,
+	tcp_getspec,
 	tcp_add
 };
 
