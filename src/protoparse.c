@@ -343,7 +343,7 @@ int prp_parse_packet(struct prparse *base, byte_t *buf, uint nprid)
 			/* new parse to provide the position information */
 			/* for determining the presence of a new child. */
 			reg = prp->region;
-			while (!prp_is_base(prp)) {
+			while (reg != NULL) {
 				pp = pp_lookup(reg->prid);
 				abort_unless(pp);
 				rv = (*pp->ops->nxtcld)(reg, buf, prp, &nprid,
@@ -354,7 +354,7 @@ int prp_parse_packet(struct prparse *base, byte_t *buf, uint nprid)
 			}
 		}
 
-		if (!rv) {
+		if (rv) {
 			/* sanity check to ensure termination */
 			/* sibling parses may not start at the same offset */
 			/* TODO: determine similar restrictions for child */

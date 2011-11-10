@@ -243,9 +243,7 @@ void prp_free_parse(struct prparse *prp);
 /* parse, then this is equivalent to prp_clear() */
 void prp_free_region(struct prparse *prp);
 
-/*
- * copy a header parse (but not the packet buffer itself).
- */
+/* copy a header parse (but not the packet buffer itself). */
 int prp_copy(struct prparse *nprp, struct prparse *oprp);
 
 /* re-parse and update the fields in 'prp'.  (but not its children) */

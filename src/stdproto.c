@@ -226,7 +226,7 @@ int eth_nxtcld(struct prparse *reg, byte_t *buf, struct prparse *cld,
 		return 0;
 
 	abort_unless(buf);
-	abort_unless(reg->offs[PRP_ETHFLD_ETYPE] <= prp_totlen(reg) - 2);
+	abort_unless(reg->offs[PRP_ETHFLD_ETYPE] <= prp_poff(reg) - 2);
 	p = buf + reg->offs[PRP_ETHFLD_ETYPE];
 	unpack(p, 2, "h", &etype);
 	switch (etype) {
