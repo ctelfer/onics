@@ -1191,7 +1191,7 @@ static void icmp_update(struct prparse *prp, byte_t *buf)
 	prp_poff(prp) = prp_soff(prp) + ICMPH_LEN;
 
 	icmp = prp_header(prp, buf, struct icmph);
-	if (ones_sum(icmp, prp_totlen(prp), 0))
+	if ((~ones_sum(icmp, prp_totlen(prp), 0) & 0xFFFF) != 0)
 		prp->error |= PRP_ERR_CKSUM;
 
 	/* TODO: check by type? */
