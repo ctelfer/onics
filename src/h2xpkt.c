@@ -63,7 +63,7 @@ void parse_options()
 
 int readline(char *cp, size_t len)
 {
-	char ch;
+	char ch = EOF;
 	char *save = cp;
 
 	g_lineno += 1;

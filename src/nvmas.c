@@ -573,7 +573,7 @@ int inst2str(const struct netvm_inst *ni, char *s, size_t len, uint inum)
 {
 	struct nvmop *op;
 	ulong args[MAXARGS], *ap = args;
-	int fr;
+	int fr = 0;
 	char a0p[2] = "";
 
 	if ((op = oc2op(ni->op)) == NULL)
