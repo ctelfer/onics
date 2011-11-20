@@ -444,8 +444,13 @@ static int arp_add(struct prparse *reg, byte_t *buf, struct prpspec *ps,
 
 static int arp_fixlen(struct prparse *prp, byte_t *buf)
 {
+	struct arph *arp;
 	if (prp_hlen(prp) < 8)
 		return -1;
+	arp = prp_header(prp, buf, struct arph);
+	if (arp->hwlen * 2 + arp->prlen * 2 > prp_plen(prp))
+		return -1;
+	prp->error &= ~(PRP_ERR_LENGTH | PRP_ERR_HLEN | PRP_ERR_TOOSMALL);
 	return 0;
 }
 
@@ -685,7 +690,7 @@ static int ipv4_fixlen(struct prparse *prp, byte_t *buf)
 
 	ip = prp_header(prp, buf, struct ipv4h);
 	hlen = prp_hlen(prp);
-	if ((hlen < IPH_MINLEN) || (hlen > IPH_MAXLEN) || 
+	if ((hlen < IPH_MINLEN) || (hlen > IPH_MAXLEN) || ((hlen & 3) != 0) ||
 	    (hlen > prp_totlen(prp)))
 		return -1;
 	ip->vhl = 0x40 | (hlen >> 2);
@@ -693,6 +698,7 @@ static int ipv4_fixlen(struct prparse *prp, byte_t *buf)
 		return -1;
 	tlen = prp_totlen(prp);
 	pack(&ip->len, 2, "h", tlen);
+	prp->error &= ~(PRP_ERR_LENGTH | PRP_ERR_HLEN | PRP_ERR_TOOSMALL);
 
 	return 0;
 }
@@ -710,6 +716,7 @@ static int ipv4_fixcksum(struct prparse *prp, byte_t *buf)
 		return -1;
 	ip->cksum = 0;
 	ip->cksum = ~ones_sum(ip, IPH_HLEN(*ip), 0);
+	prp->error &= ~PRP_ERR_CKSUM;
 
 	return 0;
 }
@@ -857,6 +864,7 @@ static int udp_fixlen(struct prparse *prp, byte_t *buf)
 		return -1;
 	pack(&prp_header(prp, buf, struct udph)->len, 2, "h",
 	     (ushort)prp_totlen(prp));
+	prp->error &= ~(PRP_ERR_LENGTH | PRP_ERR_HLEN | PRP_ERR_TOOSMALL);
 	return 0;
 }
 
@@ -870,6 +878,7 @@ static int udp_fixcksum(struct prparse *prp, byte_t *buf)
 		return -1;
 	udp->cksum = 0;
 	udp->cksum = pseudo_cksum(prp, ipprp, buf, IPPROT_UDP);
+	prp->error &= ~PRP_ERR_CKSUM;
 
 	return 0;
 }
@@ -1061,10 +1070,11 @@ static int tcp_fixlen(struct prparse *prp, byte_t *buf)
 	abort_unless(prp);
 	tcp = prp_header(prp, buf, struct tcph);
 	hlen = prp_hlen(prp);
-	if ((hlen < TCPH_MINLEN) || (hlen > TCPH_MAXLEN) ||
+	if ((hlen < TCPH_MINLEN) || (hlen > TCPH_MAXLEN) || ((hlen & 3) != 0) ||
 	    (hlen > prp_totlen(prp)))
 		return -1;
 	tcp->doff = hlen << 2;
+	prp->error &= ~(PRP_ERR_LENGTH | PRP_ERR_HLEN | PRP_ERR_TOOSMALL);
 
 	return 0;
 }
@@ -1081,6 +1091,7 @@ static int tcp_fixcksum(struct prparse *prp, byte_t *buf)
 		return -1;
 	tcp->cksum = 0;
 	tcp->cksum = pseudo_cksum(prp, ipprp, buf, IPPROT_TCP);
+	prp->error &= ~PRP_ERR_CKSUM;
 
 	return 0;
 }
@@ -1205,6 +1216,7 @@ static int icmp_fixcksum(struct prparse *prp, byte_t *buf)
 		return -1;
 	icmp->cksum = 0;
 	icmp->cksum = ~ones_sum(icmp, prp_totlen(prp), 0);
+	prp->error &= ~PRP_ERR_CKSUM;
 	return 0;
 }
 
@@ -1521,16 +1533,22 @@ static int ipv6_fixlen(struct prparse *prp, byte_t *buf)
 	ushort plen;
 
 	abort_unless(prp && buf);
+	if (prp_hlen(prp) < 40)
+		return -1;
 	if (ip6prp->jlenoff == 0) {
 		if (prp_plen(prp) > 65535)
 			return -1;
 		plen = prp_plen(prp);
 		pack(&ip6->len, 2, "h", plen);
 	} else {
+		if (ip6prp->jlenoff > prp_totlen(prp) - 2)
+			return -1;
 		plen = 0;
 		pack(&ip6->len, 2, "h", plen);
 		pack(buf + ip6prp->jlenoff, 4, "w", (ulong)prp_plen(prp));
 	}
+	prp->error &= ~(PRP_ERR_LENGTH | PRP_ERR_HLEN | PRP_ERR_TOOSMALL);
+
 	return 0;
 }
 
@@ -1658,6 +1676,7 @@ static int icmp6_fixcksum(struct prparse *prp, byte_t *buf)
 		return -1;
 	icmp6->cksum = 0;
 	icmp6->cksum = pseudo_cksum(prp, ipprp, buf, IPPROT_ICMPV6);
+	prp->error &= ~PRP_ERR_CKSUM;
 	return 0;
 }
 
