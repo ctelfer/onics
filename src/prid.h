@@ -37,6 +37,7 @@
 #define PRID_USER8		PRID_BUILD(PRID_PF_RES, 199)
 #define PRID_ANY		PRID_BUILD(PRID_PF_RES, 254)
 #define PRID_INVALID            PRID_BUILD(PRID_PF_RES, 255)
+#define PRID_MAX		PRID_INVALID
 
 
 /* Standard protocol IDs */

@@ -6,6 +6,7 @@
 #include <cat/io.h>
 #include "prid.h"
 #include "pktbuf.h"
+#include "ns.h"
 
 const size_t pkb_xpkt_pool_size = 1024 - sizeof(cat_pcpad_t);
 #define PKB_MAX_DATA_LEN  (65536 + 2048 - sizeof(cat_pcpad_t))
@@ -548,34 +549,29 @@ int pkb_is_parsed(struct pktbuf *pkb)
 
 static int islink(int prid)
 {
-	return PRID_FAMILY(prid) == PRID_PF_DLT;
+	struct ns_namespace *ns = ns_lookup_by_prid(prid);
+	return (ns && ns->pclass == PRID_PCLASS_LINK);
 }
 
 
 static int istunnel(int prid)
 {
-	return 0;
+	struct ns_namespace *ns = ns_lookup_by_prid(prid);
+	return (ns && ns->pclass == PRID_PCLASS_TUNNEL);
 }
 
 
 static int isnet(int prid)
 {
-	return PRID_FAMILY(prid) == PRID_PF_NET;
+	struct ns_namespace *ns = ns_lookup_by_prid(prid);
+	return (ns && ns->pclass == PRID_PCLASS_NET);
 }
 
 
 static int isxport(int prid)
 {
-	/* NOTE: not all inet protocols are transport protocols. */
-	switch (prid) {
-	case PRID_ICMP:
-	case PRID_ICMP6:
-	case PRID_UDP:
-	case PRID_TCP:
-		return 1;
-	default:
-		return 0;
-	}
+	struct ns_namespace *ns = ns_lookup_by_prid(prid);
+	return (ns && ns->pclass == PRID_PCLASS_XPORT);
 }
 
 

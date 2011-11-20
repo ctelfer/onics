@@ -194,7 +194,7 @@ void print_parse(struct prparse *prp, ulong soff, ulong feoff, ulong deoff,
 	char line[MAXLINE];
 	struct ns_namespace *ns;
 
-	ns = ns_lookup_by_prid(NULL, prp->prid);
+	ns = ns_lookup_by_prid(prp->prid);
 	if (ns == NULL) {
 		if ( prp->prid == PRID_NONE )
 			snprintf(line, MAXPFX, "# DATA: ");

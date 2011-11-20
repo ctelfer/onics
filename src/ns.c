@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 
+static struct ns_namespace *pridtab[PRID_MAX+1];
 static struct ns_elem *rootelem[256] = { 0 };
 static struct ns_namespace rootns =
 	NS_NAMESPACE_ROOT(rootelem, array_length(rootelem));
@@ -16,11 +17,15 @@ int ns_add_elem(struct ns_namespace *ns, struct ns_elem *e)
 	int id;
 	int freeid = -1;
 	struct ns_elem *e2;
+	struct ns_namespace *ns2;
 
 	abort_unless(e && TYPEOK(e->type));
 
 	if (ns == NULL)
 		ns = &rootns;
+
+	if (ns->prid > PRID_MAX)
+		return -1;
 
 	freeid = -1;
 	for (id = 0; id < ns->nelem; ++id) {
@@ -41,6 +46,11 @@ int ns_add_elem(struct ns_namespace *ns, struct ns_elem *e)
 
 	e->parent = ns;
 	ns->elems[freeid] = e;
+	if (e->type == NST_NAMESPACE) {
+		ns2 = (struct ns_namespace *)e;
+		if (pridtab[ns2->prid] != NULL)
+			pridtab[ns2->prid] = ns2;
+	}
 
 	return 0;
 }
@@ -48,7 +58,7 @@ int ns_add_elem(struct ns_namespace *ns, struct ns_elem *e)
 
 void ns_rem_elem(struct ns_elem *e)
 {
-	struct ns_namespace *ns;
+	struct ns_namespace *ns, *ns2;
 	int id;
 
 	abort_unless(e && TYPEOK(e->type));
@@ -65,6 +75,12 @@ void ns_rem_elem(struct ns_elem *e)
 		abort_unless(id < ns->nelem);
 		ns->elems[id] = NULL;
 		e->parent = NULL;
+
+		if (e->type == NST_NAMESPACE) {
+			ns2 = (struct ns_namespace *)e;
+			if (pridtab[ns2->prid] == ns2)
+				pridtab[ns2->prid] = NULL;
+		}
 	}
 }
 
@@ -112,25 +128,11 @@ struct ns_elem *ns_lookup(struct ns_namespace *ns, const char *name)
 }
 
 
-struct ns_namespace *ns_lookup_by_prid(struct ns_namespace *ns, uint prid)
+struct ns_namespace *ns_lookup_by_prid(uint prid)
 {
-	struct ns_elem **elem = NULL, **end;
-
-	if (!ns)
-		ns = &rootns;
-
-	elem = ns->elems;
-	for (elem = ns->elems, end = elem + ns->nelem ; elem < end; ++elem) {
-		if (*elem == NULL)
-			break;
-		if ((*elem)->type == NST_NAMESPACE) {
-			ns = (struct ns_namespace *)*elem;
-			if (ns->prid == prid)
-				return ns;
-		}
-	}
-
-	return NULL;
+	if (prid > PRID_MAX)
+		return NULL;
+	return pridtab[prid];
 }
 
 
