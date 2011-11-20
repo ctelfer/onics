@@ -263,7 +263,7 @@ static void ni_pushfr(struct netvm *vm)
 static void ni_popfr(struct netvm *vm)
 {
 	struct netvm_inst *inst = &vm->inst[vm->pc];
-	uint64_t tos;
+	uint64_t tos = 0;
 	uint64_t bp;
 
 	if (inst->x) {
@@ -1627,7 +1627,7 @@ void netvm_clr_mem(struct netvm *vm)
 	for (i = 0; i < NETVM_MAXMSEGS; ++i) {
 		m  = &vm->msegs[i];
 		if (((m->perms & NETVM_SEG_WR) != 0) && (m->base != NULL))
-			memset(m->base, m->len, 0);
+			memset(m->base, 0, m->len);
 	}
 }
 
