@@ -23,7 +23,7 @@
 
 # comment
 .include "filename"
-.define PRID_TCP		0x0006
+.define PRID_TCP	0x0006
 .define RWSEG		0
 .define RWPERMS 	3
 .segment RWSEG RWPERMS  1024
@@ -36,7 +36,7 @@ label:	add
 	jmpi, @label
 	bzi, 3
 	cpop 0, 0, z, w
-	pkfxli *PKTN:PRID.INDEX.FIELD[OFFSET]
+	pkfxli *PKTN:PRID:INDEX:FIELD[OFFSET]
 */
 
 struct clopt options[] = { 
