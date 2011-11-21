@@ -81,13 +81,13 @@ void print_vmret(int vmrv, int ec, uint pc, uint64_t rc)
 static void print_stack(struct netvm *vm)
 {
 	uint sp;
-	printf("Stack:\n");
+	fprintf(stderr, "Stack:\n");
 	sp = vm->sp;
 	while (sp > 0) {
 		--sp;
-		printf("\t%4u: %llu (0x%llx)\n", sp,
-		       (ulonglong)vm->stack[sp],
-		       (ulonglong)vm->stack[sp]);
+		fprintf(stderr, "\t%4u: %llu (0x%llx)\n", sp,
+		        (ulonglong)vm->stack[sp],
+		        (ulonglong)vm->stack[sp]);
 	}
 }
 
@@ -150,6 +150,7 @@ void run_with_packets(struct netvm_program *prog, struct netvm *vm, int filter)
 			errsys("Error parsing packets");
 		++npkt;
 
+		netvm_load_pkt(vm, p, 0);
 		vmrv = nvmp_exec(prog, NVMP_EP_PACKET, vm, -1, &rc);
 
 		if (vmrv < 0)
