@@ -6,7 +6,7 @@ INCS=-I${CATLIB_ROOT}/include
 #LIBS=-L${CATLIB_ROOT}/lib -lcat -lpcap
 #DEFS=
 # Some of these are gcc-specific.  TODO: remove/group compiler specific flags.
-OPTS=-g -Wall -Wno-sign-conversion -Wno-pointer-sign -O3 -fno-strict-aliasing
+OPTS=-g -Wall -Wno-sign-conversion -Wno-pointer-sign -fno-strict-aliasing
 LIBS=-L${CATLIB_ROOT}/lib -lcat -lpcap
 DEFS=
 BINDIR=../bin
