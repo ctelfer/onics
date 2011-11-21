@@ -48,7 +48,7 @@ int ns_add_elem(struct ns_namespace *ns, struct ns_elem *e)
 	ns->elems[freeid] = e;
 	if (e->type == NST_NAMESPACE) {
 		ns2 = (struct ns_namespace *)e;
-		if (pridtab[ns2->prid] != NULL)
+		if (pridtab[ns2->prid] == NULL)
 			pridtab[ns2->prid] = ns2;
 	}
 
