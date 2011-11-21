@@ -1,0 +1,10 @@
+.define ipv6 0x0101
+.define net 0xff82
+.define prid 5
+.entry packet @start
+.matchonly
+
+start:
+	ldpfi *0:net:0:prid[0]
+	push ipv6
+	eq

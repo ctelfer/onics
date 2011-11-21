@@ -154,6 +154,7 @@ struct prparse {
 #define prp_list_head(prp) prp_is_base(prp)
 #define prp_list_end(prp) prp_is_base(prp)
 #define prp_empty(prp) (l_isempty(&(prp)->node))
+#define prp_off_valid(prp, off) ((prp)->offs[(off)] != PRP_OFF_INVALID)
 
 /* Find the next parse in the specified region or return NULL if none */
 /* exists in the parse list.  use the region parse as the 'from' for */

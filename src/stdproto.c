@@ -40,10 +40,7 @@ struct ip_parse {
 
 struct ipv6_parse {
 	struct prparse prp;
-	ulong nexthoff;
-	ulong jlenoff;
-	ulong ahoff;
-	ulong fraghoff;
+	ulong xfields[PRP_IPV6_NXFIELDS];
 };
 
 
@@ -745,7 +742,7 @@ static uint16_t pseudo_cksum(struct prparse *prp, struct prparse *ipprp,
 		ph.saddr = ip->saddr;
 		ph.daddr = ip->daddr;
 		ph.proto = proto;
-		ph.totlen = ntoh16(prp_totlen(prp));
+		ph.totlen = hton16(prp_totlen(prp));
 		sum = ones_sum(&ph, 12, 0);
 	} else {
 		struct pseudo6h ph;
@@ -755,7 +752,7 @@ static uint16_t pseudo_cksum(struct prparse *prp, struct prparse *ipprp,
 		ph.saddr = ip6->saddr;
 		ph.daddr = ip6->daddr;
 		ph.proto = proto;
-		ph.totlen = ntoh32(prp_totlen(prp));
+		ph.totlen = hton32(prp_totlen(prp));
 		sum = ones_sum(&ph, IPV6H_LEN, 0);
 	}
 	return ~ones_sum(prp_header(prp, buf, void), prp_totlen(prp), sum);
@@ -764,7 +761,7 @@ static uint16_t pseudo_cksum(struct prparse *prp, struct prparse *ipprp,
 
 static struct prparse *find_ipprp(struct prparse *prp)
 {
-	while (prp != NULL && prp->prid != PRID_IPV4 && prp->prid != PRID_IPV4)
+	while (prp != NULL && prp->prid != PRID_IPV4 && prp->prid != PRID_IPV6)
 		prp = prp->region;
 	return prp;
 }
@@ -1239,7 +1236,7 @@ static int isv6ext(uint8_t proto)
 
 
 /* search for jumbogram options */
-static int parse_ipv6_hopopt(struct ipv6_parse *ip6prp, struct ipv6h *ip6,
+static int parse_ipv6_hopopt(struct prparse *prp, struct ipv6h *ip6,
 			     byte_t *p, long olen)
 {
 	byte_t *end = p + olen;
@@ -1253,24 +1250,22 @@ static int parse_ipv6_hopopt(struct ipv6_parse *ip6prp, struct ipv6h *ip6,
 			continue;
 		}
 		if (p + p[1] + 2 > end) {	/* padn + all other options */
-			ip6prp->prp.error |= PRP_ERR_OPTLEN | PRP_ERR_HLEN;
+			prp->error |= PRP_ERR_OPTLEN | PRP_ERR_HLEN;
 			return -1;
 		}
 		if (p[0] == 0xC2) {	/* jumbogram option */
-			if (ip6prp->jlenoff > 0) {
-				ip6prp->prp.error |= PRP_ERR_OPTLEN |
-						     PRP_ERR_HLEN;
+			if (prp_off_valid(prp, PRP_IPV6FLD_JLEN)) {
+				prp->error |= PRP_ERR_OPTLEN | PRP_ERR_HLEN;
 				return -1;
 			}
 			if ((p[1] != 4) || (ip6->len != 0) ||
-			    (ip6prp->jlenoff > 0) ||
+			    prp_off_valid(prp, PRP_IPV6FLD_JLEN) || 
 			    (((p - (byte_t *) ip6) & 3) != 2)) {
-				ip6prp->prp.error |= PRP_ERR_OPTERR |
-						     PRP_ERR_HLEN;
+				prp->error |= PRP_ERR_OPTERR | PRP_ERR_HLEN;
 				return -1;
 			}
-			ip6prp->jlenoff = (p - (byte_t *)ip6) + 
-				          prp_soff(&ip6prp->prp);
+			prp->offs[PRP_IPV6FLD_JLEN] = (p - (byte_t *)ip6) + 
+				          	      prp_soff(prp);
 		}
 		p += p[1] + 2;
 	}
@@ -1278,8 +1273,7 @@ static int parse_ipv6_hopopt(struct ipv6_parse *ip6prp, struct ipv6h *ip6,
 }
 
 
-static int parse_ipv6_opt(struct ipv6_parse *ip6prp, struct ipv6h *ip6,
-			  ulong len)
+static int parse_ipv6_opt(struct prparse *prp, struct ipv6h *ip6, ulong len)
 {
 	ulong xlen = 0;
 	uint8_t nexth;
@@ -1291,51 +1285,50 @@ static int parse_ipv6_opt(struct ipv6_parse *ip6prp, struct ipv6h *ip6,
 	nexth = ip6->nxthdr;
 	p = (byte_t *)ip6 + IPV6H_LEN;
 	if (xlen > len - 8) {
-		ip6prp->prp.error |= PRP_ERR_OPTLEN | PRP_ERR_HLEN;
+		prp->error |= PRP_ERR_OPTLEN | PRP_ERR_HLEN;
 		return -1;
 	}
 
 	while (isv6ext(nexth)) {
 		if (nexth == IPPROT_AH) { /* AH is idiotic and useless */
 			olen = (p[1] << 2) + 8;
-			if (ip6prp->ahoff == 0) {
-				ip6prp->ahoff = prp_soff(&ip6prp->prp) + 
-						IPV6H_LEN + xlen;
+			if (!prp_off_valid(prp, PRP_IPV6FLD_AHH)) {
+				prp->offs[PRP_IPV6FLD_AHH] = prp_soff(prp) + 
+							     IPV6H_LEN + xlen;
 			}
 		} else if (nexth == IPPROT_V6_FRAG_HDR) {
-			if (ip6prp->fraghoff != 0) {
-				ip6prp->prp.error |= PRP_ERR_OPTERR | 
-						     PRP_ERR_HLEN;
+			if (prp_off_valid(prp, PRP_IPV6FLD_FRAGH)) {
+				prp->error |= PRP_ERR_OPTERR | PRP_ERR_HLEN;
 				return -1;
 			}
-			ip6prp->fraghoff = prp_soff(&ip6prp->prp) + IPV6H_LEN +
-					   xlen;
+			prp->offs[PRP_IPV6FLD_FRAGH] = prp_soff(prp) +
+						       IPV6H_LEN + xlen;
 			olen = 8;
 			
 		} else {
 			olen = (p[1] << 3) + 8;
 		}
 		if (olen > len - xlen) {
-			ip6prp->prp.error |= PRP_ERR_OPTLEN | PRP_ERR_HLEN;
+			prp->error |= PRP_ERR_OPTLEN | PRP_ERR_HLEN;
 			return -1;
 		}
 		/* hop-by-hop options can only come first */
 		if (nexth == IPPROT_V6_HOPOPT && xlen != 0) {
-			ip6prp->prp.error |= PRP_ERR_OPTERR | PRP_ERR_HLEN;
+			prp->error |= PRP_ERR_OPTERR | PRP_ERR_HLEN;
 			return -1;
 		}
 
 		xlen += olen;
 		p += olen;
 		if (xlen > len - 8) {
-			ip6prp->prp.error |= PRP_ERR_OPTLEN | PRP_ERR_HLEN;
+			prp->error |= PRP_ERR_OPTLEN | PRP_ERR_HLEN;
 			return -1;
 		}
-		ip6prp->nexthoff = xlen + prp_soff(&ip6prp->prp);
+		prp->offs[PRP_IPV6FLD_NXTHDR] = xlen + prp_soff(prp);
 		nexth = p[0];
 	}
 
-	prp_poff(&ip6prp->prp) = prp_soff(&ip6prp->prp) + IPV6H_LEN + xlen;
+	prp_poff(prp) = prp_soff(prp) + IPV6H_LEN + xlen;
 
 	return 0;
 }
@@ -1347,7 +1340,7 @@ static struct prparse *ipv6_parse(struct prparse *reg, byte_t *buf,
 	struct prparse *prp;
 
 	prp = crtprp(sizeof(struct ipv6_parse), PRID_IPV6, off, 0, maxlen, 0,
-		     &ipv6_prparse_ops, 0);
+		     &ipv6_prparse_ops, PRP_IPV6_NXFIELDS);
 	if (!prp)
 		return NULL;
 
@@ -1361,7 +1354,6 @@ static struct prparse *ipv6_parse(struct prparse *reg, byte_t *buf,
 int ipv6_nxtcld(struct prparse *reg, byte_t *buf, struct prparse *cld,
 	        uint *prid, ulong *off, ulong *maxlen)
 {
-	struct ipv6_parse *ip6prp;
 	struct ipv6h *ip6;
 	byte_t *p;
 	ushort foff;
@@ -1371,7 +1363,6 @@ int ipv6_nxtcld(struct prparse *reg, byte_t *buf, struct prparse *cld,
 		return 0;
 
 	abort_unless(buf);
-	ip6prp = (struct ipv6_parse *)reg;
 	ip6 = prp_header(reg, buf, struct ipv6h);
 
 	/* We treat AH and ESP as their own protocols, not IPv6 options */
@@ -1380,19 +1371,21 @@ int ipv6_nxtcld(struct prparse *reg, byte_t *buf, struct prparse *cld,
 	/* past said header.  In other words, the IPv6 header may extend */
 	/* past the start of the next protocol. Did I mention how little */
 	/* I like AH's design. */
-	if (ip6prp->ahoff == IPPROT_AH) {
+	if (prp_off_valid(reg, PRP_IPV6FLD_AHH)) {
 		*prid = PRID_BUILD(PRID_PF_INET, IPPROT_AH);
-		*off = ip6prp->ahoff;
-		*maxlen = prp_totlen(reg) - ip6prp->ahoff;
+		*off = reg->offs[PRP_IPV6FLD_AHH];
+		*maxlen = prp_totlen(reg) - reg->offs[PRP_IPV6FLD_AHH];
 	} else {
-		abort_unless(ip6prp->nexthoff >= prp_soff(reg));
-		abort_unless(ip6prp->nexthoff < prp_eoff(reg));
-		nexth = buf[ip6prp->nexthoff];
+		ulong nhoff = reg->offs[PRP_IPV6FLD_NXTHDR];
+		abort_unless(nhoff != PRP_OFF_INVALID);
+		abort_unless(nhoff >= prp_soff(reg));
+		abort_unless(nhoff < prp_eoff(reg));
+		nexth = buf[nhoff];
 		*prid = PRID_BUILD(PRID_PF_INET, nexth);
-		if (ip6prp->fraghoff != 0) {
+		if (prp_off_valid(reg, PRP_IPV6FLD_FRAGH)) {
 			/* we can't parse the next header if we aren't the */
 			/* first fragment. */
-			p = buf + ip6prp->fraghoff + 2;
+			p = buf + reg->offs[PRP_IPV6FLD_FRAGH] + 2;
 			unpack(p, 2, "h", &foff);
 			foff &= ~7;
 			if (foff > 0)
@@ -1415,7 +1408,6 @@ static int ipv6_add(struct prparse *reg, byte_t *buf, struct prpspec *ps,
 		    int enclose)
 {
 	struct prparse *prp, *cld;
-	struct ipv6_parse *ip6prp;
 	struct ipv6h *ip6;
 
 	if (ps->hlen < IPV6H_LEN || ps->plen > 65535) {
@@ -1424,17 +1416,13 @@ static int ipv6_add(struct prparse *reg, byte_t *buf, struct prpspec *ps,
 	}
 
 	prp = crtprp(sizeof(struct ipv6_parse), PRID_IPV6, ps->off, ps->hlen,
-		     ps->plen, ps->tlen, &ipv6_prparse_ops, 0);
+		     ps->plen, ps->tlen, &ipv6_prparse_ops, PRP_IPV6_NXFIELDS);
 	if (!prp)
 		return -1;
 
 	if (buf) {
-		ip6prp = (struct ipv6_parse *)prp;
 		ip6 = prp_header(prp, buf, struct ipv6h);
-		ip6prp->nexthoff = 6;
-		ip6prp->jlenoff = 0;
-		ip6prp->ahoff = 0;
-		ip6prp->fraghoff = 0;
+		prp->offs[PRP_IPV6FLD_NXTHDR] = prp_soff(prp) + 6;
 		memset(ip6, 0, prp_hlen(prp));
 		*(byte_t *)ip6 = 0x60;
 		ip6->len = hton16(prp_plen(prp));
@@ -1453,7 +1441,6 @@ static int ipv6_add(struct prparse *reg, byte_t *buf, struct prpspec *ps,
 
 static void ipv6_update(struct prparse *prp, byte_t *buf)
 {
-	struct ipv6_parse *ip6prp;
 	struct ipv6h *ip6;
 	ushort paylen;
 	ulong len, jlen, extra, hbhlen;
@@ -1461,12 +1448,8 @@ static void ipv6_update(struct prparse *prp, byte_t *buf)
 
 	prp->error = 0;
 	resetxfields(prp);
-	ip6prp = (struct ipv6_parse *)prp;
 	ip6 = prp_header(prp, buf, struct ipv6h);
-	ip6prp->nexthoff = 6;
-	ip6prp->jlenoff = 0;
-	ip6prp->ahoff = 0;
-	ip6prp->fraghoff = 0;
+	prp->offs[PRP_IPV6FLD_NXTHDR] = prp_soff(prp) + 6;
 
 	len = prp_totlen(prp);
 	if (len < IPV6H_LEN) {
@@ -1498,12 +1481,12 @@ static void ipv6_update(struct prparse *prp, byte_t *buf)
 				      PRP_ERR_LENGTH;
 			return;
 		}
-		rv = parse_ipv6_hopopt(ip6prp, ip6, (byte_t *)(ip6+1), hbhlen);
-		if (rv < 0 || ip6prp->jlenoff == 0) {
+		rv = parse_ipv6_hopopt(prp, ip6, (byte_t *)(ip6+1), hbhlen);
+		if (rv < 0 || !prp_off_valid(prp, PRP_IPV6FLD_JLEN)) {
 			prp->error |= PRP_ERR_LENGTH;
 			return;
 		}
-		unpack(buf + ip6prp->jlenoff, 4, "w", &jlen);
+		unpack(buf + prp->offs[PRP_IPV6FLD_JLEN], 4, "w", &jlen);
 		if (jlen > len - IPV6H_LEN) {
 			prp->error |= PRP_ERR_OPTERR | PRP_ERR_LENGTH;
 			return;
@@ -1522,30 +1505,30 @@ static void ipv6_update(struct prparse *prp, byte_t *buf)
 	}
 
 	/* sets hlen */
-	parse_ipv6_opt(ip6prp, ip6, len - IPV6H_LEN);
+	parse_ipv6_opt(prp, ip6, len - IPV6H_LEN);
 }
 
 
 static int ipv6_fixlen(struct prparse *prp, byte_t *buf)
 {
 	struct ipv6h *ip6 = prp_header(prp, buf, struct ipv6h);
-	struct ipv6_parse *ip6prp = (struct ipv6_parse *)prp;
 	ushort plen;
 
 	abort_unless(prp && buf);
 	if (prp_hlen(prp) < 40)
 		return -1;
-	if (ip6prp->jlenoff == 0) {
+	if (!prp_off_valid(prp, PRP_IPV6FLD_JLEN)) {
 		if (prp_plen(prp) > 65535)
 			return -1;
 		plen = prp_plen(prp);
 		pack(&ip6->len, 2, "h", plen);
 	} else {
-		if (ip6prp->jlenoff > prp_totlen(prp) - 2)
+		if (prp->offs[PRP_IPV6FLD_JLEN] > prp_totlen(prp) - 2)
 			return -1;
 		plen = 0;
 		pack(&ip6->len, 2, "h", plen);
-		pack(buf + ip6prp->jlenoff, 4, "w", (ulong)prp_plen(prp));
+		pack(buf + prp->offs[PRP_IPV6FLD_JLEN], 4, "w",
+		     (ulong)prp_plen(prp));
 	}
 	prp->error &= ~(PRP_ERR_LENGTH | PRP_ERR_HLEN | PRP_ERR_TOOSMALL);
 
