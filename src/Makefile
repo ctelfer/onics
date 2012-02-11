@@ -96,4 +96,5 @@ clean:
 	rm -f ${TARGETS}
 	rm -f *.o
 	rm -f lex.pml.c pml.c pml.h pml.out
+	rm -f ../lemon/lemon
 
