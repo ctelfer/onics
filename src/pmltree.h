@@ -1,5 +1,5 @@
 /*
- * Copyright 2009 -- Christopher Telfer
+ * Copyright 2011 -- Christopher Telfer
  * See attached licence.
  */
 #ifndef __pmltree_h
@@ -37,7 +37,7 @@ struct pml_symtab {
 struct pml_ast {
 	int			error;
 	int			done;
-	unsigned long		line;
+	ulong			line;
 	struct pml_symtab	vars;
 	struct pml_symtab	funcs;
 	struct list		b_rules;
@@ -101,12 +101,14 @@ enum {
 struct pml_node_base {
 	int			type;
 	struct list		ln;
+	void *			aux;
 };
 
 
 struct pml_list {
 	int			type;
 	struct list		ln;
+	void *			aux;
 	struct list		list;
 };
 
@@ -145,6 +147,7 @@ enum {
 struct pml_expr_base {
 	int			type;
 	struct list		ln;
+	void *			aux;
 	ushort			etype;
 	ushort			eflags;
 	size_t			width;
@@ -156,6 +159,7 @@ struct pml_bytestr {
 	int			is_dynamic;
 	struct raw		bytes;
 	uchar			sbytes[PML_BYTESTR_MAX_STATIC];
+	uint64_t		addr;
 };
 
 
@@ -168,6 +172,7 @@ struct pml_maskval {
 struct pml_literal {
 	int			type;
 	struct list		ln;
+	void *			aux;
 	ushort			etype;
 	ushort			eflags;
 	size_t			width;
@@ -188,10 +193,17 @@ enum {
 };
 
 
+/*
+ * The address of each variable should be interpreted according to its type:
+ *  - const -> offset in read-only segment
+ *  - global -> offset is in the read-write segment
+ *  - local -> offset (in bytes) from bottom of the stack frame.
+ */
 struct pml_variable {
 	/* pml_sym_base fields */
 	int			type;
 	struct list		ln;
+	void *			aux;
 	struct hnode		hn;
 	char *			name;
 
@@ -199,13 +211,14 @@ struct pml_variable {
 	ushort			vtype;
 	ushort			etype;
 	size_t			width;
-	uint64_t		addr;
+	uint64_t		addr;	/* depends on type:  see above */
 };
 
 
 struct pml_op {
 	int			type;
 	struct list		ln;
+	void *			aux;
 	ushort			etype;
 	ushort			eflags;
 	size_t			width;
@@ -219,6 +232,7 @@ struct pml_op {
 struct pml_call {
 	int			type;
 	struct list		ln;
+	void *			aux;
 	ushort			etype;
 	ushort			eflags;
 	size_t			width;
@@ -231,6 +245,7 @@ struct pml_call {
 struct pml_if {
 	int			type;
 	struct list		ln;
+	void *			aux;
 
 	union pml_expr_u *	test;
 	struct pml_list *	tbody;
@@ -241,6 +256,7 @@ struct pml_if {
 struct pml_while {
 	int			type;
 	struct list		ln;
+	void *			aux;
 
 	union pml_expr_u *	test;
 	struct pml_list *	body;
@@ -274,6 +290,7 @@ enum {
 struct pml_locator {
 	int			type;
 	struct list		ln;
+	void *			aux;
 	ushort			etype;
 	ushort			eflags;
 	size_t			width;
@@ -296,6 +313,7 @@ struct pml_locator {
 struct pml_assign {
 	int			type;
 	struct list		ln;
+	void *			aux;
 
 	struct pml_locator *	loc;
 	union pml_expr_u *	expr;
@@ -315,8 +333,9 @@ enum {
 struct pml_cfmod {
 	int			type;
 	struct list		ln;
-	int			cftype;
+	void *			aux;
 
+	int			cftype;
 	union pml_expr_u *	expr;
 };
 
@@ -324,6 +343,7 @@ struct pml_cfmod {
 struct pml_print {
 	int			type;
 	struct list		ln;
+	void *			aux;
 
 	char *			fmt;
 	struct pml_list *	args;	/* expressions */
@@ -333,6 +353,7 @@ struct pml_print {
 struct pml_sym {
 	int			type;
 	struct list		ln;
+	void *			aux;
 	struct hnode		hn;
 	char *			name;
 };
@@ -350,10 +371,11 @@ struct pml_function {
 	/* pml_sym_base fields */
 	int			type;
 	struct list		ln;
-	struct hnode		hn;		/* node for lookup in the AST */
+	void *			aux;
+	struct hnode		hn;	/* node for lookup in the AST */
 	char *			name;
 
-	uint			arity;		/* number of arguments */
+	uint			arity;	/* number of arguments */
 	struct pml_symtab	params;
 	struct pml_symtab	vars;
 	union pml_node *	body;	/* expr for pred, list for func */
@@ -362,7 +384,7 @@ struct pml_function {
 	int			flags;
 	size_t			pstksz;
 	size_t			vstksz;
-	size_t			width;
+	size_t			width;	/* of return value: always 8 for now */
 };
 
 
@@ -376,6 +398,7 @@ enum {
 struct pml_rule {
 	int			type;
 	struct list		ln;
+	void *			aux;
 
 	int			trigger;
 	struct pml_symtab	vars;

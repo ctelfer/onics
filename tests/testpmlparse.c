@@ -1,6 +1,8 @@
 #include "prid.h"
 #include "pmltree.h"
 #include "stdproto.h"
+#include <stdlib.h>
+#include <string.h>
 
 #define VERBOSE		1
 #define LEX		2
@@ -18,11 +20,21 @@ int main(int argc, char *argv[])
 	struct pml_lex_val none, extra;
 	int printmask = VERBOSE|LEX|TREE1|TREE2;
 
-	if (argc > 1)
+	if (argc > 1) {
+		if (strcmp(argv[1], "-h") == 0) {
+			fprintf(stderr, "usage: %s <printmask>\n"
+					"\tBit 0: enables verbose\n"
+					"\tBit 1: enables lex analyzer output\n"
+					"\tBit 2: prints pre-optimized AST\n"
+					"\tBit 3: prints optimized AST\n",
+				argv[0]);
+			exit(1);
+		}
 		printmask = atoi(argv[1]);
+	}
 
 	if (printmask & VERBOSE) {
-		printf("n########\n");
+		printf("#########\n");
 		printf("Initializing parse data structures\n");
 		printf("#########\n");
 	}
@@ -40,7 +52,7 @@ int main(int argc, char *argv[])
 	pml_ast_init(&tree);
 
 	if (printmask & VERBOSE) {
-		printf("n########\n");
+		printf("#########\n");
 		printf("Starting Parse\n");
 		printf("#########\n");
 	}

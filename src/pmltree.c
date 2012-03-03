@@ -392,20 +392,28 @@ int pml_func_add_param(struct pml_function *func, struct pml_variable *var)
 }
 
 
-union pml_node *pmln_alloc(int pmltt)
+union pml_node *pmln_alloc(int type)
 {
 	union pml_node *np;
+	struct pml_node_base *node;
 
 	np = calloc(1, sizeof(*np));
 	if (np == NULL)
 		return NULL;
 
-	switch (pmltt) {
+	/* initialize the common elements of each node */
+	node = &np->base;
+	node->type = type;
+	l_init(&node->ln);
+	node->aux = NULL;
+
+	/* Initialize the rest of the fields based on type. */
+	/* A function pointer table based on type would be more */
+	/* extensible, but overkill. */
+	switch (type) {
 
 	case PMLTT_LIST: {
 		struct pml_list *p = &np->list;
-		p->type = pmltt;
-		l_init(&p->ln);
 		l_init(&p->list);
 	} break;
 
@@ -413,17 +421,15 @@ union pml_node *pmln_alloc(int pmltt)
 	case PMLTT_BYTESTR:
 	case PMLTT_MASKVAL: {
 		struct pml_literal *p = &np->literal;
-		p->type = pmltt;
-		l_init(&p->ln);
 		p->eflags = PML_EFLAG_CONST;
-		if (pmltt == PMLTT_SCALAR) {
+		if (type == PMLTT_SCALAR) {
 			p->etype = PML_ETYPE_SCALAR;
 			p->u.scalar = 0;
 			p->width = 8;
-		} else if (pmltt == PMLTT_BYTESTR) {
+		} else if (type == PMLTT_BYTESTR) {
 			p->etype = PML_ETYPE_BYTESTR;
 			pml_bytestr_set_static(&p->u.bytestr, NULL, 0);
-		} else if (pmltt == PMLTT_MASKVAL) {
+		} else if (type == PMLTT_MASKVAL) {
 			p->etype = PML_ETYPE_MASKVAL;
 			pml_bytestr_set_static(&p->u.maskval.val, NULL, 0);
 			pml_bytestr_set_static(&p->u.maskval.mask, NULL, 0);
@@ -432,8 +438,6 @@ union pml_node *pmln_alloc(int pmltt)
 
 	case PMLTT_VAR: {
 		struct pml_variable *p = &np->variable;
-		p->type = pmltt;
-		l_init(&p->ln);
 		ht_ninit(&p->hn, "", p);
 		p->vtype = PML_VTYPE_UNKNOWN;
 		p->etype = PML_ETYPE_UNKNOWN;
@@ -445,11 +449,9 @@ union pml_node *pmln_alloc(int pmltt)
 	case PMLTT_UNOP:
 	case PMLTT_BINOP: {
 		struct pml_op *p = &np->op;
-		p->type = pmltt;
 		p->etype = PML_ETYPE_UNKNOWN;
 		p->eflags = 0;
 		p->width = 0;
-		l_init(&p->ln);
 		p->op = 0;
 		p->arg1 = NULL;
 		p->arg2 = NULL;
@@ -461,27 +463,19 @@ union pml_node *pmln_alloc(int pmltt)
 		p->etype = PML_ETYPE_SCALAR;
 		p->eflags = 0;
 		p->width = 8;
-		p->type = pmltt;
-		l_init(&p->ln);
 		p->func = NULL;
 		p->args = NULL;
-		return (union pml_node *)p;
 	} break;
 
 	case PMLTT_IF: {
 		struct pml_if *p = &np->ifstmt;
-		p->type = pmltt;
-		l_init(&p->ln);
 		p->test = NULL;
 		p->tbody = NULL;
 		p->fbody = NULL;
-		return (union pml_node *)p;
 	} break;
 
 	case PMLTT_WHILE: {
 		struct pml_while *p = &np->whilestmt;;
-		p->type = pmltt;
-		l_init(&p->ln);
 		p->test = NULL;
 		p->body = NULL;
 	} break;
@@ -490,7 +484,7 @@ union pml_node *pmln_alloc(int pmltt)
 	case PMLTT_LOCADDR: {
 		struct pml_locator *p = &np->locator;
 		p->eflags = 0;
-		if (pmltt == PMLTT_LOCATOR) {
+		if (type == PMLTT_LOCATOR) {
 			p->etype = PML_ETYPE_UNKNOWN;
 			p->width = 0;
 		} else {
@@ -499,8 +493,6 @@ union pml_node *pmln_alloc(int pmltt)
 		}
 		p->reftype = PML_REF_UNKNOWN;
 		p->rpfld = PML_RPF_NONE;
-		p->type = pmltt;
-		l_init(&p->ln);
 		p->name = NULL;
 		p->pkt = NULL;
 		p->idx = NULL;
@@ -510,31 +502,24 @@ union pml_node *pmln_alloc(int pmltt)
 
 	case PMLTT_ASSIGN: {
 		struct pml_assign *p = &np->assign;
-		p->type = pmltt;
-		l_init(&p->ln);
 		p->loc = NULL;
 		p->expr = NULL;
 	} break;
 
 	case PMLTT_CFMOD: {
 		struct pml_cfmod *p = &np->cfmod;
-		p->type = pmltt;
-		l_init(&p->ln);
 		p->cftype = PML_CFM_UNKNOWN;
 		p->expr = NULL;
         } break;
 
 	case PMLTT_PRINT: {
 		struct pml_print *p = &np->print;
-		p->type = pmltt;
-		l_init(&p->ln);
 		p->fmt = NULL;
 		p->args = NULL;
 	} break;
 
 	case PMLTT_FUNCTION: {
 		struct pml_function *p = &np->function;
-		l_init(&p->ln);
 		ht_ninit(&p->hn, "", p);
 		if (symtab_init(&p->params) < 0) {
 			free(np);
@@ -547,7 +532,6 @@ union pml_node *pmln_alloc(int pmltt)
 		}
 		p->flags = 0;
 		p->width = 8;
-		p->type = pmltt;
 		p->name = NULL;
 		p->arity = 0;
 		p->body = NULL;
@@ -558,8 +542,6 @@ union pml_node *pmln_alloc(int pmltt)
 
 	case PMLTT_RULE: {
 		struct pml_rule *p = &np->rule;
-		p->type = pmltt;
-		l_init(&p->ln);
 		symtab_init(&p->vars);
 		p->pattern = NULL;
 		p->stmts = NULL;
@@ -2744,11 +2726,13 @@ static int pml_opt_cexpr(union pml_expr_u *e, void *astp, union pml_expr_u **ne)
 	*ne = NULL;
 
 	if (e != NULL && PML_EXPR_IS_CONST(e) && !PML_EXPR_IS_LITERAL(e)) {
+
 		init_global_state(&gs, astp, 0);
 		rv = pml_eval(&gs, NULL, (union pml_node *)e, &r);
 		clear_global_state(&gs);
 		if (rv < 0)
 			return -1;
+
 		switch(r.etype) {
 		case PML_ETYPE_SCALAR:
 			lit = (struct pml_literal *)pmln_alloc(PMLTT_SCALAR);
@@ -2890,13 +2874,10 @@ static int pml_cexpr_walker(union pml_node *node, void *astp, void *xstk)
 	case PMLTT_LOCATOR:
 	case PMLTT_LOCADDR: {
 		struct pml_locator *l = (struct pml_locator *)node;
-		if (pml_opt_p_cexpr(&l->pkt, astp) < 0)
-			return -1;
-		if (pml_opt_p_cexpr(&l->idx, astp) < 0)
-			return -1;
-		if (pml_opt_p_cexpr(&l->off, astp) < 0)
-			return -1;
-		if (pml_opt_p_cexpr(&l->len, astp) < 0)
+		if ((pml_opt_p_cexpr(&l->pkt, astp) < 0) ||
+		    (pml_opt_p_cexpr(&l->idx, astp) < 0) ||
+		    (pml_opt_p_cexpr(&l->off, astp) < 0) ||
+		    (pml_opt_p_cexpr(&l->len, astp) < 0))
 			return -1;
 	} break;
 
