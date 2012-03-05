@@ -1,0 +1,31 @@
+.define RWSEG	0
+.define RWPERMS	3
+.segment RWSEG RWPERMS 1024
+.mem zeroes RWSEG 256 256
+.mem letters RWSEG 248 8 "abcdefgh"
+.mem newline RWSEG 0 8 "\x0A"
+.define nl 0x01000000
+.entry start @start
+
+.define outport_type 2
+.define cpout 1
+.define prstri 8
+.define prhex 3
+.coproc cpout outport_type
+
+start:
+	push 0x41004200
+	sti 4, RWSEG, 257
+	ldi 4, RWSEG, 254
+	cpopi cpout, prhex, 4, 8
+	cpopi cpout, prstri, newline.seg, nl
+	ldi 4, RWSEG, 258
+	cpopi cpout, prhex, 4, 8
+	cpopi cpout, prstri, newline.seg, nl
+	ldi 4, RWSEG, 262
+	cpopi cpout, prhex, 4, 8
+	cpopi cpout, prstri, newline.seg, nl
+	halt 0
+	
+
+
