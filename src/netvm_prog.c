@@ -117,7 +117,10 @@ void nvmp_init_mem(struct netvm_program *prog, struct netvm *vm)
 		ms = &vm->msegs[mi->segnum];
 		abort_unless(mi->val.len <= UINT_MAX - mi->off);
 		abort_unless(mi->val.len + mi->off <= ms->len);
-		memmove(ms->base + mi->off, mi->val.data, mi->val.len);
+		if (mi->val.data == NULL)
+			memset(ms->base + mi->off, 0, mi->val.len);
+		else
+			memmove(ms->base + mi->off, mi->val.data, mi->val.len);
 	}
 }
 
@@ -307,6 +310,10 @@ int nvmp_read(struct netvm_program *prog, FILE *infile, int *eret)
 			e = NVMP_RDE_MILEN;
 			goto err;
 		}
+		ilen = 0;
+		if (!(segnum & NVMP_ZINIT))
+			ilen = (len + 3) & ~3;
+		segnum &= NVMP_SEGMASK;
 		if (segnum >= NETVM_MAXMSEGS) {
 			e = NVMP_RDE_MISEG;
 			goto err;
@@ -316,12 +323,11 @@ int nvmp_read(struct netvm_program *prog, FILE *infile, int *eret)
 			e = NVMP_RDE_MIOFFLEN;
 			goto err;
 		}
-		ilen = (len + 3) & ~3;
-		if (milen < ilen) {
-			e = NVMP_RDE_MITOTLEN;
-			goto err;
-		}
 		if (ilen > 0) {
+			if (milen < ilen) {
+				e = NVMP_RDE_MITOTLEN;
+				goto err;
+			}
 			if ((mi->val.data = malloc(ilen)) == NULL) {
 				e = NVMP_RDE_OOMEM;
 				goto err;
@@ -331,6 +337,8 @@ int nvmp_read(struct netvm_program *prog, FILE *infile, int *eret)
 				goto err;
 			}
 			memset(mi->val.data + len, 0, ilen - len);
+		} else {
+			mi->val.data = NULL;
 		}
 		mi->val.len = len;
 		mi->segnum = segnum;
@@ -376,10 +384,12 @@ int nvmp_write(struct netvm_program *prog, FILE *outfile)
 		if ((mi->val.len > (SIZE_MAX & ~(size_t)3)) || 
 		    (mi->segnum >= NETVM_MAXMSEGS))
 			return -1;
-		ilen = (mi->val.len + 3) & ~(size_t)3;
-		if (ULONG_MAX - milen < ilen)
-			return -1;
-		milen += ilen;
+		if (mi->val.data != NULL) {
+			ilen = (mi->val.len + 3) & ~(size_t)3;
+			if (ULONG_MAX - milen < ilen)
+				return -1;
+			milen += ilen;
+		}
 	}
 
 	for (i = 0; i < NVMP_EP_NUMEP; ++i) {
@@ -427,10 +437,17 @@ int nvmp_write(struct netvm_program *prog, FILE *outfile)
 
 	/* write memory initializations */
 	for (i = 0, mi = prog->inits; i < prog->ninits; ++i, ++mi) {
-		pack(buf, sizeof(buf), "www", (ulong)mi->segnum, 
-		     (ulong)mi->off, (ulong)mi->val.len);
+		ulong segnum = mi->segnum;
+		/* if the data pointer is NULL, that means initialize with 0s */
+		if (mi->val.data == NULL)
+			segnum |= NVMP_ZINIT;
+		pack(buf, sizeof(buf), "www", segnum, (ulong)mi->off,
+		     (ulong)mi->val.len);
 		if (fwrite(buf, 1, NVMP_MIHLEN, outfile) < NVMP_MIHLEN)
 			return -1;
+		/* Nothing to write for zero-initializations */
+		if (mi->val.data == NULL)
+			continue;
 		if (fwrite(mi->val.data, 1, mi->val.len, outfile) < mi->val.len)
 			return -1;
 		ilen = (mi->val.len + 3) & ~(size_t)3;
@@ -468,7 +485,6 @@ void nvmp_clear(struct netvm_program *prog)
 
 	if (prog->ninits != 0) {
 		for (i = 0; i < prog->ninits; ++i) {
-			abort_unless(prog->inits[i].val.data != NULL);
 			free(prog->inits[i].val.data);
 			prog->inits[i].val.data = NULL;
 			prog->inits[i].val.len = 0;

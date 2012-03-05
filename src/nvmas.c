@@ -916,7 +916,7 @@ static int do_mem(struct asmctx *ctx, char *fn, uint lineno,
 		mi->val.data = ecalloc(1, len);
 		memcpy(mi->val.data, toks[5].data, toks[5].len);
 	} else {
-		mi->val.data = 0;
+		mi->val.data = NULL;
 	}
 
 	return 0;

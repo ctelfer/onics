@@ -83,6 +83,9 @@ int nvmp_exec(struct netvm_program *prog, int ep, struct netvm *vm, int maxcycle
  *
  *  Memory initialization format:
  *    segnum[4] off[4] len[4] <data padded to 4 byte multiples>
+ *     - or -
+ *    segnum|(1<<31)[4] off[4] len[4]
+ *     *This one is to initialize with 0s*
  */
 
 #define NVMP_MAGIC	0x4E564D50
@@ -93,6 +96,8 @@ int nvmp_exec(struct netvm_program *prog, int ep, struct netvm *vm, int maxcycle
 #define NVMP_CPLEN	12
 #define NVMP_SEGPLEN	12
 #define NVMP_MIHLEN	12
+#define NVMP_ZINIT	0x80000000
+#define NVMP_SEGMASK	0x7FFFFFFF
 
 
 #define NVMP_RDE_OK       0

@@ -207,7 +207,7 @@ int main(int argc, char *argv[])
 	if ((pf = fopen(progname, "r")) == NULL)
 		errsys("fopen");
 	if (nvmp_read(&prog, pf, &rv) < 0)
-		err("Error reading netvm program '%s\n", progname);
+		err("Error reading netvm program %s\n", progname);
 	fclose(pf);
 	
 	for (i = 0; i < NETVM_MAXMSEGS; ++i) {
@@ -218,7 +218,7 @@ int main(int argc, char *argv[])
 	}
 
 	if ((rv = nvmp_validate(&prog, &vm)) < 0)
-		err("Error validating program: %s\n", netvm_estr(rv));
+		err("Error validating program %s\n", netvm_estr(rv));
 
 	nvmp_init_mem(&prog, &vm);
 
