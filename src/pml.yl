@@ -305,7 +305,9 @@ var Count;
 
 /* ----- Grammar ----- */
 
-prog ::= decllist.
+prog ::= decllist. {
+	pml_ast_finalize(ast);
+}
 
 /* Declarations */
 decllist ::= decllist decl. /* nothing to do: resolved below. */
@@ -381,13 +383,13 @@ idlist(IL) ::= . { IL = (struct pml_list *)pmln_alloc(PMLTT_LIST); }
 idlist(IL) ::= someids(IL2). { IL = IL2; }
 someids(IL) ::= ID(V). {
 	struct pml_variable *v = pml_var_alloc((char *)V.u.raw.data, 0, 
-					       PML_VTYPE_LOCAL, NULL);
+					       PML_VTYPE_PARAM, NULL);
 	IL = (struct pml_list *)pmln_alloc(PMLTT_LIST);
 	l_ins(&IL->list, &v->ln);
 }
 someids(IL) ::= someids(IL2) COMMA ID(V). {
 	struct pml_variable *v = pml_var_alloc((char *)V.u.raw.data, 0,
-					       PML_VTYPE_LOCAL, NULL);
+					       PML_VTYPE_PARAM, NULL);
 	l_enq(&IL2->list, &v->ln);
 	IL = IL2;
 }

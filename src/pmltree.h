@@ -1,5 +1,5 @@
 /*
- * Copyright 2011 -- Christopher Telfer
+ * Copyright 2012 -- Christopher Telfer
  * See attached licence.
  */
 #ifndef __pmltree_h
@@ -27,10 +27,19 @@ typedef int (*pml_eval_f)(struct pml_global_state *gs,
 			  struct pml_retval *v);
 
 
+/* Sizes are in bytes for globals and words (8-bytes) for function */
+/* parameters and local variables. For global variables, rw block 1 */
+/* is for initialized globals while block 2 is for those that the */
+/* code does not explicitly initialize.  (initialized to 0).  For */
+/* functions, rw block 1 is for parameters and rw block 2 is for */
+/* local variables. */
 struct pml_symtab {
 	struct list		list;
 	struct htab		tab;
-	uint64_t		nxtaddr;
+
+	uint64_t		addr_ro;  /* size of read-only mem */
+	uint64_t		addr_rw1; /* size of read-write block 1 */
+	uint64_t		addr_rw2; /* size of read-write block 2*/
 };
 
 
@@ -64,7 +73,6 @@ enum {
 	PMLTT_CFMOD,
 	PMLTT_PRINT,
 	PMLTT_FUNCTION,
-	PMLTT_INLINE,
 	PMLTT_RULE,
 };
 
@@ -189,6 +197,7 @@ enum {
 	PML_VTYPE_UNKNOWN, 
 	PML_VTYPE_CONST,
 	PML_VTYPE_GLOBAL,
+	PML_VTYPE_PARAM,
 	PML_VTYPE_LOCAL,
 };
 
@@ -376,7 +385,6 @@ struct pml_function {
 	char *			name;
 
 	uint			arity;	/* number of arguments */
-	struct pml_symtab	params;
 	struct pml_symtab	vars;
 	union pml_node *	body;	/* expr for pred, list for func */
 	pml_eval_f		ieval;	/* call to eval intrinsic */
@@ -491,6 +499,7 @@ int pml_ast_add_intrinsic(struct pml_ast *ast, struct pml_idef *intr);
 struct pml_variable *pml_ast_lookup_var(struct pml_ast *ast, char *name);
 int pml_ast_add_var(struct pml_ast *ast, struct pml_variable *var);
 int pml_ast_add_rule(struct pml_ast *ast, struct pml_rule *rule);
+void pml_ast_finalize(struct pml_ast *ast);
 
 struct pml_variable *pml_func_lookup_param(struct pml_function *func, 
 					   char *name);

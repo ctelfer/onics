@@ -1,5 +1,5 @@
 /*
- * Copyright 2009 -- Christopher Telfer
+ * Copyright 2012 -- Christopher Telfer
  * See attached licence.
  */
 #include "pmltree.h"
@@ -67,7 +67,9 @@ static int symtab_init(struct pml_symtab *t)
 	}
 	ht_init(&t->tab, bins, SYMTABSIZE, cmp_str, ht_shash, NULL);
 	l_init(&t->list);
-	t->nxtaddr = 0;
+	t->addr_ro  = 0;
+	t->addr_rw1 = 0;
+	t->addr_rw2 = 0;
 	return 0;
 }
 
@@ -115,6 +117,28 @@ static void symtab_destroy(struct pml_symtab *t)
 	free(t->tab.bkts);
 	t->tab.bkts = NULL;
 	abort_unless(l_isempty(&t->list));
+}
+
+
+/* A symbol table can allocate variables in two read-write blocks. */
+/* For global variables, the first block is variables with explicit */
+/* initializers and the second is for variables without them.  The */
+/* program initializeds the latter to 0.  For functions, the first */
+/* block is for parameters and the second is for local variables.  */
+/* This function adjusts the addresses variables in the second block */
+/* by the size of the first block.  */
+static void symtab_adj_var_addrs(struct pml_symtab *t)
+{
+	struct list *n;
+	struct pml_variable *v;
+
+	abort_unless(t);
+	l_for_each(n, &t->list) {
+		v = (struct pml_variable *)l_to_node(n);
+		if ((v->vtype == PML_VTYPE_LOCAL) || 
+		    ((v->vtype == PML_VTYPE_GLOBAL) && (v->init == NULL)))
+			v->addr += t->addr_rw1;
+	}
 }
 
 
@@ -327,6 +351,8 @@ struct pml_variable *pml_ast_lookup_var(struct pml_ast *ast, char *name)
 
 int pml_ast_add_var(struct pml_ast *ast, struct pml_variable *var)
 {
+	uint64_t max;
+
 	if (symtab_add(&ast->vars, (struct pml_sym *)var) < 0) {
 		pml_ast_err(ast, "Duplicate global variable: %s\n", var->name);
 		return -1;
@@ -336,9 +362,20 @@ int pml_ast_add_var(struct pml_ast *ast, struct pml_variable *var)
 		return -1;
 
 	if (var->vtype != PML_VTYPE_CONST) {
-		var->addr = ast->vars.nxtaddr;
-		/* pad global vars to 8-byte alignment */
-		ast->vars.nxtaddr += rup2_64(var->width, 3);
+		/* NOTE: pad global vars to 8-byte sizes */
+		max = (uint64_t)-1 - ast->vars.addr_rw1 - ast->vars.addr_rw2;
+		if (rup2_64(var->width, 3) > max) {
+			pml_ast_err(ast, 
+				    "global read-write address space overflow");
+			return -1;
+		}
+		if (var->init != NULL) {
+			var->addr = ast->vars.addr_rw1;
+			ast->vars.addr_rw1 += rup2_64(var->width, 3);
+		} else { 
+			var->addr = ast->vars.addr_rw2;
+			ast->vars.addr_rw2 += rup2_64(var->width, 3);
+		}
 	}
 
 	return 0;
@@ -368,27 +405,34 @@ int pml_ast_add_rule(struct pml_ast *ast, struct pml_rule *rule)
 }
 
 
-struct pml_variable *pml_func_lookup_param(struct pml_function *func, char *s)
+struct pml_variable *pml_func_lookup_param(struct pml_function *f, char *s)
 {
-	return (struct pml_variable *)symtab_lookup(&func->params, s);
+	struct pml_variable *v = 
+		(struct pml_variable *)symtab_lookup(&f->vars, s);
+	if (v && v->vtype == PML_VTYPE_PARAM)
+		return v;
+	else
+		return NULL;
 }
 
 
-int pml_func_add_param(struct pml_function *func, struct pml_variable *var)
+int pml_func_add_param(struct pml_function *f, struct pml_variable *v)
 {
-	int rv;
-	rv = symtab_add(&func->params, (struct pml_sym *)var);
-	if (rv < 0)
+	abort_unless(v && v->vtype == PML_VTYPE_PARAM);
+	if (symtab_add(&f->vars, (struct pml_sym *)v) < 0)
 		return -1;
-	var->addr = func->params.nxtaddr;
-	func->params.nxtaddr += 1;
-
-	/* XXX all parameters must be added before local addresses, so */
-	/* the local variable table's next address always starts at the  */
-	/* last parameter table's next address. */
-	func->vars.nxtaddr = func->params.nxtaddr;
+	v->addr = f->vars.addr_rw1;
+	f->vars.addr_rw1 += 1;
 
 	return 0;
+}
+
+
+void pml_ast_finalize(struct pml_ast *ast)
+{
+	if (ast->error)
+		return;
+	symtab_adj_var_addrs(&ast->vars);
 }
 
 
@@ -521,12 +565,8 @@ union pml_node *pmln_alloc(int type)
 	case PMLTT_FUNCTION: {
 		struct pml_function *p = &np->function;
 		ht_ninit(&p->hn, "", p);
-		if (symtab_init(&p->params) < 0) {
-			free(np);
-			return NULL;
-		}
 		if (symtab_init(&p->vars) < 0) {
-			symtab_destroy(&p->params);
+			symtab_destroy(&p->vars);
 			free(np);
 			return NULL;
 		}
@@ -658,7 +698,6 @@ void pmln_free(union pml_node *node)
 		ht_rem(&p->hn);
 		free(p->name);
 		p->name = NULL;
-		symtab_destroy(&p->params);
 		symtab_destroy(&p->vars);
 		pmln_free(p->body);
 	} break;
@@ -898,7 +937,7 @@ static const char *ets(void *p) {
 
 
 static const char *vtype_strs[] = {
-	"unknown", "const", "global", "local"
+	"unknown", "const", "global", "param", "local"
 };
 static const char *vts(struct pml_variable *v)
 {
@@ -1224,13 +1263,7 @@ void pmlt_print(union pml_node *np, uint depth)
 		       (ulong)p->width);
 
 		indent(depth);
-		printf("Parameters -- \n");
-		l_for_each(n, &p->params.list) {
-			pmlt_print(l_to_node(n), depth+1);
-		}
-
-		indent(depth);
-		printf("Variables -- \n");
+		printf("Parameters & Variables -- \n");
 		l_for_each(n, &p->vars.list) {
 			pmlt_print(l_to_node(n), depth+1);
 		}
@@ -1517,14 +1550,6 @@ int pmlt_walk(union pml_node *np, void *ctx, pml_walk_f pre, pml_walk_f in,
 		struct pml_function *p = &np->function;
 		struct list *n;
 
-		l_for_each_safe(n, x, &p->params.list) {
-			rv = pmlt_walk(l_to_node(n), ctx, pre, in, post);
-			if (rv < 0)
-				return rv;
-			else if (rv > 0)
-				return 0;
-		}
-
 		l_for_each_safe(n, x, &p->vars.list) {
 			rv = pmlt_walk(l_to_node(n), ctx, pre, in, post);
 			if (rv < 0)
@@ -1764,11 +1789,10 @@ int pml_locator_resolve_nsref(struct pml_ast *ast, struct pml_locator *l)
 
 
 struct pml_resolve_ctx {
-	/* at most 3 var symbol tables to consider:  params, vars, global */
-	struct pml_symtab *symtabs[3];
+	/* at most 2 var symbol tables to consider:  vars, global */
+	struct pml_symtab *symtabs[2];
 	int ntab;
 	int vtidx;
-	int ptidx;
 	struct pml_function *livefunc;
 	struct pml_while *innerloop;
 	struct pml_ast *ast;
@@ -1776,7 +1800,7 @@ struct pml_resolve_ctx {
 
 
 static struct pml_variable *rlookup(struct pml_resolve_ctx *ctx, 
-				    const char *name, int *ti)
+				    const char *name)
 {
 	int i;
 	union pml_node *node;
@@ -1785,7 +1809,6 @@ static struct pml_variable *rlookup(struct pml_resolve_ctx *ctx,
 		node = symtab_lookup(ctx->symtabs[i], name);
 		if (node != NULL) {
 			abort_unless(node->base.type == PMLTT_VAR);
-			*ti = i;
 			return (struct pml_variable *)node;
 		}
 	}
@@ -1797,7 +1820,6 @@ static struct pml_variable *rlookup(struct pml_resolve_ctx *ctx,
 static int resolve_locator(struct pml_resolve_ctx *ctx, struct pml_locator *l)
 {
 	struct pml_variable *v;
-	int ti;
 	int rv;
 	struct pml_symtab *t;
 
@@ -1825,14 +1847,19 @@ static int resolve_locator(struct pml_resolve_ctx *ctx, struct pml_locator *l)
 			return 0;
 	}
 
-	v = rlookup(ctx, l->name, &ti);
+	v = rlookup(ctx, l->name);
 	if (v != NULL) {
 		l->reftype = PML_REF_VAR;
 		l->u.varref = v;
-		if (v->vtype == PML_VTYPE_CONST)
+		if (v->vtype == PML_VTYPE_CONST) {
 			l->eflags |= (PML_EFLAG_CONST|PML_EFLAG_PCONST);
-		else if (ti == ctx->ptidx)
-			l->eflags |= PML_EFLAG_PCONST;
+		} else if (v->vtype == PML_VTYPE_PARAM) {
+			struct pml_function *f = ctx->livefunc;
+			/* if the variable is a parameter in an inline */
+			/* function, then it can be considered constant */
+			if (PML_FUNC_IS_INLINE(f))
+				l->eflags |= PML_EFLAG_PCONST;
+		}
 		l->width = v->width;
 		return 0;
 	}
@@ -1850,9 +1877,9 @@ static int resolve_locator(struct pml_resolve_ctx *ctx, struct pml_locator *l)
 		pml_ast_err(ctx->ast, "out of memory building ast\n");
 		return -1;
 	}
-	v->addr = t->nxtaddr;
-	t->nxtaddr += 8;
-	symtab_add(t, (struct pml_sym *)v);
+	v->addr = t->addr_rw2;
+	t->addr_rw2 += 1;
+	abort_unless(symtab_add(t, (struct pml_sym *)v) >= 0);
 	l->reftype = PML_REF_VAR;
 	l->u.varref = v;
 
@@ -2019,8 +2046,8 @@ static int resolve_node_post(union pml_node *node, void *ctxp, void *xstk)
 		if ((l->reftype == PML_REF_NS_CONST) || 
 		    ((l->reftype == PML_REF_VAR) && 
 		     (l->u.varref->vtype == PML_VTYPE_CONST))) {
-			pml_ast_err(ctx->ast, "'%s' is not a field with"
-					      "an address to take\n",
+			pml_ast_err(ctx->ast, 
+				    "'%s' is not an addressable field.\n",
 				    l->name);
 			return -1;
 		}
@@ -2082,53 +2109,51 @@ int pml_resolve_refs(struct pml_ast *ast, union pml_node *node)
 		ctx.symtabs[1] = &ast->vars;
 		ctx.ntab = 2;
 		ctx.vtidx = 0;
-		ctx.ptidx = -1;
 		rv = resolve_node(&ctx, (union pml_node *)rule->pattern);
 		if (rv < 0)
 			goto out;
 		rv = resolve_node(&ctx, (union pml_node *)rule->stmts);
 		if (rv < 0)
 			goto out;
-		rule->vstksz = rule->vars.nxtaddr;
+		rule->vstksz = rule->vars.addr_rw2 * sizeof(uint64_t);
 
 	} else if (node->base.type == PMLTT_FUNCTION &&
 		   !PML_FUNC_IS_INLINE((struct pml_function *)node)) {
 		struct pml_function *func = (struct pml_function *)node;
 
-		ctx.symtabs[0] = &func->params;
-		ctx.symtabs[1] = &func->vars;
-		ctx.symtabs[2] = &ast->vars;
-		ctx.ntab = 3;
-		ctx.vtidx = 1;
-		ctx.ptidx = 0;
+		ctx.symtabs[0] = &func->vars;
+		ctx.symtabs[1] = &ast->vars;
+		ctx.ntab = 2;
+		ctx.vtidx = 0;
 		ctx.livefunc = func;
 		rv = resolve_node(&ctx, (union pml_node *)func->body);
 		if (rv < 0)
 			goto out;
-		func->pstksz = func->params.nxtaddr * sizeof(uint64_t);
-		func->vstksz = func->vars.nxtaddr * sizeof(uint64_t) -
-			       func->pstksz;
+		func->pstksz = func->vars.addr_rw1 * sizeof(uint64_t);
+		func->vstksz = func->vars.addr_rw2 * sizeof(uint64_t);
+		symtab_adj_var_addrs(&ast->vars);
 
 	} else if (node->base.type == PMLTT_FUNCTION) {
 		struct pml_function *inln = (struct pml_function *)node;
 		struct pml_expr_base *pe;
 
 		abort_unless(PML_FUNC_IS_INLINE(inln));
-		ctx.symtabs[0] = &inln->params;
+		ctx.symtabs[0] = &inln->vars;
 		ctx.symtabs[1] = &ast->vars;
 		ctx.ntab = 2;
-		ctx.ptidx = 0;
 		ctx.vtidx = -1; /* no local variables in inlines */
+		ctx.livefunc = inln;
 		rv = resolve_node(&ctx, (union pml_node *)inln->body);
 		if (rv < 0)
 			goto out;
-		inln->pstksz = inln->params.nxtaddr * sizeof(uint64_t);
+		inln->pstksz = inln->vars.addr_rw1 * sizeof(uint64_t);
 		if (PML_EXPR_IS_PCONST(inln->body))
 			inln->flags |= PML_FF_PCONST;
 		pe = (struct pml_expr_base *)inln->body;
 		if (pe->etype != PML_ETYPE_SCALAR) {
-			pml_ast_err(ast, "Non-scalar expression for inline %s "
-					 "(type = %d)\n",
+			pml_ast_err(ast,
+				    "Non-scalar expression for inline %s "
+				    "(type = %d)\n",
 				    inln->name, pe->etype);
 			goto out;
 		}
@@ -2139,7 +2164,6 @@ int pml_resolve_refs(struct pml_ast *ast, union pml_node *node)
 		ctx.symtabs[0] = &ast->vars;
 		ctx.ntab = 1;
 		ctx.vtidx = -1;
-		ctx.ptidx = -1;
 		rv = resolve_node(&ctx, (union pml_node *)var->init);
 		if (rv < 0)
 			goto out;
@@ -2588,6 +2612,7 @@ static int e_locator(struct pml_global_state *gs, struct pml_stack_frame *fr,
 		abort_unless(l->idx == NULL);
 		abort_unless(v->vtype == PML_VTYPE_CONST ||
 			     v->vtype == PML_VTYPE_GLOBAL ||
+			     v->vtype == PML_VTYPE_PARAM ||
 		             v->vtype == PML_VTYPE_LOCAL);
 
 		if (v->vtype == PML_VTYPE_CONST) {
@@ -2621,7 +2646,8 @@ static int e_locator(struct pml_global_state *gs, struct pml_stack_frame *fr,
 
 		} else {
 
-			abort_unless(v->vtype == PML_VTYPE_LOCAL);
+			abort_unless(v->vtype == PML_VTYPE_PARAM ||
+			             v->vtype == PML_VTYPE_LOCAL);
 			abort_unless(l->etype == PML_ETYPE_SCALAR);
 			abort_unless(l->off == NULL && l->len == NULL);
 			abort_unless(fr);
@@ -2663,6 +2689,7 @@ static int e_locaddr(struct pml_global_state *gs, struct pml_stack_frame *fr,
 
 	if (l->reftype == PML_REF_VAR) {
 		abort_unless(l->u.varref->vtype == PML_VTYPE_GLOBAL ||
+		             l->u.varref->vtype == PML_VTYPE_PARAM ||
 		             l->u.varref->vtype == PML_VTYPE_LOCAL);
 		r->etype = PML_ETYPE_SCALAR;
 		r->val = l->u.varref->addr;
@@ -2780,8 +2807,8 @@ errout:
 }
 
 
-/* optimize an expression pointed to by a union pml_expr_u * pointer */
-static int pml_opt_p_cexpr(union pml_expr_u **e, void *astp)
+/* optimize an expression pointed to by a (union pml_expr_u *) pointer */
+static int pml_opt_e_cexpr(union pml_expr_u **e, void *astp)
 {
 	union pml_expr_u *ne;
 	if (pml_opt_cexpr(*e, astp, &ne) < 0)
@@ -2794,8 +2821,8 @@ static int pml_opt_p_cexpr(union pml_expr_u **e, void *astp)
 }
 
 
-/* optimize an expression pointed to by a union pml_node * pointer */
-static int pml_opt_np_cexpr(union pml_node **e, void *astp)
+/* optimize an expression pointed to by a (union pml_node *) pointer */
+static int pml_opt_n_cexpr(union pml_node **e, void *astp)
 {
 	union pml_expr_u *ne;
 	if (pml_opt_cexpr((union pml_expr_u *)*e, astp, &ne) < 0)
@@ -2809,6 +2836,7 @@ static int pml_opt_np_cexpr(union pml_node **e, void *astp)
 
 
 /* optimize an expression pointed to by a union pml_expr_u * pointer */
+/* that is in an expression list. */
 static int pml_opt_l_cexpr(union pml_expr_u *e, void *astp)
 {
 	struct list *prev;
@@ -2834,7 +2862,7 @@ static int pml_cexpr_walker(union pml_node *node, void *astp, void *xstk)
 	case PMLTT_VAR: {
 		struct pml_variable *v = (struct pml_variable *)node;
 		if (v->init != NULL) {
-			if (pml_opt_p_cexpr(&v->init, astp) < 0)
+			if (pml_opt_e_cexpr(&v->init, astp) < 0)
 				return -1;
 		}
 	} break;
@@ -2842,10 +2870,10 @@ static int pml_cexpr_walker(union pml_node *node, void *astp, void *xstk)
 	case PMLTT_BINOP:
 	case PMLTT_UNOP: {
 		struct pml_op *op = (struct pml_op *)node;
-		if (pml_opt_p_cexpr(&op->arg1, astp) < 0)
+		if (pml_opt_e_cexpr(&op->arg1, astp) < 0)
 			return -1;
 		if (op->type == PMLTT_BINOP) {
-			if (pml_opt_p_cexpr(&op->arg2, astp) < 0)
+			if (pml_opt_e_cexpr(&op->arg2, astp) < 0)
 				return -1;
 		}
 	} break;
@@ -2861,29 +2889,29 @@ static int pml_cexpr_walker(union pml_node *node, void *astp, void *xstk)
 
 	case PMLTT_IF: {
 		struct pml_if *pif = (struct pml_if *)node;
-		if (pml_opt_p_cexpr(&pif->test, astp) < 0)
+		if (pml_opt_e_cexpr(&pif->test, astp) < 0)
 			return -1;
 	} break;
 
 	case PMLTT_WHILE: {
 		struct pml_while *w = (struct pml_while *)node;
-		if (pml_opt_p_cexpr(&w->test, astp) < 0)
+		if (pml_opt_e_cexpr(&w->test, astp) < 0)
 			return -1;
 	} break;
 
 	case PMLTT_LOCATOR:
 	case PMLTT_LOCADDR: {
 		struct pml_locator *l = (struct pml_locator *)node;
-		if ((pml_opt_p_cexpr(&l->pkt, astp) < 0) ||
-		    (pml_opt_p_cexpr(&l->idx, astp) < 0) ||
-		    (pml_opt_p_cexpr(&l->off, astp) < 0) ||
-		    (pml_opt_p_cexpr(&l->len, astp) < 0))
+		if ((pml_opt_e_cexpr(&l->pkt, astp) < 0) ||
+		    (pml_opt_e_cexpr(&l->idx, astp) < 0) ||
+		    (pml_opt_e_cexpr(&l->off, astp) < 0) ||
+		    (pml_opt_e_cexpr(&l->len, astp) < 0))
 			return -1;
 	} break;
 
 	case PMLTT_ASSIGN: {
 		struct pml_assign *a = (struct pml_assign *)node;
-		if (pml_opt_p_cexpr(&a->expr, astp) < 0)
+		if (pml_opt_e_cexpr(&a->expr, astp) < 0)
 			return -1;
 	} break;
 
@@ -2899,14 +2927,14 @@ static int pml_cexpr_walker(union pml_node *node, void *astp, void *xstk)
 	case PMLTT_FUNCTION: {
 		struct pml_function *f = (struct pml_function *)node;
 		if (PML_FUNC_IS_INLINE(f)) {
-			if (pml_opt_np_cexpr(&f->body, astp) < 0)
+			if (pml_opt_n_cexpr(&f->body, astp) < 0)
 				return -1;
 		}
 	} break;
 
 	case PMLTT_RULE: {
 		struct pml_rule *r = (struct pml_rule *)node;
-		if (pml_opt_p_cexpr(&r->pattern, astp) < 0)
+		if (pml_opt_e_cexpr(&r->pattern, astp) < 0)
 			return -1;
 	} break;
 
