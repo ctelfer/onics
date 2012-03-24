@@ -180,10 +180,12 @@ var Count;
 %extra_argument { struct pml_ast *ast }
 
 %syntax_error {
+	pml_ast_err(ast, "syntax error");
 	ast->error = 1;
 }
 
 %parse_failure {
+	pml_ast_err(ast, "parse error");
 	ast->error = 1;
 }
 
@@ -540,8 +542,10 @@ cmpexpr(E) ::= borexpr(LHS) cmpop(OP) borexpr(RHS). {
 }
 cmpexpr(E) ::= borexpr(LHS) matchop(OP) BYTESTR(T1) DIV BYTESTR(T2). {
 	struct pml_literal *v = (struct pml_literal *)pmln_alloc(PMLTT_MASKVAL);
-	pml_bytestr_set_dynamic(&v->u.maskval.val, T1.u.raw.data, T1.u.raw.len);
-	pml_bytestr_set_dynamic(&v->u.maskval.mask,T2.u.raw.data, T2.u.raw.len);
+	pml_bytestr_copy(ast, &v->u.maskval.val, PML_SEG_ROMEM, T1.u.raw.data,
+			 T1.u.raw.len);
+	pml_bytestr_copy(ast, &v->u.maskval.mask, PML_SEG_ROMEM, T2.u.raw.data,
+			 T2.u.raw.len);
 	E = pml_binop_alloc(OP, LHS, (union pml_expr_u *)v); 
 }
 cmpexpr(E) ::= borexpr(LHS) matchop(OP) IPV4ADDR(A) DIV NUM(L). {
@@ -549,7 +553,7 @@ cmpexpr(E) ::= borexpr(LHS) matchop(OP) IPV4ADDR(A) DIV NUM(L). {
 	uchar mask[4] = { 0 };
 	int i, rem;
 
-	pml_bytestr_set_static(&v->u.maskval.val, A.u.v4addr, 4);
+	pml_bytestr_copy(ast, &v->u.maskval.val, PML_SEG_ROMEM, A.u.v4addr, 4);
 
 	if (L.u.num > 32)
 		pml_ast_err(ast, "IPv4 address mask > 32 bits in length\n");
@@ -561,14 +565,14 @@ cmpexpr(E) ::= borexpr(LHS) matchop(OP) IPV4ADDR(A) DIV NUM(L). {
 	}
 	mask[i] = 0xFF - ((1 << (8 - rem)) - 1);
 
-	pml_bytestr_set_static(&v->u.maskval.mask, mask, 4);
+	pml_bytestr_copy(ast, &v->u.maskval.mask, PML_SEG_ROMEM, mask, 4);
 
 	E = pml_binop_alloc(OP, LHS, (union pml_expr_u *)v); 
 }
 cmpexpr(E) ::= borexpr(LHS) matchop(OP) IPV4ADDR(A1) DIV IPV4ADDR(A2). {
 	struct pml_literal *v = (struct pml_literal *)pmln_alloc(PMLTT_MASKVAL);
-	pml_bytestr_set_static(&v->u.maskval.val, A1.u.v4addr, 4);
-	pml_bytestr_set_static(&v->u.maskval.mask, A2.u.v4addr, 4);
+	pml_bytestr_copy(ast, &v->u.maskval.val, PML_SEG_ROMEM, A1.u.v4addr, 4);
+	pml_bytestr_copy(ast, &v->u.maskval.mask, PML_SEG_ROMEM, A2.u.v4addr, 4);
 	E = pml_binop_alloc(OP, LHS, (union pml_expr_u *)v); 
 }
 cmpexpr(E) ::= borexpr(LHS) matchop(OP) IPV6ADDR(A) DIV NUM(L). {
@@ -576,7 +580,7 @@ cmpexpr(E) ::= borexpr(LHS) matchop(OP) IPV6ADDR(A) DIV NUM(L). {
 	uchar mask[16] = { 0 };
 	int i, rem;
 
-	pml_bytestr_set_static(&v->u.maskval.val, A.u.v6addr, 16);
+	pml_bytestr_copy(ast, &v->u.maskval.val, PML_SEG_ROMEM, A.u.v6addr, 16);
 
 	if (L.u.num > 128)
 		pml_ast_err(ast, "IPv6 address mask > 128 bits in length.\n");
@@ -588,26 +592,26 @@ cmpexpr(E) ::= borexpr(LHS) matchop(OP) IPV6ADDR(A) DIV NUM(L). {
 	}
 	mask[i] = 0xFF - ((1 << (8 - rem)) - 1);
 
-	pml_bytestr_set_static(&v->u.maskval.mask, mask, 16);
+	pml_bytestr_copy(ast, &v->u.maskval.mask, PML_SEG_ROMEM, mask, 16);
 
 	E = pml_binop_alloc(OP, LHS, (union pml_expr_u *)v); 
 }
 cmpexpr(E) ::= borexpr(LHS) matchop(OP) IPV6ADDR(A1) DIV IPV6ADDR(A2). {
 	struct pml_literal *v = (struct pml_literal *)pmln_alloc(PMLTT_MASKVAL);
-	pml_bytestr_set_static(&v->u.maskval.val, A1.u.v6addr, 16);
-	pml_bytestr_set_static(&v->u.maskval.mask, A2.u.v6addr, 16);
+	pml_bytestr_copy(ast, &v->u.maskval.val, PML_SEG_ROMEM, A1.u.v6addr, 16);
+	pml_bytestr_copy(ast, &v->u.maskval.mask, PML_SEG_ROMEM, A2.u.v6addr, 16);
 	E = pml_binop_alloc(OP, LHS, (union pml_expr_u *)v); 
 }
 cmpexpr(E) ::= borexpr(LHS) matchop(OP) ETHADDR(E1) DIV ETHADDR(E2). {
 	struct pml_literal *v = (struct pml_literal *)pmln_alloc(PMLTT_MASKVAL);
-	pml_bytestr_set_static(&v->u.maskval.val, E1.u.ethaddr, 6);
-	pml_bytestr_set_static(&v->u.maskval.mask, E2.u.ethaddr, 6);
+	pml_bytestr_copy(ast, &v->u.maskval.val, PML_SEG_ROMEM, E1.u.ethaddr, 6);
+	pml_bytestr_copy(ast, &v->u.maskval.mask, PML_SEG_ROMEM, E2.u.ethaddr, 6);
 	E = pml_binop_alloc(OP, LHS, (union pml_expr_u *)v); 
 }
 cmpexpr(E) ::= borexpr(LHS) matchop(OP) REGEX(R). {
 	struct pml_literal *v = (struct pml_literal *)pmln_alloc(PMLTT_BYTESTR);
 	int op = (OP == PMLOP_MATCH) ? PMLOP_REXMATCH : PMLOP_NOTREXMATCH;
-	pml_bytestr_set_dynamic(&v->u.bytestr, R.u.raw.data, R.u.raw.len);
+	pml_bytestr_copy(ast, &v->u.bytestr, PML_SEG_ROMEM, R.u.raw.data, R.u.raw.len);
 	E = pml_binop_alloc(op, LHS, (union pml_expr_u *)v); 
 }
 cmpexpr(E) ::= borexpr(LHS). { E = LHS; }
@@ -712,28 +716,30 @@ value(V) ::= AMP locname(L). {
 }
 value(V) ::= BYTESTR(I). {
 	struct pml_literal *v = (struct pml_literal *)pmln_alloc(PMLTT_BYTESTR);
-	pml_bytestr_set_dynamic(&v->u.bytestr, I.u.raw.data, I.u.raw.len);
+	pml_bytestr_copy(ast, &v->u.bytestr, PML_SEG_ROMEM, I.u.raw.data,
+			 I.u.raw.len);
 	V = (union pml_expr_u *)v;
 }
 value(V) ::= IPADDR(I). {
 	struct pml_literal *v = (struct pml_literal *)pmln_alloc(PMLTT_BYTESTR);
-	pml_bytestr_set_static(&v->u.bytestr, I.u.v4addr, 4);
+	pml_bytestr_copy(ast, &v->u.bytestr, PML_SEG_ROMEM, I.u.v4addr, 4);
 	V = (union pml_expr_u *)v;
 }
 value(V) ::= IPV6ADDR(I). {
 	struct pml_literal *v = (struct pml_literal *)pmln_alloc(PMLTT_BYTESTR);
-	pml_bytestr_set_static(&v->u.bytestr, I.u.v6addr, 16);
+	pml_bytestr_copy(ast, &v->u.bytestr, PML_SEG_ROMEM, I.u.v6addr, 16);
 	V = (union pml_expr_u *)v;
 }
 value(V) ::= ETHADDR(I). {
 	struct pml_literal *v = (struct pml_literal *)pmln_alloc(PMLTT_BYTESTR);
-	pml_bytestr_set_static(&v->u.bytestr, I.u.ethaddr, 6);
+	pml_bytestr_copy(ast, &v->u.bytestr, PML_SEG_ROMEM, I.u.ethaddr, 6);
 	V = (union pml_expr_u *)v;
 }
 value(V) ::= numval(N). { V = (union pml_expr_u *)N; }
 value(V) ::= STRING(I). {
 	struct pml_literal *v = (struct pml_literal *)pmln_alloc(PMLTT_BYTESTR);
-	pml_bytestr_set_dynamic(&v->u.bytestr, I.u.raw.data, I.u.raw.len);
+	pml_bytestr_copy(ast, &v->u.bytestr, PML_SEG_ROMEM, I.u.raw.data,
+			 I.u.raw.len);
 	V = (union pml_expr_u *)v;
 }
 value(V) ::= ATAT locname(L). {

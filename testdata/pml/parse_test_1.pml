@@ -2,7 +2,7 @@ const X = 53;
 const Y = 4 * X;
 
 var Global;
-var another_global[40];
+var another_global[40] = "hello world";
 
 ?- ip.saddr =~ 127.0.0.0/24 -? { 
 	print "hi", x; 

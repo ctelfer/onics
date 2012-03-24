@@ -7,6 +7,7 @@
 #include <cat/cat.h>
 #include <cat/list.h>
 #include <cat/hash.h>
+#include <cat/buffer.h>
 #include <stdio.h>
 #include <stdint.h>
 #include "pml.h"
@@ -37,9 +38,8 @@ struct pml_symtab {
 	struct list		list;
 	struct htab		tab;
 
-	uint64_t		addr_ro;  /* size of read-only mem */
-	uint64_t		addr_rw1; /* size of read-write block 1 */
-	uint64_t		addr_rw2; /* size of read-write block 2*/
+	ulong			addr_rw1; /* size of read-write block 1 */
+	ulong			addr_rw2; /* size of read-write block 2*/
 };
 
 
@@ -52,7 +52,19 @@ struct pml_ast {
 	struct list		b_rules;
 	struct list		p_rules;
 	struct list		e_rules;
+	struct dynbuf		mi_bufs[2];
 	char			errbuf[256];
+};
+
+
+enum {
+	PML_SEG_NONE = -1,
+
+	PML_SEG_MIN = 0,
+	PML_SEG_ROMEM = 0,
+	PML_SEG_RWMEM = 1,
+
+	PML_SEG_MAX = PML_SEG_RWMEM,
 };
 
 
@@ -158,16 +170,14 @@ struct pml_expr_base {
 	void *			aux;
 	ushort			etype;
 	ushort			eflags;
-	size_t			width;
+	ulong			width;
 };
 
 
-#define PML_BYTESTR_MAX_STATIC	16
 struct pml_bytestr {
-	int			is_dynamic;
-	struct raw		bytes;
-	uchar			sbytes[PML_BYTESTR_MAX_STATIC];
-	uint64_t		addr;
+	int			segnum;
+	ulong			addr;
+	ulong			len;
 };
 
 
@@ -183,7 +193,7 @@ struct pml_literal {
 	void *			aux;
 	ushort			etype;
 	ushort			eflags;
-	size_t			width;
+	ulong			width;
 
 	union {
 		uint64_t		scalar;
@@ -219,8 +229,8 @@ struct pml_variable {
 	union pml_expr_u *	init;
 	ushort			vtype;
 	ushort			etype;
-	size_t			width;
-	uint64_t		addr;	/* depends on type:  see above */
+	ulong			width;
+	ulong			addr;	/* depends on type:  see above */
 };
 
 
@@ -230,7 +240,7 @@ struct pml_op {
 	void *			aux;
 	ushort			etype;
 	ushort			eflags;
-	size_t			width;
+	ulong			width;
 
 	int			op;
 	union pml_expr_u *	arg1;
@@ -244,7 +254,7 @@ struct pml_call {
 	void *			aux;
 	ushort			etype;
 	ushort			eflags;
-	size_t			width;
+	ulong			width;
 
 	struct pml_function *	func;
 	struct pml_list *	args;		/* expressions */
@@ -302,7 +312,7 @@ struct pml_locator {
 	void *			aux;
 	ushort			etype;
 	ushort			eflags;
-	size_t			width;
+	ulong			width;
 
 	char *			name;
 	int			reftype;
@@ -390,9 +400,9 @@ struct pml_function {
 	pml_eval_f		ieval;	/* call to eval intrinsic */
 
 	int			flags;
-	size_t			pstksz;
-	size_t			vstksz;
-	size_t			width;	/* of return value: always 8 for now */
+	ulong			pstksz;
+	ulong			vstksz;
+	ulong			width;	/* of return value: always 8 for now */
 };
 
 
@@ -413,7 +423,7 @@ struct pml_rule {
 
 	union pml_expr_u *	pattern;
 	struct pml_list *	stmts;
-	size_t			vstksz;
+	ulong			vstksz;
 };
 
 
@@ -448,8 +458,8 @@ union pml_node {
 /* PML expression (and maybe statement) evaluation */
 struct pml_stack_frame {
 	uint8_t *	stack;
-	size_t		ssz;
-	size_t		psz;
+	ulong		ssz;
+	ulong		psz;
 	union {
 		struct pml_node_base *	node;
 		struct pml_rule *	rule;
@@ -461,15 +471,15 @@ struct pml_stack_frame {
 struct pml_global_state {
 	struct pml_ast *ast;
 	uint8_t *	gmem;
-	size_t		gsz;
+	ulong		gsz;
 };
 
 
 struct pml_retval {
-	int		etype;
-	struct raw	bytes;
-	struct raw	mask;
-	uint64_t	val;
+	int			etype;
+	struct pml_bytestr	bytes;
+	struct pml_bytestr	mask;
+	uint64_t		val;
 };
 
 
@@ -513,14 +523,12 @@ struct pml_variable *pml_var_alloc(char *name, int width, int vtype,
 struct pml_call *pml_call_alloc(struct pml_ast *ast, struct pml_function *func,
 				struct pml_list *args);
 
-void pml_bytestr_set_static(struct pml_bytestr *b, void *data, size_t len);
-void pml_bytestr_set_dynamic(struct pml_bytestr *b, void *data, size_t len);
-int pml_bytestr_copy(struct pml_bytestr *b, const void *data, size_t len);
-void pml_bytestr_free(struct pml_bytestr *b);
+int pml_bytestr_copy(struct pml_ast *ast, struct pml_bytestr *bs, int seg,
+		     void *data, ulong len);
 
 struct pml_function *pml_ast_lookup_func(struct pml_ast *ast, char *name);
 
-int pml_locator_extend_name(struct pml_locator *l, char *name, size_t len);
+int pml_locator_extend_name(struct pml_locator *l, char *name, ulong len);
 
 /* 
    Walk an abstract syntax tree.  
@@ -544,7 +552,7 @@ int pml_resolve_refs(struct pml_ast *ast, union pml_node *node);
 int pml_ast_optimize(struct pml_ast *ast);
 
 int init_global_state(struct pml_global_state *gs, struct pml_ast *ast,
-		      size_t gsz);
+		      ulong gsz);
 void clear_global_state(struct pml_global_state *gs);
 int pml_eval(struct pml_global_state *gs, struct pml_stack_frame *fr, 
 	     union pml_node *node, struct pml_retval *v);

@@ -1,6 +1,6 @@
 
 
-var Numpkts = 0;
+var Numpkts = 5;
 
 BEGIN {
 	print "Hello World";

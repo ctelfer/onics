@@ -319,7 +319,7 @@ enum {
 	NETVM_OC_LDPDI,		/* x bytes from the (packed) desc location */
 
 	NETVM_OC_CMP,		/* [ua1,ua2,len] compare bytes in mem */
-	NETVM_OC_PCMP,		/* [ua1,ua2,pfx,len] compare bits via prefix */
+	NETVM_OC_PCMP,		/* [ua1,ua2,len] compare bits via prefix */
 	NETVM_OC_MSKCMP,	/* [ua1,ua2,umka,len] compare bytes via mask */
 
 	/* Arithmatic operations */
