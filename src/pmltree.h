@@ -12,9 +12,12 @@
 #include <stdint.h>
 #include "pml.h"
 
+
+/* -- Data structures for the PML Abstract Syntax Tree -- */
+
 /* forward declarations */
-union pml_node;
-struct pml_global_state;
+union  pml_node;
+struct pml_ast;
 struct pml_stack_frame;
 struct pml_retval;
 
@@ -23,9 +26,8 @@ struct pml_retval;
 typedef int pml_walk_f(union pml_node *node, void *ctx, void *xstk);
 
 /* subtree evaluation */
-typedef int (*pml_eval_f)(struct pml_global_state *gs,
-			  struct pml_stack_frame *fr, union pml_node *node,
-			  struct pml_retval *v);
+typedef int (*pml_eval_f)(struct pml_ast *ast, struct pml_stack_frame *fr,
+			  union pml_node *node, struct pml_retval *v);
 
 
 /* Sizes are in bytes for globals and words (8-bytes) for function */
@@ -468,13 +470,6 @@ struct pml_stack_frame {
 };
 
 
-struct pml_global_state {
-	struct pml_ast *ast;
-	uint8_t *	gmem;
-	ulong		gsz;
-};
-
-
 struct pml_retval {
 	int			etype;
 	struct pml_bytestr	bytes;
@@ -494,27 +489,19 @@ struct pml_idef {
 };
 
 
-union pml_node *pmln_alloc(int pmltt);
-void pmln_free(union pml_node *node);
-void pmln_print(union pml_node *node, uint depth);
-
-int pml_ast_init(struct pml_ast *ast);
-int pml_ast_add_std_intrinsics(struct pml_ast *ast);
+/* -- basic AST initialization and maintenance -- */
+int  pml_ast_init(struct pml_ast *ast);
+int  pml_ast_add_std_intrinsics(struct pml_ast *ast);
 void pml_ast_clear(struct pml_ast *ast);
 void pml_ast_err(struct pml_ast *ast, const char *fmt, ...);
-void pml_ast_print(struct pml_ast *ast);
-struct pml_function *pml_ast_lookup_func(struct pml_ast *ast, char *name);
-int pml_ast_add_func(struct pml_ast *ast, struct pml_function *func);
-int pml_ast_add_intrinsic(struct pml_ast *ast, struct pml_idef *intr);
-struct pml_variable *pml_ast_lookup_var(struct pml_ast *ast, char *name);
-int pml_ast_add_var(struct pml_ast *ast, struct pml_variable *var);
-int pml_ast_add_rule(struct pml_ast *ast, struct pml_rule *rule);
-void pml_ast_finalize(struct pml_ast *ast);
 
-struct pml_variable *pml_func_lookup_param(struct pml_function *func, 
-					   char *name);
-int pml_func_add_param(struct pml_function *func, struct pml_variable *var);
+/* -- PML AST node allocation -- */
+union pml_node *pmln_alloc(int pmltt);
+void pmln_free(union pml_node *node);
 
+int  pml_locator_extend_name(struct pml_locator *l, char *name, ulong len);
+int  pml_bytestr_copy(struct pml_ast *ast, struct pml_bytestr *bs, int seg,
+		      void *data, ulong len);
 union pml_expr_u *pml_binop_alloc(int op, union pml_expr_u *left, 
 		                  union pml_expr_u *right);
 union pml_expr_u *pml_unop_alloc(int op, union pml_expr_u *ex);
@@ -523,13 +510,31 @@ struct pml_variable *pml_var_alloc(char *name, int width, int vtype,
 struct pml_call *pml_call_alloc(struct pml_ast *ast, struct pml_function *func,
 				struct pml_list *args);
 
-int pml_bytestr_copy(struct pml_ast *ast, struct pml_bytestr *bs, int seg,
-		     void *data, ulong len);
-
+/* -- helper functions for symbol values PML (vars, functions, etc) -- */
+int  pml_func_add_param(struct pml_function *func, struct pml_variable *var);
+int  pml_ast_add_func(struct pml_ast *ast, struct pml_function *func);
+int  pml_ast_add_intrinsic(struct pml_ast *ast, struct pml_idef *intr);
 struct pml_function *pml_ast_lookup_func(struct pml_ast *ast, char *name);
+struct pml_variable *pml_func_lookup_param(struct pml_function *func, 
+					   char *name);
+int  pml_ast_add_var(struct pml_ast *ast, struct pml_variable *var);
+int  pml_ast_add_rule(struct pml_ast *ast, struct pml_rule *rule);
+struct pml_variable *pml_ast_lookup_var(struct pml_ast *ast, char *name);
 
-int pml_locator_extend_name(struct pml_locator *l, char *name, ulong len);
+/* -- Functions to finalize the AST or portions of it. -- */
 
+/* Resolve a namespace reference to a PML expression. */
+/* Returns -1 if there was an internal error. */
+/* Returns 0 if the locator could not be resolved. */
+/* Returns 1 if the locator was resolved. */
+int  pml_locator_resolve_nsref(struct pml_ast *ast, struct pml_locator *l);
+int  pml_resolve_refs(struct pml_ast *ast, union pml_node *node);
+
+void pml_ast_finalize(struct pml_ast *ast);
+int  pml_ast_optimize(struct pml_ast *ast);
+
+
+/* -- Utility functions on a completed tree -- */
 /* 
    Walk an abstract syntax tree.  
    Call 'pre' before processing each node, 'in' between subnodes, and 
@@ -538,26 +543,20 @@ int pml_locator_extend_name(struct pml_locator *l, char *name, ulong len);
    (and subnodes) but continue on the traversal.  If the return value is
    0, then continue processing.
  */
-int pmlt_walk(union pml_node *np, void *ctx, pml_walk_f pre, pml_walk_f in,
-	      pml_walk_f post);
+int  pmlt_walk(union pml_node *np, void *ctx, pml_walk_f pre, pml_walk_f in,
+	       pml_walk_f post);
+void pmln_print(union pml_node *node, uint depth);
+void pml_ast_print(struct pml_ast *ast);
 
-/* Resolve a namespace reference to a PML expression. */
-/* Returns -1 if there was an internal error. */
-/* Returns 0 if the locator could not be resolved. */
-/* Returns 1 if the locator was resolved. */
-int pml_locator_resolve_nsref(struct pml_ast *ast, struct pml_locator *l);
 
-int pml_resolve_refs(struct pml_ast *ast, union pml_node *node);
+/* -- PML tree evaluation -- */
+void pml_ast_mem_init(struct pml_ast *ast);
+int  pml_eval(struct pml_ast *ast, struct pml_stack_frame *fr, 
+	      union pml_node *node, struct pml_retval *v);
 
-int pml_ast_optimize(struct pml_ast *ast);
 
-int init_global_state(struct pml_global_state *gs, struct pml_ast *ast,
-		      ulong gsz);
-void clear_global_state(struct pml_global_state *gs);
-int pml_eval(struct pml_global_state *gs, struct pml_stack_frame *fr, 
-	     union pml_node *node, struct pml_retval *v);
 
-/* Lexical analyzer definitions */
+/* -- Lexical analyzer definitions -- */
 
 #define PMLLV_SCALAR	0
 #define PMLLV_STRING	1
@@ -589,7 +588,7 @@ void pmllex_destroy(pml_scanner_t);
 #endif /* THIS_IS_SCANNER */
 
 
-/* Parser interface */
+/* -- Parser interface -- */
 
 typedef void *pml_parser_t;
 
