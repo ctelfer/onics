@@ -274,6 +274,9 @@ struct netvm {
  *      packet or memory segment.
  */
 
+/* maximum number of values for a multi-return */
+#define NETVM_MAXRET	8
+
 enum {
 	NETVM_OC_POP,		/* discards top 'w' entries of stack */
 	NETVM_OC_POPTO,		/* discard all but last 'w' in stack frame */
@@ -410,12 +413,13 @@ enum {
 	NETVM_OC_JMP,		/* [addr] branch to absolute address addr */
 
 	NETVM_OC_CALL,		/* [(args..,)v]: branch and link to v */ 
-				/*   put return address 'w' deep in the */
-				/*   stack, pushing the rest (args) up */
-	NETVM_OC_RET,		/* [v,(rets..,)]: return from call */
+				/*   Store next PC on stack, then push */
+				/*   current BP to SP, set BP to new SP */
+	NETVM_OC_RET,		/* [(rets..,)]: return from call */
 				/*   branch back to bp-2 addr, restoring */
-				/*   bp to bp-1 value.  leave the top 'w' */
-				/*   vals from the stack on the top of stack */
+				/*   bp to bp-1 value.  save the top 'x' */
+				/*   vals from the stack.  pop to bp-1-'w'. */
+				/*   push the saved values onto the stack. */
 
 	NETVM_OC_ST,		/* [v,a1] store x bytes of v to a1 in seg y */
 				/*    full 64-bit address supported */
@@ -502,10 +506,11 @@ enum {
 	NETVM_ERR_BRMONLY = -4,
 	NETVM_ERR_BADLAYER = -5,
 	NETVM_ERR_BADWIDTH = -6,
-	NETVM_ERR_BADCP = -7,
-	NETVM_ERR_CPERR = -8,
-	NETVM_ERR_CPREQ = -9,
-	NETVM_ERR_PROG = -10,
+	NETVM_ERR_BADNUMRET = -7,
+	NETVM_ERR_BADCP = -8,
+	NETVM_ERR_CPERR = -9,
+	NETVM_ERR_CPREQ = -10,
+	NETVM_ERR_PROG = -11,
 	NETVM_ERR_MIN = NETVM_ERR_PROG,
 
 	/* runtime errors */

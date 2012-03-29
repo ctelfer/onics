@@ -6,13 +6,6 @@
 #include <cat/bitops.h>
 #include <cat/pack.h>
 #include "util.h"
-
-/* 
- * TODO:  If the host processor doesn't support unaligned data access (e.g. 
- * xscale),then the load and store operations need to be revamped to use 
- * memmove/memcpy to load and store data values.  This can wait for later.
- */
-
 #include "netvm_op_macros.h"
 
 #define MAXINST         0x7ffffffe
@@ -208,18 +201,30 @@ static void ni_swap(struct netvm *vm)
 
 static void ni_ldbp(struct netvm *vm)
 {
+	struct netvm_inst *inst = &vm->inst[vm->pc];
 	uint64_t pos;
+
 	S_POP(vm, pos);
-	FATAL(vm, NETVM_ERR_STKUNDF, !S_HAS(vm, pos+1));
-	S_PUSH_NOCK(vm, vm->stack[vm->bp + pos]);
+	if (inst->x) {
+		FATAL(vm, NETVM_ERR_STKUNDF, vm->bp <= pos);
+		S_PUSH_NOCK(vm, vm->stack[vm->bp - pos - 1]);
+	} else {
+		FATAL(vm, NETVM_ERR_STKUNDF, !S_HAS(vm, pos+1));
+		S_PUSH_NOCK(vm, vm->stack[vm->bp + pos]);
+	}
 }
 
 
 static void ni_ldbpi(struct netvm *vm)
 {
 	struct netvm_inst *inst = &vm->inst[vm->pc];
-	FATAL(vm, NETVM_ERR_STKUNDF, !S_HAS(vm, inst->w+1));
-	S_PUSH(vm, vm->stack[vm->bp + inst->w]);
+	if (inst->x) {
+		FATAL(vm, NETVM_ERR_STKUNDF, vm->bp <= inst->w);
+		S_PUSH_NOCK(vm, vm->stack[vm->bp - inst->w - 1]);
+	} else {
+		FATAL(vm, NETVM_ERR_STKUNDF, !S_HAS(vm, inst->w+1));
+		S_PUSH(vm, vm->stack[vm->bp + inst->w]);
+	}
 }
 
 
@@ -246,36 +251,30 @@ static void ni_stbpi(struct netvm *vm)
 
 static void ni_pushfr(struct netvm *vm)
 {
-	struct netvm_inst *inst = &vm->inst[vm->pc];
-	uint64_t sslot;
-
-	FATAL(vm, NETVM_ERR_STKUNDF, !S_HAS(vm, inst->w));
-	FATAL(vm, NETVM_ERR_STKOVFL, S_AVAIL(vm) < 1);
-	sslot = vm->sp - inst->w;
-	memmove(vm->stack + sslot + 1, vm->stack + sslot,
-		inst->w * sizeof(vm->stack[0]));
-	vm->stack[sslot] = vm->bp;
-	vm->bp = sslot + 1;
-	vm->sp += 1;
+	S_PUSH(vm, vm->bp);
+	vm->bp = vm->sp;
 }
 
 
 static void ni_popfr(struct netvm *vm)
 {
 	struct netvm_inst *inst = &vm->inst[vm->pc];
-	uint64_t tos = 0;
+	int i;
 	uint64_t bp;
+	uint64_t ret[NETVM_MAXRET];
 
 	if (inst->x) {
 		FATAL(vm, NETVM_ERR_STKUNDF, (vm->bp < 1));
-		if (inst->y)
-			S_POP(vm, tos);
+		FATAL(vm, NETVM_ERR_STKUNDF, (inst->y > NETVM_MAXRET));
+		FATAL(vm, NETVM_ERR_STKUNDF, !S_HAS(vm, inst->y));
+		for (i = 0; i < inst->y; ++i)
+			ret[i] = S_GET(vm, i);
 		vm->sp = vm->bp - 1;
 		bp = vm->stack[vm->bp - 1];
 		FATAL(vm, NETVM_ERR_STKUNDF, bp >= vm->bp - 1);
 		vm->bp = bp;
-		if (inst->y)
-			S_PUSH_NOCK(vm, tos);
+		while (i > 0)
+			S_PUSH_NOCK(vm, ret[--i]);
 	} else {
 		vm->sp = vm->bp;
 	}
@@ -878,21 +877,14 @@ static void ni_jmp(struct netvm *vm)
 
 static void ni_call(struct netvm *vm)
 {
-	struct netvm_inst *inst = &vm->inst[vm->pc];
-	uint64_t addr, narg, sslot;
+	uint64_t addr;
 
-	narg = inst->w;
 	S_POP(vm, addr);
 	FATAL(vm, NETVM_ERR_INSTADDR, addr > vm->ninst);
-	FATAL(vm, NETVM_ERR_STKUNDF, !S_HAS(vm, narg));
 	FATAL(vm, NETVM_ERR_STKOVFL, S_AVAIL(vm) < 2);
-	sslot = vm->sp - narg;
-	memmove(vm->stack + sslot + 2, vm->stack + sslot,
-		narg * sizeof(vm->stack[0]));
-	vm->stack[sslot] = vm->pc + 1;
-	vm->stack[sslot + 1] = vm->bp;
-	vm->bp = sslot + 2;
-	vm->sp += 2;
+	S_PUSH_NOCK(vm, vm->pc + 1);
+	S_PUSH_NOCK(vm, vm->bp);
+	vm->bp = vm->sp;
 	vm->nxtpc = addr;
 }
 
@@ -900,20 +892,24 @@ static void ni_call(struct netvm *vm)
 static void ni_ret(struct netvm *vm)
 {
 	struct netvm_inst *inst = &vm->inst[vm->pc];
-	uint64_t addr, bp, narg, sslot;
+	uint64_t addr, bp, sslot;
+	uint64_t ret[NETVM_MAXRET];
+	int i;
 
-	narg = inst->w;
-	FATAL(vm, NETVM_ERR_IOVFL, (narg + 2 < narg));
-	FATAL(vm, NETVM_ERR_STKUNDF, !S_HAS(vm, narg) || (vm->bp < 2));
+	FATAL(vm, NETVM_ERR_STKUNDF, (inst->x > NETVM_MAXRET));
+	FATAL(vm, NETVM_ERR_STKUNDF, !S_HAS(vm, inst->x) || (vm->bp < 2));
+	for (i = 0; i < inst->x; ++i)
+		ret[i] = S_GET(vm, i);
 	sslot = vm->bp - 2;
 	addr = vm->stack[sslot];
 	bp = vm->stack[sslot + 1];
 	FATAL(vm, NETVM_ERR_INSTADDR, addr > vm->ninst);
-	FATAL(vm, NETVM_ERR_STKOVFL, bp > vm->bp - 2);
-	memmove(vm->stack + sslot, vm->stack + vm->sp - narg,
-		narg * sizeof(vm->stack[0]));
-	vm->sp = sslot + narg;
+	FATAL(vm, NETVM_ERR_STKOVFL, bp > sslot);
+	FATAL(vm, NETVM_ERR_STKUNDF, sslot - bp < inst->w);
 	vm->bp = bp;
+	vm->sp = sslot - inst->w;
+	while (i > 0)
+		S_PUSH_NOCK(vm, ret[--i]);
 	vm->nxtpc = addr;
 }
 
@@ -1538,6 +1534,12 @@ int netvm_validate(struct netvm *vm)
 			if ((cp->validate != NULL)
 			    && ((rv = (*cp->validate)(inst, vm)) < 0))
 				return rv;
+		} else if (inst->op == NETVM_OC_POPFR) {
+			if (inst->x && inst->y > NETVM_MAXRET)
+				return NETVM_ERR_BADNUMRET;
+		} else if (inst->op == NETVM_OC_RET) {
+			if (inst->x > NETVM_MAXRET)
+				return NETVM_ERR_BADNUMRET;
 		}
 	}
 	return 0;
@@ -1747,6 +1749,7 @@ static const char *val_error_strings[-(NETVM_ERR_MIN) + 1] = {
 	"Invalid branch/jump in matchonly mode",
 	"Invalid layer index",
 	"Invalid width field",
+	"Invalid multi-return length",
 	"Coprocessor instruction invalid",
 	"Coprocessor-specific validation error",
 	"Coprocessor required but not present",

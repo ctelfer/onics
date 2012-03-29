@@ -1,24 +1,32 @@
-
+.entry start @start
 .define ABOVEBP		0
 .define BELOWBP		1
 
+start:
 	# BP = 0, Stack is now:
 	push	50
 	# BP = 0, Stack is now:  50
 	push	40
 	# BP = 0, Stack is now:  40, 50
+	pushfr
+	# BP = 3, Stack is now:  0(BP), 40, 50
 	push	30
-	# BP = 0, Stack is now:  30, 40, 50
+	# BP = 3, Stack is now:  30, 0(BP), 40, 50
 	push	20
-	# BP = 0, Stack is now:  20, 30, 40, 50
-	pushfr	3
-	# BP = 2, Stack is now:  20, 30, 40, 0(BP), 50
-	ldbpi	0
-	# BP = 2, Stack is now:  30, 20, 30, 40, 0(B), 50
-	ldbpi	1
-	# BP = 2, Stack is now:  40, 30, 20, 30, 40, 0(B), 50
-	sub
-	# BP = 2, Stack is now:  10, 20, 30, 40, 0(B), 50
+	# BP = 3, Stack is now:  20, 30, 0(BP), 40, 50
+	ldbpi	ABOVEBP, 0
+	# BP = 3, Stack is now:  30, 20, 30, 0(BP), 40, 50
+	ldbpi	BELOWBP, 1
+	# BP = 3, Stack is now:  40, 30, 20, 30, 0(BP), 40, 50
+	add
+	# BP = 3, Stack is now:  70, 20, 30, 0(BP), 40, 50
+	pushfr
+	# BP = 7, Stack is now:  3(BP), 70, 20, 30, 0(BP), 40, 50
+	ldbpi	BELOWBP, 0
+	# BP = 7, Stack is now:  3, 3(BP), 70, 20, 30, 0(BP), 40, 50
 	popfr	1, 1
-	# BP = 0, Stack is now:  10, 50
-	mul
+	# BP = 3, Stack is now:  3, 70, 20, 30, 0(BP), 40, 50
+	add
+	# BP = 3, Stack is now:  73, 20, 30, 0(BP), 40, 50
+	popfr	1, 2
+	# BP = 0, Stack is now:  73, 20, 40, 50

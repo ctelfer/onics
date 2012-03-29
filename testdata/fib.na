@@ -22,20 +22,20 @@
 
 fib:
 	push	1
-	ldbpi	0
+	ldbpi	1,2	# Load 2nd word below saved base pointer
 	lei	2
 	bnzi	@fib_done
-	ldbpi	0
+	ldbpi	1,2
 	subi	1
 	push	@fib
-	call	1
-	ldbpi	0
+	call
+	ldbpi	1,2
 	subi	2
 	push	@fib
-	call	1
+	call
 	add
 fib_done:
-	ret	1
+	ret	1, 1	# return 1 value popping 1 argument
 	
 
 start:
@@ -45,7 +45,7 @@ start:
 	cpopi	cpout, prnum, 4, 0
 	cpopi	cpout, prstri, fibs2_mem.seg, fibs2
 	push	@fib
-	call	1
+	call
 	cpopi	cpout, prnum, 4, 0
 	cpopi	cpout, prstri, fibs3_mem.seg, fibs3
 	halt	0
