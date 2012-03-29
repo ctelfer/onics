@@ -131,11 +131,15 @@ int nvmp_exec(struct netvm_program *prog, int ep, struct netvm *vm, int maxc,
 	int rv;
 	struct netvm_segdesc msave[NETVM_MAXMSEGS];
 
-	abort_unless(prog && vm && ep >= 0 && ep < NVMP_EP_NUMEP);
-	netvm_set_code(vm, prog->inst, prog->ninst);
-	netvm_set_matchonly(vm, prog->matchonly);
-	netvm_restart(vm);
-	netvm_set_pc(vm, prog->eps[ep]);
+	abort_unless(prog && vm);
+	abort_unless((ep >= 0 && ep < NVMP_EP_NUMEP) ||
+		     (ep == NVMP_EXEC_CONTINUE));
+	if (ep != NVMP_EXEC_CONTINUE) {
+		netvm_set_code(vm, prog->inst, prog->ninst);
+		netvm_set_matchonly(vm, prog->matchonly);
+		netvm_restart(vm);
+		netvm_set_pc(vm, prog->eps[ep]);
+	}
 	install_mseg(vm, prog, msave);
 	rv = netvm_run(vm, maxc, vmrv);
 	restore_mseg(vm, msave);

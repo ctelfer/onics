@@ -81,7 +81,7 @@ void print_vmret(int vmrv, int ec, uint pc, uint64_t rc)
 static void print_stack(struct netvm *vm)
 {
 	uint sp;
-	fprintf(stderr, "Stack:\n");
+	fprintf(stderr, "Stack: (BP = %u)\n", vm->bp);
 	sp = vm->sp;
 	while (sp > 0) {
 		--sp;
@@ -100,7 +100,19 @@ void run_without_packets(struct netvm_program *prog, int epi, struct netvm *vm)
 	if (prog->eps[epi] == NVMP_EP_INVALID)
 		return;
 
-	vmrv = nvmp_exec(prog, epi, vm, -1, &rc);
+	if (verbosity > 3) {
+		fprintf(stderr, "Executing %u\n", vm->pc);
+		vmrv = nvmp_exec(prog, epi, vm, 1, &rc);
+		print_stack(vm);
+		while (vmrv == -2) {
+			fprintf(stderr, "Executing %u\n", vm->pc);
+			vmrv = nvmp_exec(prog, NVMP_EXEC_CONTINUE, vm, 1, &rc);
+			print_stack(vm);
+		}
+	} else {
+		vmrv = nvmp_exec(prog, epi, vm, -1, &rc);
+	}
+
 	if (verbosity > 0) {
 		print_vmret(vmrv, vm->error, vm->pc, rc);
 		if (verbosity > 1)
@@ -151,7 +163,18 @@ void run_with_packets(struct netvm_program *prog, struct netvm *vm, int filter)
 		++npkt;
 
 		netvm_load_pkt(vm, p, 0);
-		vmrv = nvmp_exec(prog, NVMP_EP_PACKET, vm, -1, &rc);
+		if (verbosity > 3) {
+			fprintf(stderr, "Executing %u\n", vm->pc);
+			vmrv = nvmp_exec(prog, NVMP_EP_PACKET, vm, 1, &rc);
+			print_stack(vm);
+			while (vmrv == -2) {
+				fprintf(stderr, "Executing %u\n", vm->pc);
+				vmrv = nvmp_exec(prog, NVMP_EXEC_CONTINUE, vm, 1, &rc);
+				print_stack(vm);
+			}
+		} else {
+			vmrv = nvmp_exec(prog, NVMP_EP_PACKET, vm, -1, &rc);
+		}
 
 		if (vmrv < 0)
 			err("VM returned error @%u: %s\n", vm->pc, 
@@ -218,7 +241,7 @@ int main(int argc, char *argv[])
 	}
 
 	if ((rv = nvmp_validate(&prog, &vm)) < 0)
-		err("Error validating program %s\n", netvm_estr(rv));
+		err("Error validating program: %s\n", netvm_estr(rv));
 
 	nvmp_init_mem(&prog, &vm);
 
