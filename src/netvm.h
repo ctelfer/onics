@@ -291,20 +291,19 @@ enum {
 				/*   i positions above the BP. This must be */
 				/*   within the newly popped stack frame. */
 	NETVM_OC_STBPI,		/* [v] as BPST but position is taken from 'w' */
-	NETVM_OC_PUSHFR,	/* push current bp onto stack - 'w' slots */
-				/*     pushing the rest of the stack up.  Set */
-				/*     the bp to point to the saved bp. */
-	NETVM_OC_POPFR,		/* pop the stack to the BP.  If 'x' pop the */
-				/*     saved BP and set the BP to the saved */
-				/*     value.  If 'x' and 'y' then keep the */
-				/*     top stack value, restore the old BP, */
-				/*     and push the saved val onto the stack */
+	NETVM_OC_PUSHFR,	/* push current BP onto stack and set the BP */
+				/*     to the new stack pointer. */
+	NETVM_OC_POPFR,		/* pop the stack to the BP-1. If 'x' > 0 then */
+				/*     save the top 'x' values to a max of */
+				/*     NETVM_MAXRET.  If 'w' > 0, also pop */
+				/*     the 'w' values below the stack frame. */
 
-				/* For LDPF and LDPFI, if 'x' is set then */
-				/* generate a unified address by setting the */
-				/* packet number and ISPKT bit in the high */
-				/* byte.  (note: not all fields are offsets */
-				/* from the packet start.  use accordingly). */
+	/* 
+	 * For LDPF and LDPFI, if 'x' is set then generate a unified address 
+	 * by setting the packet number and ISPKT bit in the high byte.  
+	 * (note: not all fields are offsets from the packet start.  use
+	 * accordingly). 
+	 */
 	NETVM_OC_LDPF,		/* [pdesc] load field from proto parse */
 	NETVM_OC_LDPFI,		/* load field from proto parse (packed pdesc) */
 

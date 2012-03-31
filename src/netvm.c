@@ -259,25 +259,22 @@ static void ni_pushfr(struct netvm *vm)
 static void ni_popfr(struct netvm *vm)
 {
 	struct netvm_inst *inst = &vm->inst[vm->pc];
-	int i;
-	uint64_t bp;
+	uint64_t bp, nsp;
 	uint64_t ret[NETVM_MAXRET];
+	int i;
 
-	if (inst->x) {
-		FATAL(vm, NETVM_ERR_STKUNDF, (vm->bp < 1));
-		FATAL(vm, NETVM_ERR_STKUNDF, (inst->y > NETVM_MAXRET));
-		FATAL(vm, NETVM_ERR_STKUNDF, !S_HAS(vm, inst->y));
-		for (i = 0; i < inst->y; ++i)
-			ret[i] = S_GET(vm, i);
-		vm->sp = vm->bp - 1;
-		bp = vm->stack[vm->bp - 1];
-		FATAL(vm, NETVM_ERR_STKUNDF, bp >= vm->bp - 1);
-		vm->bp = bp;
-		while (i > 0)
-			S_PUSH_NOCK(vm, ret[--i]);
-	} else {
-		vm->sp = vm->bp;
-	}
+	FATAL(vm, NETVM_ERR_STKUNDF, (inst->x > NETVM_MAXRET));
+	FATAL(vm, NETVM_ERR_STKUNDF, !S_HAS(vm, inst->x) || (vm->bp < 1));
+	for (i = 0; i < inst->x; ++i)
+		ret[i] = S_GET(vm, i);
+	nsp = vm->bp - 1;
+	bp = vm->stack[nsp];
+	FATAL(vm, NETVM_ERR_STKUNDF, bp > nsp);
+	FATAL(vm, NETVM_ERR_STKUNDF, nsp - bp < inst->w);
+	vm->bp = bp;
+	vm->sp = nsp - inst->w;
+	while (i > 0)
+		S_PUSH_NOCK(vm, ret[--i]);
 }
 
 
@@ -904,7 +901,7 @@ static void ni_ret(struct netvm *vm)
 	addr = vm->stack[sslot];
 	bp = vm->stack[sslot + 1];
 	FATAL(vm, NETVM_ERR_INSTADDR, addr > vm->ninst);
-	FATAL(vm, NETVM_ERR_STKOVFL, bp > sslot);
+	FATAL(vm, NETVM_ERR_STKUNDF, bp > sslot);
 	FATAL(vm, NETVM_ERR_STKUNDF, sslot - bp < inst->w);
 	vm->bp = bp;
 	vm->sp = sslot - inst->w;
@@ -1534,10 +1531,8 @@ int netvm_validate(struct netvm *vm)
 			if ((cp->validate != NULL)
 			    && ((rv = (*cp->validate)(inst, vm)) < 0))
 				return rv;
-		} else if (inst->op == NETVM_OC_POPFR) {
-			if (inst->x && inst->y > NETVM_MAXRET)
-				return NETVM_ERR_BADNUMRET;
-		} else if (inst->op == NETVM_OC_RET) {
+		} else if ((inst->op == NETVM_OC_POPFR) ||
+			   (inst->op == NETVM_OC_RET)) {
 			if (inst->x > NETVM_MAXRET)
 				return NETVM_ERR_BADNUMRET;
 		}
