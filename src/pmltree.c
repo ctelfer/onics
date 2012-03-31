@@ -311,7 +311,7 @@ int pml_ast_add_intrinsic(struct pml_ast *ast, struct pml_idef *intr)
 		abort_unless(intr->pnames[i]);
 		if ((ncpy = strdup(intr->pnames[i])) == NULL)
 			goto enomem;
-		v = pml_var_alloc(ncpy, 0, PML_VTYPE_LOCAL, NULL);
+		v = pml_var_alloc(ncpy, 0, PML_VTYPE_PARAM, NULL);
 		if (v == NULL) {
 			free(ncpy);
 			goto enomem;
@@ -2098,7 +2098,6 @@ int pml_resolve_refs(struct pml_ast *ast, union pml_node *node)
 			goto out;
 		func->pstksz = func->vars.addr_rw1 * sizeof(uint64_t);
 		func->vstksz = func->vars.addr_rw2 * sizeof(uint64_t);
-		symtab_adj_var_addrs(&ast->vars);
 
 	} else if (node->base.type == PMLTT_FUNCTION) {
 		struct pml_function *inln = (struct pml_function *)node;
@@ -2632,6 +2631,7 @@ static int e_locator(struct pml_ast *ast, struct pml_stack_frame *fr,
 			}
 
 		} else {
+			byte_t *p;
 
 			abort_unless(v->vtype == PML_VTYPE_PARAM ||
 			             v->vtype == PML_VTYPE_LOCAL);
@@ -2646,8 +2646,10 @@ static int e_locator(struct pml_ast *ast, struct pml_stack_frame *fr,
 				return -1;
 			}
 			r->etype = PML_ETYPE_SCALAR;
-			r->val = *(uint64_t *)(fr->stack + 
-					       v->addr * sizeof(uint64_t));
+			p = fr->stack + v->addr * sizeof(uint64_t);
+			if (v->vtype == PML_VTYPE_LOCAL)
+				p += fr->psz;
+			r->val = *(uint64_t *)p;
 		}
 	} else if (l->reftype == PML_REF_PKTFLD) {
 

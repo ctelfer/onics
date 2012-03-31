@@ -459,7 +459,7 @@ union pml_node {
 
 /* PML expression (and maybe statement) evaluation */
 struct pml_stack_frame {
-	uint8_t *	stack;
+	byte_t *	stack;
 	ulong		ssz;
 	ulong		psz;
 	union {
