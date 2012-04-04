@@ -22,7 +22,8 @@ TARGETS=${BINDIR}/pcapin \
 	${BINDIR}/x2hpkt \
 	${BINDIR}/h2xpkt \
 	${BINDIR}/nvmas \
-	${BINDIR}/nvmpf
+	${BINDIR}/nvmpf \
+	${BINDIR}/pml
 
 all: ${LIBOBJS} ${TARGETS}
 
@@ -72,6 +73,16 @@ ${BINDIR}/nvmpf: protoparse.o stdproto.o util.o pktbuf.o netvm.o xpkt.o \
 	         netvm.h protoparse.h pktbuf.h xpkt.h netvm_prog.h
 	${CC} -o ${BINDIR}/nvmpf nvmpf.c protoparse.o stdproto.o util.o \
 	         pktbuf.o netvm.o xpkt.o netvm_std_coproc.o netvm_prog.o ns.o \
+		${DEFS} ${OPTS} ${INCS} ${LIBS}
+
+${BINDIR}/pml:   pml_main.c protoparse.o stdproto.o util.o pktbuf.o netvm.o \
+		 xpkt.o netvm_std_coproc.o netvm_prog.o ns.o \
+		 pmlncg.o lex.pml.o pml.o pmltree.o \
+	         netvm.h protoparse.h pktbuf.h xpkt.h netvm_prog.h \
+		 pmlncg.h netvm_prog.h pmltree.h
+	${CC} -o ${BINDIR}/pml pml_main.c protoparse.o stdproto.o util.o \
+	         pktbuf.o netvm.o xpkt.o netvm_std_coproc.o netvm_prog.o ns.o \
+		 pmlncg.o lex.pml.o pml.o pmltree.o \
 		${DEFS} ${OPTS} ${INCS} ${LIBS}
 
 
