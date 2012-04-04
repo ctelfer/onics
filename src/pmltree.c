@@ -126,6 +126,7 @@ static void symtab_adj_var_addrs(struct pml_symtab *t)
 		    ((v->vtype == PML_VTYPE_GLOBAL) && (v->init == NULL)))
 			v->addr += t->addr_rw1;
 	}
+	t->addr_rw2 += t->addr_rw1;
 }
 
 
@@ -248,7 +249,7 @@ void pml_ast_clear(struct pml_ast *ast)
 	abort_unless(l_isempty(&ast->e_rules));
 
 	for (i = PML_SEG_MIN; i <= PML_SEG_MAX; ++i)
-		dyb_free(&ast->mi_bufs[i]);
+		dyb_clear(&ast->mi_bufs[i]);
 
 	str_copy(ast->errbuf, "", sizeof(ast->errbuf));
 }
@@ -430,7 +431,7 @@ void pml_ast_finalize(struct pml_ast *ast)
 
 	gsz = ast->vars.addr_rw1 + ast->vars.addr_rw2;
 	symtab_adj_var_addrs(&ast->vars);
-	if (dyb_alloc(&ast->mi_bufs[PML_SEG_RWMEM], gsz) < 0) {
+	if (dyb_resv(&ast->mi_bufs[PML_SEG_RWMEM], gsz) < 0) {
 		pml_ast_err(ast, "can't allocate %lu bytes for global mem\n",
 			    gsz);
 		ast->error = 1;
@@ -1314,7 +1315,7 @@ void pml_ast_print(struct pml_ast *ast)
 }
 
 
-int pmlt_walk(union pml_node *np, void *ctx, pml_walk_f pre, pml_walk_f in,
+int pmln_walk(union pml_node *np, void *ctx, pml_walk_f pre, pml_walk_f in,
 	      pml_walk_f post)
 {
 	int rv = 0;
@@ -1338,7 +1339,7 @@ int pmlt_walk(union pml_node *np, void *ctx, pml_walk_f pre, pml_walk_f in,
 		struct pml_list *p = &np->list;
 		struct list *e;
 		l_for_each_safe(e, x, &p->list) {
-			rv = pmlt_walk(l_to_node(e), ctx, pre, in, post);
+			rv = pmln_walk(l_to_node(e), ctx, pre, in, post);
 			if (rv < 0)
 				return rv;
 			else if (rv > 0)
@@ -1349,7 +1350,7 @@ int pmlt_walk(union pml_node *np, void *ctx, pml_walk_f pre, pml_walk_f in,
 	case PMLTT_VAR: {
 		struct pml_variable *p = &np->variable;
 		if (p->init != NULL) {
-			rv = pmlt_walk((union pml_node *)p->init, ctx, pre, in,
+			rv = pmln_walk((union pml_node *)p->init, ctx, pre, in,
 				       post);
 			if (rv < 0)
 				return rv;
@@ -1360,7 +1361,7 @@ int pmlt_walk(union pml_node *np, void *ctx, pml_walk_f pre, pml_walk_f in,
 
 	case PMLTT_UNOP: {
 		struct pml_op *p = &np->op;
-		rv = pmlt_walk((union pml_node *)p->arg1, ctx, pre, in, post);
+		rv = pmln_walk((union pml_node *)p->arg1, ctx, pre, in, post);
 		if (rv < 0)
 			return rv;
 		else if (rv > 0)
@@ -1370,7 +1371,7 @@ int pmlt_walk(union pml_node *np, void *ctx, pml_walk_f pre, pml_walk_f in,
 	case PMLTT_BINOP: {
 		struct pml_op *p = &np->op;
 
-		rv = pmlt_walk((union pml_node *)p->arg1, ctx, pre, in, post);
+		rv = pmln_walk((union pml_node *)p->arg1, ctx, pre, in, post);
 		if (rv < 0)
 			return rv;
 		else if (rv > 0)
@@ -1384,7 +1385,7 @@ int pmlt_walk(union pml_node *np, void *ctx, pml_walk_f pre, pml_walk_f in,
 				return 0;
 		}
 
-		rv = pmlt_walk((union pml_node *)p->arg2, ctx, pre, in, post);
+		rv = pmln_walk((union pml_node *)p->arg2, ctx, pre, in, post);
 		if (rv < 0)
 			return rv;
 		else if (rv > 0)
@@ -1393,7 +1394,7 @@ int pmlt_walk(union pml_node *np, void *ctx, pml_walk_f pre, pml_walk_f in,
 
 	case PMLTT_CALL: {
 		struct pml_call *p = &np->call;
-		rv = pmlt_walk((union pml_node *)p->args, ctx, pre, in, post);
+		rv = pmln_walk((union pml_node *)p->args, ctx, pre, in, post);
 		if (rv < 0)
 			return rv;
 		else if (rv > 0)
@@ -1403,20 +1404,20 @@ int pmlt_walk(union pml_node *np, void *ctx, pml_walk_f pre, pml_walk_f in,
 	case PMLTT_IF: {
 		struct pml_if *p = &np->ifstmt;
 
-		rv = pmlt_walk((union pml_node *)p->test, ctx, pre, in, post);
+		rv = pmln_walk((union pml_node *)p->test, ctx, pre, in, post);
 		if (rv < 0)
 			return rv;
 		else if (rv > 0)
 			return 0;
 
-		rv = pmlt_walk((union pml_node *)p->tbody, ctx, pre, in, post);
+		rv = pmln_walk((union pml_node *)p->tbody, ctx, pre, in, post);
 		if (rv < 0)
 			return rv;
 		else if (rv > 0)
 			return 0;
 
 		if (p->fbody != NULL) {
-			rv = pmlt_walk((union pml_node *)p->fbody, ctx, pre, in,
+			rv = pmln_walk((union pml_node *)p->fbody, ctx, pre, in,
 				       post);
 			if (rv < 0)
 				return rv;
@@ -1428,13 +1429,13 @@ int pmlt_walk(union pml_node *np, void *ctx, pml_walk_f pre, pml_walk_f in,
 	case PMLTT_WHILE: {
 		struct pml_while *p = &np->whilestmt;
 
-		rv = pmlt_walk((union pml_node *)p->test, ctx, pre, in, post);
+		rv = pmln_walk((union pml_node *)p->test, ctx, pre, in, post);
 		if (rv < 0)
 			return rv;
 		else if (rv > 0)
 			return 0;
 
-		rv = pmlt_walk((union pml_node *)p->body, ctx, pre, in, post);
+		rv = pmln_walk((union pml_node *)p->body, ctx, pre, in, post);
 		if (rv < 0)
 			return rv;
 		else if (rv > 0)
@@ -1446,7 +1447,7 @@ int pmlt_walk(union pml_node *np, void *ctx, pml_walk_f pre, pml_walk_f in,
 		struct pml_locator *p = &np->locator;
 
 		if (p->pkt != NULL) {
-			rv = pmlt_walk((union pml_node *)p->pkt, ctx, pre, in,
+			rv = pmln_walk((union pml_node *)p->pkt, ctx, pre, in,
 				       post);
 			if (rv < 0)
 				return rv;
@@ -1455,7 +1456,7 @@ int pmlt_walk(union pml_node *np, void *ctx, pml_walk_f pre, pml_walk_f in,
 		}
 
 		if (p->idx != NULL) {
-			rv = pmlt_walk((union pml_node *)p->idx, ctx, pre, in,
+			rv = pmln_walk((union pml_node *)p->idx, ctx, pre, in,
 				       post);
 			if (rv < 0)
 				return rv;
@@ -1464,7 +1465,7 @@ int pmlt_walk(union pml_node *np, void *ctx, pml_walk_f pre, pml_walk_f in,
 		}
 
 		if (p->off != NULL) {
-			rv = pmlt_walk((union pml_node *)p->off, ctx, pre, in,
+			rv = pmln_walk((union pml_node *)p->off, ctx, pre, in,
 				       post);
 			if (rv < 0)
 				return rv;
@@ -1473,7 +1474,7 @@ int pmlt_walk(union pml_node *np, void *ctx, pml_walk_f pre, pml_walk_f in,
 		}
 
 		if (p->len != NULL) {
-			rv = pmlt_walk((union pml_node *)p->len, ctx, pre, in,
+			rv = pmln_walk((union pml_node *)p->len, ctx, pre, in,
 				       post);
 			if (rv < 0)
 				return rv;
@@ -1485,13 +1486,13 @@ int pmlt_walk(union pml_node *np, void *ctx, pml_walk_f pre, pml_walk_f in,
 	case PMLTT_ASSIGN: {
 		struct pml_assign *p = &np->assign;
 
-		rv = pmlt_walk((union pml_node *)p->loc, ctx, pre, in, post);
+		rv = pmln_walk((union pml_node *)p->loc, ctx, pre, in, post);
 		if (rv < 0)
 			return rv;
 		else if (rv > 0)
 			return 0;
 
-		rv = pmlt_walk((union pml_node *)p->expr, ctx, pre, in, post);
+		rv = pmln_walk((union pml_node *)p->expr, ctx, pre, in, post);
 		if (rv < 0)
 			return rv;
 		else if (rv > 0)
@@ -1501,7 +1502,7 @@ int pmlt_walk(union pml_node *np, void *ctx, pml_walk_f pre, pml_walk_f in,
 	case PMLTT_CFMOD: {
 		struct pml_cfmod *p = &np->cfmod;
 
-		rv = pmlt_walk((union pml_node *)p->expr, ctx, pre, in, post);
+		rv = pmln_walk((union pml_node *)p->expr, ctx, pre, in, post);
 		if (rv < 0)
 			return rv;
 		else if (rv > 0)
@@ -1511,7 +1512,7 @@ int pmlt_walk(union pml_node *np, void *ctx, pml_walk_f pre, pml_walk_f in,
 	case PMLTT_PRINT: {
 		struct pml_print *p = &np->print;
 
-		rv = pmlt_walk((union pml_node *)p->args, ctx, pre, in, post);
+		rv = pmln_walk((union pml_node *)p->args, ctx, pre, in, post);
 		if (rv < 0)
 			return rv;
 		else if (rv > 0)
@@ -1523,14 +1524,14 @@ int pmlt_walk(union pml_node *np, void *ctx, pml_walk_f pre, pml_walk_f in,
 		struct list *n;
 
 		l_for_each_safe(n, x, &p->vars.list) {
-			rv = pmlt_walk(l_to_node(n), ctx, pre, in, post);
+			rv = pmln_walk(l_to_node(n), ctx, pre, in, post);
 			if (rv < 0)
 				return rv;
 			else if (rv > 0)
 				return 0;
 		}
 
-		rv = pmlt_walk((union pml_node *)p->body, ctx, pre, in, post);
+		rv = pmln_walk((union pml_node *)p->body, ctx, pre, in, post);
 		if (rv < 0)
 			return rv;
 		else if (rv > 0)
@@ -1541,7 +1542,7 @@ int pmlt_walk(union pml_node *np, void *ctx, pml_walk_f pre, pml_walk_f in,
 		struct pml_rule *p = &np->rule;
 
 		if (p->pattern != NULL) {
-			rv = pmlt_walk((union pml_node *)p->pattern, ctx, pre,
+			rv = pmln_walk((union pml_node *)p->pattern, ctx, pre,
 				       in, post);
 			if (rv < 0)
 				return rv;
@@ -1549,7 +1550,7 @@ int pmlt_walk(union pml_node *np, void *ctx, pml_walk_f pre, pml_walk_f in,
 				return 0;
 		}
 
-		rv = pmlt_walk((union pml_node *)p->stmts, ctx, pre, in, post);
+		rv = pmln_walk((union pml_node *)p->stmts, ctx, pre, in, post);
 		if (rv < 0)
 			return rv;
 		else if (rv > 0)
@@ -1567,6 +1568,45 @@ int pmlt_walk(union pml_node *np, void *ctx, pml_walk_f pre, pml_walk_f in,
 	}
 
 	return 0;
+}
+
+
+int pml_ast_walk(struct pml_ast *ast, void *ctx, pml_walk_f pre,
+		 pml_walk_f in, pml_walk_f post)
+{
+	struct list *n;
+	int rv = 0;
+
+	if (ast == NULL)
+		return -1;
+
+	l_for_each(n, &ast->vars.list) {
+		rv = pmln_walk(l_to_node(n), ctx, pre, in, post);
+		if (rv < 0)
+			goto out;
+	}
+	l_for_each(n, &ast->funcs.list) {
+		rv = pmln_walk(l_to_node(n), ctx, pre, in, post);
+		if (rv < 0)
+			goto out;
+	}
+	l_for_each(n, &ast->b_rules) {
+		rv = pmln_walk(l_to_node(n), ctx, pre, in, post);
+		if (rv < 0)
+			goto out;
+	}
+	l_for_each(n, &ast->p_rules) {
+		rv = pmln_walk(l_to_node(n), ctx, pre, in, post);
+		if (rv < 0)
+			goto out;
+	}
+	l_for_each(n, &ast->e_rules) {
+		rv = pmln_walk(l_to_node(n), ctx, pre, in, post);
+		if (rv < 0)
+			goto out;
+	}
+out:
+	return rv;
 }
 
 
@@ -2055,7 +2095,7 @@ static int resolve_node_post(union pml_node *node, void *ctxp, void *xstk)
 
 static int resolve_node(struct pml_resolve_ctx *ctx, union pml_node *node)
 {
-	return pmlt_walk(node, ctx, resolve_node_pre, NULL,
+	return pmln_walk(node, ctx, resolve_node_pre, NULL,
 			 resolve_node_post);
 }
 
@@ -2959,37 +2999,7 @@ static int pml_cexpr_walker(union pml_node *node, void *astp, void *xstk)
 
 int pml_ast_optimize(struct pml_ast *ast)
 {
-	struct list *n;
-	int rv = 0;
-
-	abort_unless(ast);
-	l_for_each(n, &ast->vars.list) {
-		rv = pmlt_walk(l_to_node(n), ast, pml_cexpr_walker, NULL, NULL);
-		if (rv < 0)
-			goto out;
-	}
-	l_for_each(n, &ast->funcs.list) {
-		rv = pmlt_walk(l_to_node(n), ast, pml_cexpr_walker, NULL, NULL);
-		if (rv < 0)
-			goto out;
-	}
-	l_for_each(n, &ast->b_rules) {
-		rv = pmlt_walk(l_to_node(n), ast, pml_cexpr_walker, NULL, NULL);
-		if (rv < 0)
-			goto out;
-	}
-	l_for_each(n, &ast->p_rules) {
-		rv = pmlt_walk(l_to_node(n), ast, pml_cexpr_walker, NULL, NULL);
-		if (rv < 0)
-			goto out;
-	}
-	l_for_each(n, &ast->e_rules) {
-		rv = pmlt_walk(l_to_node(n), ast, pml_cexpr_walker, NULL, NULL);
-		if (rv < 0)
-			goto out;
-	}
-out:
-	return rv;
+	return pml_ast_walk(ast, ast, pml_cexpr_walker, NULL, NULL);
 }
 
 

@@ -58,6 +58,14 @@ struct pml_ast {
 	char			errbuf[256];
 };
 
+/* 
+ * we keep the size of the PML_SEG_ROMEM segment in the size of the mi_buf 
+ * that corresponds to that segment.  We keep the size of the RW segment in
+ * the variable symbol table:  'vars.addr_rw2'.  vars.addr_rw1 is the
+ * length of the explictly initialized portion.
+ */
+
+
 
 enum {
 	PML_SEG_NONE = -1,
@@ -543,8 +551,10 @@ int  pml_ast_optimize(struct pml_ast *ast);
    (and subnodes) but continue on the traversal.  If the return value is
    0, then continue processing.
  */
-int  pmlt_walk(union pml_node *np, void *ctx, pml_walk_f pre, pml_walk_f in,
+int  pmln_walk(union pml_node *np, void *ctx, pml_walk_f pre, pml_walk_f in,
 	       pml_walk_f post);
+int  pml_ast_walk(struct pml_ast *ast, void *ctx, pml_walk_f pre,
+		  pml_walk_f in, pml_walk_f post);
 void pmln_print(union pml_node *node, uint depth);
 void pml_ast_print(struct pml_ast *ast);
 
