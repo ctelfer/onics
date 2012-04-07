@@ -205,10 +205,10 @@ static void init_coproc(struct pmlncg *cg)
 	for (i = 0; i < NETVM_MAXCOPROC; ++i)
 		prog->cpreqs[i] = NETVM_CPT_NONE;
 
-	prog->cpreqs[NETVM_CPI_XPKT] = prog->cpreqs[NETVM_CPT_XPKT];
-	prog->cpreqs[NETVM_CPI_OUTPORT] = prog->cpreqs[NETVM_CPT_OUTPORT];
-	prog->cpreqs[NETVM_CPI_PKTQ] = prog->cpreqs[NETVM_CPT_PKTQ];
-	prog->cpreqs[NETVM_CPI_REX] = prog->cpreqs[NETVM_CPT_REX];
+	prog->cpreqs[NETVM_CPI_XPKT] = NETVM_CPT_XPKT;
+	prog->cpreqs[NETVM_CPI_OUTPORT] = NETVM_CPT_OUTPORT;
+	prog->cpreqs[NETVM_CPI_PKTQ] = NETVM_CPT_PKTQ;
+	prog->cpreqs[NETVM_CPI_REX] = NETVM_CPT_REX;
 }
 
 
@@ -260,7 +260,7 @@ static void clearcg(struct pmlncg *cg, int copied, int clearall)
 
 	pml_ast_walk(cg->ast, cg, clearaux, NULL, NULL);
 
-	if (!clearall) {
+	if (clearall) {
 		pib_clear(&cg->ibuf);
 		if (copied) {
 			inits = cg->prog->inits;
@@ -330,6 +330,10 @@ int pml_to_nvmp(struct pml_ast *ast, struct netvm_program *prog, int copy)
 		dyb_release(&ast->mi_bufs[PML_SEG_RWMEM]);
 		pml_ast_clear(ast);
 	}
+
+	/* program takes ownership of instruction buffer */
+	prog->inst = cg.ibuf.inst;
+	prog->ninst = cg.ibuf.ninst;
 
 	clearcg(&cg, copy, 0);
 

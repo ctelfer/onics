@@ -38,19 +38,23 @@ struct netvm_program {
 };
 
 
+/* clear/initialize a netvm program for population.  */
+/* not needed for nvmp_read(). */
+void nvmp_init(struct netvm_program *prog);
+
 /* Determine whether a program has a particular type of entry point defined */
 int nvmp_ep_is_set(struct netvm_program *prog, int ep);
 
 /* returns the same error codes as netvm_validate */
-int nvmp_validate(struct netvm_program *prog, struct netvm *vm);
+int nvmp_validate(struct netvm *vm, struct netvm_program *prog);
 
 /* Assumes that the VM already has sufficient memory for the program. */
 /* This is checked in nvmp_validate(). */
-void nvmp_init_mem(struct netvm_program *prog, struct netvm *vm);
+void nvmp_init_mem(struct netvm *vm, struct netvm_program *prog);
 
 /* Returns the same error codes as netvm_run.  Use netvm_run() to continue */
 /* execution if the program runs out of cycles. */
-int nvmp_exec(struct netvm_program *prog, int ep, struct netvm *vm, int maxcycles,
+int nvmp_exec(struct netvm *vm, struct netvm_program *prog, int ep, int maxcycles,
 	      uint64_t *vmrv);
 
 /*
@@ -70,7 +74,7 @@ int nvmp_exec(struct netvm_program *prog, int ep, struct netvm *vm, int maxcycle
  *  -- 9 -- finalization entry point
  *  -- <# instr> * 8 bytes --  instructions
  *  -- <# cpreqs> * 12 bytes --  coprocessor requirements
- *  -- <# segs> -- segment sections
+ *  -- <# segs> * 12 bytes -- segment sections
  *  -- <# mem inits> -- memory initializations
  *
  *  Instruction format:
@@ -128,5 +132,27 @@ int nvmp_write(struct netvm_program *prog, FILE *outfile);
 
 /* Should only be called for programs read with nfmp_read() */
 void nvmp_clear(struct netvm_program *prog);
+
+/* Pretty-print the return value of the virtual machine */
+void nvmp_prret(FILE *f, struct netvm *vm, int rv, uint64_t tos);
+
+/* Dump the stack of the virtual machine */
+void nvmp_prstk(FILE *f, struct netvm *vm);
+
+
+
+enum {
+	NVMP_RUN_SINGLE_STEP = 1,	/* Run the prog by single-stepping it */
+	NVMP_RUN_IGNORE_ERR = 2,	/* Ignore netvm program errors */
+	NVMP_RUN_DEBUG = 4,		/* Debug print info about execution */
+	NVMP_RUN_PRSTK = 8,		/* Print the VM stack during and/or */
+					/* after the execution run. */
+};
+
+
+/* Run a complete netvm program given a VM, packet source, packet sink, */
+/* debug output (if NVMP_RUN_DEBUG or NVMP_RUN_PRSTK are set) and flags. */
+int nvmp_run_all(struct netvm *vm, struct netvm_program *prog,
+	         FILE *pin, FILE *pout, FILE *dout, int flags);
 
 #endif /* __netvm_prog_h */

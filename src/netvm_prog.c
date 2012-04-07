@@ -1,11 +1,12 @@
-#include "netvm_prog.h"
-#include <cat/pack.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <errno.h>
 #include <string.h>
 #include <limits.h>
 
+#include <cat/pack.h>
+
+#include "netvm_prog.h"
 
 STATIC_BUG_ON(uint_larger_than_32_bits, sizeof(uint32_t) < sizeof(uint));
 
@@ -36,6 +37,31 @@ static void restore_mseg(struct netvm *vm,
 }
 
 
+void nvmp_init(struct netvm_program *prog)
+{
+	int i;
+	struct netvm_segdesc *sd;
+
+	abort_unless(prog);
+
+	memset(prog, 0, sizeof(*prog));
+
+	/* mostly redundant but explicit */
+	prog->inst = NULL;
+	prog->ninst = 0;
+	for (i = 0; i < NVMP_EP_NUMEP; ++i)
+		prog->eps[i] = NVMP_EP_INVALID;
+	for (i = 0, sd = prog->sdescs; i < NETVM_MAXMSEGS; ++i, ++sd) {
+		sd->perms = 0;
+		sd->len = 0;
+	}
+	for (i = 0; i < NETVM_MAXCOPROC; ++i)
+		prog->cpreqs[i] = NETVM_CPT_NONE;
+	prog->inits = NULL;
+	prog->ninits = 0;
+}
+
+
 int nvmp_ep_is_set(struct netvm_program *prog, int ep)
 {
 	abort_unless(prog && ep >= 0 && ep < NVMP_EP_NUMEP);
@@ -43,7 +69,7 @@ int nvmp_ep_is_set(struct netvm_program *prog, int ep)
 }
 
 
-int nvmp_validate(struct netvm_program *prog, struct netvm *vm)
+int nvmp_validate(struct netvm *vm, struct netvm_program *prog)
 {
 	uint i;
 	int rv = 0;
@@ -101,7 +127,7 @@ int nvmp_validate(struct netvm_program *prog, struct netvm *vm)
 }
 
 
-void nvmp_init_mem(struct netvm_program *prog, struct netvm *vm)
+void nvmp_init_mem(struct netvm *vm, struct netvm_program *prog)
 {
 	int i;
 	struct netvm_mseg *ms;
@@ -125,7 +151,7 @@ void nvmp_init_mem(struct netvm_program *prog, struct netvm *vm)
 }
 
 
-int nvmp_exec(struct netvm_program *prog, int ep, struct netvm *vm, int maxc,
+int nvmp_exec(struct netvm *vm, struct netvm_program *prog, int ep, int maxc,
 	      uint64_t *vmrv)
 {
 	int rv;
@@ -168,16 +194,7 @@ int nvmp_read(struct netvm_program *prog, FILE *infile, int *eret)
 	int e = NVMP_RDE_OK;
 
 	abort_unless(prog);
-	memset(prog, 0, sizeof(prog));
-	/* redundant but explicit */
-	prog->ninst = 0;
-	prog->inst = NULL;
-	for (i = 0, sd = prog->sdescs; i < NETVM_MAXMSEGS; ++i, ++sd) {
-		sd->perms = 0;
-		sd->len = 0;
-	}
-	for (i = 0; i < NETVM_MAXCOPROC; ++i)
-		prog->cpreqs[i] = NETVM_CPT_NONE;
+	nvmp_init(prog);
 
 	if (fread(buf, 1, NVMP_HLEN, infile) < NVMP_HLEN) {
 		e = NVMP_RDE_RUNTHDR;
@@ -323,7 +340,7 @@ int nvmp_read(struct netvm_program *prog, FILE *infile, int *eret)
 			goto err;
 		}
 		sd = &prog->sdescs[segnum];
-		if ((off >= sd->len) || (sd->len - off < len)) {
+		if ((off > sd->len) || (sd->len - off < len)) {
 			e = NVMP_RDE_MIOFFLEN;
 			goto err;
 		}
@@ -498,5 +515,247 @@ void nvmp_clear(struct netvm_program *prog)
 
 	prog->inits = 0;
 	prog->inits = NULL;
+}
+
+
+void nvmp_prret(FILE *f, struct netvm *vm, int rv, uint64_t rc)
+{
+	abort_unless(f && vm);
+	if (rv == 0) {
+		fprintf(f, "VM provided no return value\n");
+	} else if (rv == 1) {
+		fprintf(f, "VM returned value %llu\n", (ulonglong)rc);
+	} else if (rv == -1) {
+		fprintf(f, "VM returned error @%u: %s\n", vm->pc,
+			netvm_estr(vm->error));
+	} else if (rv == -2) {
+		fprintf(f, "VM quanta expired @%u\n", vm->pc);
+	} else {
+		fprintf(f, "VM returned unknown error @%u: %s\n", vm->pc,
+			netvm_estr(vm->error));
+	}
+}
+
+
+void nvmp_prstk(FILE *f, struct netvm *vm)
+{
+	uint sp;
+	sp = vm->sp;
+	fprintf(f, "Stack: (SP = %u, BP = %u)\n", sp, vm->bp);
+	while (sp > 0) {
+		--sp;
+		fprintf(f, "\t%4u: %llu (0x%llx)\n", sp,
+		        (ulonglong)vm->stack[sp],
+		        (ulonglong)vm->stack[sp]);
+	}
+}
+
+
+static int flushpkts(struct netvm *vm, int send, FILE *f, FILE *dout, int flags)
+{
+	int debug = flags & NVMP_RUN_DEBUG;
+	int i;
+	int esave;
+	struct pktbuf *p;
+
+	for (i = 0; i < NETVM_MAXPKTS; ++i) {
+		p = netvm_clr_pkt(vm, i, 1);
+
+		if (p != NULL) {
+			if (debug)
+				fprintf(dout, "Removed packet %d\n", i);
+
+			if (send) {
+				if (debug)
+					fprintf(dout, "Sending packet %d\n", i);
+
+				if (pkb_pack(p) < 0) {
+					if (dout != NULL) {
+						esave = errno;
+						fprintf(dout, 
+							"Error packing packet "
+							"for writing");
+						errno = esave;
+					}
+					return -1;
+				}
+
+				if (pkb_file_write(p, f) < 0) {
+					if (dout != NULL) {
+						esave = errno; 
+						fprintf(dout,
+							"Error writing out "
+							"packet");
+						errno = esave;
+					}
+					return -1;
+				}
+			}
+
+			pkb_free(p);
+		}
+	}
+
+	return 0;
+}
+
+
+static const char *epstr[] = {
+	"START",
+	"PACKET",
+	"END",
+};
+
+static const char *nvmp_epstr(int epi)
+{
+	if (epi < 0 || epi >= NVMP_EP_NUMEP)
+		return "UNKNOWN";
+	else
+		return epstr[epi];
+}
+
+
+static int _nvmp_run(struct netvm *vm, struct netvm_program *prog, int epi,
+		     FILE *dout, uint64_t *tos, int flags)
+{
+	int rv;
+	int debug = flags & NVMP_RUN_DEBUG;
+	int prstk = flags & NVMP_RUN_PRSTK;
+
+	if (prog->eps[epi] == NVMP_EP_INVALID) {
+		if (debug)
+			fprintf(dout, "No %s entry point\n", nvmp_epstr(epi));
+		return 0;
+	}
+
+	if (debug)
+		fprintf(dout, "Program has a valid %s entry point\n",
+			nvmp_epstr(epi));
+
+	if (flags & NVMP_RUN_SINGLE_STEP) {
+
+		if (debug) {
+			fprintf(dout, "Single stepping netvm program\n");
+			fprintf(dout, "Executing instruction %u\n",
+				prog->eps[epi]);
+		}
+
+		rv = nvmp_exec(vm, prog, epi, 1, tos);
+
+		while (rv == -2) {
+
+			if (debug)
+				fprintf(dout, "Executing instruction %u\n",
+					vm->pc);
+
+			rv = nvmp_exec(vm, prog, NVMP_EXEC_CONTINUE, 1, tos);
+
+			if (prstk)
+				nvmp_prstk(dout, vm);
+		}
+	} else {
+		if (debug)
+			fprintf(dout, "Running netvm program to completion\n");
+
+		rv = nvmp_exec(vm, prog, epi, -1, tos);
+	}
+
+	if (debug)
+		nvmp_prret(dout, vm, rv, *tos);
+
+	if (prstk)
+		nvmp_prstk(dout, vm);
+
+	return rv;
+}
+
+
+int nvmp_run_all(struct netvm *vm, struct netvm_program *prog, FILE *pin,
+		 FILE *pout, FILE *dout, int flags)
+{
+	ulong npkt = 0;
+	ulong npass = 0;
+	int ignerr = flags & NVMP_RUN_IGNORE_ERR;
+	int debug = flags & NVMP_RUN_DEBUG;
+	int rv;
+	int pass;
+	int esave;
+	uint64_t tos;
+	struct pktbuf *p;
+
+	if (debug && dout == NULL) {
+		errno = EINVAL;
+		return -1;
+	}
+
+	nvmp_init_mem(vm, prog);
+
+	rv = _nvmp_run(vm, prog, NVMP_EP_START, dout, &tos, flags);
+	if (rv < 0 && !ignerr)
+		return rv;
+
+	if (prog->eps[NVMP_EP_PACKET] != NVMP_EP_INVALID) {
+
+		if (debug)
+			fprintf(dout, "Processing packets in '%s' mode.\n",
+				(vm->matchonly ? "match only" : "standard"));
+
+		while (pkb_file_read(&p, pin) > 0) {
+
+			if (pkb_parse(p) < 0) {
+				if (dout != NULL) {
+					esave = errno;
+					fprintf(dout,
+						"Error parsing packet %lu\n",
+						npkt);
+					errno = esave;
+				}
+				return -1;
+			}
+			++npkt;
+
+			if (debug)
+				fprintf(dout, "Read packet %lu\n", npkt);
+
+			netvm_load_pkt(vm, p, 0);
+			rv = _nvmp_run(vm, prog, NVMP_EP_PACKET, dout, &tos,
+				       flags);
+			if (rv < 0 && !ignerr)
+				return rv;
+
+			pass = (rv == 1) && tos;
+			if (pass) {
+				if (debug)
+					fprintf(dout, "Packet %lu passed\n",
+						npkt);
+				++npass;
+			}
+
+			rv = flushpkts(vm, !vm->matchonly || pass, pout, dout,
+				       flags);
+			if (rv < 0 && !ignerr)
+				return rv;
+
+		}
+
+		if (debug)
+			fprintf(dout, "%lu packets processed and %lu passed\n",
+				npkt, npass);
+		
+	} else {
+
+		if (debug)
+			fprintf(dout,
+				"No %s entry point: no packet read/write\n",
+				nvmp_epstr(NVMP_EP_PACKET));
+
+	}
+
+
+	rv = _nvmp_run(vm, prog, NVMP_EP_END, dout, &tos, debug);
+	if (rv < 0 && !ignerr)
+		return rv;
+
+	return 0;
 }
 

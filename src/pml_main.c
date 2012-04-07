@@ -46,7 +46,7 @@ const char *ifname = NULL;
 void usage()
 {
 	char buf[4096];
-	fprintf(stderr, "usage: nvmpf [options]\n");
+	fprintf(stderr, "usage: pml [options]\n");
 	optparse_print(&optparser, buf, sizeof(buf));
 	str_cat(buf, "\n", sizeof(buf));
 	fprintf(stderr, "%s\n", buf);
@@ -72,180 +72,12 @@ void parse_options(int argc, char *argv[])
 			ifname = opt->val.str_val;
 		} else if (opt->ch == 'c') {
 			ofname = opt->val.str_val;
+		} else if (opt->ch == 's') {
+			single_step = 1;
 		}
 	}
-	if (rv != argc - 1)
+	if (rv != argc)
 		usage();
-}
-
-
-void print_vmret(int vmrv, int ec, uint pc, uint64_t rc)
-{
-	if (vmrv == 0) {
-		fprintf(stderr, "VM provided no return value\n");
-	} else if (vmrv == 1) {
-		fprintf(stderr, "VM returned value %llu\n", (ulonglong)rc);
-	} else if (vmrv == -1) {
-		fprintf(stderr, "VM returned error @%u: %s\n", pc,
-			netvm_estr(ec));
-	} else {
-		abort_unless(0);
-	}
-}
-
-
-static void print_stack(struct netvm *vm)
-{
-	uint sp;
-	fprintf(stderr, "Stack: (BP = %u)\n", vm->bp);
-	sp = vm->sp;
-	while (sp > 0) {
-		--sp;
-		fprintf(stderr, "\t%4u: %llu (0x%llx)\n", sp,
-		        (ulonglong)vm->stack[sp],
-		        (ulonglong)vm->stack[sp]);
-	}
-}
-
-
-void run_without_packets(struct netvm_program *prog, int epi, struct netvm *vm)
-{
-	int vmrv;
-	uint64_t rc;
-
-	if (prog->eps[epi] == NVMP_EP_INVALID)
-		return;
-
-	if (single_step) {
-		if (verbosity > 0)
-			fprintf(stderr, "Single stepping program\n");
-		if (verbosity > 2)
-			fprintf(stderr, "Executing %u\n", vm->pc);
-
-		vmrv = nvmp_exec(prog, epi, vm, 1, &rc);
-
-		if (verbosity > 3)
-			print_stack(vm);
-
-		while (vmrv == -2) {
-			if (verbosity > 2)
-				fprintf(stderr, "Executing %u\n", vm->pc);
-
-			vmrv = nvmp_exec(prog, NVMP_EXEC_CONTINUE, vm, 1, &rc);
-
-			if (verbosity > 3)
-				print_stack(vm);
-		}
-	} else {
-		if (verbosity > 0)
-			fprintf(stderr, "Running to completion\n");
-		vmrv = nvmp_exec(prog, epi, vm, -1, &rc);
-	}
-
-	if (verbosity > 0) {
-		print_vmret(vmrv, vm->error, vm->pc, rc);
-		if (verbosity > 1)
-			print_stack(vm);
-	}
-	if (vmrv < 0 && !ignore_errors) {
-		if (verbosity > 0)
-			fprintf(stderr, "exiting\n");
-		exit(1);
-	}
-}
-
-
-static void send_clr_packets(struct netvm *vm, int send)
-{
-	int i;
-	struct pktbuf *p;
-
-	for (i = 0; i < NETVM_MAXPKTS; ++i) {
-		p = netvm_clr_pkt(vm, i, 1);
-		if (p != NULL) {
-			if (send) {
-				if (pkb_pack(p) < 0)
-					err("Error packing packet for writing");
-				if (pkb_file_write(p, stdout) < 0)
-					errsys("Error writing out packet");
-			}
-			pkb_free(p);
-		}
-	}
-}
-
-
-void run_with_packets(struct netvm_program *prog, struct netvm *vm, int filter)
-{
-	struct pktbuf *p;
-	int npkt = 0;
-	int npass = 0;
-	int pass, vmrv;
-	uint64_t rc;
-
-	if (prog->eps[NVMP_EP_PACKET] == NVMP_EP_INVALID)
-		return;
-
-	while (pkb_file_read(&p, stdin) > 0) {
-		if (pkb_parse(p) < 0)
-			errsys("Error parsing packets");
-		++npkt;
-
-		netvm_load_pkt(vm, p, 0);
-		if (single_step) {
-			if (verbosity > 0)
-				fprintf(stderr, "Single stepping program\n");
-			if (verbosity > 1)
-				fprintf(stderr, "Executing %u\n", vm->pc);
-
-			vmrv = nvmp_exec(prog, NVMP_EP_PACKET, vm, 1, &rc);
-
-			if (verbosity > 3)
-				print_stack(vm);
-
-			while (vmrv == -2) {
-				if (verbosity > 1)
-					fprintf(stderr, "Executing %u\n",
-						vm->pc);
-
-				vmrv = nvmp_exec(prog, NVMP_EXEC_CONTINUE, vm,
-						 1, &rc);
-
-				if (verbosity > 3)
-					print_stack(vm);
-			}
-		} else {
-			if (verbosity > 0)
-				fprintf(stderr, "Running to completion\n");
-			vmrv = nvmp_exec(prog, NVMP_EP_PACKET, vm, -1, &rc);
-		}
-
-		if (vmrv < 0)
-			err("VM returned error @%u: %s\n", vm->pc, 
-			    netvm_estr(vm->error));
-
-		pass = (vmrv == 1) && rc;
-		if (pass)
-			++npass;
-
-		if (verbosity > 0) {
-			fprintf(stderr, "Packet %5u: ", npkt);
-			print_vmret(vmrv, vm->error, vm->pc, rc);
-			if (verbosity > 1)
-				print_stack(vm);
-		}
-		if (vmrv < 0 && !ignore_errors) {
-			if (verbosity > 0)
-				fprintf(stderr, "exiting\n");
-			exit(1);
-		}
-
-		send_clr_packets(vm, !filter || pass);
-	}
-
-	if (verbosity > 1)
-		fprintf(stderr, "%u out of %u packets returned 'true'\n", 
-			npass, npkt);
 }
 
 
@@ -259,12 +91,12 @@ void parse_pml_program(FILE *f, struct netvm_program *prog)
 	
 	pml_lexv_init(&none);
 	if (pmllex_init(&scanner))
-		errsys("pmllex_init:");
+		errsys("pmllex_init: ");
 	pmlset_in(f, scanner);
 	pmlset_extra(none, scanner);
 
 	if (!(parser = pml_alloc()))
-		errsys("pml_alloc:");
+		errsys("pml_alloc: ");
 	pml_ast_init(&ast);
 
 	if (verbosity > 0)
@@ -297,65 +129,94 @@ void parse_pml_program(FILE *f, struct netvm_program *prog)
 	if (pml_ast_optimize(&ast) < 0)
 		err("Error optimizing PML tree: %s\n", ast.errbuf);
 
-
+	nvmp_init(prog);
 	if (pml_to_nvmp(&ast, prog, 0) < 0)
-		errsys("Error generating code in pml_to_nvmp:");
+		errsys("Error generating code in pml_to_nvmp: ");
 }
 
 
-void run_program(struct netvm *vm, struct netvm_program *prog)
+void initvm(struct netvm *vm, uint64_t *stk, uint stksz, 
+	    struct netvm_std_coproc *cproc, struct file_emitter *fe,
+	    struct netvm_program *prog)
 {
 	int i;
 	int rv;
 	uint len;
+	uint perms;
+
+	netvm_init(vm, stk, stksz);
+	if (init_netvm_std_coproc(vm, cproc) < 0)
+		errsys("Error initializing NetVM coprocessors: ");
+	file_emitter_init(fe, stderr);
+	set_outport_emitter(&cproc->outport, &fe->fe_emitter);
 
 	for (i = 0; i < NETVM_MAXMSEGS; ++i) {
-		if (prog->sdescs[i].perms == 0)
-			continue;
 		len = prog->sdescs[i].len;
-		netvm_set_mseg(vm, i, emalloc(len), len, 
-			       prog->sdescs[i].perms);
+		perms = prog->sdescs[i].perms;
+		if (perms != 0)
+			netvm_set_mseg(vm, i, emalloc(len), len, perms);
 	}
 
-	if ((rv = nvmp_validate(prog, vm)) < 0)
+	if ((rv = nvmp_validate(vm, prog)) < 0)
 		err("Error validating program: %s\n", netvm_estr(rv));
 
-	nvmp_init_mem(prog, vm);
-	run_without_packets(prog, NVMP_EP_START, vm);
-	run_with_packets(prog, vm, vm->matchonly);
-	run_without_packets(prog, NVMP_EP_END, vm);
+
 }
 
 
 int main(int argc, char *argv[])
 {
 	struct netvm vm;
-	struct netvm_std_coproc vmcps;
-	struct netvm_program prog;
+	uint64_t vmstk[1024];
+	struct netvm_std_coproc cproc;
 	struct file_emitter fe;
-	FILE *f;
+	struct netvm_program prog;
+	FILE *fin, *fout;
+	int flags = 0;
 
 	parse_options(argc, argv);
 
 	register_std_proto();
 	pkb_init(1);
-	file_emitter_init(&fe, stderr);
-	netvm_init(&vm, vm_stack, array_length(vm_stack));
-	if (init_netvm_std_coproc(&vm, &vmcps) < 0)
-		errsys("Error initializing NetVM coprocessors");
-	set_outport_emitter(&vmcps.outport, &fe.fe_emitter);
-
 
 	if (ifname != NULL) {
-		if ((f = fopen(ifname , "r")) == NULL)
-			errsys("error opening input file:");
+		if ((fin = fopen(ifname , "r")) == NULL)
+			errsys("error opening input file '%s': ", ifname);
 	} else {
-		f = stdin;
+		fin = stdin;
 	}
 
-	parse_pml_program(f, &prog);
+	parse_pml_program(fin, &prog);
+	fclose(fin);
 
-	run_program(&vm, &prog);
+	if (ofname != NULL) {
+
+		if ((fout = fopen(ofname, "w")) == NULL)
+			errsys("error opening output file '%s': ", ofname);
+		if (nvmp_write(&prog, fout) < 0)
+			errsys("error writing out program: ");
+		fclose(fout);
+		nvmp_clear(&prog);
+
+	} else {
+
+		initvm(&vm, vmstk, array_length(vmstk), &cproc, &fe, &prog);
+
+		if (ignore_errors)
+			flags |= NVMP_RUN_IGNORE_ERR;
+		if (single_step)
+			flags |= NVMP_RUN_SINGLE_STEP;
+		if (verbosity > 0)
+			flags |= NVMP_RUN_DEBUG;
+		if (verbosity > 1)
+			flags |= NVMP_RUN_PRSTK;
+
+		if (nvmp_run_all(&vm, &prog, stdin, stdout, stderr, flags) < 0)
+			err("error running netvm program");
+
+		nvmp_clear(&prog);
+
+	}
 	
 	return 0;
 }
