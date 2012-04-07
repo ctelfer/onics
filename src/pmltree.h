@@ -413,6 +413,7 @@ struct pml_function {
 	ulong			pstksz;
 	ulong			vstksz;
 	ulong			width;	/* of return value: always 8 for now */
+	ulong			addr;
 };
 
 

@@ -505,7 +505,7 @@ union pml_node *pmln_alloc(int type)
 		struct pml_op *p = &np->op;
 		p->etype = PML_ETYPE_UNKNOWN;
 		p->eflags = 0;
-		p->width = 0;
+		p->width = 8;
 		p->op = 0;
 		p->arg1 = NULL;
 		p->arg2 = NULL;
@@ -588,6 +588,7 @@ union pml_node *pmln_alloc(int type)
 		p->ieval = NULL;
 		p->pstksz = 0;
 		p->vstksz = 0;
+		p->addr = 0;
 	} break;
 
 	case PMLTT_RULE: {
@@ -1344,6 +1345,14 @@ int pmln_walk(union pml_node *np, void *ctx, pml_walk_f pre, pml_walk_f in,
 				return rv;
 			else if (rv > 0)
 				return 0;
+
+			if (in != NULL) {
+				rv = (*in)((union pml_node *)p, ctx, xstk);
+				if (rv < 0)
+					return rv;
+				else if (rv > 0)
+					return 0;
+			}
 		}
 	} break;
 
@@ -1410,11 +1419,27 @@ int pmln_walk(union pml_node *np, void *ctx, pml_walk_f pre, pml_walk_f in,
 		else if (rv > 0)
 			return 0;
 
+		if (in != NULL) {
+			rv = (*in)((union pml_node *)p, ctx, xstk);
+			if (rv < 0)
+				return rv;
+			else if (rv > 0)
+				return 0;
+		}
+
 		rv = pmln_walk((union pml_node *)p->tbody, ctx, pre, in, post);
 		if (rv < 0)
 			return rv;
 		else if (rv > 0)
 			return 0;
+
+		if (in != NULL) {
+			rv = (*in)((union pml_node *)p, ctx, xstk);
+			if (rv < 0)
+				return rv;
+			else if (rv > 0)
+				return 0;
+		}
 
 		if (p->fbody != NULL) {
 			rv = pmln_walk((union pml_node *)p->fbody, ctx, pre, in,
@@ -1434,6 +1459,14 @@ int pmln_walk(union pml_node *np, void *ctx, pml_walk_f pre, pml_walk_f in,
 			return rv;
 		else if (rv > 0)
 			return 0;
+
+		if (in != NULL) {
+			rv = (*in)((union pml_node *)p, ctx, xstk);
+			if (rv < 0)
+				return rv;
+			else if (rv > 0)
+				return 0;
+		}
 
 		rv = pmln_walk((union pml_node *)p->body, ctx, pre, in, post);
 		if (rv < 0)
@@ -1492,6 +1525,14 @@ int pmln_walk(union pml_node *np, void *ctx, pml_walk_f pre, pml_walk_f in,
 		else if (rv > 0)
 			return 0;
 
+		if (in != NULL) {
+			rv = (*in)((union pml_node *)p, ctx, xstk);
+			if (rv < 0)
+				return rv;
+			else if (rv > 0)
+				return 0;
+		}
+
 		rv = pmln_walk((union pml_node *)p->expr, ctx, pre, in, post);
 		if (rv < 0)
 			return rv;
@@ -1531,6 +1572,14 @@ int pmln_walk(union pml_node *np, void *ctx, pml_walk_f pre, pml_walk_f in,
 				return 0;
 		}
 
+		if (in != NULL) {
+			rv = (*in)((union pml_node *)p, ctx, xstk);
+			if (rv < 0)
+				return rv;
+			else if (rv > 0)
+				return 0;
+		}
+
 		rv = pmln_walk((union pml_node *)p->body, ctx, pre, in, post);
 		if (rv < 0)
 			return rv;
@@ -1544,6 +1593,14 @@ int pmln_walk(union pml_node *np, void *ctx, pml_walk_f pre, pml_walk_f in,
 		if (p->pattern != NULL) {
 			rv = pmln_walk((union pml_node *)p->pattern, ctx, pre,
 				       in, post);
+			if (rv < 0)
+				return rv;
+			else if (rv > 0)
+				return 0;
+		}
+
+		if (in != NULL) {
+			rv = (*in)((union pml_node *)p, ctx, xstk);
 			if (rv < 0)
 				return rv;
 			else if (rv > 0)
