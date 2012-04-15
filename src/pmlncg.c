@@ -69,23 +69,23 @@ static int pib_add_ixyzw(struct pml_ibuf *b, uint8_t oc, uint8_t x, uint8_t y,
 	struct netvm_inst in = { oc, x, y, z, w };
 	return pib_add(b, &in);
 }
-#define EMIT_NULL(_ibuf, SYM) 						    \
-	do { 		   						    \
-		if (pib_add_ixyzw(_ibuf, NETVM_OC_##SYM,0,0,0,0) < 0)	    \
-			return -1;					    \
-	} while (0);
+#define EMIT_NULL(_ibuf, SYM) 						\
+	do { 		   						\
+		if (pib_add_ixyzw(_ibuf, NETVM_OC_##SYM,0,0,0,0) < 0)	\
+			return -1;					\
+	} while (0)
 
-#define EMIT_W(_ibuf, SYM, w) 						    \
-	do { 		   						    \
-		if (pib_add_ixyzw(_ibuf, NETVM_OC_##SYM,0,0,0,w) < 0)	    \
-			return -1;					    \
-	} while (0);
+#define EMIT_W(_ibuf, SYM, w) 						\
+	do { 		   						\
+		if (pib_add_ixyzw(_ibuf, NETVM_OC_##SYM,0,0,0,w) < 0)	\
+			return -1;					\
+	} while (0)
 
-#define EMIT_XYZW(_ibuf, SYM, x, y, z, w) 				    \
-	do { 		   						    \
-		if (pib_add_ixyzw(_ibuf, NETVM_OC_##SYM,x,y,z,w) < 0)	    \
-			return -1;					    \
-	} while (0);
+#define EMIT_XYZW(_ibuf, SYM, x, y, z, w) 				\
+	do { 		   						\
+		if (pib_add_ixyzw(_ibuf, NETVM_OC_##SYM,x,y,z,w) < 0)	\
+			return -1;					\
+	} while (0)
 
 
 #define UNIMPL(s)							\
@@ -262,13 +262,18 @@ static int push64(struct pml_ibuf *b, uint64_t v)
 
 static int cgscalar(struct pml_ibuf *b, struct pml_literal *l)
 {
+	abort_unless(b && l);
 	return push64(b, l->u.scalar);
 }
 
 
 static int cgbytestr(struct pml_ibuf *b, struct pml_literal *l, int withlen)
 {
-	struct pml_bytestr *v = &l->u.bytestr;
+	struct pml_bytestr *v;
+
+	abort_unless(b && l);
+	v = &l->u.bytestr;
+
 	if (push64(b, v->addr) < 0)
 		return -1;
 	if (v->segnum != 0)
@@ -283,8 +288,12 @@ static int cgbytestr(struct pml_ibuf *b, struct pml_literal *l, int withlen)
 
 static int cgmaskval(struct pml_ibuf *b, struct pml_literal *l)
 {
-	struct pml_bytestr *v = &l->u.maskval.val;
-	struct pml_bytestr *m = &l->u.maskval.mask;
+	struct pml_bytestr *v, *m;
+
+	abort_unless(b && l);
+	v = &l->u.maskval.val;
+	m = &l->u.maskval.mask;
+
 	if (push64(b, v->addr) < 0)
 		return -1;
 	if (v->segnum != 0)
@@ -295,6 +304,26 @@ static int cgmaskval(struct pml_ibuf *b, struct pml_literal *l)
 		EMIT_W(b, ORHI, (m->segnum << 24));
 	if (push64(b, m->len) < 0)
 		return -1;
+	return 0;
+}
+
+
+static int cgmatchop(struct pml_ibuf *b, struct pml_op *op)
+{
+	union pml_expr_u *rhs;
+
+	abort_unless(b && op);
+	rhs = op->arg2;
+
+	if (rhs->base.type == PMLTT_BYTESTR) {
+		EMIT_NULL(b, CMP);
+	} else {
+		abort_unless(rhs->base.type == PMLTT_MASKVAL);
+		EMIT_NULL(b, MSKCMP);
+	}
+	if (op->op == PMLOP_NOTMATCH)
+		EMIT_NULL(b, NOT);
+
 	return 0;
 }
 
@@ -317,8 +346,7 @@ static int cgop(struct pml_ibuf *b, struct pml_op *op, void *xstk)
 
 	case PMLOP_MATCH:
 	case PMLOP_NOTMATCH:
-		UNIMPL(match);
-		break;
+		return cgmatchop(b, op);
 
 	case PMLOP_REXMATCH:
 	case PMLOP_NOTREXMATCH:
