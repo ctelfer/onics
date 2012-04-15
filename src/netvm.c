@@ -451,16 +451,19 @@ static void ni_ld(struct netvm *vm)
 
 static void ni_ldu(struct netvm *vm)
 {
-	struct netvm_inst *inst = &vm->inst[vm->pc];
-	register uint64_t addr;
+	uint64_t addr;
+	uint64_t len;
 	int width;
 	byte_t *p;
 
-	width = inst->x;
+	S_POP(vm, len);
 	S_POP(vm, addr);
-	netvm_get_uaddr_ptr(vm, addr, 0, width & 0x7F, &p);
+	width = len & 0x7F;
+	if (width > 8)
+		width = 8;
+	netvm_get_uaddr_ptr(vm, addr, 0, width, &p);
 	if (!vm->error)
-		netvm_p2stk(vm, p, width);
+		netvm_p2stk(vm, p, (int)(len & 0xFF));
 }
 
 
@@ -953,19 +956,21 @@ static void ni_st(struct netvm *vm)
 
 static void ni_stu(struct netvm *vm)
 {
-	struct netvm_inst *inst = &vm->inst[vm->pc];
 	uint64_t addr;
 	uint64_t val;
+	uint64_t len;
 	int width;
 	byte_t *p;
 
-	width = inst->x;
+	S_POP(vm, len);
 	S_POP(vm, addr);
-	netvm_get_uaddr_ptr(vm, addr, 1, width & 0x7F, &p);
-	if (!vm->error) {
-		S_POP(vm, val);
-		netvm_stk2p(vm, p, val, width);
-	}
+	S_POP(vm, val);
+	width = len & 0x7F;
+	if (width > 8)
+		width = 8;
+	netvm_get_uaddr_ptr(vm, addr, 1, width, &p);
+	if (!vm->error)
+		netvm_stk2p(vm, p, val, (int)(len & 0xFF));
 }
 
 
@@ -1707,11 +1712,15 @@ int netvm_run(struct netvm *vm, int maxcycles, uint64_t *rv)
 		vm->nxtpc = vm->pc + 1;
 		inst = &vm->inst[vm->pc];
 		(*g_netvm_ops[inst->op])(vm);
+
 		if (vm->error == 0) {
 			vm->pc = vm->nxtpc;
-			if (maxcycles > 0) {
-				if (--maxcycles == 0)
-					vm->running = 0;
+			/* return -2 if we are out of cycles, but */
+			/* don't return -2 if program already halted */
+			if ((maxcycles > 0) && (--maxcycles == 0) && 
+			    vm->running) {
+				vm->running = 0;
+				return -2;
 			} else if (vm->pc >= vm->ninst) {
 				vm->running = 0;
 			} 
@@ -1722,9 +1731,7 @@ int netvm_run(struct netvm *vm, int maxcycles, uint64_t *rv)
 		}
 	}
 
-	if (maxcycles == 0) {
-		return -2;
-	} else if (vm->error) {
+	if (vm->error) {
 		return -1;
 	} else if (vm->sp == 0) {
 		return 0;

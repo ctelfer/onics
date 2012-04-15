@@ -316,7 +316,7 @@ enum {
 	NETVM_OC_LD,		/* [addr] load x bytes from addr in seg y */
 				/*    full 64-bit address supported */
 	NETVM_OC_LDI,		/* load x bytes from mem seg y @ addr w */
-	NETVM_OC_LDU,		/* [ua] load x bytes from ua */
+	NETVM_OC_LDU,		/* [ua,len] load len (max 8) bytes from ua */
 	NETVM_OC_LDPD,		/* [pdesc] x bytes from the pkt desc location */
 	NETVM_OC_LDPDI,		/* x bytes from the (packed) desc location */
 
@@ -423,7 +423,7 @@ enum {
 	NETVM_OC_ST,		/* [v,a1] store x bytes of v to a1 in seg y */
 				/*    full 64-bit address supported */
 	NETVM_OC_STI,		/* [v] store x bytes of v to w in seg y */
-	NETVM_OC_STU,		/* [v,uaddr] store x bytes of v to uaddr */
+	NETVM_OC_STU,		/* [v,ua,len] store len bytes of v to uaddr */
 	NETVM_OC_STPD,		/* [v,pdesc] store x bytes of v at pdesc */
 	NETVM_OC_STPDI,		/* [v] store x bytes of v at (packed) pdesc */
 

@@ -524,7 +524,8 @@ void nvmp_prret(FILE *f, struct netvm *vm, int rv, uint64_t rc)
 	if (rv == 0) {
 		fprintf(f, "VM provided no return value\n");
 	} else if (rv == 1) {
-		fprintf(f, "VM returned value %llu\n", (ulonglong)rc);
+		fprintf(f, "VM returned value %llu (0x%llx)\n", (ulonglong)rc,
+			(ulonglong)rc);
 	} else if (rv == -1) {
 		fprintf(f, "VM returned error @%u: %s\n", vm->pc,
 			netvm_estr(vm->error));
@@ -641,6 +642,9 @@ static int _nvmp_run(struct netvm *vm, struct netvm_program *prog, int epi,
 		}
 
 		rv = nvmp_exec(vm, prog, epi, 1, tos);
+
+		if (prstk)
+			nvmp_prstk(dout, vm);
 
 		while (rv == -2) {
 

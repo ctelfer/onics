@@ -1,0 +1,26 @@
+.entry start @start
+
+.define SEG 	1
+.define SEGHI	0x01000000
+.define LEN	8
+
+.segment  SEG  3  1024
+.mem val  SEG  32 LEN "\x12\x34\x56\x78\x9A\xBC\xDE\xF0"
+.mem mask SEG  64 LEN "\xFF\x00\xFF\x00\xFF\x00\xFF\x00"
+
+start:
+	push	val.addr
+	orhi	SEGHI
+	push	mask.addr
+	orhi	SEGHI
+	push	8
+
+
+	dup	0
+	swap	0, 3
+	swap	0, 1
+	ldu
+	swap	0, 2
+	ldu
+	and
+	halt
