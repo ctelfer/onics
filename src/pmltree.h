@@ -538,6 +538,8 @@ struct pml_variable *pml_ast_lookup_var(struct pml_ast *ast, char *name);
 /* Returns 1 if the locator was resolved. */
 int  pml_locator_resolve_nsref(struct pml_ast *ast, struct pml_locator *l);
 int  pml_resolve_refs(struct pml_ast *ast, union pml_node *node);
+struct pml_literal *pml_lookup_ns_literal(struct pml_ast *ast, 
+					  struct pml_locator *l);
 
 void pml_ast_finalize(struct pml_ast *ast);
 int  pml_ast_optimize(struct pml_ast *ast);

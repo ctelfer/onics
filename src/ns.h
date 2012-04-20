@@ -140,16 +140,17 @@ struct ns_bytestr {
 	ushort			type;
 	ushort			flags;
 	struct ns_namespace *	parent;
-	uint			prid;
 	const char *		name;
+	uint			prid;
 	struct raw		value;
 };
 
-#define NS_BYTESTR_I(name, par, prid, arr) \
-	{ NST_BYTESTR, (par), (name), (prid), { (str), array_length(str) } } 
-#define NS_ASCIISTR_I(name, par, prid, str) NS_BYTESTR_I(name, par, prid, str)
 #define NS_BYTESTR_I_LEN(name, par, prid, arr, len) \
-	{ NST_BYTESTR, (par), (name), (prid), { (arr), (len) } } 
+	{ NST_BYTESTR, 0, (par), (name), (prid), { (len), (arr) } } 
+#define NS_BYTESTR_I(name, par, prid, arr) \
+	NS_BYTESTR_I_LEN(name, par, prid, arr, array_length(arr))
+#define NS_ASCIISTR_I(name, par, prid, str) \
+	NS_BYTESTR_I(name, par, prid, str)
 
 
 struct ns_maskstr {
@@ -162,12 +163,11 @@ struct ns_maskstr {
 	struct raw		mask;
 };
 
-#define NS_MASKSTR_I(name, par, prid, val, mask) \
-	{ NST_MASKSTR, (par), (name), (prid), { (val), array_length(val) }, \
-	  { (mask), array_length(val) } } 
 #define NS_MASKSTR_I_LEN(name, par, prid, val, mask, len) \
-	{ NST_MASKSTR, (par), (name), (prid), { (val), (len) }, \
-	  { (mask), (len) } }
+	{ NST_MASKSTR, 0, (par), (name), (prid), { (len), (val) }, \
+	  { (len), (mask) } }
+#define NS_MASKSTR_I(name, par, prid, val, mask) \
+	NS_MASKSTR_I_LEN(name, par, prid, val, mask, array_length(val))
 
 
 int ns_add_elem(struct ns_namespace *ns, struct ns_elem *e);

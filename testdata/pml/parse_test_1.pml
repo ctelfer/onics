@@ -3,8 +3,9 @@ const Y = 4 * X;
 
 var Global;
 var another_global[40] = "hello world";
+var broadcast_var[4] = ip.addr.broadcast;
 
-?- ip.saddr =~ 127.0.0.0/24 -? { 
+?- ip.saddr =~ 127.0.0.0/24 -? {
 	print "hi", x; 
 }
 
@@ -14,6 +15,7 @@ var another_global[40] = "hello world";
 
 
 ?- ip -?  {
+	a = 0;
 	i = 0;
 	csum = 0;
 	while ( i < ip.hlen ) {
@@ -31,5 +33,7 @@ var another_global[40] = "hello world";
 	}
 
 	ip.daddr = \x20304050;
+	a = ip.saddr =~ ip.addr.localhost;
+	a = ip.saddr =~ ip.addr.localnet;
 }
 

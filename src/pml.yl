@@ -608,6 +608,24 @@ cmpexpr(E) ::= borexpr(LHS) matchop(OP) ETHADDR(E1) DIV ETHADDR(E2). {
 	pml_bytestr_copy(ast, &v->u.maskval.mask, PML_SEG_ROMEM, E2.u.ethaddr, 6);
 	E = pml_binop_alloc(OP, LHS, (union pml_expr_u *)v); 
 }
+cmpexpr(E) ::= borexpr(LHS) matchop(OP) locname(L). {
+	struct pml_literal *v;
+	int op = (OP == PMLOP_MATCH) ? PMLOP_MATCH : PMLOP_NOTMATCH;
+	E = NULL;
+	v = pml_lookup_ns_literal(ast, L);
+	if (v == NULL) {
+		pml_ast_err(ast, "unable to find protocol value '%s'",
+			    L->name);
+	} else if (v->type == PMLTT_SCALAR) {
+		pmln_free((union pml_node *)v);
+		pml_ast_err(ast, "Protocol field '%s' on right side of match "
+				 "operator is neither a byte nor mask string",
+			    L->name);
+	} else {
+		E = pml_binop_alloc(op, LHS, (union pml_expr_u *)v);
+	}
+	pmln_free((union pml_node *)L);
+}
 cmpexpr(E) ::= borexpr(LHS) matchop(OP) REGEX(R). {
 	struct pml_literal *v = (struct pml_literal *)pmln_alloc(PMLTT_BYTESTR);
 	int op = (OP == PMLOP_MATCH) ? PMLOP_REXMATCH : PMLOP_NOTREXMATCH;

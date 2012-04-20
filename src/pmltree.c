@@ -1678,6 +1678,115 @@ static int find_reserved_pktfld(const char *field)
 }
 
 
+struct pml_literal *pml_lookup_ns_literal(struct pml_ast *ast, 
+					  struct pml_locator *l)
+{
+	struct pml_literal *lit = NULL;
+	struct ns_elem *e;
+
+	abort_unless(l);
+	e = ns_lookup(NULL, l->name);
+	if (e == NULL)
+		return NULL;
+
+	if (e->type == NST_BYTESTR) {
+		struct ns_bytestr *nbs;
+		lit = (struct pml_literal *)pmln_alloc(PMLTT_BYTESTR);
+		if (lit == NULL)
+			return NULL;
+
+		nbs = (struct ns_bytestr *)e;
+		if (pml_bytestr_copy(ast, &lit->u.bytestr, PML_SEG_ROMEM,
+				     nbs->value.data, nbs->value.len) < 0) {
+			pmln_free((union pml_node *)lit);
+			return NULL;
+		}
+	} else if (e->type == NST_MASKSTR) {
+		struct ns_maskstr *ms;
+		lit = (struct pml_literal *)pmln_alloc(PMLTT_MASKVAL);
+		if (lit == NULL)
+			return NULL;
+
+		ms = (struct ns_maskstr *)e;
+		if ((pml_bytestr_copy(ast, &lit->u.maskval.val, PML_SEG_ROMEM,
+				      ms->value.data, ms->value.len) < 0) ||
+		    (pml_bytestr_copy(ast, &lit->u.maskval.mask, PML_SEG_ROMEM,
+				      ms->mask.data, ms->mask.len) < 0)) {
+			pmln_free((union pml_node *)lit);
+			return NULL;
+		}
+	} else if (e->type == NST_SCALAR) {
+		struct ns_scalar *sc;
+		lit = (struct pml_literal *)pmln_alloc(PMLTT_SCALAR);
+		if (lit == NULL)
+			return NULL;
+
+		sc = (struct ns_scalar *)e;
+		lit->u.scalar = sc->value & 0xFFFFFFFF;
+		if (NSF_IS_SIGNED(sc->flags))
+			lit->u.scalar = sxt64(lit->u.scalar, 32);
+	} else {
+		return NULL;
+	}
+	lit->eflags = PML_EFLAG_CONST|PML_EFLAG_PCONST;
+
+	return lit;
+}
+
+
+static void set_nsref_locator_type(struct pml_locator *l)
+{
+	if (l->rpfld != PML_RPF_NONE) {
+
+		if (PML_RPF_IS_BYTESTR(l->rpfld)) {
+			l->etype = PML_ETYPE_BYTESTR;
+			l->width = 0;
+			l->eflags |= PML_EFLAG_VARLEN;
+		} else {
+			l->etype = PML_ETYPE_SCALAR;
+			l->width = 8;
+		}
+
+	} else if (l->u.nsref->type == NST_NAMESPACE) {
+
+		/* a namespace with no offset or length */
+		/* is a test for the existance of the header */
+		struct ns_namespace *ns = (struct ns_namespace *)l->u.nsref;
+		if (l->off == NULL && l->len == NULL) {
+			l->width = 8;
+			l->etype = PML_ETYPE_SCALAR;
+		} else {
+			l->etype = PML_ETYPE_BYTESTR;
+			if (NSF_IS_VARLEN(ns->flags)) {
+				l->width = 0;
+				l->eflags |= PML_EFLAG_VARLEN;
+			} else {
+				l->width = ns->len;
+			}
+		}
+
+	} else {
+
+		struct ns_pktfld *pf = (struct ns_pktfld *)l->u.nsref;
+		abort_unless(l->u.nsref->type == NST_PKTFLD);
+
+		if (NSF_IS_INBITS(pf->flags)) {
+			l->etype = PML_ETYPE_SCALAR;
+			l->width = 8;
+		} else {
+			l->etype = PML_ETYPE_BYTESTR;
+			if (NSF_IS_VARLEN(pf->flags)) {
+				l->width = 0;
+				l->eflags |= PML_EFLAG_VARLEN;
+			} else {
+				l->width = pf->len;
+			}
+		}
+
+	}
+}
+
+
 int pml_locator_resolve_nsref(struct pml_ast *ast, struct pml_locator *l)
 {
 	struct ns_elem *e;
@@ -1714,51 +1823,25 @@ int pml_locator_resolve_nsref(struct pml_ast *ast, struct pml_locator *l)
 	e = ns_lookup(NULL, name);
 	if (rpf != PML_RPF_NONE)
 		free(name);
-	if (e == NULL || (rpf != PML_RPF_NONE && e->type != NST_NAMESPACE))
+	if (e == NULL)
 		return 0;
+	if (rpf != PML_RPF_NONE && e->type != NST_NAMESPACE) {
+		pml_ast_err(ast, "'%s' is an illegal field\n", l->name);
+		return -1;
+	}
 
 	switch (e->type) {
 	case NST_NAMESPACE:
 		l->u.nsref = e;
 		ns = (struct ns_namespace *)e;
 		l->reftype = PML_REF_PKTFLD;
-		if (rpf != PML_RPF_NONE) {
-			l->rpfld = rpf;
-			if (PML_RPF_IS_BYTESTR(rpf)) {
-				l->etype = PML_ETYPE_BYTESTR;
-				l->width = 0;
-				l->eflags |= PML_EFLAG_VARLEN;
-			} else {
-				l->etype = PML_ETYPE_SCALAR;
-				l->width = 8;
-			}
-		} else {
-			l->etype = PML_ETYPE_BYTESTR;
-			if (NSF_IS_VARLEN(ns->flags)) {
-				l->width = 0;
-				l->eflags |= PML_EFLAG_VARLEN;
-			} else {
-				l->width = ns->len;
-			}
-		}
+		l->rpfld = rpf;
 		break;
 
 	case NST_PKTFLD:
 		l->u.nsref = e;
 		pf = (struct ns_pktfld *)e;
 		l->reftype = PML_REF_PKTFLD;
-		if (NSF_IS_INBITS(pf->flags)) {
-			l->etype = PML_ETYPE_SCALAR;
-			l->width = 8;
-		} else {
-			l->etype = PML_ETYPE_BYTESTR;
-			if (NSF_IS_VARLEN(pf->flags)) {
-				l->width = 0;
-				l->eflags |= PML_EFLAG_VARLEN;
-			} else {
-				l->width = pf->len;
-			}
-		}
 		break;
 
 	case NST_SCALAR:
@@ -1804,6 +1887,7 @@ int pml_locator_resolve_nsref(struct pml_ast *ast, struct pml_locator *l)
 		lit = (struct pml_literal *)pmln_alloc(PMLTT_BYTESTR);
 		if (lit == NULL)
 			return -1;
+		lit->eflags = PML_EFLAG_CONST|PML_EFLAG_PCONST;
 		if (pml_bytestr_copy(ast, &lit->u.bytestr, PML_SEG_ROMEM,
 				     nbs->value.data + off, len) < 0) {
 			pmln_free((union pml_node *)lit);
@@ -1827,14 +1911,17 @@ int pml_locator_resolve_nsref(struct pml_ast *ast, struct pml_locator *l)
 	case NST_MASKSTR:
 		/* can not have packet, index, offset or length for masks */
 		if (l->pkt != NULL || l->idx != NULL || l->off != NULL || 
-		    l->len != NULL)
+		    l->len != NULL) {
+			pml_ast_err(ast, "fields illegal for mask value\n");
 			return -1;
+		}
 		ms = (struct ns_maskstr *)e;
 		abort_unless(ms->value.len == ms->mask.len);
 
 		lit = (struct pml_literal *)pmln_alloc(PMLTT_MASKVAL);
 		if (lit == NULL)
 			return -1;
+		lit->eflags = PML_EFLAG_CONST|PML_EFLAG_PCONST;
 		if ((pml_bytestr_copy(ast, &lit->u.maskval.val, PML_SEG_ROMEM,
 				      ms->value.data, ms->value.len) < 0) ||
 		    (pml_bytestr_copy(ast, &lit->u.maskval.mask, PML_SEG_ROMEM,
@@ -2087,19 +2174,15 @@ static int resolve_node_post(union pml_node *node, void *ctxp, void *xstk)
 			return -1;
 		if (l->reftype == PML_REF_LITERAL) {
 			l->etype = l->u.litref->etype;
+			l->eflags = l->u.litref->eflags;
 		} else if (l->reftype == PML_REF_VAR) {
 			struct pml_variable *v = l->u.varref;
 			l->etype = v->etype;
 			if (v->vtype == PML_VTYPE_CONST)
 				l->eflags |= PML_EFLAG_CONST;
 		} else {
-			struct ns_elem *e;
 			abort_unless(l->reftype == PML_REF_PKTFLD);
-			e = l->u.nsref;
-			if (e->type == NST_NAMESPACE)
-				l->etype = PML_ETYPE_SCALAR;
-			else
-				l->etype = PML_ETYPE_BYTESTR;
+			set_nsref_locator_type(l);
 		}
 	} break;
 
@@ -2109,7 +2192,10 @@ static int resolve_node_post(union pml_node *node, void *ctxp, void *xstk)
 			return -1;
 		if ((l->reftype == PML_REF_NS_CONST) || 
 		    ((l->reftype == PML_REF_VAR) && 
-		     (l->u.varref->vtype == PML_VTYPE_CONST))) {
+		     (l->u.varref->vtype == PML_VTYPE_CONST)) ||
+		    ((l->reftype == PML_REF_PKTFLD) &&
+		     (l->rpfld != PML_RPF_NONE) &&
+		     !PML_RPF_IS_BYTESTR(l->rpfld))) {
 			pml_ast_err(ctx->ast, 
 				    "'%s' is not an addressable field.\n",
 				    l->name);

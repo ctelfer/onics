@@ -188,7 +188,7 @@ int nvmp_read(struct netvm_program *prog, FILE *infile, int *eret)
 	ulong magic, ninst, ncp, nseg, nmi, milen;
 	ulong sep, pep, eep;
 	ulong cpi;
-	ulonglong cpt;
+	ullong cpt;
 	ulong segnum, off, len, perms;
 	size_t ilen;
 	int e = NVMP_RDE_OK;
@@ -441,7 +441,7 @@ int nvmp_write(struct netvm_program *prog, FILE *outfile)
 		if (prog->cpreqs[i] == NETVM_CPT_NONE)
 			continue;
 		pack(buf, sizeof(buf), "wj", (ulong)i,
-		     (ulonglong)prog->cpreqs[i]);
+		     (ullong)prog->cpreqs[i]);
 		if (fwrite(buf, 1, NVMP_CPLEN, outfile) < NVMP_CPLEN)
 			return -1;
 	}
@@ -524,8 +524,8 @@ void nvmp_prret(FILE *f, struct netvm *vm, int rv, uint64_t rc)
 	if (rv == 0) {
 		fprintf(f, "VM provided no return value\n");
 	} else if (rv == 1) {
-		fprintf(f, "VM returned value %llu (0x%llx)\n", (ulonglong)rc,
-			(ulonglong)rc);
+		fprintf(f, "VM returned value %llu (0x%llx)\n", (ullong)rc,
+			(ullong)rc);
 	} else if (rv == -1) {
 		fprintf(f, "VM returned error @%u: %s\n", vm->pc,
 			netvm_estr(vm->error));
@@ -546,8 +546,8 @@ void nvmp_prstk(FILE *f, struct netvm *vm)
 	while (sp > 0) {
 		--sp;
 		fprintf(f, "\t%4u: %llu (0x%llx)\n", sp,
-		        (ulonglong)vm->stack[sp],
-		        (ulonglong)vm->stack[sp]);
+		        (ullong)vm->stack[sp],
+		        (ullong)vm->stack[sp]);
 	}
 }
 

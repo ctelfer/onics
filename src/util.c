@@ -77,13 +77,12 @@ ulong getbits(const byte_t * p, ulong bitoff, uint bitlen)
 	/* whole bytes in body */
 	while (bitlen >= 8) {
 		bitlen -= 8;
-		v |= (v << 8) | *p++;
+		v = (v << 8) | *p++;
 	}
 
 	/* mask off trailing bits that don't matter */
-	if (bitlen > 0) {
+	if (bitlen > 0)
 		v = (v << bitlen) | ((*p & LEFTMASK(bitlen)) >> (8 - bitlen));
-	}
 
 	return v;
 }
@@ -97,7 +96,7 @@ ulong getbits(const byte_t * p, ulong bitoff, uint bitlen)
 
 void setbits(byte_t *p, ulong bitoff, uint bitlen, ulong val)
 {
-	int exlen;
+	int x;
 	unsigned char m;
 
 	abort_unless(p && (bitlen <= sizeof(ulong) << 3));
@@ -107,17 +106,14 @@ void setbits(byte_t *p, ulong bitoff, uint bitlen, ulong val)
 	bitoff &= 7;
 
 	/* header */
-	exlen = (8 - bitoff) & 7;
-	if (exlen > bitlen)
-		exlen = bitlen;
-	if (exlen > 0) {
-		m = (1 << (8 - bitoff)) - 1;
-		/* clear rightmost bits if within 1 byte */
-		m &= LEFTMASK(bitoff + exlen);
+	x = (8 - bitoff) & 7;
+	if (x > bitlen)
+		x = bitlen;
+	if (x > 0) {
+		m = ~(RIGHTMASK(bitoff) & LEFTMASK(bitoff + x));
 		*p &= m;
-		/* XXX the RIGHTMASK here should be unnecessary */
-		*p++ |= (val >> (bitlen - exlen)) & RIGHTMASK(exlen);
-		bitlen -= exlen;
+		*p++ |= (val >> (bitlen - x)) << (8 - bitoff - x);
+		bitlen -= x;
 	}
 
 	/* body */
@@ -128,8 +124,8 @@ void setbits(byte_t *p, ulong bitoff, uint bitlen, ulong val)
 
 	/* trailer */
 	if (bitlen > 0) {
-		*p &= LEFTMASK(bitlen);
-		*p |= (val & RIGHTMASK(bitlen)) << (8 - bitlen);
+		*p = (*p & ~LEFTMASK(bitlen)) | 
+		     ((val & RIGHTMASK(bitlen)) << (8 - bitlen));
 	}
 }
 

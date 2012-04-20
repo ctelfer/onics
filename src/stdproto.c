@@ -1981,6 +1981,33 @@ static struct ns_pktfld ipv4_ns_opt =
 		PRP_OI_POFF,
 		"IP Options -- Offset %lu, Length %lu", &ns_fmt_hdr);
 
+extern struct ns_elem *stdproto_ipv4_addr_ns_elems[STDPROTO_NS_SUB_ELEN];
+static struct ns_namespace ipv4_addr_ns = 
+	NS_NAMESPACE_I("addr", &ipv4_ns, PRID_IPV4, PRID_NONE,
+		"Reserved IP addresses and address masks",
+		stdproto_ipv4_addr_ns_elems, 
+		array_length(stdproto_ipv4_addr_ns_elems));
+static struct ns_bytestr ipv4_addr_broadcast =
+	NS_BYTESTR_I_LEN("broadcast", &ipv4_addr_ns, PRID_NONE,
+			 "\xFF\xFF\xFF\xFF", 4);
+static struct ns_bytestr ipv4_addr_localhost =
+	NS_BYTESTR_I_LEN("localhost", &ipv4_addr_ns, PRID_NONE,
+			 "\x7F\x00\x00\x01", 4);
+static struct ns_bytestr ipv4_addr_any =
+	NS_BYTESTR_I_LEN("any", &ipv4_addr_ns, PRID_NONE,
+			 "\x00\x00\x00\x00", 4);
+static struct ns_maskstr ipv4_addr_localnet =
+	NS_MASKSTR_I_LEN("localnet", &ipv4_addr_ns, PRID_NONE,
+			 "\x7F\x00\x00\x00", "\xFF\x00\x00\x00", 4);
+
+struct ns_elem *stdproto_ipv4_addr_ns_elems[STDPROTO_NS_SUB_ELEN] = {
+	(struct ns_elem *)&ipv4_addr_broadcast,
+	(struct ns_elem *)&ipv4_addr_localhost,
+	(struct ns_elem *)&ipv4_addr_any,
+	(struct ns_elem *)&ipv4_addr_localnet,
+};
+
+
 struct ns_elem *stdproto_ipv4_ns_elems[STDPROTO_NS_ELEN] = {
 	(struct ns_elem *)&ipv4_ns_vers, (struct ns_elem *)&ipv4_ns_hlen,
 	(struct ns_elem *)&ipv4_ns_diffsrv, (struct ns_elem *)&ipv4_ns_ecn,
@@ -1989,7 +2016,10 @@ struct ns_elem *stdproto_ipv4_ns_elems[STDPROTO_NS_ELEN] = {
 	(struct ns_elem *)&ipv4_ns_mf, (struct ns_elem *)&ipv4_ns_fragoff,
 	(struct ns_elem *)&ipv4_ns_ttl, (struct ns_elem *)&ipv4_ns_proto,
 	(struct ns_elem *)&ipv4_ns_cksum, (struct ns_elem *)&ipv4_ns_saddr,
-	(struct ns_elem *)&ipv4_ns_daddr, (struct ns_elem *)&ipv4_ns_opt
+	(struct ns_elem *)&ipv4_ns_daddr, (struct ns_elem *)&ipv4_ns_opt,
+
+	/* constants */
+	(struct ns_elem *)&ipv4_addr_ns,
 };
 
 
