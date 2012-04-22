@@ -164,8 +164,11 @@ enum {
 	PML_EFLAG_VARLEN = 4,
 };
 #define PML_EXPR_IS_SCALAR(ep) \
-	(((union pml_expr_u *)ep)->expr.etype == PML_ETYPE_UINT || \
-	 ((union pml_expr_u *)ep)->expr.etype == PML_ETYPE_SINT)
+	(((union pml_expr_u *)ep)->expr.etype == PML_ETYPE_SCALAR)
+#define PML_EXPR_IS_BYTESTR(ep) \
+	(((union pml_expr_u *)ep)->expr.etype == PML_ETYPE_BYTESTR)
+#define PML_EXPR_IS_MASKVAL(ep) \
+	(((union pml_expr_u *)ep)->expr.etype == PML_ETYPE_MASKVAL)
 #define PML_EXPR_IS_CONST(ep) \
 	((((union pml_expr_u *)ep)->expr.eflags & PML_EFLAG_CONST) != 0)
 #define PML_EXPR_IS_PCONST(ep) \
@@ -237,6 +240,7 @@ struct pml_variable {
 	char *			name;
 
 	union pml_expr_u *	init;
+	struct pml_function *	func;
 	ushort			vtype;
 	ushort			etype;
 	ulong			width;
@@ -294,28 +298,30 @@ struct pml_while {
 
 enum {
 	PML_REF_UNKNOWN,
+	PML_REF_UNKNOWN_NS_ELEM,	/* temporary */
 	PML_REF_VAR,
 	PML_REF_PKTFLD,
-	PML_REF_NS_CONST,
-	PML_REF_UNKNOWN_NS_ELEM,	/* temporary */
 	PML_REF_LITERAL,
 };
 enum {
 	PML_RPF_NONE,
-	PML_RPF_LEN,
+	PML_RPF_EXISTS,
 	PML_RPF_HLEN,
 	PML_RPF_PLEN,
 	PML_RPF_TLEN,
+	PML_RPF_LEN,
 	PML_RPF_ERROR,
 	PML_RPF_PRID,
 	PML_RPF_INDEX,
 	PML_RPF_HEADER,
 	PML_RPF_PAYLOAD,
 	PML_RPF_TRAILER,
-	PML_RPF_FIRST = PML_RPF_LEN,
+	PML_RPF_FIRST = PML_RPF_HLEN,
 	PML_RPF_LAST = PML_RPF_TRAILER,
 };
 #define PML_RPF_IS_BYTESTR(f) ((f) >= PML_RPF_HEADER && (f) <= PML_RPF_TRAILER)
+#define PML_RPF_TO_NVMFIELD(f)  ((f) - PML_RPF_EXISTS + NETVM_PRP_HLEN)
+#define PML_RPF_TO_NVMOFF(f)  ((f) - PML_RPF_HEADER + NETVM_PRP_SOFF)
 struct pml_locator {
 	int			type;
 	struct list		ln;
@@ -536,10 +542,10 @@ struct pml_variable *pml_ast_lookup_var(struct pml_ast *ast, char *name);
 /* Returns -1 if there was an internal error. */
 /* Returns 0 if the locator could not be resolved. */
 /* Returns 1 if the locator was resolved. */
-int  pml_locator_resolve_nsref(struct pml_ast *ast, struct pml_locator *l);
+int  pml_locator_resolve_nsref(struct pml_ast *ast, struct pml_locator *loc);
 int  pml_resolve_refs(struct pml_ast *ast, union pml_node *node);
 struct pml_literal *pml_lookup_ns_literal(struct pml_ast *ast, 
-					  struct pml_locator *l);
+					  struct pml_locator *loc);
 
 void pml_ast_finalize(struct pml_ast *ast);
 int  pml_ast_optimize(struct pml_ast *ast);
@@ -560,6 +566,7 @@ int  pml_ast_walk(struct pml_ast *ast, void *ctx, pml_walk_f pre,
 		  pml_walk_f in, pml_walk_f post);
 void pmln_print(union pml_node *node, uint depth);
 void pml_ast_print(struct pml_ast *ast);
+int  pml_lit_val64(struct pml_ast *ast, struct pml_literal *lit, uint64_t *val);
 
 
 /* -- PML tree evaluation -- */

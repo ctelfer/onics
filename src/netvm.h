@@ -28,6 +28,7 @@ struct netvm_inst {
  * a segment number to test this.
  */
 #define	NETVM_SEG_ISPKT		0x80
+#define	NETVM_SEG_SEGMASK	0x7F
 
 /*
  *
@@ -102,6 +103,7 @@ struct netvm_inst {
 #define NETVM_PD_OFF_LEN	32
 #define NETVM_PD_OFF_MASK	0xffffffff
 
+#define NETVM_PPD_PKT_MASK	0xF
 #define NETVM_PPD_IDX_OFF	4
 #define NETVM_PPD_IDX_MASK	0xF
 #define NETVM_PPD_FLD_OFF	0
@@ -143,19 +145,19 @@ struct netvm_prp_desc {
 
 /* Packet parse field indices */
 enum {
-	NETVM_PRP_HLEN,
-	NETVM_PRP_PLEN,
-	NETVM_PRP_TLEN,
-	NETVM_PRP_LEN,
-	NETVM_PRP_ERR,
-	NETVM_PRP_PRID,
-	NETVM_PRP_PIDX,
+	NETVM_PRP_HLEN,		/* header length */
+	NETVM_PRP_PLEN,		/* payload length */
+	NETVM_PRP_TLEN,		/* trailer length */
+	NETVM_PRP_LEN,		/* total length */
+	NETVM_PRP_ERR,		/* error mask */
+	NETVM_PRP_PRID,		/* protocol ID: usually used with pclasses */
+	NETVM_PRP_PIDX,		/* protocol parse index (0 == none) */
 	NETVM_PRP_OFF_BASE,
 
-	NETVM_PRP_SOFF = NETVM_PRP_OFF_BASE,
-	NETVM_PRP_POFF,
-	NETVM_PRP_TOFF,
-	NETVM_PRP_EOFF,
+	NETVM_PRP_SOFF = NETVM_PRP_OFF_BASE,	/* parse start offset */
+	NETVM_PRP_POFF,				/* parse payload offset */
+	NETVM_PRP_TOFF,				/* parse trailer offset */
+	NETVM_PRP_EOFF,				/* parse end offset */
 };
 
 #define NETVM_ISPRPOFF(f)	((f) >= NETVM_PRP_OFF_BASE)
@@ -285,7 +287,7 @@ enum {
 	NETVM_OC_ZPUSH,		/* pushes 'w' 0s onto the stack */
 	NETVM_OC_DUP,		/* dups 'w' from the top of the stack */
 	NETVM_OC_SWAP,		/* swap stack pos 0 and 'w' from SP down */
-	NETVM_OC_LDBP,		/* [i] load value i positions above the BP */
+	NETVM_OC_LDBP,		/* [i] load value 'i' above(below if 'x') BP */
 	NETVM_OC_LDBPI,		/* as BPLD but position is taken from 'w' */
 	NETVM_OC_STBP,		/* [v, i] pop top of stack and store the value */
 				/*   i positions above the BP. This must be */

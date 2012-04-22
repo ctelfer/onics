@@ -418,6 +418,7 @@ int pml_func_add_param(struct pml_function *f, struct pml_variable *v)
 		return -1;
 	v->addr = f->vars.addr_rw1;
 	f->vars.addr_rw1 += 1;
+	v->func = f;
 
 	return 0;
 }
@@ -498,6 +499,7 @@ union pml_node *pmln_alloc(int type)
 		p->width = 0;
 		p->name = NULL;
 		p->init = NULL;
+		p->func = NULL;
 	} break;
 
 	case PMLTT_UNOP:
@@ -972,7 +974,8 @@ static const char *cfmstr(struct pml_cfmod *m)
 
 
 static const char *rpfld_strs[] = {
-	"none", "len", "hlen", "plen", "tlen", "error", "prid",
+	"**UNALLOWED**", "exists", 
+	"len", "hlen", "plen", "tlen", "error", "prid",
 	"index", "header", "payload", "trailer",
 };
 static const char *rpfstr(int field)
@@ -1166,9 +1169,10 @@ void pmlt_print(struct pml_ast *ast, union pml_node *np, uint depth)
 			else
 				printf("Reserved packet field (%s)\n",
 				       rpfstr(p->rpfld));
-		} else if (p->reftype == PML_REF_NS_CONST) {
+		} else if (p->reftype == PML_REF_LITERAL) {
 			indent(depth);
-			printf("Protocol Constant --\n");
+			printf("Constant --\n");
+			pmlt_print(ast, (union pml_node *)p->u.litref, depth+1);
 		}
 
 		if (p->pkt != NULL) {
@@ -1736,8 +1740,9 @@ struct pml_literal *pml_lookup_ns_literal(struct pml_ast *ast,
 
 static void set_nsref_locator_type(struct pml_locator *l)
 {
-	if (l->rpfld != PML_RPF_NONE) {
+	struct ns_elem *nse = l->u.nsref;
 
+	if (l->rpfld != PML_RPF_NONE) {
 		if (PML_RPF_IS_BYTESTR(l->rpfld)) {
 			l->etype = PML_ETYPE_BYTESTR;
 			l->width = 0;
@@ -1746,43 +1751,27 @@ static void set_nsref_locator_type(struct pml_locator *l)
 			l->etype = PML_ETYPE_SCALAR;
 			l->width = 8;
 		}
-
-	} else if (l->u.nsref->type == NST_NAMESPACE) {
-
-		/* a namespace with no offset or length */
-		/* is a test for the existance of the header */
-		struct ns_namespace *ns = (struct ns_namespace *)l->u.nsref;
-		if (l->off == NULL && l->len == NULL) {
-			l->width = 8;
-			l->etype = PML_ETYPE_SCALAR;
-		} else {
-			l->etype = PML_ETYPE_BYTESTR;
-			if (NSF_IS_VARLEN(ns->flags)) {
-				l->width = 0;
-				l->eflags |= PML_EFLAG_VARLEN;
-			} else {
-				l->width = ns->len;
-			}
-		}
-
 	} else {
-
-		struct ns_pktfld *pf = (struct ns_pktfld *)l->u.nsref;
-		abort_unless(l->u.nsref->type == NST_PKTFLD);
-
-		if (NSF_IS_INBITS(pf->flags)) {
+		if (NSF_IS_INBITS(nse->flags)) {
 			l->etype = PML_ETYPE_SCALAR;
 			l->width = 8;
 		} else {
 			l->etype = PML_ETYPE_BYTESTR;
-			if (NSF_IS_VARLEN(pf->flags)) {
+			if (NSF_IS_VARLEN(nse->flags)) {
 				l->width = 0;
 				l->eflags |= PML_EFLAG_VARLEN;
 			} else {
-				l->width = pf->len;
+				if (nse->type == NST_NAMESPACE) {
+					struct ns_namespace *ns;
+					ns = (struct ns_namespace *)nse;
+					l->width = ns->len;
+				} else {
+					struct ns_pktfld *pf;
+				       	pf = (struct ns_pktfld *)nse;
+					l->width = pf->len;
+				}
 			}
 		}
-
 	}
 }
 
@@ -1835,6 +1824,10 @@ int pml_locator_resolve_nsref(struct pml_ast *ast, struct pml_locator *l)
 		l->u.nsref = e;
 		ns = (struct ns_namespace *)e;
 		l->reftype = PML_REF_PKTFLD;
+		/* a namespace with no offset or length is the same as */
+		/* an 'exists' reserved namespace: syntactic sugar */
+		if (rpf == PML_RPF_NONE && l->off == NULL && l->len == NULL)
+			rpf = PML_RPF_EXISTS;
 		l->rpfld = rpf;
 		break;
 
@@ -2031,6 +2024,7 @@ static int resolve_locsym(struct pml_resolve_ctx *ctx, struct pml_locator *l)
 	v->addr = t->addr_rw2;
 	t->addr_rw2 += 1;
 	abort_unless(symtab_add(t, (struct pml_sym *)v) >= 0);
+	v->func = ctx->livefunc;
 	l->reftype = PML_REF_VAR;
 	l->u.varref = v;
 
@@ -2190,8 +2184,7 @@ static int resolve_node_post(union pml_node *node, void *ctxp, void *xstk)
 		struct pml_locator *l = (struct pml_locator *)node;
 		if (resolve_locsym(ctx, l) < 0)
 			return -1;
-		if ((l->reftype == PML_REF_NS_CONST) || 
-		    ((l->reftype == PML_REF_VAR) && 
+		if (((l->reftype == PML_REF_VAR) && 
 		     (l->u.varref->vtype == PML_VTYPE_CONST)) ||
 		    ((l->reftype == PML_REF_PKTFLD) &&
 		     (l->rpfld != PML_RPF_NONE) &&
@@ -2439,6 +2432,39 @@ static uint64_t val64(struct pml_ast *ast, struct pml_retval *v)
 		abort_unless(0);
 		return (uint64_t)-1;
 	}
+}
+
+
+int pml_lit_val64(struct pml_ast *ast, struct pml_literal *lit, uint64_t *val)
+{
+	byte_t *data, *mask;
+	int i;
+	ulong len;
+	byte_t bytes[8];
+
+	if (ast == NULL || lit == NULL || val == NULL)
+		return -1;
+
+	if (lit->type == PMLTT_SCALAR) {
+		*val = lit->u.scalar;
+	} else if (lit->type == PMLTT_BYTESTR) {
+		data = pml_bytestr_ptr(ast, &lit->u.bytestr);
+		*val = be64val(data, lit->u.bytestr.len);
+	} else if (lit->type == PMLTT_MASKVAL) {
+		data = pml_bytestr_ptr(ast, &lit->u.maskval.val);
+		mask = pml_bytestr_ptr(ast, &lit->u.maskval.mask);
+		len = lit->u.maskval.val.len;
+		if (len != lit->u.maskval.mask.len)
+			return -1;
+		if (len > sizeof(bytes))
+			len = sizeof(bytes);
+		for (i = 0; i < len; ++i)
+			bytes[i] = data[i] & mask[i];
+		*val = be64val(bytes, len);
+	} else {
+		return -1;
+	}
+	return 0;
 }
 
 
