@@ -564,28 +564,44 @@ static int cgmemaddr(struct pml_ibuf *b, uint64_t addr, int segnum,
 }
 
 
+static ulong lvaraddr(struct pml_variable *var)
+{
+	struct pml_function *func = var->func;
+	if (var->vtype == PML_VTYPE_LOCAL) {
+		return var->addr; /* above BP */
+	} else if (PML_FUNC_IS_INLINE(func)) {
+		return var->addr + 1; /* below BP */
+	} else {
+		return var->addr + 2; /* below BP */
+	}
+}
+
+
 static int cgvarref(struct pml_ibuf *b, struct pml_ast *ast,
 		    struct pml_locator *loc, int etype)
 {
 	struct pml_variable *var = loc->u.varref;
 	struct locval lv;
+	ulong addr;
+	struct pml_function *func;
+	int belowbp;
 
 	abort_unless(loc->pkt == NULL && loc->idx == NULL);
 
-	if (var->vtype == PML_VTYPE_PARAM) {
-		struct pml_function *func = var->func;
-		if (PML_FUNC_IS_INTRINSIC(func)) {
+	if ((var->vtype == PML_VTYPE_PARAM) ||
+	    (var->vtype == PML_VTYPE_LOCAL)) {
+		addr = lvaraddr(var);
+		func = var->func;
+		belowbp = (var->vtype == PML_VTYPE_PARAM);
+
+		if (func != NULL && PML_FUNC_IS_INTRINSIC(func)) {
 			fprintf(stderr, "can't generate varref code for"
 					"an intrinsic function (%s)\n",
 				func->name);
 			return -1;
-		} else if (PML_FUNC_IS_INLINE(func)) {
-			EMIT_XW(b, LDBPI, 1, 1 + var->addr);
-		} else {
-			EMIT_XW(b, LDBPI, 1, 2 + var->addr);
-		}
-	} else if (var->vtype == PML_VTYPE_LOCAL) {
-		EMIT_XW(b, LDBPI, 0, var->addr);
+		} 
+		
+		EMIT_XW(b, LDBPI, belowbp, addr);
 	} else if (var->vtype == PML_VTYPE_GLOBAL) {
 
 		/* TODO add offset and length checks */
@@ -625,7 +641,11 @@ static int cgldp(struct pml_ibuf *b, struct pml_ast *ast,
 		 int oc, byte_t x)
 {
 	struct locval lpkt, lidx, loff;
+	struct ns_pktfld *pf = NULL;
+	long toff;
 
+	if (loc->u.nsref->type == NST_PKTFLD)
+		pf = (struct ns_pktfld *)loc->u.nsref;
 
 	if (cglocval(b, ast, loc->pkt, &lpkt) < 0)
 		return -1;
@@ -643,12 +663,18 @@ static int cgldp(struct pml_ibuf *b, struct pml_ast *ast,
 
 	if (cglocval(b, ast, loc->off, &loff) < 0)
 		return -1;
-	if (lidx.onstack) {
+	if (loff.onstack) {
+		if (pf != NULL && pf->off != 0) {
+			abort_unless(!NSF_IS_INBITS(pf->flags));
+			EMIT_W(b, ADDI, pf->off);
+		}
 		EMIT_W(b, ANDI, NETVM_PD_OFF_MASK);
+	} else {
+		toff = pf->off + loff.val;
 	}
 
 	if (!lpkt.onstack && !lidx.onstack && !loff.onstack &&
-	    (loff.val <= NETVM_PPD_OFF_MASK)) {
+	    (toff <= NETVM_PPD_OFF_MASK)) {
 		uint y = lpkt.val & NETVM_PPD_PKT_MASK;
 		uint z = ((lidx.val & NETVM_PPD_IDX_MASK) << 
 				NETVM_PPD_IDX_OFF) |
@@ -656,7 +682,7 @@ static int cgldp(struct pml_ibuf *b, struct pml_ast *ast,
 				NETVM_PPD_FLD_OFF);
 		ulong w = ((prid & NETVM_PPD_PRID_MASK)
 				<< NETVM_PPD_PRID_OFF) |
-			  ((loff.val & NETVM_PPD_OFF_MASK)
+			  ((toff & NETVM_PPD_OFF_MASK)
 			   	<< NETVM_PPD_OFF_OFF);
 
 
@@ -836,17 +862,77 @@ static int cglocator(struct pml_ibuf *b, struct pml_ast *ast,
 }
 
 
+static int cglocaddr(struct pml_ibuf *b, struct pml_ast *ast,
+		     struct pml_locator *loc)
+{
+	uint64_t addr;
+	struct pml_literal *lit;
+	struct pml_variable *var;
+	struct ns_pktfld *pf;
+	struct ns_namespace *ns;
+
+	switch (loc->etype) {
+	case PML_REF_VAR:
+		var = loc->u.varref;
+		if ((var->vtype == PML_VTYPE_PARAM) ||
+		    (var->vtype == PML_VTYPE_LOCAL)) {
+			addr = lvaraddr(var);
+		} else {
+			abort_unless(var->vtype == PML_VTYPE_GLOBAL);
+			addr = var->addr |
+			       ((uint64_t)PML_SEG_RWMEM << NETVM_UA_SEG_OFF);
+		}
+		PUSH64(b, addr);
+		break;
+
+	case PML_REF_PKTFLD:
+		if (loc->u.nsref->type == NST_NAMESPACE) {
+			pf = (struct ns_pktfld *)loc->u.nsref;
+			if (cgldp(b, ast, loc, pf->prid, 
+				  NETVM_PRP_SOFF + pf->oidx,
+				  NETVM_OC_LDPF, 0) < 0)
+				return -1;
+		} else {
+			ns = (struct ns_namespace *)loc->u.nsref;
+			abort_unless(PML_RPF_IS_BYTESTR(loc->rpfld));
+			if (cgldp(b, ast, loc, ns->prid, 
+				  PML_RPF_TO_NVMFIELD(loc->rpfld), 
+				  NETVM_OC_LDPF, 0) < 0)
+				return -1;
+		}
+		break;
+
+	case PML_REF_LITERAL:
+		lit = loc->u.litref;
+		abort_unless((lit->type == PMLTT_BYTESTR) ||
+			     (lit->type == PMLTT_MASKVAL));
+		addr = (uint64_t)lit->u.bytestr.addr | 
+		       ((uint64_t)lit->u.bytestr.segnum << NETVM_UA_SEG_OFF);
+		PUSH64(b, addr);
+		break;
+
+	default:
+		abort_unless(0);
+	}
+
+	return 0;
+}
+
+
 static int w_expr_pre(union pml_node *n, void *auxp, void *xstk)
 {
 	struct cgeaux *ea = auxp;
 	struct cgestk *es = xstk;
+	struct pml_op *op;
+	struct pml_locator *loc;
 
 	/* save the expected type */
 	es->etype = ea->etype;
 	
 	ea->etype = PML_ETYPE_UNKNOWN;
-	if (n->base.type == PMLTT_BINOP) {
-		struct pml_op *op = (struct pml_op *)n;
+	switch (n->base.type) {
+	case PMLTT_BINOP:
+		op = (struct pml_op *)n;
 		/* TODO: optimize for constant on RHS or on LHS of */
 		/* commutative operation. */
 		switch (op->op) {
@@ -860,16 +946,31 @@ static int w_expr_pre(union pml_node *n, void *auxp, void *xstk)
 			ea->etype = PML_ETYPE_SCALAR;
 			break;
 		}
-	} else if (n->base.type == PMLTT_UNOP) {
+		break;
+
+	case PMLTT_UNOP:
 		ea->etype = PML_ETYPE_SCALAR;
-	} else if (n->base.type == PMLTT_LOCATOR) {
-		struct pml_locator *loc = (struct pml_locator *)n;
+		break;
+
+	case PMLTT_LOCATOR:
+		loc = (struct pml_locator *)n;
 		/* prune walk for locators:  cglocator will walk it's own */
 		/* sub-fields as needed.  */
 		if (cglocator(ea->ibuf, ea->ast, loc, es->etype) < 0)
 			return -1;
 		return 1;
+
+	case PMLTT_LOCADDR:
+		loc = (struct pml_locator *)n;
+		if (cglocaddr(ea->ibuf, ea->ast, loc) < 0)
+			return -1;
+		/* prune walk for locators:  no need to walk subfields */
+		return 1;
+
+	default:
+		break;
 	}	
+
 	return 0;
 }
 
@@ -929,8 +1030,6 @@ static int w_expr_post(union pml_node *n, void *auxp, void *xstk)
 		rv = cgcall(b, ea->ast, &n->call);
 		break;
 	case PMLTT_LOCADDR:
-		UNIMPL(locaddr);
-		break;
 	case PMLTT_LOCATOR:
 	default:
 		abort_unless(0);

@@ -1824,10 +1824,18 @@ int pml_locator_resolve_nsref(struct pml_ast *ast, struct pml_locator *l)
 		l->u.nsref = e;
 		ns = (struct ns_namespace *)e;
 		l->reftype = PML_REF_PKTFLD;
+		/* Syntactic Sugar: */
 		/* a namespace with no offset or length is the same as */
-		/* an 'exists' reserved namespace: syntactic sugar */
-		if (rpf == PML_RPF_NONE && l->off == NULL && l->len == NULL)
-			rpf = PML_RPF_EXISTS;
+		/* an 'exists' reserved namespace if referred to by a */
+		/* locator or 'header' if referred to by a locaddr.  */
+		if (rpf == PML_RPF_NONE && l->off == NULL && l->len == NULL) {
+			if (l->type == PMLTT_LOCATOR) {
+				rpf = PML_RPF_EXISTS;
+			} else {
+				abort_unless(PMLTT_LOCADDR);
+				rpf = PML_RPF_HEADER;
+			}
+		}
 		l->rpfld = rpf;
 		break;
 
@@ -1995,16 +2003,6 @@ static int resolve_locsym(struct pml_resolve_ctx *ctx, struct pml_locator *l)
 	if (v != NULL) {
 		l->reftype = PML_REF_VAR;
 		l->u.varref = v;
-		if (v->vtype == PML_VTYPE_CONST) {
-			l->eflags |= (PML_EFLAG_CONST|PML_EFLAG_PCONST);
-		} else if (v->vtype == PML_VTYPE_PARAM) {
-			struct pml_function *f = ctx->livefunc;
-			/* if the variable is a parameter in an inline */
-			/* function, then it can be considered constant */
-			if (PML_FUNC_IS_INLINE(f))
-				l->eflags |= PML_EFLAG_PCONST;
-		}
-		l->width = v->width;
 		return 0;
 	}
 
@@ -2172,8 +2170,16 @@ static int resolve_node_post(union pml_node *node, void *ctxp, void *xstk)
 		} else if (l->reftype == PML_REF_VAR) {
 			struct pml_variable *v = l->u.varref;
 			l->etype = v->etype;
-			if (v->vtype == PML_VTYPE_CONST)
-				l->eflags |= PML_EFLAG_CONST;
+			if (v->vtype == PML_VTYPE_CONST) {
+				l->eflags |= (PML_EFLAG_CONST|PML_EFLAG_PCONST);
+			} else if (v->vtype == PML_VTYPE_PARAM) {
+				struct pml_function *f = ctx->livefunc;
+				/* if the variable is a parameter in an inline */
+				/* function, then it can be considered constant */
+				if (PML_FUNC_IS_INLINE(f))
+					l->eflags |= PML_EFLAG_PCONST;
+			}
+			l->width = v->width;
 		} else {
 			abort_unless(l->reftype == PML_REF_PKTFLD);
 			set_nsref_locator_type(l);
@@ -2188,12 +2194,19 @@ static int resolve_node_post(union pml_node *node, void *ctxp, void *xstk)
 		     (l->u.varref->vtype == PML_VTYPE_CONST)) ||
 		    ((l->reftype == PML_REF_PKTFLD) &&
 		     (l->rpfld != PML_RPF_NONE) &&
-		     !PML_RPF_IS_BYTESTR(l->rpfld))) {
+		     !PML_RPF_IS_BYTESTR(l->rpfld)) ||
+		    ((l->reftype == PML_REF_LITERAL) &&
+		     (l->u.litref->type == PMLTT_SCALAR))) {
 			pml_ast_err(ctx->ast, 
 				    "'%s' is not an addressable field.\n",
 				    l->name);
 			return -1;
 		}
+		if (l->reftype == PML_REF_VAR)
+			l->eflags |= PML_EFLAG_CONST|PML_EFLAG_PCONST;
+		/* redundant? */
+		l->etype = PML_ETYPE_SCALAR;
+		l->width = 8;
 	} break;
 
 	case PMLTT_WHILE: {
