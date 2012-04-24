@@ -541,6 +541,21 @@ static int cglocval(struct pml_ibuf *b, struct pml_ast *ast,
 }
 
 
+static int islitexpr(union pml_expr_u *ex, struct pml_ast *ast, uint64_t maxval)
+{
+	uint64_t v;
+	if (ex == NULL)
+		return 1;
+	if (PML_EXPR_IS_LITERAL(ex)) {
+		if (pml_lit_val64(ast, &ex->literal, &v) < 0)
+			return 0;
+		return v <= maxval;
+	} else {
+		return 0;
+	}
+}
+
+
 static int cgmemaddr(struct pml_ibuf *b, uint64_t addr, int segnum,
 		     struct locval *off)
 {
@@ -634,11 +649,12 @@ static int cgvarref(struct pml_ibuf *b, struct pml_ast *ast,
 /* part of a packet descriptor is at bit 0 */
 STATIC_BUG_ON(LDPFI_is_LDPF_plus_1, NETVM_OC_LDPF == NETVM_OC_LDPF + 1);
 STATIC_BUG_ON(LDPDI_is_LDPD_plus_1, NETVM_OC_LDPD == NETVM_OC_LDPD + 1);
+STATIC_BUG_ON(STPDI_is_STPD_plus_1, NETVM_OC_STPD == NETVM_OC_STPD + 1);
 STATIC_BUG_ON(NETVM_PD_OFF_OFF_is_not_zero, NETVM_PD_OFF_OFF != 0);
 
-static int cgldp(struct pml_ibuf *b, struct pml_ast *ast,
-		 struct pml_locator *loc, uint prid, uint field,
-		 int oc, byte_t x)
+static int cgpdop(struct pml_ibuf *b, struct pml_ast *ast,
+		  struct pml_locator *loc, uint prid, uint field,
+		  int oc, uint8_t x)
 {
 	struct locval lpkt, lidx, loff;
 	struct ns_pktfld *pf = NULL;
@@ -674,7 +690,7 @@ static int cgldp(struct pml_ibuf *b, struct pml_ast *ast,
 	}
 
 	if (!lpkt.onstack && !lidx.onstack && !loff.onstack &&
-	    (toff <= NETVM_PPD_OFF_MASK)) {
+	    (field <= NETVM_PPD_FLD_MASK) && (toff <= NETVM_PPD_OFF_MASK)) {
 		uint y = lpkt.val & NETVM_PPD_PKT_MASK;
 		uint z = ((lidx.val & NETVM_PPD_IDX_MASK) << 
 				NETVM_PPD_IDX_OFF) |
@@ -741,7 +757,7 @@ static int cgrpf(struct pml_ibuf *b, struct pml_ast *ast,
 			field = PML_RPF_TO_NVMFIELD(loc->rpfld);
 	}
 
-	if (cgldp(b, ast, loc, ns->prid, field, NETVM_OC_LDPF, 0) < 0)
+	if (cgpdop(b, ast, loc, ns->prid, field, NETVM_OC_LDPF, 0) < 0)
 		return -1;
 
 	if (PML_RPF_IS_BYTESTR(loc->rpfld)) {
@@ -773,8 +789,76 @@ static int cgrpf(struct pml_ibuf *b, struct pml_ast *ast,
 }
 
 
-static int cgpktfld(struct pml_ibuf *b, struct pml_ast *ast,
-		    struct pml_locator *loc, int etype)
+/*
+  Cases:
+  pdesc in instr:
+   - etype == SCALAR
+     * len is static 
+       use ldpdi with len = max(8, len)
+     * len is dynamic
+       use ldpfi, eval len, ldu
+   - etype == BYTESTR
+     * len is static
+       use ldpfi, push len
+     * len is dynamic
+       use ldpfi, eval len
+
+  pdesc on stack:
+   - etype == SCALAR
+     * len is static
+       use ldpd with len = max(8, len)
+     * len is dynamic
+       use ldpd, eval len, ldu
+   - etype == BYTESTR
+     * len is static
+       use ldpf, push len
+     * len is dynamic
+       use ldpf, eval len
+ */
+static int cgpfbytefield(struct pml_ibuf *b, struct pml_ast *ast,
+			 struct pml_locator *loc, int etype)
+{
+	struct ns_pktfld *pf = (struct ns_pktfld *)loc->u.nsref;
+	uint field = NETVM_PRP_SOFF + pf->oidx;
+	int fixedlen = islitexpr(loc->len, ast, (uint64_t)-1);
+	uint64_t len = 0;
+	struct locval llen;
+
+	if (fixedlen) {
+		if (loc->len == NULL)
+			len = pf->len;
+		else
+			pml_lit_val64(ast, (struct pml_literal *)loc->len,
+				      &len);
+	}
+
+	if ((etype == PML_ETYPE_SCALAR) && fixedlen &&
+	    (field <= NETVM_PPD_FLD_MASK)) {
+		if (len > 8)
+			len = 8;
+		return cgpdop(b, ast, loc, pf->prid,
+			      field, NETVM_OC_LDPD, len);
+	} else {
+		if (cgpdop(b, ast, loc, pf->prid, field, NETVM_OC_LDPF, 0) < 0)
+			return -1;
+		if (fixedlen) {
+			PUSH64(b, len);
+		} else {
+			if (cglocval(b, ast, loc->len, &llen) < 0)
+				return -1;
+			abort_unless(llen.onstack);
+		}
+	}
+
+	if (etype == PML_ETYPE_SCALAR)
+		EMIT_NULL(b, LDU);
+
+	return 0;
+}
+
+
+static int cgpfref(struct pml_ibuf *b, struct pml_ast *ast,
+		   struct pml_locator *loc, int etype)
 {
 	struct ns_elem *nse = loc->u.nsref;
 
@@ -784,7 +868,7 @@ static int cgpktfld(struct pml_ibuf *b, struct pml_ast *ast,
 		abort_unless(loc->off == NULL && loc->len == NULL);
 		UNIMPL(pktfld_bitfield);
 	} else {
-		UNIMPL(pktfld_bytefield);
+		return cgpfbytefield(b, ast, loc, etype);;
 	}
 
 	return 0;
@@ -852,7 +936,7 @@ static int cglocator(struct pml_ibuf *b, struct pml_ast *ast,
 	case PML_REF_VAR:
 		return cgvarref(b, ast, loc, etype);
 	case PML_REF_PKTFLD:
-		return cgpktfld(b, ast, loc, etype);
+		return cgpfref(b, ast, loc, etype);
 	case PML_REF_LITERAL:
 		return cglitref(b, ast, loc, etype);
 	default:
@@ -888,16 +972,16 @@ static int cglocaddr(struct pml_ibuf *b, struct pml_ast *ast,
 	case PML_REF_PKTFLD:
 		if (loc->u.nsref->type == NST_NAMESPACE) {
 			pf = (struct ns_pktfld *)loc->u.nsref;
-			if (cgldp(b, ast, loc, pf->prid, 
-				  NETVM_PRP_SOFF + pf->oidx,
-				  NETVM_OC_LDPF, 0) < 0)
+			if (cgpdop(b, ast, loc, pf->prid, 
+				   NETVM_PRP_SOFF + pf->oidx,
+				   NETVM_OC_LDPF, 0) < 0)
 				return -1;
 		} else {
 			ns = (struct ns_namespace *)loc->u.nsref;
 			abort_unless(PML_RPF_IS_BYTESTR(loc->rpfld));
-			if (cgldp(b, ast, loc, ns->prid, 
-				  PML_RPF_TO_NVMFIELD(loc->rpfld), 
-				  NETVM_OC_LDPF, 0) < 0)
+			if (cgpdop(b, ast, loc, ns->prid, 
+				   PML_RPF_TO_NVMFIELD(loc->rpfld), 
+				   NETVM_OC_LDPF, 0) < 0)
 				return -1;
 		}
 		break;
@@ -1080,8 +1164,7 @@ static int cgbe(struct pmlncg *cg)
 
 static int cgrules(struct pmlncg *cg)
 {
-	/* TODO: add code to generate rules */
-	return 0;
+	UNIMPL(cgrules);
 }
 
 
