@@ -20,10 +20,10 @@ struct netvm_inst {
 /*
  * Segments
  *
- * The Netvm supports separate memory segments and regards packets as
+ * The Netvm uses separate memory segments and regards packets as
  * being a special type of memory segment.  A memory segment is denoted
  * by an 8-bit number where the high order bit determines whether the
- * lower 7 bits index a regular memory segment or packet.  (0 means mem,
+ * lower 7 bits index a regular memory segment or packet.  (0 means memory,
  * and 1 means packet).  NETVM_SEG_ISPKT is the bitmask to apply to
  * a segment number to test this.
  */
@@ -31,12 +31,9 @@ struct netvm_inst {
 #define	NETVM_SEG_SEGMASK	0x7F
 
 /*
- *
- * Unified Address Space
- *
- * Certain operations (ldua, stua, cmp, pcmp, mcmp) accept addresses in a
- * unified address space format.  This format is a single 64-bit address
- * that can refer to any memory segment or packet buffer.  The format is:
+ * Most memory operations accept addresses in a unified address space format.
+ * This format is a single 64-bit address that can refer to any memory 
+ * segment or packet buffer.  The format is:
  *
  * MSB                      LSB
  *  [seg desc: 8  address: 56]
@@ -44,12 +41,6 @@ struct netvm_inst {
  * The segment descriptor is a memory segment index with the NETVM_SEG_ISPKT
  * bit (bit 7 in the 8-bit address) cleared or a packet number with the
  * NETVM_SEG_ISPKT bit set.
- *
- * If memory must be accessed using the full 64-bit address space (can only
- * be for memory segments), then that memory must be accessed using an
- * instruction with a full 64-bit address.  This really should only be an
- * issue for some platform where I/O address space is mapped into a memory
- * segment and the high order bits are significant for some reason.
  */
 
 #define NETVM_UA_SEG_OFF	56
@@ -263,17 +254,14 @@ struct netvm {
  *
  * Field types:
  * v, v1, v2 - a generic numeric value
- * sa - a source address in memory
- * da - a destination address in memory
  * len - a length, usually of some region in memory
  * pdesc - a header descriptor (see below)
  * pkn - an index into the packet table
- * pa - a packet address
  * rxaddr - address of regular expression in memory
  * rxlen - length of regular expression in memory
  * cp - coprocessor identifier
- * ua - a unified address space addresss (see above).  May refer to a
- *      packet or memory segment.
+ * addr - an address (see above).  May refer to a packet or memory segment.
+ *        (also, a1, a2, a3, amk... )
  */
 
 /* maximum number of values for a multi-return */
@@ -318,13 +306,13 @@ enum {
 	NETVM_OC_LD,		/* [addr] load x bytes from addr in seg y */
 				/*    full 64-bit address supported */
 	NETVM_OC_LDI,		/* load x bytes from mem seg y @ addr w */
-	NETVM_OC_LDU,		/* [ua,len] load len (max 8) bytes from ua */
+	NETVM_OC_LDU,		/* [addr,len] load len(max 8) bytes from addr */
 	NETVM_OC_LDPD,		/* [pdesc] x bytes from the pkt desc location */
 	NETVM_OC_LDPDI,		/* x bytes from the (packed) desc location */
 
-	NETVM_OC_CMP,		/* [ua1,ua2,len] compare bytes in mem */
-	NETVM_OC_PCMP,		/* [ua1,ua2,len] compare bits via prefix */
-	NETVM_OC_MSKCMP,	/* [ua1,ua2,umka,len] compare bytes via mask */
+	NETVM_OC_CMP,		/* [a1,a2,len] compare bytes in mem */
+	NETVM_OC_PCMP,		/* [a1,a2,len] compare bits via prefix */
+	NETVM_OC_MSKCMP,	/* [a1,a2,amk,len] compare bytes via mask */
 
 	/* Arithmatic operations */
 	NETVM_OC_NOT,		/* [v] logcal not (1 or 0) */
@@ -425,12 +413,12 @@ enum {
 	NETVM_OC_ST,		/* [v,a1] store x bytes of v to a1 in seg y */
 				/*    full 64-bit address supported */
 	NETVM_OC_STI,		/* [v] store x bytes of v to w in seg y */
-	NETVM_OC_STU,		/* [v,ua,len] store len bytes of v to uaddr */
+	NETVM_OC_STU,		/* [v,addr,len] store len bytes of v to addr */
 	NETVM_OC_STPD,		/* [v,pdesc] store x bytes of v at pdesc */
 	NETVM_OC_STPDI,		/* [v] store x bytes of v at (packed) pdesc */
 
-	NETVM_OC_MOVE,		/* [ua1,ua2,len] move len bytes from */
-				/*    ua1 to ua2.  (note unified addresses) */
+	NETVM_OC_MOVE,		/* [a1,a2,len] move len bytes from */
+				/*    a1 to a2.  (note unified addresses) */
 
 	/* packet specific operations */
 	NETVM_OC_PKSWAP,	/* [p1,p2] swap packets p1 and p2  */
