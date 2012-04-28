@@ -782,10 +782,20 @@ static int cg_rpf(struct pml_ibuf *b, struct pml_ast *ast,
 		return -1;
 
 	if (PML_RPF_IS_BYTESTR(loc->rpfld)) {
-		if (cg_locval(b, ast, loc->len, &llen) < 0)
-			return -1;
-		if (!lpkt.onstack)
-			PUSH64(b, llen.val);
+		if (NSF_IS_VARLEN(ns->flags)) {
+			EMIT_NULL(b, DUP);
+			cgpd.off = 0;
+			cgpd.field = ns->len;
+			if (cg_pdop(b, ast, &cgpd) < 0)
+				return -1;
+			EMIT_XW(b, SWAP, 0, 1);
+			EMIT_NULL(b, SUB);
+		} else {
+			if (cg_locval(b, ast, loc->len, &llen) < 0)
+				return -1;
+			if (!lpkt.onstack)
+				PUSH64(b, llen.val);
+		}
 	}
 
 	if (typecast(b, loc->etype, etype) < 0)
