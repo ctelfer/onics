@@ -10,6 +10,9 @@
 
 int cg_expr(struct pml_ibuf *b, struct pml_ast *ast, union pml_node *n,
 	    int etype);
+int cg_stmt(struct pmlncg *cg, union pml_node *n);
+
+
 
 struct cgeaux {
 	struct pml_ibuf *	ibuf;
@@ -100,45 +103,104 @@ static int pib_add_ixyzw(struct pml_ibuf *b, uint8_t oc, uint8_t x, uint8_t y,
 	} while (0)
 
 
-
-
-static struct pml_nvm_code *newcode(union pml_node *pmln)
+static uint nexti(struct pml_ibuf *b)
 {
-	struct pml_nvm_code *c;
-	struct pml_node_base *n;
-	int i;
-
-	abort_unless(pmln && pmln->base.aux == NULL);
-	n = &pmln->base;
-
-	c = malloc(sizeof(c));
-	if (c == NULL)
-		return NULL;
-
-	c->node = pmln;
-	n->aux = c;
-
-	for (i = 0; i < PNC_MAX_PIBS; ++i)
-		pib_init(&c->pib[i]);
-
-	return c;
+	abort_unless(b);
+	return b->ninst;
 }
 
 
-static void freecode(union pml_node *pmln)
+static int pcg_save_iaddr(struct pml_ibuf *b, struct dynbuf *dyb)
 {
-	struct pml_nvm_code *c;
-	int i;
+	uint iaddr;
+	abort_unless(b->ninst > 0);
+	iaddr = b->ninst - 1;
+	return dyb_cat_a(dyb, &iaddr, sizeof(iaddr));
+}
 
-	abort_unless(pmln);
-	c = pmln->base.aux;
 
-	if (c != NULL) {
-		c->node = NULL;
-		for (i = 0; i < PNC_MAX_PIBS; ++i)
-			pib_clear(&c->pib[i]);
-		pmln->base.aux = NULL;
+void pcg_get_saved_iaddrs(struct dynbuf *dyb, uint **arr, uint *alen)
+{
+	*alen = dyb->len / sizeof(uint);
+	*arr = (uint *)dyb->data;
+}
+
+
+static void pcg_resolve_branches(struct pml_ibuf *b, uint *iaddrs, uint naddrs,
+				 uint addr)
+{
+	struct netvm_inst *inst;
+
+	while (naddrs > 0) {
+		abort_unless(*iaddrs < b->ninst);
+		inst = b->inst + *iaddrs;
+		inst->w = (ulong)addr - *iaddrs;
+		++iaddrs;
+		--naddrs;
 	}
+}
+
+
+static int pcg_save_break(struct pmlncg *cg)
+{
+	return pcg_save_iaddr(&cg->ibuf, &cg->breaks);
+}
+
+
+static uint pcg_get_nbreaks(struct pmlncg *cg)
+{
+	return cg->breaks.len / sizeof(uint);
+}
+
+
+static void pcg_resolve_breaks(struct pmlncg *cg, uint bskip, uint addr)
+{
+	uint *iaddrs, naddrs;
+	pcg_get_saved_iaddrs(&cg->breaks, &iaddrs, &naddrs);
+	abort_unless(bskip <= naddrs);
+	iaddrs += bskip;
+	naddrs -= bskip;
+	pcg_resolve_branches(&cg->ibuf, iaddrs, naddrs, addr);
+	cg->breaks.len -= bskip * sizeof(uint);
+}
+
+
+static int pcg_save_continue(struct pmlncg *cg)
+{
+	return pcg_save_iaddr(&cg->ibuf, &cg->continues);
+}
+
+
+static uint pcg_get_ncontinues(struct pmlncg *cg)
+{
+	return cg->breaks.len / sizeof(uint);
+}
+
+
+static void pcg_resolve_continues(struct pmlncg *cg, uint cskip, uint addr)
+{
+	uint *iaddrs, naddrs;
+	pcg_get_saved_iaddrs(&cg->continues, &iaddrs, &naddrs);
+	abort_unless(cskip <= naddrs);
+	iaddrs += cskip;
+	naddrs -= cskip;
+	pcg_resolve_branches(&cg->ibuf, iaddrs, naddrs, addr);
+	cg->continues.len -= cskip * sizeof(uint);
+}
+
+
+static int pcg_save_nextrule(struct pmlncg *cg)
+{
+	return pcg_save_iaddr(&cg->ibuf, &cg->nextrules);
+}
+
+
+static void pcg_resolve_nextrules(struct pmlncg *cg, uint addr)
+{
+	uint *iaddrs, naddrs;
+	pcg_get_saved_iaddrs(&cg->nextrules, &iaddrs, &naddrs);
+	pcg_resolve_branches(&cg->ibuf, iaddrs, naddrs, addr);
+	dyb_empty(&cg->nextrules);
 }
 
 
@@ -247,13 +309,6 @@ static int init_pktact(struct pmlncg *cg)
 	cg->nxtpaddr = 0;
 	cg->dropaddr = 2;
 	return 0;
-}
-
-
-static uint nexti(struct pml_ibuf *b)
-{
-	abort_unless(b);
-	return b->ninst;
 }
 
 
@@ -406,7 +461,7 @@ static int cg_op(struct pml_ibuf *b, struct pml_op *op, struct cgestk *es)
 		/* patch up branch */
 		abort_unless(es->iaddr < b->ninst);
 		inst = b->inst + es->iaddr;
-		inst->w = nexti(b);
+		inst->w = nexti(b) - es->iaddr;
 		return 0;
 
 	case PMLOP_MATCH:
@@ -1150,16 +1205,176 @@ static int w_expr_post(union pml_node *n, void *auxp, void *xstk)
 
 
 int cg_expr(struct pml_ibuf *b, struct pml_ast *ast, union pml_node *n,
-	   int etype)
+	    int etype)
 {
 	struct cgeaux ea = { b, ast, etype };
 	return pmln_walk(n, &ea, w_expr_pre, w_expr_in, w_expr_post);
 }
 
 
-int clearaux(union pml_node *node, void *ctx, void *xstk)
+static int cg_list(struct pmlncg *cg, struct pml_list *list)
 {
-	freecode(node);
+	struct list *trav;
+	union pml_node *n;
+
+	l_for_each(trav, &list->list) {
+		n = l_to_node(trav);
+		if (cg_stmt(cg, n) < 0)
+			return -1;
+	}
+
+	return 0;
+}
+
+
+static int cg_if(struct pmlncg *cg, struct pml_if *ifstmt)
+{
+	struct pml_ibuf *b = &cg->ibuf;
+	struct pml_ast *ast = cg->ast;
+	struct netvm_inst *inst;
+	uint bra;
+
+	if (cg_expr(b, ast, (union pml_node *)ifstmt->test,
+		    PML_ETYPE_SCALAR) < 0)
+		return -1;
+
+	bra = nexti(b);
+	EMIT_W(b, BZI, 0);
+
+	if (cg_stmt(cg, (union pml_node *)ifstmt->tbody) < 0)
+		return -1;
+
+	inst = b->inst + bra;
+	inst->w = nexti(b) - bra;
+
+	if (ifstmt->fbody != NULL) {
+		bra = nexti(b);
+		EMIT_W(b, BRI, 0);
+
+		if (cg_stmt(cg, (union pml_node *)ifstmt->fbody) < 0)
+			return -1;
+
+		inst = b->inst + bra;
+		inst->w = nexti(b) - bra;
+	}
+
+	return 0;
+}
+
+
+static int cg_cfmod(struct pmlncg *cg, struct pml_cfmod *cfm)
+{
+	struct pml_ibuf *b = &cg->ibuf;
+	union pml_node *n;
+
+	switch (cfm->cftype) {
+	case PML_CFM_RETURN:
+		abort_unless(cg->curfunc != NULL);
+		n = (union pml_node *)cfm->expr;
+		if (cg_expr(b, cg->ast, n, PML_ETYPE_SCALAR) < 0)
+			return -1;
+		EMIT_XW(b, RET, 1, cg->curfunc->arity);
+		break;
+	case PML_CFM_BREAK:
+		EMIT_W(b, BRI, 0);
+		if (pcg_save_break(cg) < 0)
+			return -1;
+		break;
+	case PML_CFM_CONTINUE:
+		EMIT_W(b, BRI, 0);
+		if (pcg_save_continue(cg) < 0)
+			return -1;
+		break;
+	case PML_CFM_NEXTRULE:
+		EMIT_W(b, BRI, 0);
+		if (pcg_save_nextrule(cg) < 0)
+			return -1;
+		break;
+	case PML_CFM_NEXTPKT:
+		EMIT_W(b, JMPI, cg->nxtpaddr);
+		break;
+	case PML_CFM_DROP:
+		EMIT_W(b, JMPI, cg->dropaddr);
+		break;
+	}
+
+	return 0;
+}
+
+
+int cg_while(struct pmlncg *cg, struct pml_while *loop)
+{
+	struct pml_ibuf *b = &cg->ibuf;
+	struct netvm_inst *inst;
+	union pml_node *n;
+	struct pml_while *oloop;
+	uint nb;
+	uint nc;
+	uint testaddr;
+	uint tbraddr;
+	uint endaddr;
+
+	oloop = cg->curloop;
+	cg->curloop = loop;
+	nb = pcg_get_nbreaks(cg);
+	nc = pcg_get_ncontinues(cg);
+
+	/* generate test and branch on the test: resolve branch later */
+	testaddr = nexti(b);
+	n = (union pml_node *)loop->test;
+	if (cg_expr(b, cg->ast, n, PML_ETYPE_SCALAR) < 0)
+		return -1;
+	tbraddr = nexti(b);
+	EMIT_W(b, BZI, 0);
+
+	/* generate the loop body */
+	n = (union pml_node *)loop->body;
+	if (cg_stmt(cg, n) < 0)
+		return -1;
+
+	/* branch back to test */
+	endaddr = nexti(b);
+	EMIT_W(b, BRI, (ulong)testaddr - endaddr);
+	++endaddr;
+
+	/* resolve branch past body */
+	inst = b->inst + tbraddr;
+	inst->w = (ulong)endaddr - tbraddr;
+
+	/* resolve breaks and continues */
+	pcg_resolve_breaks(cg, nb, endaddr);
+	pcg_resolve_continues(cg, nc, testaddr);
+
+	cg->curloop = loop;
+	return 0;
+}
+
+
+int cg_stmt(struct pmlncg *cg, union pml_node *n)
+{
+	if (n == NULL)
+		return 0;
+
+	switch (n->base.type) {
+	case PMLTT_LIST:
+		return cg_list(cg, &n->list);
+	case PMLTT_IF:
+		return cg_if(cg, &n->ifstmt);
+	case PMLTT_WHILE:
+		return cg_while(cg, &n->whilestmt);
+		break;
+	case PMLTT_ASSIGN:
+		UNIMPL(stmt_assign);
+		break;
+	case PMLTT_CFMOD:
+		return cg_cfmod(cg, &n->cfmod);
+	case PMLTT_PRINT:
+		UNIMPL(stmt_print);
+		break;
+	default:
+		return -1;
+	}
+
 	return 0;
 }
 
@@ -1173,12 +1388,28 @@ static int cg_func(struct pmlncg *cg)
 
 static int cg_be(struct pmlncg *cg)
 {
-	/* TODO: add code to generate BEGIN & END segments */
+	struct list *n;
+	struct pml_rule *r;
 
-	/* DUMMY CODE */
-	cg->prog->eps[NVMP_EP_START] = nexti(&cg->ibuf);
-	EMIT_W(&cg->ibuf, PUSH, 0xdeadbeef);
-	EMIT_NULL(&cg->ibuf, HALT);
+	if (!l_isempty(&cg->ast->b_rules)) {
+		cg->prog->eps[NVMP_EP_START] = nexti(&cg->ibuf);
+		l_for_each(n, &cg->ast->b_rules) {
+			r = (struct pml_rule *)l_to_node(n);
+			if (cg_stmt(cg, (union pml_node *)r->stmts) < 0)
+				return -1;
+		}
+		EMIT_NULL(&cg->ibuf, HALT);
+	}
+
+	if (!l_isempty(&cg->ast->e_rules)) {
+		cg->prog->eps[NVMP_EP_END] = nexti(&cg->ibuf);
+		l_for_each(n, &cg->ast->e_rules) {
+			r = (struct pml_rule *)l_to_node(n);
+			if (cg_stmt(cg, (union pml_node *)r->stmts) < 0)
+				return -1;
+		}
+		EMIT_NULL(&cg->ibuf, HALT);
+	}
 
 	return 0;
 }
@@ -1186,7 +1417,46 @@ static int cg_be(struct pmlncg *cg)
 
 static int cg_rules(struct pmlncg *cg)
 {
-	UNIMPL(cg_rules);
+	struct pml_ibuf *b = &cg->ibuf;
+	struct netvm_inst *inst;
+	struct list *n;
+	struct pml_rule *r;
+	union pml_node *pat;
+	uint eaddr;
+	uint tbaddr;
+
+	if (l_isempty(&cg->ast->p_rules))
+		return 0;
+
+	cg->prog->eps[NVMP_EP_END] = nexti(b);
+
+	l_for_each(n, &cg->ast->p_rules) {
+		r = (struct pml_rule *)l_to_node(n);
+		pat = (union pml_node *)r->pattern;
+
+		if (pat != NULL) {
+			if (cg_expr(b, cg->ast, pat, PML_ETYPE_SCALAR) < 0)
+				return -1;
+			tbaddr = nexti(b);
+			EMIT_W(b, BZI, 0);
+		}
+
+		if (cg_stmt(cg, (union pml_node *)r->stmts) < 0)
+			return -1;
+
+		eaddr = nexti(&cg->ibuf);
+		if (pat != NULL) {
+			inst = b->inst + tbaddr;
+			inst->w = eaddr - tbaddr;
+		}
+
+		pcg_resolve_nextrules(cg, eaddr);
+	}
+
+	EMIT_W(&cg->ibuf, PUSH, 0);
+	EMIT_NULL(&cg->ibuf, HALT);
+
+	return 0;
 }
 
 
@@ -1196,11 +1466,9 @@ static void clearcg(struct pmlncg *cg, int copied, int clearall)
 
 	abort_unless(cg);
 
-	dyb_clear(&cg->brks);
-	dyb_clear(&cg->conts);
-	dyb_clear(&cg->nxtrules);
-
-	pml_ast_walk(cg->ast, cg, clearaux, NULL, NULL);
+	dyb_clear(&cg->breaks);
+	dyb_clear(&cg->continues);
+	dyb_clear(&cg->nextrules);
 
 	if (clearall) {
 		pib_clear(&cg->ibuf);
@@ -1231,9 +1499,11 @@ int pml_to_nvmp(struct pml_ast *ast, struct netvm_program *prog, int copy)
 	cg.ast = ast;
 	cg.prog = prog;
 	pib_init(&cg.ibuf);
-	dyb_init(&cg.brks, NULL);
-	dyb_init(&cg.conts, NULL);
-	dyb_init(&cg.nxtrules, NULL);
+	dyb_init(&cg.breaks, NULL);
+	dyb_init(&cg.continues, NULL);
+	dyb_init(&cg.nextrules, NULL);
+	cg.curfunc = NULL;
+	cg.curloop = NULL;
 
 	prog->inits = inits;
 	prog->ninits = PMLCG_MI_NUM;

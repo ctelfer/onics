@@ -20,19 +20,7 @@ struct pml_ibuf {
 
 void pib_init(struct pml_ibuf *b);
 void pib_clear(struct pml_ibuf *b);
-int pib_add(struct pml_ibuf *b, struct netvm_inst *i);
-
-
-/* 
- * Structure to generate instructions for code-AST elements.
- */
-#define PNC_MAX_PIBS	3
-struct pml_nvm_code {
-	union pml_node *	node;
-	struct pml_ibuf		pib[PNC_MAX_PIBS];
-	uint			vidx;
-	uint			midx;
-};
+int  pib_add(struct pml_ibuf *b, struct netvm_inst *i);
 
 
 enum {
@@ -46,21 +34,20 @@ enum {
 struct pmlncg {
 
 	struct pml_ast *	ast;		/* AST we are building from */
-
 	struct netvm_program *	prog;		/* program we are generating */
-
 	struct pml_ibuf		ibuf;		/* current instruction buf */
-
 	uint			dropaddr;	/* address of 'drop' code */
-
 	uint			nxtpaddr;	/* address of 'nextpkt' code */
 
+	struct pml_function *	curfunc;
+	struct pml_while *	curloop;
+
 	/* resolve these after codegen for loops */
-	struct dynbuf		brks; 		/* unresolved 'break's */
-	struct dynbuf		conts;		/* unresolved 'continue's */
+	struct dynbuf		breaks; 	/* unresolved 'break's */
+	struct dynbuf		continues;	/* unresolved 'continue's */
 
 	/* resolve these after codegen for rules */
-	struct dynbuf		nxtrules;	/* unresolved 'nextrule's */
+	struct dynbuf		nextrules;	/* unresolved 'nextrule's */
 };
 
 /*
