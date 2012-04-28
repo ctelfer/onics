@@ -434,29 +434,15 @@ void netvm_get_uaddr_ptr(struct netvm *vm, uint64_t uaddr, int iswr,
 static void ni_ld(struct netvm *vm)
 {
 	struct netvm_inst *inst = &vm->inst[vm->pc];
-	register uint64_t addr;
-	int width;
-	byte_t *p;
-
-	width = inst->x;
-	if (inst->op == NETVM_OC_LD)
-		S_POP(vm, addr);
-	else
-		addr = inst->w;
-	netvm_get_seg_ptr(vm, inst->y, addr, 0, width & 0x7F, &p);
-	if (!vm->error)
-		netvm_p2stk(vm, p, width);
-}
-
-
-static void ni_ldu(struct netvm *vm)
-{
 	uint64_t addr;
 	uint64_t len;
 	int width;
 	byte_t *p;
 
-	S_POP(vm, len);
+	if (inst->op == NETVM_OC_LDLI)
+		len = inst->x;
+	else
+		S_POP(vm, len);
 	S_POP(vm, addr);
 	width = len & 0x7F;
 	if (width > 8)
@@ -464,6 +450,21 @@ static void ni_ldu(struct netvm *vm)
 	netvm_get_uaddr_ptr(vm, addr, 0, width, &p);
 	if (!vm->error)
 		netvm_p2stk(vm, p, (int)(len & 0xFF));
+}
+
+
+static void ni_ldi(struct netvm *vm)
+{
+	struct netvm_inst *inst = &vm->inst[vm->pc];
+	register uint64_t addr;
+	int width;
+	byte_t *p;
+
+	width = inst->x;
+	addr = inst->w;
+	netvm_get_seg_ptr(vm, inst->y, addr, 0, width & 0x7F, &p);
+	if (!vm->error)
+		netvm_p2stk(vm, p, width);
 }
 
 
@@ -938,31 +939,14 @@ static void ni_st(struct netvm *vm)
 	struct netvm_inst *inst = &vm->inst[vm->pc];
 	uint64_t addr;
 	uint64_t val;
-	int width;
-	byte_t *p;
-
-	width = inst->x;
-	if (inst->op == NETVM_OC_ST)
-		S_POP(vm, addr);
-	else
-		addr = inst->w;
-	netvm_get_seg_ptr(vm, inst->y, addr, 1, width & 0x7F, &p);
-	if (!vm->error) {
-		S_POP(vm, val);
-		netvm_stk2p(vm, p, val, width);
-	}
-}
-
-
-static void ni_stu(struct netvm *vm)
-{
-	uint64_t addr;
-	uint64_t val;
 	uint64_t len;
 	int width;
 	byte_t *p;
 
-	S_POP(vm, len);
+	if (inst->op == NETVM_OC_STLI)
+		len = inst->x;
+	else
+		S_POP(vm, len);
 	S_POP(vm, addr);
 	S_POP(vm, val);
 	width = len & 0x7F;
@@ -971,6 +955,23 @@ static void ni_stu(struct netvm *vm)
 	netvm_get_uaddr_ptr(vm, addr, 1, width, &p);
 	if (!vm->error)
 		netvm_stk2p(vm, p, val, (int)(len & 0xFF));
+}
+
+
+static void ni_sti(struct netvm *vm)
+{
+	struct netvm_inst *inst = &vm->inst[vm->pc];
+	uint64_t addr;
+	uint64_t val;
+	int width;
+	byte_t *p;
+
+	width = inst->x;
+	addr = inst->w;
+	S_POP(vm, val);
+	netvm_get_seg_ptr(vm, inst->y, addr, 1, width & 0x7F, &p);
+	if (!vm->error)
+		netvm_stk2p(vm, p, val, width);
 }
 
 
@@ -1330,8 +1331,8 @@ netvm_op g_netvm_ops[NETVM_OC_MAXOP + 1] = {
 	ni_ldpf,		/* LDPFI */
 
 	ni_ld,			/* LD */
-	ni_ld,			/* LDI */
-	ni_ldu,			/* LDU */
+	ni_ld,			/* LDLI */
+	ni_ldi,			/* LDSI */
 	ni_ldpd,		/* LDPD */
 	ni_ldpd,		/* LDPDI */
 
@@ -1415,8 +1416,8 @@ netvm_op g_netvm_ops[NETVM_OC_MAXOP + 1] = {
 	ni_ret,			/* RET */
 
 	ni_st,			/* ST */
-	ni_st,			/* STI */
-	ni_stu,			/* STU */
+	ni_st,			/* STLI */
+	ni_sti,			/* STI */
 	ni_stpd,		/* STPD */
 	ni_stpd,		/* STPDI */
 
@@ -1507,9 +1508,9 @@ int netvm_validate(struct netvm *vm)
 				return NETVM_ERR_BRMONLY;
 
 		/* validate widths for load/store operations */
-		} else if ((inst->op == NETVM_OC_LD) ||
+		} else if ((inst->op == NETVM_OC_LDLI) ||
 		           (inst->op == NETVM_OC_LDI) ||
-		           (inst->op == NETVM_OC_ST) ||
+		           (inst->op == NETVM_OC_STLI) ||
 		           (inst->op == NETVM_OC_STI) ||
 			   (inst->op == NETVM_OC_POPL) ||
 			   (inst->op == NETVM_OC_NLZ) ||

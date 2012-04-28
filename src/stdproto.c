@@ -2054,7 +2054,7 @@ static struct ns_pktfld ipv6_ns_daddr =
 	NS_BYTEFIELD_I("daddr", &ipv6_ns, PRID_IPV6, 24, 16,
 		"Destination Address:  %s", &ns_fmt_ipv6a);
 static struct ns_pktfld ipv6_ns_exth =
-	NS_BYTEFIELD_VARLEN_I("exth", &ipv6_ns, PRID_IPV6, PRP_OI_SOFF, 20,
+	NS_BYTEFIELD_VARLEN_I("exth", &ipv6_ns, PRID_IPV6, PRP_OI_SOFF, 40,
 		PRP_OI_POFF,
 		"Extension Headers -- Offset %lu, Length %lu", &ns_fmt_hdr);
 

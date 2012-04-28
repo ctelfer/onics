@@ -19,8 +19,8 @@ start:
 	dup	0
 	swap	0, 3
 	swap	0, 1
-	ldu
+	ld
 	swap	0, 2
-	ldu
+	ld
 	and
 	halt

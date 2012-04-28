@@ -17,4 +17,3 @@ b:
 	bzi     @l
 	bnzi	@b
 	ldi	8, g_var.seg, g_var.addr
-	ldi	8, g_var.seg, 9, g_var.addr

@@ -303,10 +303,9 @@ enum {
 	 * for a value of x-128 bytes.   The same address conventions are
 	 * followed on the ST, STI, STU, STPD, STPDI, instructions.
 	 */
-	NETVM_OC_LD,		/* [addr] load x bytes from addr in seg y */
-				/*    full 64-bit address supported */
+	NETVM_OC_LD,		/* [addr,len] load len(max 8) bytes from addr */
+	NETVM_OC_LDLI,		/* [addr] load 'x' (max 8) bytes from addr */
 	NETVM_OC_LDI,		/* load x bytes from mem seg y @ addr w */
-	NETVM_OC_LDU,		/* [addr,len] load len(max 8) bytes from addr */
 	NETVM_OC_LDPD,		/* [pdesc] x bytes from the pkt desc location */
 	NETVM_OC_LDPDI,		/* x bytes from the (packed) desc location */
 
@@ -410,10 +409,10 @@ enum {
 				/*   vals from the stack.  pop to bp-1-'w'. */
 				/*   push the saved values onto the stack. */
 
-	NETVM_OC_ST,		/* [v,a1] store x bytes of v to a1 in seg y */
-				/*    full 64-bit address supported */
+	NETVM_OC_ST,		/* [v,addr,len] store len(max 8) bytes of */
+				/*  v to addr */
+	NETVM_OC_STLI,		/* [v,addr] store x(max 8) bytes of v to addr */
 	NETVM_OC_STI,		/* [v] store x bytes of v to w in seg y */
-	NETVM_OC_STU,		/* [v,addr,len] store len bytes of v to addr */
 	NETVM_OC_STPD,		/* [v,pdesc] store x bytes of v at pdesc */
 	NETVM_OC_STPDI,		/* [v] store x bytes of v at (packed) pdesc */
 
