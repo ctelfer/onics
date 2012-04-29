@@ -721,10 +721,23 @@ static void cgpd_init(struct cg_pdesc *cgpd, int oc, uint8_t x,
 		if (PML_RPF_IS_BYTESTR(loc->rpfld)) {
 			cgpd->field = PML_RPF_TO_NVMOFF(loc->rpfld);
 		} else {
-			if (loc->rpfld == PML_RPF_EXISTS)
-				cgpd->field = NETVM_PRP_PIDX;
-			else
+			if (loc->rpfld == PML_RPF_EXISTS) {
+				/*
+				 * We are testing for parse existence here.
+				 * If the offset index for the namespace is
+				 * PRP_OI_SOFF, then we can check for the
+				 * parse index of the parse. (must be > 0).
+				 * Otherwise we have to load the actual
+				 * offset and test for NETVM_PRP_INVALID.
+				 * See cg_rpf().
+				 */
+				if (ns->oidx == PRP_OI_SOFF)
+					cgpd->field = NETVM_PRP_PIDX;
+				else
+					cgpd->field = NETVM_PRP_SOFF + ns->oidx;
+			} else {
 				cgpd->field = PML_RPF_TO_NVMFIELD(loc->rpfld);
+			}
 		}
 		cgpd->prid = ns->prid;
 	} else {
@@ -851,10 +864,57 @@ static int cg_rpf(struct pml_ibuf *b, struct pml_ast *ast,
 			if (!lpkt.onstack)
 				PUSH64(b, llen.val);
 		}
+	} else if (ns->oidx != PRP_OI_SOFF) {
+		/*
+		 * If we have a namespace referring to a subfield 
+		 * within a protocol then we have to test explicitly
+		 * for invalid rather than implicitly by getting
+		 * the header's parse index.  See cgpd_init().
+		 */
+		EMIT_W(b, EQI, NETVM_PF_INVALID);
 	}
+
 
 	if (typecast(b, loc->etype, etype) < 0)
 		return -1;
+
+	return 0;
+}
+
+
+static int cg_pfbitfield(struct pml_ibuf *b, struct pml_ast *ast,
+			 struct pml_locator *loc)
+{
+	struct cg_pdesc cgpd;
+	struct ns_pktfld *pf = (struct ns_pktfld *)loc->u.nsref;
+	ulong bitoff = NSF_BITOFF(pf->flags);
+	ulong bytelen = ((pf->len + bitoff + 7) & ~(ulong)7) >> 3;
+	ulong remlen = bytelen * 8 - bitoff - pf->len;
+	uint64_t mask;
+
+	if (bytelen > 8) {
+		fprintf(stderr,
+			"Unable to generate bitfield %s:  "
+			"read byte length = %lu\n",
+			pf->name, bytelen);
+		return -1;
+	}
+
+	cgpd_init(&cgpd, NETVM_OC_LDPD, bytelen, loc);
+	if (cg_pdop(b, ast, &cgpd) < 0)
+		return -1;
+
+	if (remlen > 0)
+		EMIT_W(b, SHRI, remlen);
+
+
+	mask = ((uint64_t)1 << pf->len) - 1;
+	if (mask <= 0xFFFFFFFF) {
+		EMIT_W(b, ANDI, mask);
+	} else {
+		PUSH64(b, mask);
+		EMIT_NULL(b, AND);
+	}
 
 	return 0;
 }
@@ -955,9 +1015,9 @@ static int cg_pfref(struct pml_ibuf *b, struct pml_ast *ast,
 		return cg_rpf(b, ast, loc, etype);
 	} else if ((nse->type == NST_PKTFLD) && NSF_IS_INBITS(nse->flags)) {
 		abort_unless(loc->off == NULL && loc->len == NULL);
-		UNIMPL(pktfld_bitfield);
+		return cg_pfbitfield(b, ast, loc);
 	} else {
-		return cg_pfbytefield(b, ast, loc, etype);;
+		return cg_pfbytefield(b, ast, loc, etype);
 	}
 
 	return 0;
@@ -1153,7 +1213,7 @@ static int w_expr_in(union pml_node *n, void *auxp, void *xstk)
 			EMIT_W(b, BRI, 0); /* fill in during post */
 		} else if (op->op == PMLOP_AND) { 
 			EMIT_W(b, BNZI, 3);
-			EMIT_W(b, PUSH, 1);
+			EMIT_W(b, PUSH, 0);
 			es->iaddr = nexti(b);
 			EMIT_W(b, BRI, 0); /* fill in during post */
 		}

@@ -2190,12 +2190,15 @@ static int resolve_node_post(union pml_node *node, void *ctxp, void *xstk)
 		struct pml_locator *l = (struct pml_locator *)node;
 		if (resolve_locsym(ctx, l) < 0)
 			return -1;
-		if (((l->reftype == PML_REF_VAR) && 
+		if (((l->reftype == PML_REF_VAR) && 	/* symbolic constant */
 		     (l->u.varref->vtype == PML_VTYPE_CONST)) ||
-		    ((l->reftype == PML_REF_PKTFLD) &&
+		    ((l->reftype == PML_REF_PKTFLD) &&	/* resv non-bytefield */
 		     (l->rpfld != PML_RPF_NONE) &&
 		     !PML_RPF_IS_BYTESTR(l->rpfld)) ||
-		    ((l->reftype == PML_REF_LITERAL) &&
+		    ((l->reftype == PML_REF_PKTFLD) &&	/* packet bitfield */
+		     (l->rpfld == PML_RPF_NONE) &&
+		     NSF_IS_INBITS(l->u.nsref->flags)) ||
+		    ((l->reftype == PML_REF_LITERAL) &&	/* protocol scalar */
 		     (l->u.litref->type == PMLTT_SCALAR))) {
 			pml_ast_err(ctx->ast, 
 				    "'%s' is not an addressable field.\n",

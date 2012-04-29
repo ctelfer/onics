@@ -319,7 +319,8 @@ enum {
 	PML_RPF_FIRST = PML_RPF_HLEN,
 	PML_RPF_LAST = PML_RPF_TRAILER,
 };
-#define PML_RPF_IS_BYTESTR(f) ((f) >= PML_RPF_HEADER && (f) <= PML_RPF_TRAILER)
+#define PML_RPF_IS_BYTESTR(f) (((f) >= PML_RPF_HEADER) && \
+			       ((f) <= PML_RPF_TRAILER))
 #define PML_RPF_TO_NVMFIELD(f)  ((f) - PML_RPF_EXISTS + NETVM_PRP_HLEN)
 #define PML_RPF_TO_NVMOFF(f)  ((f) - PML_RPF_HEADER + NETVM_PRP_SOFF)
 struct pml_locator {
