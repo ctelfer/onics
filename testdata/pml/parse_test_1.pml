@@ -19,7 +19,8 @@ var broadcast_var[4] = ip.addr.broadcast;
 	i = 0;
 	csum = 0;
 	while ( i < ip.hlen ) {
-		csum = csum + tcp[i * 2, 2];
+		csum = csum + tcp[i, 2];
+		i = i + 2;
 	}
 
 	while ( csum > 0xFFFF ) {

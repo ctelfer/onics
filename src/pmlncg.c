@@ -1563,7 +1563,7 @@ int pml_to_nvmp(struct pml_ast *ast, struct netvm_program *prog, int copy)
 	if (cg_be(&cg) < 0)
 		goto err;
 
-	if (cg_rules(&cg < 0))
+	if (cg_rules(&cg) < 0)
 		goto err;
 
 	/* if we got to here we are good to go! */
