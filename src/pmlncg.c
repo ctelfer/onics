@@ -1379,9 +1379,44 @@ int cg_stmt(struct pmlncg *cg, union pml_node *n)
 }
 
 
-static int cg_func(struct pmlncg *cg)
+static int cg_func(struct pmlncg *cg, struct pml_function *f)
 {
-	/* TODO: add code to generate functions */
+	struct pml_ibuf *b = &cg->ibuf;
+	ulong vlen;
+
+	abort_unless(cg->curfunc == NULL);
+	cg->curfunc = f;
+
+	if (f->vstksz > 0) {
+		abort_unless(f->vstksz % 8 == 0);
+		vlen = f->vstksz / 8;
+		EMIT_W(b, ZPUSH, vlen);
+	}
+
+	if (cg_stmt(cg, f->body) < 0)
+		return -1;
+
+	/* XXX just to be safe */
+	EMIT_W(b, PUSH, 0);
+	EMIT_XW(b, RET, 1, f->arity);
+
+	cg->curfunc = NULL;
+	return 0;
+}
+
+
+static int cg_funcs(struct pmlncg *cg)
+{
+	struct pml_function *f;
+	struct list *flist, *n;
+	flist = &cg->ast->funcs.list;
+
+	l_for_each(n, flist) {
+		f = (struct pml_function *)l_to_node(n);
+		if (cg_func(cg, f) < 0)
+			return -1;
+	}
+
 	return 0;
 }
 
@@ -1522,7 +1557,7 @@ int pml_to_nvmp(struct pml_ast *ast, struct netvm_program *prog, int copy)
 	if (init_pktact(&cg) < 0)
 		goto err;
 
-	if (cg_func(&cg) < 0)
+	if (cg_funcs(&cg) < 0)
 		goto err;
 
 	if (cg_be(&cg) < 0)
