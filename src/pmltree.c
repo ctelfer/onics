@@ -454,7 +454,6 @@ union pml_node *pmln_alloc(int type)
 	node = &np->base;
 	node->type = type;
 	l_init(&node->ln);
-	node->aux = NULL;
 
 	/* Initialize the rest of the fields based on type. */
 	/* A function pointer table based on type would be more */
@@ -570,7 +569,9 @@ union pml_node *pmln_alloc(int type)
 
 	case PMLTT_PRINT: {
 		struct pml_print *p = &np->print;
-		p->fmt = NULL;
+		p->fmt.addr = 0;
+		p->fmt.len = 0;
+		p->fmt.segnum = PML_SEG_NONE;
 		p->args = NULL;
 	} break;
 
@@ -693,7 +694,6 @@ void pmln_free(union pml_node *node)
 
 	case PMLTT_PRINT: {
 		struct pml_print *p = &node->print;
-		free(p->fmt);
 		pmln_free((union pml_node *)p->args);
 	} break;
 
@@ -1224,7 +1224,8 @@ void pmlt_print(struct pml_ast *ast, union pml_node *np, uint depth)
 	case PMLTT_PRINT: {
 		struct pml_print *p = &np->print;
 		indent(depth);
-		printf("Print Statement: \"%s\"\n", p->fmt);
+		printf("Print Statement: \"%s\"\n", 
+		       (char *)pml_bytestr_ptr(ast, &p->fmt));
 		if (p->args != NULL) {
 			indent(depth);
 			printf("Arguments -- \n");
@@ -3097,7 +3098,7 @@ static int pml_cexpr_walker(union pml_node *node, void *astp, void *xstk)
 	switch(node->base.type) {
 
 	case PMLTT_VAR: {
-		struct pml_variable *v = (struct pml_variable *)node;
+		struct pml_variable *v = &node->variable;
 		if (v->init != NULL) {
 			if (pml_opt_e_cexpr(&v->init, astp) < 0)
 				return -1;
@@ -3106,7 +3107,7 @@ static int pml_cexpr_walker(union pml_node *node, void *astp, void *xstk)
 
 	case PMLTT_BINOP:
 	case PMLTT_UNOP: {
-		struct pml_op *op = (struct pml_op *)node;
+		struct pml_op *op = &node->op;
 		if (pml_opt_e_cexpr(&op->arg1, astp) < 0)
 			return -1;
 		if (op->type == PMLTT_BINOP) {
@@ -3116,7 +3117,7 @@ static int pml_cexpr_walker(union pml_node *node, void *astp, void *xstk)
 	} break;
 
 	case PMLTT_CALL: {
-		struct pml_call *c = (struct pml_call *)node;
+		struct pml_call *c = &node->call;
 		l_for_each_safe(n, x, &c->args->list) {
 			if (pml_opt_l_cexpr((union pml_expr_u *)l_to_node(n), 
 					   astp) < 0)
@@ -3125,20 +3126,20 @@ static int pml_cexpr_walker(union pml_node *node, void *astp, void *xstk)
 	} break;
 
 	case PMLTT_IF: {
-		struct pml_if *pif = (struct pml_if *)node;
+		struct pml_if *pif = &node->ifstmt;
 		if (pml_opt_e_cexpr(&pif->test, astp) < 0)
 			return -1;
 	} break;
 
 	case PMLTT_WHILE: {
-		struct pml_while *w = (struct pml_while *)node;
+		struct pml_while *w = &node->whilestmt;
 		if (pml_opt_e_cexpr(&w->test, astp) < 0)
 			return -1;
 	} break;
 
 	case PMLTT_LOCATOR:
 	case PMLTT_LOCADDR: {
-		struct pml_locator *l = (struct pml_locator *)node;
+		struct pml_locator *l = &node->locator;
 		if ((pml_opt_e_cexpr(&l->pkt, astp) < 0) ||
 		    (pml_opt_e_cexpr(&l->idx, astp) < 0) ||
 		    (pml_opt_e_cexpr(&l->off, astp) < 0) ||
@@ -3147,22 +3148,23 @@ static int pml_cexpr_walker(union pml_node *node, void *astp, void *xstk)
 	} break;
 
 	case PMLTT_ASSIGN: {
-		struct pml_assign *a = (struct pml_assign *)node;
+		struct pml_assign *a = &node->assign;
 		if (pml_opt_e_cexpr(&a->expr, astp) < 0)
 			return -1;
 	} break;
 
 	case PMLTT_PRINT: {
 		struct pml_print *p = (struct pml_print *)node;
+		union pml_expr_u *arg;
 		l_for_each_safe(n, x, &p->args->list) {
-			if (pml_opt_l_cexpr((union pml_expr_u *)l_to_node(n),
-					   astp) < 0)
+			arg = (union pml_expr_u *)l_to_node(n);
+			if (pml_opt_l_cexpr(arg, astp) < 0)
 				return -1;
 		}
 	} break;
 
 	case PMLTT_FUNCTION: {
-		struct pml_function *f = (struct pml_function *)node;
+		struct pml_function *f = &node->function;
 		if (PML_FUNC_IS_INLINE(f)) {
 			if (pml_opt_n_cexpr(&f->body, astp) < 0)
 				return -1;
@@ -3170,7 +3172,7 @@ static int pml_cexpr_walker(union pml_node *node, void *astp, void *xstk)
 	} break;
 
 	case PMLTT_RULE: {
-		struct pml_rule *r = (struct pml_rule *)node;
+		struct pml_rule *r = &node->rule;
 		if (pml_opt_e_cexpr(&r->pattern, astp) < 0)
 			return -1;
 	} break;

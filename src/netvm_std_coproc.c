@@ -386,16 +386,17 @@ static void nci_prstr(struct netvm *vm, struct netvm_coproc *ncp, int cpi)
 	uint8_t seg;
 
 	abort_unless(cp->outport);
-	seg = inst->z;
 	if (inst->y == NETVM_CPOC_PRSTR) {
 		S_POP(vm, len);
 		S_POP(vm, addr);
+		netvm_get_uaddr_ptr(vm, addr, 0, len, &p);
 	} else {
 		abort_unless(inst->y == NETVM_CPOC_PRSTRI);
 		len = (inst->w >> 24) & 0xFF;
 		addr = inst->w & 0xFFFFFF;
+		seg = inst->z;
+		netvm_get_seg_ptr(vm, seg, addr, 0, len, &p);
 	}
-	netvm_get_seg_ptr(vm, seg, addr, 0, len, &p);
 	if (!vm->error)
 		emit_raw(cp->outport, p, len);
 }

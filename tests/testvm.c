@@ -87,7 +87,7 @@ struct netvm_inst vm_prog_count10[] = {
 	/*7 */ NETVM_OP(DUP, 0, 0, 0, 0),
 	/*8 */ NETVM_OP(GEI, 0, 0, 0, 10),
 	/*9 */ NETVM_BRIF_F(7), /* out of loop */
-	/*10*/ NETVM_OP(PUSH, 0, 0, 0, 64), 
+	/*10*/ NETVM_OP(PUSH, 0, 0, 0, 64), 	/* RWSEG is 0 in seg bits */
 	/*11*/ NETVM_OP(PUSH, 0, 0, 0, 1), 
 	/*12*/ NETVM_OP(CPOPI, NETVM_CPI_OUTPORT, NETVM_CPOC_PRSTR, 0, 0), 
 	/*13*/ NETVM_OP(ADDI, 0, 0, 0, 1),
@@ -96,7 +96,7 @@ struct netvm_inst vm_prog_count10[] = {
 
 	/* out of loop */
 	/*16*/ NETVM_OP(POP, 0, 0, 0, 1), 
-	/*17*/ NETVM_OP(PUSH, 0, 0, 0, 72), 
+	/*17*/ NETVM_OP(PUSH, 0, 0, 0, 72), 	/* RWSEG is 0 in seg bits */
 	/*18*/ NETVM_OP(PUSH, 0, 0, 0, 1), 
 	/*19*/ NETVM_OP(CPOPI, NETVM_CPI_OUTPORT, NETVM_CPOC_PRSTR, 0, 0), 
 };

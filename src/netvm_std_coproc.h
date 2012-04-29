@@ -63,9 +63,9 @@ enum {
 	NETVM_CPOC_PRETH,/* [vhi, vlo] print ethernet addr (network byte order) */
 	                 /*     vhi has only 2 MSB of address */
 	NETVM_CPOC_PRIPV6,/* [v0,v1,v2,v3] print IPv6 addr (network byte order) */
-	NETVM_CPOC_PRSTR,/* [addr,len] print len bytes from addr in mem,  */
-			 /*   'z' is the memory segment */
+	NETVM_CPOC_PRSTR,/* [addr,len] print len bytes from addr */
 	NETVM_CPOC_PRSTRI,/* as PRSTR except w holds |len(8)|addr(24)| */
+			  /* and 'z' holds the segment to print from */
 
 	NETVM_CPOC_NUMPR
 };

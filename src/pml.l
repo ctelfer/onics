@@ -1,9 +1,10 @@
 %{
-#include "pml.h"
-#include "pmltree.h"
+#include <string.h>
+#include <ctype.h>
 #include <cat/err.h>
 #include <cat/str.h>
-#include <string.h>
+#include "pml.h"
+#include "pmltree.h"
 
 #define YY_EXTRA_TYPE	struct pml_lex_val
 #define YY_NO_INPUT
@@ -185,23 +186,82 @@ int parse_ipv6_addr(yyscan_t scanner, const char *text)
 }
 
 
+static int isodigit(char c)
+{
+	return (c >= '0' && c <= '7');
+}
+
+static void c_translate(struct raw *r, const char *s, size_t len)
+{
+	char *d = r->data;
+	r->len = 0;
+	while (len > 0) {
+		if (*s != '\\' && len > 1) {
+			*d++ = *s++;
+			len -= 1;
+		} else {
+			switch (s[1]) {
+			case '\\': *d++ = '\\'; s += 2; len -= 2; break;
+			case 'a':  *d++ = '\a'; s += 2; len -= 2; break;
+			case 'b':  *d++ = '\b'; s += 2; len -= 2; break;
+			case 't':  *d++ = '\t'; s += 2; len -= 2; break;
+			case 'n':  *d++ = '\n'; s += 2; len -= 2; break;
+			case 'v':  *d++ = '\v'; s += 2; len -= 2; break;
+			case 'f':  *d++ = '\f'; s += 2; len -= 2; break;
+			case 'r':  *d++ = '\r'; s += 2; len -= 2; break;
+			case 'x':
+				if (len < 4 && isxdigit(s[2]) && 
+				    isxdigit(s[3])) {
+					*d++ = *s++;
+					len -= 1;
+				} else {
+					*d++ = (chnval(s[2]) << 4) + 
+					       (chnval(s[3]) << 0);
+					s += 4;
+					len -= 4;
+				}
+				break;
+			default:
+				if (len >= 4 && isodigit(s[1]) && 
+				    isodigit(s[2]) && isodigit(s[3])) {
+					*d++ = ((chnval(s[1]) << 6) +
+						(chnval(s[2]) << 3) +
+						(chnval(s[3]) << 0)) % 0xFF;
+					s += 4;
+					len -= 4;
+				} else {
+					*d++ = *s++;
+					len -= 1;
+				}
+			}
+		}
+		++r->len;
+	}
+	*d = '\0';
+	++r->len;
+}
+
+
 static int copy_string(yyscan_t scanner, const char *text, int tok, int quoted)
 {
 	size_t len;
 	struct pml_lex_val v;
 
-	v.type  = PMLLV_STRING;
+	v.type = PMLLV_STRING;
 	len = strlen(text) + 1;
 	if ( quoted ) {
-		len -= 2;
+		abort_unless(len >= 3);
+		len -= 3;
 		text += 1;
 	}
 	if ( (v.u.raw.data = malloc(len)) == NULL )
 		return -1;
-	memcpy(v.u.raw.data, text, len);
-	if ( quoted )
-		v.u.raw.data[len-1] = '\0';
-	v.u.raw.len = len;
+	if ( quoted ) {
+		c_translate(&v.u.raw, text, len);
+	} else {
+		memcpy(v.u.raw.data, text, len);
+		v.u.raw.len = len;
+	}
 	pmlset_extra(v, scanner);
 
 	return tok;

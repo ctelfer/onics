@@ -131,14 +131,12 @@ enum {
 struct pml_node_base {
 	int			type;
 	struct list		ln;
-	void *			aux;
 };
 
 
 struct pml_list {
 	int			type;
 	struct list		ln;
-	void *			aux;
 	struct list		list;
 };
 
@@ -180,7 +178,6 @@ enum {
 struct pml_expr_base {
 	int			type;
 	struct list		ln;
-	void *			aux;
 	ushort			etype;
 	ushort			eflags;
 	ulong			width;
@@ -203,7 +200,6 @@ struct pml_maskval {
 struct pml_literal {
 	int			type;
 	struct list		ln;
-	void *			aux;
 	ushort			etype;
 	ushort			eflags;
 	ulong			width;
@@ -235,7 +231,6 @@ struct pml_variable {
 	/* pml_sym_base fields */
 	int			type;
 	struct list		ln;
-	void *			aux;
 	struct hnode		hn;
 	char *			name;
 
@@ -251,7 +246,6 @@ struct pml_variable {
 struct pml_op {
 	int			type;
 	struct list		ln;
-	void *			aux;
 	ushort			etype;
 	ushort			eflags;
 	ulong			width;
@@ -265,7 +259,6 @@ struct pml_op {
 struct pml_call {
 	int			type;
 	struct list		ln;
-	void *			aux;
 	ushort			etype;
 	ushort			eflags;
 	ulong			width;
@@ -278,7 +271,6 @@ struct pml_call {
 struct pml_if {
 	int			type;
 	struct list		ln;
-	void *			aux;
 
 	union pml_expr_u *	test;
 	struct pml_list *	tbody;
@@ -289,7 +281,6 @@ struct pml_if {
 struct pml_while {
 	int			type;
 	struct list		ln;
-	void *			aux;
 
 	union pml_expr_u *	test;
 	struct pml_list *	body;
@@ -326,7 +317,6 @@ enum {
 struct pml_locator {
 	int			type;
 	struct list		ln;
-	void *			aux;
 	ushort			etype;
 	ushort			eflags;
 	ulong			width;
@@ -349,7 +339,6 @@ struct pml_locator {
 struct pml_assign {
 	int			type;
 	struct list		ln;
-	void *			aux;
 
 	struct pml_locator *	loc;
 	union pml_expr_u *	expr;
@@ -369,7 +358,6 @@ enum {
 struct pml_cfmod {
 	int			type;
 	struct list		ln;
-	void *			aux;
 
 	int			cftype;
 	union pml_expr_u *	expr;
@@ -379,9 +367,8 @@ struct pml_cfmod {
 struct pml_print {
 	int			type;
 	struct list		ln;
-	void *			aux;
 
-	char *			fmt;
+	struct pml_bytestr	fmt;
 	struct pml_list *	args;	/* expressions */
 };
 
@@ -389,7 +376,6 @@ struct pml_print {
 struct pml_sym {
 	int			type;
 	struct list		ln;
-	void *			aux;
 	struct hnode		hn;
 	char *			name;
 };
@@ -407,7 +393,6 @@ struct pml_function {
 	/* pml_sym_base fields */
 	int			type;
 	struct list		ln;
-	void *			aux;
 	struct hnode		hn;	/* node for lookup in the AST */
 	char *			name;
 
@@ -434,7 +419,6 @@ enum {
 struct pml_rule {
 	int			type;
 	struct list		ln;
-	void *			aux;
 
 	int			trigger;
 	struct pml_symtab	vars;

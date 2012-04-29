@@ -46,10 +46,7 @@ inline ishttp() ( tcp && (tcp.sport == 80 || tcp.dport == 80) )
 
 # A function can be recursive, have local variables and it has
 # a series of statements enclosed in parentheses.
-# All variable declarations must come before statements.
 func incr(v) {
-	var x;
-
 	x = v + 1;
 	return x;
 }
@@ -509,17 +506,21 @@ cfmkw(C) ::= NEXTRULE. { C = PML_CFM_NEXTRULE; }
 cfmkw(C) ::= NEXTPKT. { C = PML_CFM_NEXTPKT; }
 cfmkw(C) ::= DROP. { C = PML_CFM_DROP; }
 
-stmt(S) ::= PRINT STRING(TV) SEMICOLON. {
+stmt(S) ::= PRINT STRING(FMT) SEMICOLON. {
 	struct pml_print *p = (struct pml_print *)pmln_alloc(PMLTT_PRINT);
-	p->fmt = (char *)TV.u.raw.data;
+	pml_bytestr_copy(ast, &p->fmt, PML_SEG_ROMEM, FMT.u.raw.data,
+			 FMT.u.raw.len);
 	p->args = (struct pml_list *)pmln_alloc(PMLTT_LIST);
+	free(FMT.u.raw.data);
 	S = (union pml_node *)p;
 }
 
-stmt(S) ::= PRINT STRING(TV) COMMA exprlist(EL) SEMICOLON. {
+stmt(S) ::= PRINT STRING(FMT) COMMA exprlist(EL) SEMICOLON. {
 	struct pml_print *p = (struct pml_print *)pmln_alloc(PMLTT_PRINT);
-	p->fmt = (char *)TV.u.raw.data;
+	pml_bytestr_copy(ast, &p->fmt, PML_SEG_ROMEM, FMT.u.raw.data,
+			 FMT.u.raw.len);
 	p->args = EL;
+	free(FMT.u.raw.data);
 	S = (union pml_node *)p;
 }
 
@@ -546,6 +547,8 @@ cmpexpr(E) ::= borexpr(LHS) matchop(OP) BYTESTR(T1) DIV BYTESTR(T2). {
 			 T1.u.raw.len);
 	pml_bytestr_copy(ast, &v->u.maskval.mask, PML_SEG_ROMEM, T2.u.raw.data,
 			 T2.u.raw.len);
+	free(T1.u.raw.data);
+	free(T2.u.raw.data);
 	E = pml_binop_alloc(OP, LHS, (union pml_expr_u *)v); 
 }
 cmpexpr(E) ::= borexpr(LHS) matchop(OP) IPV4ADDR(A) DIV NUM(L). {
@@ -630,6 +633,7 @@ cmpexpr(E) ::= borexpr(LHS) matchop(OP) REGEX(R). {
 	struct pml_literal *v = (struct pml_literal *)pmln_alloc(PMLTT_BYTESTR);
 	int op = (OP == PMLOP_MATCH) ? PMLOP_REXMATCH : PMLOP_NOTREXMATCH;
 	pml_bytestr_copy(ast, &v->u.bytestr, PML_SEG_ROMEM, R.u.raw.data, R.u.raw.len);
+	free(R.u.raw.data);
 	E = pml_binop_alloc(op, LHS, (union pml_expr_u *)v); 
 }
 cmpexpr(E) ::= borexpr(LHS). { E = LHS; }
@@ -736,6 +740,7 @@ value(V) ::= BYTESTR(I). {
 	struct pml_literal *v = (struct pml_literal *)pmln_alloc(PMLTT_BYTESTR);
 	pml_bytestr_copy(ast, &v->u.bytestr, PML_SEG_ROMEM, I.u.raw.data,
 			 I.u.raw.len);
+	free(I.u.raw.data);
 	V = (union pml_expr_u *)v;
 }
 value(V) ::= IPADDR(I). {
@@ -758,6 +763,7 @@ value(V) ::= STRING(I). {
 	struct pml_literal *v = (struct pml_literal *)pmln_alloc(PMLTT_BYTESTR);
 	pml_bytestr_copy(ast, &v->u.bytestr, PML_SEG_ROMEM, I.u.raw.data,
 			 I.u.raw.len);
+	free(I.u.raw.data);
 	V = (union pml_expr_u *)v;
 }
 value(V) ::= ATAT locname(L). {

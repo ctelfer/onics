@@ -26,6 +26,15 @@ struct cgestk {
 };
 
 
+struct locval {
+	int			onstack;
+	uint64_t		val;
+};
+
+
+const static struct locval locval_0 = { 0, 0 };
+
+
 void pib_init(struct pml_ibuf *b)
 {
 	abort_unless(b);
@@ -94,6 +103,7 @@ static int pib_add_ixyzw(struct pml_ibuf *b, uint8_t oc, uint8_t x, uint8_t y,
 #define EMIT_NULL(_ibuf, SYM) EMIT_XYZW(_ibuf, SYM, 0, 0, 0, 0)
 #define EMIT_W(_ibuf, SYM, _w) EMIT_XYZW(_ibuf, SYM, 0, 0, 0, _w)
 #define EMIT_XW(_ibuf, SYM, _x, _w) EMIT_XYZW(_ibuf, SYM, _x, 0, 0, _w)
+#define EMIT_XY(_ibuf, SYM, _x, _y) EMIT_XYZW(_ibuf, SYM, _x, _y, 0, 0)
 
 
 #define UNIMPL(s)							\
@@ -204,51 +214,79 @@ static void pcg_resolve_nextrules(struct pmlncg *cg, uint addr)
 }
 
 
-static int copy_meminits(struct pml_ast *ast, struct netvm_meminit *inits,
+static int copy_meminits(struct pml_ast *ast, struct netvm_program *prog,
 		         int copy)
 {
+	struct netvm_meminit *inits = prog->inits;
 	struct pml_symtab *st;
 	struct dynbuf tb;
 	int esave;
+	uint len;
+	int i;
 
 	abort_unless(ast->mi_bufs[PML_SEG_ROMEM].off == 0);
 	abort_unless(ast->mi_bufs[PML_SEG_RWMEM].off == 0);
 
 	dyb_init(&tb, NULL);
 
-	inits[0].segnum = PML_SEG_ROMEM;
-	inits[0].off = 0;
-	inits[0].val.len = ast->mi_bufs[PML_SEG_ROMEM].len;
-	if (copy) {
-		if (dyb_copy(&tb, &ast->mi_bufs[PML_SEG_ROMEM]) < 0)
-			return -1;
-		inits[0].val.data = dyb_release(&tb);
-	} else {
-		inits[0].val.data = ast->mi_bufs[PML_SEG_ROMEM].data;
+	prog->ninits = 0;
+
+	len = ast->mi_bufs[PML_SEG_ROMEM].len;
+	if (len > 0) {
+		inits->segnum = PML_SEG_ROMEM;
+		inits->off = 0;
+		inits->val.len = len;
+		if (copy) {
+			if (dyb_copy(&tb, &ast->mi_bufs[PML_SEG_ROMEM]) < 0)
+				goto err_free;
+			inits->val.data = dyb_release(&tb);
+		} else {
+			inits->val.data = ast->mi_bufs[PML_SEG_ROMEM].data;
+		}
+		++inits;
+		++prog->ninits;
 	}
 
-	inits[1].segnum = PML_SEG_RWMEM;
-	inits[1].off = 0;
-	inits[1].val.len = ast->mi_bufs[PML_SEG_RWMEM].len;
-	if (copy) {
-		if (dyb_copy(&tb, &ast->mi_bufs[PML_SEG_RWMEM]) < 0) {
-			esave = errno;
-			free(inits[0].val.data);
-			errno = esave;
-			return -1;
+	len = ast->mi_bufs[PML_SEG_RWMEM].len;
+	if (len > 0) {
+		inits->segnum = PML_SEG_RWMEM;
+		inits->off = 0;
+		inits->val.len = len;
+		if (copy) {
+			if (dyb_copy(&tb, &ast->mi_bufs[PML_SEG_RWMEM]) < 0)
+				goto err_free;
+			inits->val.data = dyb_release(&tb);
+		} else {
+			inits->val.data = ast->mi_bufs[PML_SEG_RWMEM].data;
 		}
-		inits[1].val.data = dyb_release(&tb);
-	} else {
-		inits[1].val.data = ast->mi_bufs[PML_SEG_RWMEM].data;
+		++inits;
+		++prog->ninits;
 	}
 
 	st = &ast->vars;
-	inits[2].segnum = PML_SEG_RWMEM;
-	inits[2].off = st->addr_rw1;
-	inits[2].val.len = st->addr_rw2 - st->addr_rw1;
-	inits[2].val.data = NULL;
-
+	len = st->addr_rw2 - st->addr_rw1;
+	if (len > 0) {
+		inits->segnum = PML_SEG_RWMEM;
+		inits->off = st->addr_rw1;
+		inits->val.len = len;
+		inits->val.data = NULL;
+		++inits;
+		++prog->ninits;
+	}
+	
 	return 0;
+
+err_free:
+	esave = errno;
+	for (i = 0; i < prog->ninits; ++i) {
+		if (prog->inits[i].val.data != NULL) {
+			free(prog->inits[i].val.data);
+			prog->inits[i].val.data = NULL;
+		}
+	}
+	prog->ninits = 0;
+	errno = esave;
+	return -1;
 }
 
 
@@ -264,11 +302,17 @@ static void init_segs(struct pmlncg *cg)
 
 	sd = &prog->sdescs[PML_SEG_ROMEM];
 	sd->len = ast->mi_bufs[PML_SEG_ROMEM].len;
-	sd->perms = NETVM_SEG_RD;
+	if (sd->len > 0)
+		sd->perms = NETVM_SEG_RD;
+	else
+		sd->perms = 0;
 	
 	sd = &prog->sdescs[PML_SEG_RWMEM];
 	sd->len = ast->vars.addr_rw2;
-	sd->perms = NETVM_SEG_RD|NETVM_SEG_WR;
+	if (sd->len > 0)
+		sd->perms = NETVM_SEG_RD|NETVM_SEG_WR;
+	else
+		sd->perms = 0;
 }
 
 
@@ -570,12 +614,6 @@ static int cg_call(struct pml_ibuf *b, struct pml_ast *ast, struct pml_call *c)
 }
 
 
-struct locval {
-	int			onstack;
-	uint64_t		val;
-};
-
-
 static int cg_locval(struct pml_ibuf *b, struct pml_ast *ast,
 		     union pml_expr_u *e, struct locval *val)
 {
@@ -597,7 +635,7 @@ static int cg_locval(struct pml_ibuf *b, struct pml_ast *ast,
 
 
 static int cg_memaddr(struct pml_ibuf *b, uint64_t addr, int segnum,
-		      struct locval *off)
+		      const struct locval *off)
 {
 	if (off->onstack) {
 		PUSH64(b, addr);
@@ -1410,6 +1448,34 @@ int cg_while(struct pmlncg *cg, struct pml_while *loop)
 }
 
 
+int cg_assign(struct pmlncg *cg, struct pml_assign *a)
+{
+	UNIMPL(cg_assign);
+	return 0;
+}
+
+
+int cg_print(struct pmlncg *cg, struct pml_print *pr)
+{
+	struct pml_ibuf *b = &cg->ibuf;
+	struct list *arglist;
+	
+	abort_unless(pr->args);
+
+	arglist = &pr->args->list;
+	if (!l_isempty(arglist))
+		UNIMPL(cg_argument_print);
+
+	if (cg_memaddr(b, pr->fmt.addr, pr->fmt.segnum, &locval_0) < 0)
+		return -1;
+
+	PUSH64(b, pr->fmt.len);
+	EMIT_XY(b, CPOPI, NETVM_CPI_OUTPORT, NETVM_CPOC_PRSTR);
+
+	return 0;
+}
+
+
 int cg_stmt(struct pmlncg *cg, union pml_node *n)
 {
 	if (n == NULL)
@@ -1422,15 +1488,12 @@ int cg_stmt(struct pmlncg *cg, union pml_node *n)
 		return cg_if(cg, &n->ifstmt);
 	case PMLTT_WHILE:
 		return cg_while(cg, &n->whilestmt);
-		break;
 	case PMLTT_ASSIGN:
-		UNIMPL(stmt_assign);
-		break;
+		return cg_assign(cg, &n->assign);
 	case PMLTT_CFMOD:
 		return cg_cfmod(cg, &n->cfmod);
 	case PMLTT_PRINT:
-		UNIMPL(stmt_print);
-		break;
+		return cg_print(cg, &n->print);
 	default:
 		return -1;
 	}
@@ -1601,13 +1664,13 @@ int pml_to_nvmp(struct pml_ast *ast, struct netvm_program *prog, int copy)
 	cg.curloop = NULL;
 
 	prog->inits = inits;
-	prog->ninits = PMLCG_MI_NUM;
+	prog->ninits = 0;
 	prog->matchonly = 0;
 	prog->eps[NVMP_EP_START] = NVMP_EP_INVALID;
 	prog->eps[NVMP_EP_PACKET] = NVMP_EP_INVALID;
 	prog->eps[NVMP_EP_END] = NVMP_EP_INVALID;
 
-	if (copy_meminits(ast, inits, copy) < 0)
+	if (copy_meminits(ast, prog, copy) < 0)
 		goto err;
 
 	init_segs(&cg);
