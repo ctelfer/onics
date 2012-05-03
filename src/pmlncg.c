@@ -105,10 +105,32 @@ static int pib_add_ixyzw(struct pml_ibuf *b, uint8_t oc, uint8_t x, uint8_t y,
 	} while (0)
 
 #define EMIT_NULL(_ibuf, SYM) EMIT_XYZW(_ibuf, SYM, 0, 0, 0, 0)
+#define EMIT_X(_ibuf, SYM, _x) EMIT_XYZW(_ibuf, SYM, _x, 0, 0, 0)
 #define EMIT_W(_ibuf, SYM, _w) EMIT_XYZW(_ibuf, SYM, 0, 0, 0, _w)
 #define EMIT_XW(_ibuf, SYM, _x, _w) EMIT_XYZW(_ibuf, SYM, _x, 0, 0, _w)
 #define EMIT_XY(_ibuf, SYM, _x, _y) EMIT_XYZW(_ibuf, SYM, _x, _y, 0, 0)
 #define EMIT_XYW(_ibuf, SYM, _x, _y, _w) EMIT_XYZW(_ibuf, SYM, _x, _y, 0, _w)
+
+#define EMIT_IBINOP(_ibuf, SYM, _w)			\
+	do {						\
+		if ((_w) <= 0xFFFFFFFF) {		\
+			EMIT_W(_ibuf, SYM##I, _w);	\
+		} else {				\
+			PUSH64(_ibuf, _w);		\
+			EMIT_NULL(_ibuf, SYM);		\
+		}					\
+	} while (0)
+
+#define EMIT_SWAP_IBINOP(_ibuf, SYM, _w)		\
+	do {						\
+		if ((_w) <= 0xFFFFFFFF) {		\
+			EMIT_XW(_ibuf, SYM##I, 1, _w);	\
+		} else {				\
+			PUSH64(_ibuf, _w);		\
+			EMIT_X(_ibuf, SYM, 1);		\
+		}					\
+	} while (0)
+
 
 
 #define UNIMPL(s)							\
@@ -825,26 +847,36 @@ int cg_adjlen(struct pml_ibuf *b, struct pml_ast *ast,
 		} else {
 			abort_unless(0);
 		}
-		PUSH64(b, len);
 		if (loc->off != NULL) {
 			if (cg_locval(b, ast, loc->off, &loff) < 0)
 				return -1;
-			if (!loff.onstack)
-				PUSH64(b, loff.val);
-			EMIT_NULL(b, SUB);
-			EMIT_W(b, MAXI, 0);
-		} 
+			if (!loff.onstack) {
+				if (loff.val >= len)
+					return -1;
+				PUSH64(b, len - loff.val);
+			} else {
+				EMIT_IBINOP(b, UMAX, len);
+				EMIT_SWAP_IBINOP(b, SUB, len);
+			}
+		} else { 
+			PUSH64(b, len);
+		}
 	} else if (loc->reftype == PML_REF_VAR) {
 		var = loc->u.varref;
 		abort_unless(var->vtype == PML_VTYPE_GLOBAL);
-		PUSH64(b, var->width);
 		if (loc->off != NULL) {
 			if (cg_locval(b, ast, loc->off, &loff) < 0)
 				return -1;
-			if (!loff.onstack)
-				PUSH64(b, loff.val);
-			EMIT_NULL(b, SUB);
-			EMIT_W(b, MAXI, 0);
+			if (!loff.onstack) {
+				if (loff.val >= var->width)
+					return -1;
+				PUSH64(b, var->width - loff.val);
+			} else {
+				EMIT_IBINOP(b, UMAX, var->width);
+				EMIT_SWAP_IBINOP(b, SUB, var->width);
+			}
+		} else {
+			PUSH64(b, var->width);
 		}
 	} else if (loc->rpfld != PML_RPF_NONE) {
 		ns = (struct ns_namespace *)loc->u.nsref;
@@ -893,14 +925,19 @@ int cg_adjlen(struct pml_ibuf *b, struct pml_ast *ast,
 			EMIT_NULL(b, SUB);
 			EMIT_W(b, MAXI, 0);
 		} else {
-			PUSH64(b, pf->len);
 			if (loc->off != NULL) {
 				if (cg_locval(b, ast, loc->off, &loff) < 0)
 					return -1;
-				if (!loff.onstack)
-					PUSH64(b, loff.val);
-				EMIT_NULL(b, SUB);
-				EMIT_W(b, MAXI, 0);
+				if (!loff.onstack) {
+					if (loff.val >= pf->len)
+						return -1;
+					PUSH64(b, pf->len - loff.val);
+				} else {
+					EMIT_IBINOP(b, UMAX, pf->len);
+					EMIT_SWAP_IBINOP(b, SUB, pf->len);
+				}
+			} else {
+				PUSH64(b, pf->len);
 			}
 		}
 
@@ -921,9 +958,11 @@ int cg_loclen(struct pml_ibuf *b, struct pml_ast *ast,
 	if (loc->len != NULL) {
 		if (cg_locval(b, ast, loc->len, &llen) < 0)
 			return -1;
-		if (!llen.onstack)
-			PUSH64(b, llen.val);
-		EMIT_NULL(b, MIN);
+		if (!llen.onstack) {
+			EMIT_IBINOP(b, MIN, llen.val);
+		} else {
+			EMIT_NULL(b, MIN);
+		}
 	} 
 
 	return 0;
@@ -982,20 +1021,15 @@ static int cg_memref(struct pml_ibuf *b, struct pml_ast *ast,
 		} else {
 			if (cg_locval(b, ast, loc->off, &loff) < 0)
 				return -1;
+			EMIT_IBINOP(b, UMAX, len);
 			/* do not allow offsets to overflow address */
 			if (ismask)
 				EMIT_NULL(b, DUP);
-			PUSH64(b, addr);
-			EMIT_NULL(b, ADD);
-			PUSH64(b, (uint64_t)0x00FFFFFFFFFFFFFFull);
-			EMIT_NULL(b, AND);
+			EMIT_IBINOP(b, ADD, addr);
 			EMIT_W(b, ORHI, (seg << NETVM_UA_SEG_HI_OFF));
 			if (ismask) {
 				EMIT_XW(b, SWAP, 0, 1);
-				PUSH64(b, addr2);
-				EMIT_NULL(b, ADD);
-				PUSH64(b, (uint64_t)0x00FFFFFFFFFFFFFFull);
-				EMIT_NULL(b, AND);
+				EMIT_IBINOP(b, ADD, addr2);
 				EMIT_W(b, ORHI, (seg2 << NETVM_UA_SEG_HI_OFF));
 			}
 		}
@@ -1724,6 +1758,7 @@ int cg_assign_pktfld(struct pmlncg *cg, struct pml_assign *a)
 		if (rv < 0) {
 			return -1;
 		} else if (rv > 0) {
+			/* TODO: calculate length */
 			cgpd_init(&cgpd, NETVM_OC_STPD, 0, loc);
 			if (cg_pdop(b, cg->ast, &cgpd) < 0)
 				return -1;

@@ -768,7 +768,10 @@ static void ni_binop(struct netvm *vm)
 	uint64_t v1, v2;
 	S_POP(vm, v2);
 	S_POP(vm, v1);
-	binop(vm, inst->op, v1, v2);
+	if (inst->x)
+		binop(vm, inst->op, v2, v1);
+	else
+		binop(vm, inst->op, v1, v2);
 }
 
 
@@ -778,7 +781,10 @@ static void ni_binopi(struct netvm *vm)
 	uint64_t v1, v2;
 	v2 = inst->w;
 	S_POP(vm, v1);
-	binop(vm, inst->op, v1, v2);
+	if (inst->x)
+		binop(vm, inst->op, v2, v1);
+	else
+		binop(vm, inst->op, v1, v2);
 }
 
 
