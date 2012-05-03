@@ -278,8 +278,8 @@ enum {
 	NETVM_OC_LDBP,		/* [i] load value 'i' above(below if 'x') BP */
 	NETVM_OC_LDBPI,		/* as BPLD but position is taken from 'w' */
 	NETVM_OC_STBP,		/* [v, i] pop top of stack and store the value */
-				/*   i positions above the BP. This must be */
-				/*   within the newly popped stack frame. */
+				/*   i positions above (below if x) the BP; */
+				/*   must be in the adjusted stack frame. */
 	NETVM_OC_STBPI,		/* [v] as BPST but position is taken from 'w' */
 	NETVM_OC_PUSHFR,	/* push current BP onto stack and set the BP */
 				/*     to the new stack pointer. */
@@ -364,9 +364,13 @@ enum {
 	NETVM_OC_UGE,		/* [v1,v2] v1 >= v2 (unsigned) */
 	NETVM_OC_UGEI,		/* [v] v1 >= w (unsigned) */
 	NETVM_OC_MIN,		/* [v1,v2] signed min(v1,v2) */
+	NETVM_OC_MINI,		/* [v] signed min(v,'w') */
 	NETVM_OC_MAX,		/* [v1,v2] signed max(v1,v2) */
+	NETVM_OC_MAXI,		/* [v] signed max(v,'w') */
 	NETVM_OC_UMIN,		/* [v1,v2] unsigned min(v1,v2) */
+	NETVM_OC_UMINI,		/* [v] unsigned min(v,'w') */
 	NETVM_OC_UMAX,		/* [v1,v2] unsigned max(v1,v2) */
+	NETVM_OC_UMAXI,		/* [v] unsigned max(v,'w') */
 
 	NETVM_OC_GETCPT,	/* [cp] push the type of co-processor 'cp' */
 				/*    push NETVM_CPT_NONE if it doesn't exist */

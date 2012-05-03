@@ -1834,7 +1834,7 @@ int pml_locator_resolve_nsref(struct pml_ast *ast, struct pml_locator *l)
 				rpf = PML_RPF_EXISTS;
 			} else {
 				abort_unless(PMLTT_LOCADDR);
-				rpf = PML_RPF_HEADER;
+				rpf = PML_RPF_PARSE;
 			}
 		}
 		l->rpfld = rpf;
@@ -2074,6 +2074,32 @@ static int binop_typecheck(struct pml_ast *ast, struct pml_op *op)
 }
 
 
+int check_nsref_assignment(struct pml_ast *ast, struct pml_assign *a)
+{
+	struct pml_locator *loc = a->loc;
+
+	abort_unless(loc->reftype == PML_REF_PKTFLD);
+	if (loc->u.nsref->type == NST_NAMESPACE) {
+		/* can't be a reserved non-byte string */
+		if (!PML_RPF_IS_BYTESTR(loc->rpfld)) {
+			pml_ast_err(ast, 
+				    "Protocol field '%s' can not be an lvalue",
+				    loc->name);
+			return -1;
+		}
+	} else if (loc->u.nsref->type != NST_PKTFLD) {
+		/* can't be a protocol constant */
+		pml_ast_err(ast, 
+			    "Protocol field '%s' is a constant and cannot"
+			    " be an lvalue\n",
+			    loc->name);
+		return -1;
+	}
+
+	return 0;
+}
+
+
 static int resolve_node_pre(union pml_node *node, void *ctxp, void *xstk)
 {
 	struct pml_resolve_ctx *ctx = ctxp;
@@ -2237,6 +2263,10 @@ static int resolve_node_post(union pml_node *node, void *ctxp, void *xstk)
 					    "a constant\n", v->name);
 				return -1;
 			}
+		} else {
+			abort_unless(a->loc->reftype == PML_REF_PKTFLD);
+			if (check_nsref_assignment(ctx->ast, a) < 0)
+				return -1;
 		}
 	} break;
 

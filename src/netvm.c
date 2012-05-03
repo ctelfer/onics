@@ -220,7 +220,7 @@ static void ni_ldbpi(struct netvm *vm)
 	struct netvm_inst *inst = &vm->inst[vm->pc];
 	if (inst->x) {
 		FATAL(vm, NETVM_ERR_STKUNDF, vm->bp <= inst->w);
-		S_PUSH_NOCK(vm, vm->stack[vm->bp - inst->w - 1]);
+		S_PUSH(vm, vm->stack[vm->bp - inst->w - 1]);
 	} else {
 		FATAL(vm, NETVM_ERR_STKUNDF, !S_HAS(vm, inst->w+1));
 		S_PUSH(vm, vm->stack[vm->bp + inst->w]);
@@ -230,12 +230,18 @@ static void ni_ldbpi(struct netvm *vm)
 
 static void ni_stbp(struct netvm *vm)
 {
+	struct netvm_inst *inst = &vm->inst[vm->pc];
 	uint64_t pos, val;
 	FATAL(vm, NETVM_ERR_STKUNDF, !S_HAS(vm, 2));
 	S_POP_NOCK(vm, pos);
 	S_POP_NOCK(vm, val);
-	FATAL(vm, NETVM_ERR_STKOVFL, !S_HAS(vm, pos+1));
-	vm->stack[vm->bp + pos] = val;
+	if (inst->x) {
+		FATAL(vm, NETVM_ERR_STKUNDF, vm->bp <= pos);
+		vm->stack[vm->bp - pos - 1] = val;
+	} else {
+		FATAL(vm, NETVM_ERR_STKOVFL, !S_HAS(vm, pos+1));
+		vm->stack[vm->bp + pos] = val;
+	}
 }
 
 
@@ -244,8 +250,13 @@ static void ni_stbpi(struct netvm *vm)
 	struct netvm_inst *inst = &vm->inst[vm->pc];
 	uint64_t val;
 	S_POP(vm, val);
-	FATAL(vm, NETVM_ERR_STKOVFL, !S_HAS(vm, inst->w+1));
-	vm->stack[vm->bp + inst->w + 1] = val;
+	if (inst->x) {
+		FATAL(vm, NETVM_ERR_STKUNDF, vm->bp <= inst->w);
+		vm->stack[vm->bp - inst->w - 1] = val;
+	} else {
+		FATAL(vm, NETVM_ERR_STKOVFL, !S_HAS(vm, inst->w+1));
+		vm->stack[vm->bp + inst->w] = val;
+	}
 }
 
 
@@ -725,15 +736,19 @@ static void binop(struct netvm *vm, int op, uint64_t v1, uint64_t v2)
 		out = v1 >= v2;
 		break;
 	case NETVM_OC_MIN:
+	case NETVM_OC_MINI:
 		out = ((int64_t)v1 < (int64_t)v2) ? v1 : v2;
 		break;
 	case NETVM_OC_MAX:
+	case NETVM_OC_MAXI:
 		out = ((int64_t)v1 > (int64_t)v2) ? v1 : v2;
 		break;
 	case NETVM_OC_UMIN:
+	case NETVM_OC_UMINI:
 		out = v1 < v2 ? v1 : v2;
 		break;
 	case NETVM_OC_UMAX:
+	case NETVM_OC_UMAXI:
 		out = v1 > v2 ? v1 : v2;
 		break;
 	default:
@@ -1393,9 +1408,13 @@ netvm_op g_netvm_ops[NETVM_OC_MAXOP + 1] = {
 	ni_binopi,		/* UGEI */
 
 	ni_binop,		/* MIN */
+	ni_binopi,		/* MINI */
 	ni_binop,		/* MAX */
+	ni_binopi,		/* MAXI */
 	ni_binop,		/* UMIN */
+	ni_binopi,		/* UMINI */
 	ni_binop,		/* UMAX */
+	ni_binopi,		/* UMAXI */
 
 	ni_getcpt,		/* GETCPT */
 	ni_cpop,		/* CPOPI */

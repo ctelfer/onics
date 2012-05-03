@@ -296,6 +296,7 @@ enum {
 };
 enum {
 	PML_RPF_NONE,
+	/* From here to 'END' must match with NETVM_PRP_* */
 	PML_RPF_EXISTS,
 	PML_RPF_HLEN,
 	PML_RPF_PLEN,
@@ -307,13 +308,19 @@ enum {
 	PML_RPF_HEADER,
 	PML_RPF_PAYLOAD,
 	PML_RPF_TRAILER,
+	/* END NETVM_PRP_* match */
+	PML_RPF_PARSE,
 	PML_RPF_FIRST = PML_RPF_HLEN,
 	PML_RPF_LAST = PML_RPF_TRAILER,
 };
-#define PML_RPF_IS_BYTESTR(f) (((f) >= PML_RPF_HEADER) && \
+#define PML_RPF_IS_BYTESTR(f) (((f) >= PML_RPF_PARSE) && \
 			       ((f) <= PML_RPF_TRAILER))
 #define PML_RPF_TO_NVMFIELD(f)  ((f) - PML_RPF_EXISTS + NETVM_PRP_HLEN)
-#define PML_RPF_TO_NVMOFF(f)  ((f) - PML_RPF_HEADER + NETVM_PRP_SOFF)
+#define PML_RPF_TO_NVMOFF(f)  (((f) == PML_RPF_PARSE) ? \
+			        NETVM_PRP_SOFF : \
+			        ((f) - PML_RPF_HEADER + NETVM_PRP_SOFF))
+#define PML_RPF_TO_NVMLEN(f)  ((f) - PML_RPF_HEADER + PML_RPF_HLEN)
+
 struct pml_locator {
 	int			type;
 	struct list		ln;
@@ -441,6 +448,7 @@ union pml_expr_u {
 
 union pml_node {
 	struct pml_node_base	base;
+	struct pml_expr_base	expr;
 	struct pml_literal	literal;
 	struct pml_variable	variable;
 	struct pml_op		op;

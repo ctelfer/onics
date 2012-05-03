@@ -796,6 +796,11 @@ locator(V) ::= locname(N) LBRACKET expr(O) COMMA expr(L) RBRACKET. {
 	V = N;
 }
 
+locator(V) ::= locname(N) LBRACKET expr(O) RBRACKET. {
+	N->off = O;
+	V = N;
+}
+
 locname(L) ::= pktname(P). { L = P; }
 locname(L1) ::= locstr(L0). { L1 = L0; }
 locname(L1) ::= pktname(P) DOT locstr(L0). {
