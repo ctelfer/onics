@@ -61,6 +61,7 @@ struct nvmop {
 #define ARGW 8
 #define PDONLY 0x10
 #define BRREL  0x20
+#define ASWAP  0x40
 #define MAXARGS 5
 #define MAXTOKS (MAXARGS+1)
 #define IDCHARS "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ" \
@@ -68,7 +69,7 @@ struct nvmop {
 #define WS	" \n\t"
 #define LABELCHARS IDCHARS
 #define ARGCHARS "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ" \
-		 "0123456789_*[]@:.-"
+		 "0123456789_*[]@:.-%"
 
 
 struct nvmop Operations[] = {
@@ -101,56 +102,56 @@ struct nvmop Operations[] = {
 	{ "popl",   NETVM_OC_POPL,   0, 0 },
 	{ "nlz",    NETVM_OC_NLZ,    0, 0 },
 	{ "signx",  NETVM_OC_SIGNX,  1, ARGX },
-	{ "add",    NETVM_OC_ADD,    0, 0 },
-	{ "addi",   NETVM_OC_ADDI,   1, ARGW },
-	{ "sub",    NETVM_OC_SUB,    0, 0 },
-	{ "subi",   NETVM_OC_SUBI,   1, ARGW },
-	{ "mul",    NETVM_OC_MUL,    0, 0 },
-	{ "muli",   NETVM_OC_MULI,   1, ARGW },
-	{ "div",    NETVM_OC_DIV,    0, 0 },
-	{ "divi",   NETVM_OC_DIVI,   1, ARGW },
-	{ "mod",    NETVM_OC_MOD,    0, 0 },
-	{ "modi",   NETVM_OC_MODI,   1, ARGW },
-	{ "shl",    NETVM_OC_SHL,    0, 0 },
-	{ "shli",   NETVM_OC_SHLI,   1, ARGW },
-	{ "shr",    NETVM_OC_SHR,    0, 0 },
-	{ "shri",   NETVM_OC_SHRI,   1, ARGW },
-	{ "shra",   NETVM_OC_SHRA,   0, 0 },
-	{ "shrai",  NETVM_OC_SHRAI,  1, ARGW },
-	{ "and",    NETVM_OC_AND,    0, 0 },
-	{ "andi",   NETVM_OC_ANDI,   1, ARGW },
-	{ "or",     NETVM_OC_OR,     0, 0 },
-	{ "ori",    NETVM_OC_ORI,    1, ARGW },
-	{ "xor",    NETVM_OC_XOR,    0, 0 },
-	{ "xori",   NETVM_OC_XORI,   1, ARGW },
-	{ "eq",     NETVM_OC_EQ,     0, 0 },
-	{ "eqi",    NETVM_OC_EQI,    1, ARGW },
-	{ "neq",    NETVM_OC_NEQ,    0, 0 },
-	{ "neqi",   NETVM_OC_NEQI,   1, ARGW },
-	{ "lt",     NETVM_OC_LT,     0, 0 },
-	{ "lti",    NETVM_OC_LTI,    1, ARGW },
-	{ "le",     NETVM_OC_LE,     0, 0 },
-	{ "lei",    NETVM_OC_LEI,    1, ARGW },
-	{ "gt",     NETVM_OC_GT,     0, 0 },
-	{ "gti",    NETVM_OC_GTI,    1, ARGW },
-	{ "ge",     NETVM_OC_GE,     0, 0 },
-	{ "gei",    NETVM_OC_GEI,    1, ARGW },
-	{ "ult",    NETVM_OC_ULT,    0, 0 },
-	{ "ulti",   NETVM_OC_ULTI,   1, ARGW },
-	{ "ule",    NETVM_OC_ULE,    0, 0 },
-	{ "ulei",   NETVM_OC_ULEI,   1, ARGW },
-	{ "ugt",    NETVM_OC_UGT,    0, 0 },
-	{ "ugti",   NETVM_OC_UGTI,   1, ARGW },
-	{ "uge",    NETVM_OC_UGE,    0, 0 },
-	{ "ugei",   NETVM_OC_UGEI,   1, ARGW },
-	{ "min",    NETVM_OC_MIN,    0, 0 },
-	{ "mini",   NETVM_OC_MIN,    1, ARGW },
-	{ "max",    NETVM_OC_MAX,    0, 0 },
-	{ "maxi",   NETVM_OC_MAX,    1, ARGW },
-	{ "umin",   NETVM_OC_UMIN,   0, 0 },
-	{ "umini",  NETVM_OC_UMIN,   1, ARGW },
-	{ "umax",   NETVM_OC_UMAX,   0, 0 },
-	{ "umaxi",  NETVM_OC_UMAX,   1, ARGW },
+	{ "add",    NETVM_OC_ADD,    0, ASWAP },
+	{ "addi",   NETVM_OC_ADDI,   1, ARGW|ASWAP },
+	{ "sub",    NETVM_OC_SUB,    0, ASWAP },
+	{ "subi",   NETVM_OC_SUBI,   1, ARGW|ASWAP },
+	{ "mul",    NETVM_OC_MUL,    0, ASWAP },
+	{ "muli",   NETVM_OC_MULI,   1, ARGW|ASWAP },
+	{ "div",    NETVM_OC_DIV,    0, ASWAP },
+	{ "divi",   NETVM_OC_DIVI,   1, ARGW|ASWAP },
+	{ "mod",    NETVM_OC_MOD,    0, ASWAP },
+	{ "modi",   NETVM_OC_MODI,   1, ARGW|ASWAP },
+	{ "shl",    NETVM_OC_SHL,    0, ASWAP },
+	{ "shli",   NETVM_OC_SHLI,   1, ARGW|ASWAP },
+	{ "shr",    NETVM_OC_SHR,    0, ASWAP },
+	{ "shri",   NETVM_OC_SHRI,   1, ARGW|ASWAP },
+	{ "shra",   NETVM_OC_SHRA,   0, ASWAP },
+	{ "shrai",  NETVM_OC_SHRAI,  1, ARGW|ASWAP },
+	{ "and",    NETVM_OC_AND,    0, ASWAP },
+	{ "andi",   NETVM_OC_ANDI,   1, ARGW|ASWAP },
+	{ "or",     NETVM_OC_OR,     0, ASWAP },
+	{ "ori",    NETVM_OC_ORI,    1, ARGW|ASWAP },
+	{ "xor",    NETVM_OC_XOR,    0, ASWAP },
+	{ "xori",   NETVM_OC_XORI,   1, ARGW|ASWAP },
+	{ "eq",     NETVM_OC_EQ,     0, ASWAP },
+	{ "eqi",    NETVM_OC_EQI,    1, ARGW|ASWAP },
+	{ "neq",    NETVM_OC_NEQ,    0, ASWAP },
+	{ "neqi",   NETVM_OC_NEQI,   1, ARGW|ASWAP },
+	{ "lt",     NETVM_OC_LT,     0, ASWAP },
+	{ "lti",    NETVM_OC_LTI,    1, ARGW|ASWAP },
+	{ "le",     NETVM_OC_LE,     0, ASWAP },
+	{ "lei",    NETVM_OC_LEI,    1, ARGW|ASWAP },
+	{ "gt",     NETVM_OC_GT,     0, ASWAP },
+	{ "gti",    NETVM_OC_GTI,    1, ARGW|ASWAP },
+	{ "ge",     NETVM_OC_GE,     0, ASWAP },
+	{ "gei",    NETVM_OC_GEI,    1, ARGW|ASWAP },
+	{ "ult",    NETVM_OC_ULT,    0, ASWAP },
+	{ "ulti",   NETVM_OC_ULTI,   1, ARGW|ASWAP },
+	{ "ule",    NETVM_OC_ULE,    0, ASWAP },
+	{ "ulei",   NETVM_OC_ULEI,   1, ARGW|ASWAP },
+	{ "ugt",    NETVM_OC_UGT,    0, ASWAP },
+	{ "ugti",   NETVM_OC_UGTI,   1, ARGW|ASWAP },
+	{ "uge",    NETVM_OC_UGE,    0, ASWAP },
+	{ "ugei",   NETVM_OC_UGEI,   1, ARGW|ASWAP },
+	{ "min",    NETVM_OC_MIN,    0, ASWAP },
+	{ "mini",   NETVM_OC_MIN,    1, ARGW|ASWAP },
+	{ "max",    NETVM_OC_MAX,    0, ASWAP },
+	{ "maxi",   NETVM_OC_MAX,    1, ARGW|ASWAP },
+	{ "umin",   NETVM_OC_UMIN,   0, ASWAP },
+	{ "umini",  NETVM_OC_UMIN,   1, ARGW|ASWAP },
+	{ "umax",   NETVM_OC_UMAX,   0, ASWAP },
+	{ "umaxi",  NETVM_OC_UMAX,   1, ARGW|ASWAP },
 	{ "getcpt", NETVM_OC_GETCPT, 0, 0 },
 	{ "cpopi",  NETVM_OC_CPOPI,  4, ARGX|ARGY|ARGZ|ARGW },
 	{ "bri",    NETVM_OC_BRI,    1, ARGW|BRREL },
@@ -494,15 +495,26 @@ int str2inst(const char *s, struct htab *ct, uint inum, struct netvm_inst *ni)
 	int nt, rv;
 	struct nvmop *op;
 	ulong v;
+	int argswap = 0;
 
 	if (str_copy(ns, s, sizeof(ns)) > sizeof(ns))
 		return ERR_TOOLONG;
 	if ((nt = tokenize(ns, toks, array_length(toks), 1)) <= 0)
 		return nt == 0 ? ERR_NARG : -nt;
+	if (toks[0].data[toks[0].len-1] == '%') {
+		toks[0].data[toks[0].len-1] = '\0';
+		toks[0].len--;
+		argswap = 1;
+	}
 	if ((op = name2op(toks[0].data)) == NULL)
 		return ERR_BADNAME;
+	if (argswap && ((op->argmask & ASWAP) == 0)) {
+		abort_unless((op->argmask & ARGX) == 0);
+		err("opcode '%s' can not be swapped\n");
+	}
 
-	ni->x = ni->y = ni->z = ni->w = 0;
+	ni->x = argswap;
+	ni->y = ni->z = ni->w = 0;
 	ni->op = op->opcode;
 
 	if ((nt == 2 && toks[1].data[0] == '*') ||
@@ -579,13 +591,22 @@ int inst2str(const struct netvm_inst *ni, char *s, size_t len, uint inum)
 	ulong args[MAXARGS], *ap = args;
 	int fr = 0;
 	char a0p[2] = "";
+	char *iname;
+	char swname[11];
 
 	if ((op = oc2op(ni->op)) == NULL)
 		return -1;
 
-	if ((strlen(op->iname) > 10) || len < 11)
+	if ((strlen(op->iname) > 8) || len < 11)
 		return -1;
-	str_fmt(s, len, "%-10s", op->iname);
+
+	iname = op->iname;
+	if (((op->argmask & ASWAP) != 0) && ni->x) {
+		str_copy(swname, op->iname, sizeof(swname));
+		str_cat(swname, "%", sizeof(swname));
+		iname = swname;
+	}
+	str_fmt(s, len, "%-10s", iname);
 	s += 10;
 	len -= 10;
 	

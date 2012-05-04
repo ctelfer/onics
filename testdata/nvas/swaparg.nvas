@@ -1,0 +1,12 @@
+.entry start @start
+
+start:
+	push	50
+	push	10
+	sub
+	push	70
+	sub%
+	divi	10
+	divi%	27
+	halt
+

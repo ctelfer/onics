@@ -726,7 +726,7 @@ static void cgpd_init(struct cg_pdesc *cgpd, int oc, uint8_t x,
 				if (ns->oidx == PRP_OI_SOFF)
 					cgpd->field = NETVM_PRP_PIDX;
 				else
-					cgpd->field = NETVM_PRP_SOFF + ns->oidx;
+					cgpd->field = NETVM_PRP_OFF_BASE + ns->oidx;
 			} else {
 				cgpd->field = PML_RPF_TO_NVMFIELD(loc->rpfld);
 			}
@@ -735,7 +735,7 @@ static void cgpd_init(struct cg_pdesc *cgpd, int oc, uint8_t x,
 	} else {
 		abort_unless(e->type == NST_PKTFLD);
 		pf = (struct ns_pktfld *)e;
-		cgpd->field = NETVM_PRP_SOFF + pf->oidx;
+		cgpd->field = NETVM_PRP_OFF_BASE + pf->oidx;
 		cgpd->prid = pf->prid;
 		cgpd->pfoff = pf->off;
 	}
@@ -749,7 +749,6 @@ static int cg_pdop(struct pml_ibuf *b, struct pml_ast *ast,
 		   struct cg_pdesc *cgpd)
 {
 	struct locval lpkt, lidx, loff;
-	ulong off;
 
 	if (cg_locval(b, ast, cgpd->pkt, &lpkt) < 0)
 		return -1;
@@ -765,23 +764,28 @@ static int cg_pdop(struct pml_ibuf *b, struct pml_ast *ast,
 		EMIT_W(b, SHLI, NETVM_PD_IDX_OFF);
 	}
 
-	off = cgpd->pfoff;
-	loff.onstack = 0;
 	if (cgpd->off != NULL) {
 		if (cg_locval(b, ast, cgpd->off, &loff) < 0)
 			return -1;
 		if (loff.onstack) {
-			if (off > 0)
-				EMIT_W(b, ADDI, off);
-			EMIT_W(b, ANDI, NETVM_PD_OFF_MASK);
+			if (cgpd->pfoff > 0)
+				EMIT_W(b, ADDI, cgpd->pfoff);
+			EMIT_W(b, UMAXI, NETVM_PD_OFF_MASK);
 		} else {
-			off += loff.val;
+			loff.val += cgpd->pfoff;
+			if (loff.val >= NETVM_PD_OFF_MASK)
+				loff.val = NETVM_PD_OFF_MASK;
 		}
+	} else {
+		loff.onstack = 0;
+		loff.val = cgpd->pfoff;
+		if (loff.val >= NETVM_PD_OFF_MASK)
+			loff.val = NETVM_PD_OFF_MASK;
 	}
 
 	if (!lpkt.onstack && !lidx.onstack && !loff.onstack &&
 	    (cgpd->field <= NETVM_PPD_FLD_MASK) && 
-	    (off <= NETVM_PPD_OFF_MASK)) {
+	    (loff.val <= NETVM_PPD_OFF_MASK)) {
 		uint y = lpkt.val & NETVM_PPD_PKT_MASK;
 		uint z = ((lidx.val & NETVM_PPD_IDX_MASK)
 				<< NETVM_PPD_IDX_OFF) |
@@ -789,7 +793,7 @@ static int cg_pdop(struct pml_ibuf *b, struct pml_ast *ast,
 				<< NETVM_PPD_FLD_OFF);
 		ulong w = ((cgpd->prid & NETVM_PPD_PRID_MASK)
 				<< NETVM_PPD_PRID_OFF) |
-			  ((off & NETVM_PPD_OFF_MASK)
+			  ((loff.val & NETVM_PPD_OFF_MASK)
 			   	<< NETVM_PPD_OFF_OFF);
 
 
@@ -916,7 +920,7 @@ int cg_adjlen(struct pml_ibuf *b, struct pml_ast *ast,
 		if (NSF_IS_VARLEN(pf->flags)) {
 			cgpd_init(&cgpd, NETVM_OC_LDPF, 0, loc);
 			cgpd.off = NULL;
-			cgpd.field = NETVM_PRP_SOFF + pf->len;
+			cgpd.field = NETVM_PRP_OFF_BASE + pf->len;
 			if (cg_pdop(b, ast, &cgpd) < 0)
 				return -1;
 			cgpd_init(&cgpd, NETVM_OC_LDPF, 0, loc);
