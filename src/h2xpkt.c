@@ -155,6 +155,7 @@ void write_packet(struct pktbuf *pkb)
 		errsys("Error sending packet\n");
 
 	pkb_reset(pkb);
+	pkb_set_len(pkb, 0);
 }
 
 
@@ -197,6 +198,7 @@ int main(int argc, char *argv[])
 	if ((pkb = pkb_create(PKB_MAX_PKTLEN)) == NULL)
 		errsys("unable to create packet: ");
 	pkb_set_off(pkb, 0);
+	pkb_set_len(pkb, 0);
 
 	while (readline(line, sizeof(line))) {
 

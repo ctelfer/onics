@@ -373,7 +373,6 @@ void netvm_p2stk(struct netvm *vm, byte_t *p, int width)
 	case 1: val |= (uint64_t)*p;
 		break;
 	default:
-		abort_unless(0);	/* should be checked at validation */
 		VMERR(vm, NETVM_ERR_WIDTH);
 	}
 

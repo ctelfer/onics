@@ -1934,8 +1934,8 @@ static struct ns_namespace ipv4_ns =
 static struct ns_pktfld ipv4_ns_vers =
 	NS_BITFIELD_I("vers", &ipv4_ns, PRID_IPV4, 0, 0, 4,
 		"Version:              %lu", &ns_fmt_num);
-static struct ns_pktfld ipv4_ns_hlen =
-	NS_BITFIELD_I("hlen", &ipv4_ns, PRID_IPV4, 0, 4, 4,
+static struct ns_pktfld ipv4_ns_ihl =
+	NS_BITFIELD_I("ihl", &ipv4_ns, PRID_IPV4, 0, 4, 4,
 		"Header Length:        %lu (%lu bytes)", &ns_fmt_wlen);
 static struct ns_pktfld ipv4_ns_diffsrv =
 	NS_BITFIELD_I("diffsrv", &ipv4_ns, PRID_IPV4, 1, 0, 6,
@@ -2009,7 +2009,7 @@ struct ns_elem *stdproto_ipv4_addr_ns_elems[STDPROTO_NS_SUB_ELEN] = {
 
 
 struct ns_elem *stdproto_ipv4_ns_elems[STDPROTO_NS_ELEN] = {
-	(struct ns_elem *)&ipv4_ns_vers, (struct ns_elem *)&ipv4_ns_hlen,
+	(struct ns_elem *)&ipv4_ns_vers, (struct ns_elem *)&ipv4_ns_ihl,
 	(struct ns_elem *)&ipv4_ns_diffsrv, (struct ns_elem *)&ipv4_ns_ecn,
 	(struct ns_elem *)&ipv4_ns_len, (struct ns_elem *)&ipv4_ns_id, 
 	(struct ns_elem *)&ipv4_ns_rf, (struct ns_elem *)&ipv4_ns_df,

@@ -296,8 +296,8 @@ enum {
 };
 enum {
 	PML_RPF_NONE,
-	/* From here to 'END' must match with NETVM_PRP_* */
 	PML_RPF_EXISTS,
+	/* From here to 'END' must match with NETVM_PRP_* */
 	PML_RPF_HLEN,
 	PML_RPF_PLEN,
 	PML_RPF_TLEN,
@@ -310,12 +310,12 @@ enum {
 	PML_RPF_TRAILER,
 	/* END NETVM_PRP_* match */
 	PML_RPF_PARSE,
-	PML_RPF_FIRST = PML_RPF_HLEN,
-	PML_RPF_LAST = PML_RPF_TRAILER,
+	PML_RPF_FIRST = PML_RPF_EXISTS,
+	PML_RPF_LAST = PML_RPF_PARSE,
 };
 #define PML_RPF_IS_BYTESTR(f) (((f) >= PML_RPF_HEADER) && \
 			       ((f) <= PML_RPF_PARSE))
-#define PML_RPF_TO_NVMFIELD(f)  ((f) - PML_RPF_EXISTS + NETVM_PRP_HLEN)
+#define PML_RPF_TO_NVMFIELD(f)  ((f) - PML_RPF_HLEN)
 #define PML_RPF_TO_NVMOFF(f)  (((f) == PML_RPF_PARSE) ? \
 			        NETVM_PRP_SOFF : \
 			        ((f) - PML_RPF_HEADER + NETVM_PRP_SOFF))

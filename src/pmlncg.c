@@ -896,7 +896,7 @@ int cg_adjlen(struct pml_ibuf *b, struct pml_ast *ast,
 		if (NSF_IS_VARLEN(ns->flags)) {
 			cgpd_init(&cgpd, NETVM_OC_LDPF, 0, loc);
 			cgpd.off = NULL;
-			cgpd.field = ns->len;
+			cgpd.field = NETVM_PRP_OFF_BASE + ns->len;
 			if (cg_pdop(b, ast, &cgpd) < 0)
 				return -1;
 			cgpd_init(&cgpd, NETVM_OC_LDPF, 0, loc);
@@ -1342,7 +1342,7 @@ static int cg_locaddr(struct pml_ibuf *b, struct pml_ast *ast,
 	struct pml_variable *var;
 	struct cg_pdesc cgpd;
 
-	switch (loc->etype) {
+	switch (loc->reftype) {
 	case PML_REF_VAR:
 		var = loc->u.varref;
 		if ((var->vtype == PML_VTYPE_PARAM) ||
@@ -1542,10 +1542,11 @@ static int cg_if(struct pmlncg *cg, struct pml_if *ifstmt)
 	if (cg_stmt(cg, (union pml_node *)ifstmt->tbody) < 0)
 		return -1;
 
-	inst = b->inst + bra;
-	inst->w = nexti(b) - bra;
-
 	if (ifstmt->fbody != NULL) {
+		/* skip the next instruction we will emit */
+		inst = b->inst + bra;
+		inst->w = nexti(b) - bra + 1;
+
 		bra = nexti(b);
 		EMIT_W(b, BRI, 0);
 
@@ -1554,7 +1555,11 @@ static int cg_if(struct pmlncg *cg, struct pml_if *ifstmt)
 
 		inst = b->inst + bra;
 		inst->w = nexti(b) - bra;
+	} else {
+		inst = b->inst + bra;
+		inst->w = nexti(b) - bra;
 	}
+
 
 	return 0;
 }

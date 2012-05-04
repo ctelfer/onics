@@ -987,8 +987,8 @@ static const char *cfmstr(struct pml_cfmod *m)
 
 static const char *rpfld_strs[] = {
 	"**UNALLOWED**", "exists", 
-	"len", "hlen", "plen", "tlen", "error", "prid",
-	"index", "header", "payload", "trailer",
+	"hlen", "plen", "tlen", "totlen", "error", "prid",
+	"index", "header", "payload", "trailer", "parse"
 };
 static const char *rpfstr(int field)
 {
