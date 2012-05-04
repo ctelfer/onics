@@ -51,9 +51,9 @@ struct pml_ast {
 	ulong			line;
 	struct pml_symtab	vars;
 	struct pml_symtab	funcs;
-	struct list		b_rules;
+	struct pml_rule *	b_rule;
 	struct list		p_rules;
-	struct list		e_rules;
+	struct pml_rule *	e_rule;
 	struct dynbuf		mi_bufs[2];
 	char			errbuf[256];
 };

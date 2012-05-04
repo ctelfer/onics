@@ -142,9 +142,9 @@ int pml_ast_init(struct pml_ast *ast)
 		symtab_destroy(&ast->vars);
 		return -1;
 	}
-	l_init(&ast->b_rules);
+	ast->b_rule = NULL;
 	l_init(&ast->p_rules);
-	l_init(&ast->e_rules);
+	ast->e_rule = NULL;
 	for (i = PML_SEG_MIN; i <= PML_SEG_MAX; ++i)
 		dyb_init(&ast->mi_bufs[i], NULL);
 	str_copy(ast->errbuf, "", sizeof(ast->errbuf));
@@ -233,20 +233,16 @@ void pml_ast_clear(struct pml_ast *ast)
 	symtab_destroy(&ast->vars);
 	symtab_destroy(&ast->funcs);
 
-	l_for_each_safe(n, x, &ast->b_rules) {
-		pmln_free(l_to_node(n));
-	}
-	abort_unless(l_isempty(&ast->b_rules));
+	pmln_free((union pml_node *)ast->b_rule);
+	ast->b_rule = NULL;
 
 	l_for_each_safe(n, x, &ast->p_rules) {
 		pmln_free(l_to_node(n));
 	}
 	abort_unless(l_isempty(&ast->p_rules));
 
-	l_for_each_safe(n, x, &ast->e_rules) {
-		pmln_free(l_to_node(n));
-	}
-	abort_unless(l_isempty(&ast->e_rules));
+	pmln_free((union pml_node *)ast->e_rule);
+	ast->e_rule = NULL;
 
 	for (i = PML_SEG_MIN; i <= PML_SEG_MAX; ++i)
 		dyb_clear(&ast->mi_bufs[i]);
@@ -379,23 +375,39 @@ int pml_ast_add_var(struct pml_ast *ast, struct pml_variable *var)
 
 int pml_ast_add_rule(struct pml_ast *ast, struct pml_rule *rule)
 {
+	struct pml_list *olist, *nlist;
 	abort_unless(rule->trigger >= PML_RULE_BEGIN &&
 		     rule->trigger <= PML_RULE_END);
-	if (pml_resolve_refs(ast, (union pml_node *)rule) < 0)
-		return -1;
 	switch(rule->trigger) {
 	case PML_RULE_BEGIN:
 		abort_unless(rule->pattern == NULL);
-		l_enq(&ast->b_rules, &rule->ln);
+		if (ast->b_rule == NULL) {
+			ast->b_rule = rule;
+		} else {
+			olist = ast->b_rule->stmts;
+			nlist = rule->stmts;
+			l_append(&olist->list, &nlist->list);
+			pmln_free((union pml_node *)rule);
+			rule = ast->b_rule;
+		}
 		break;
 	case PML_RULE_PACKET:
 		l_enq(&ast->p_rules, &rule->ln);
 		break;
 	case PML_RULE_END:
-		abort_unless(rule->pattern == NULL);
-		l_enq(&ast->e_rules, &rule->ln);
+		if (ast->e_rule == NULL) {
+			ast->e_rule = rule;
+		} else {
+			olist = ast->e_rule->stmts;
+			nlist = rule->stmts;
+			l_append(&olist->list, &nlist->list);
+			pmln_free((union pml_node *)rule);
+			rule = ast->e_rule;
+		}
 		break;
 	}
+	if (pml_resolve_refs(ast, (union pml_node *)rule) < 0)
+		return -1;
 	return 0;
 }
 
@@ -1303,20 +1315,18 @@ void pml_ast_print(struct pml_ast *ast)
 	l_for_each(n, &ast->funcs.list)
 		pmlt_print(ast, l_to_node(n), 1);
 	printf("-----------\n");
-	printf("Begin Rules\n");
+	printf("Begin Rule\n");
 	printf("-----------\n");
-	l_for_each(n, &ast->b_rules)
-		pmlt_print(ast, l_to_node(n), 1);
+	pmlt_print(ast, (union pml_node *)ast->b_rule, 1);
 	printf("-----------\n");
 	printf("Packet Rules\n");
 	printf("-----------\n");
 	l_for_each(n, &ast->p_rules)
 		pmlt_print(ast, l_to_node(n), 1);
 	printf("-----------\n");
-	printf("End Rules\n");
+	printf("End Rule\n");
 	printf("-----------\n");
-	l_for_each(n, &ast->e_rules)
-		pmlt_print(ast, l_to_node(n), 1);
+	pmlt_print(ast, (union pml_node *)ast->e_rule, 1);
 	printf("-----------\n");
 }
 
@@ -1652,21 +1662,17 @@ int pml_ast_walk(struct pml_ast *ast, void *ctx, pml_walk_f pre,
 		if (rv < 0)
 			goto out;
 	}
-	l_for_each(n, &ast->b_rules) {
-		rv = pmln_walk(l_to_node(n), ctx, pre, in, post);
-		if (rv < 0)
-			goto out;
-	}
+	rv = pmln_walk((union pml_node *)ast->b_rule, ctx, pre, in, post);
+	if (rv < 0)
+		goto out;
 	l_for_each(n, &ast->p_rules) {
 		rv = pmln_walk(l_to_node(n), ctx, pre, in, post);
 		if (rv < 0)
 			goto out;
 	}
-	l_for_each(n, &ast->e_rules) {
-		rv = pmln_walk(l_to_node(n), ctx, pre, in, post);
-		if (rv < 0)
-			goto out;
-	}
+	rv = pmln_walk((union pml_node *)ast->e_rule, ctx, pre, in, post);
+	if (rv < 0)
+		goto out;
 out:
 	return rv;
 }

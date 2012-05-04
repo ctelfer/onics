@@ -770,7 +770,7 @@ static int cg_pdop(struct pml_ibuf *b, struct pml_ast *ast,
 		if (loff.onstack) {
 			if (cgpd->pfoff > 0)
 				EMIT_W(b, ADDI, cgpd->pfoff);
-			EMIT_W(b, UMAXI, NETVM_PD_OFF_MASK);
+			EMIT_W(b, UMINI, NETVM_PD_OFF_MASK);
 		} else {
 			loff.val += cgpd->pfoff;
 			if (loff.val >= NETVM_PD_OFF_MASK)
@@ -862,7 +862,7 @@ int cg_adjlen(struct pml_ibuf *b, struct pml_ast *ast,
 				PUSH64(b, len - loff.val);
 				*known_len = len - loff.val;
 			} else {
-				EMIT_IBINOP(b, UMAX, len);
+				EMIT_IBINOP(b, UMIN, len);
 				EMIT_SWAP_IBINOP(b, SUB, len);
 			}
 		} else { 
@@ -881,7 +881,7 @@ int cg_adjlen(struct pml_ibuf *b, struct pml_ast *ast,
 				PUSH64(b, var->width - loff.val);
 				*known_len = var->width - loff.val;
 			} else {
-				EMIT_IBINOP(b, UMAX, var->width);
+				EMIT_IBINOP(b, UMIN, var->width);
 				EMIT_SWAP_IBINOP(b, SUB, var->width);
 			}
 		} else {
@@ -944,7 +944,7 @@ int cg_adjlen(struct pml_ibuf *b, struct pml_ast *ast,
 					PUSH64(b, pf->len - loff.val);
 					*known_len = pf->len -= loff.val;
 				} else {
-					EMIT_IBINOP(b, UMAX, pf->len);
+					EMIT_IBINOP(b, UMIN, pf->len);
 					EMIT_SWAP_IBINOP(b, SUB, pf->len);
 				}
 			} else {
@@ -1048,8 +1048,8 @@ static int cg_memref(struct pml_ibuf *b, struct pml_ast *ast,
 		} else {
 			if (cg_locval(b, ast, loc->off, &loff) < 0)
 				return -1;
-			EMIT_IBINOP(b, UMAX, len);
 			/* do not allow offsets to overflow address */
+			EMIT_IBINOP(b, UMIN, len);
 			if (ismask)
 				EMIT_NULL(b, DUP);
 			EMIT_IBINOP(b, ADD, addr);
@@ -1454,6 +1454,7 @@ static int w_expr_in(union pml_node *n, void *auxp, void *xstk)
 			es->iaddr = nexti(b);
 			EMIT_W(b, BRI, 0); /* fill in during post */
 		}
+		ea->etype = PML_ETYPE_SCALAR;
 		break;
 	}
 
@@ -1696,12 +1697,13 @@ int cg_assign_bytestr_var(struct pmlncg *cg, struct pml_assign *a)
 	if (cg_memref(b, cg->ast, loc) < 0)
 		return -1;
 
-	EMIT_XW(b, SWAP, 1, 2);
-	EMIT_NULL(b, UMIN);
-	if (etype == PML_ETYPE_SCALAR)
+	if (etype == PML_ETYPE_SCALAR) {
 		EMIT_NULL(b, ST);
-	else
+	} else {
+		EMIT_XW(b, SWAP, 1, 2);
+		EMIT_NULL(b, UMIN);
 		EMIT_NULL(b, MOVE);
+	}
 
 	return 0;
 }
@@ -1803,10 +1805,13 @@ int cg_assign_pktfld(struct pmlncg *cg, struct pml_assign *a)
 	if (cg_loclen(b, cg->ast, loc) < 0)
 		return -1;
 
-	if (etype == PML_ETYPE_SCALAR)
+	if (etype == PML_ETYPE_SCALAR) {
 		EMIT_NULL(b, ST);
-	else
+	} else {
+		EMIT_XW(b, SWAP, 1, 2);
+		EMIT_NULL(b, UMIN);
 		EMIT_NULL(b, MOVE);
+	}
 
 	return 0;
 }
@@ -1922,26 +1927,28 @@ static int cg_funcs(struct pmlncg *cg)
 
 static int cg_be(struct pmlncg *cg)
 {
-	struct list *n;
 	struct pml_rule *r;
+	ulong nvars;
 
-	if (!l_isempty(&cg->ast->b_rules)) {
+	if (cg->ast->b_rule != NULL) {
 		cg->prog->eps[NVMP_EP_START] = nexti(&cg->ibuf);
-		l_for_each(n, &cg->ast->b_rules) {
-			r = (struct pml_rule *)l_to_node(n);
-			if (cg_stmt(cg, (union pml_node *)r->stmts) < 0)
-				return -1;
-		}
+		r = cg->ast->b_rule;
+		nvars = r->vars.addr_rw2;
+		if (nvars > 0)
+			EMIT_W(&cg->ibuf, ZPUSH, nvars);
+		if (cg_stmt(cg, (union pml_node *)r->stmts) < 0)
+			return -1;
 		EMIT_NULL(&cg->ibuf, HALT);
 	}
 
-	if (!l_isempty(&cg->ast->e_rules)) {
+	if (cg->ast->e_rule != NULL) {
 		cg->prog->eps[NVMP_EP_END] = nexti(&cg->ibuf);
-		l_for_each(n, &cg->ast->e_rules) {
-			r = (struct pml_rule *)l_to_node(n);
-			if (cg_stmt(cg, (union pml_node *)r->stmts) < 0)
-				return -1;
-		}
+		r = cg->ast->e_rule;
+		nvars = r->vars.addr_rw2;
+		if (nvars > 0)
+			EMIT_W(&cg->ibuf, ZPUSH, nvars);
+		if (cg_stmt(cg, (union pml_node *)r->stmts) < 0)
+			return -1;
 		EMIT_NULL(&cg->ibuf, HALT);
 	}
 
@@ -1958,15 +1965,17 @@ static int cg_rules(struct pmlncg *cg)
 	union pml_node *pat;
 	uint eaddr;
 	uint tbaddr;
+	ulong nvars;
 
 	if (l_isempty(&cg->ast->p_rules))
 		return 0;
 
-	cg->prog->eps[NVMP_EP_END] = nexti(b);
+	cg->prog->eps[NVMP_EP_PACKET] = nexti(&cg->ibuf);
 
 	l_for_each(n, &cg->ast->p_rules) {
 		r = (struct pml_rule *)l_to_node(n);
 		pat = (union pml_node *)r->pattern;
+		nvars = r->vars.addr_rw2;
 
 		if (pat != NULL) {
 			if (cg_expr(b, cg->ast, pat, PML_ETYPE_SCALAR) < 0)
@@ -1975,8 +1984,14 @@ static int cg_rules(struct pmlncg *cg)
 			EMIT_W(b, BZI, 0);
 		}
 
+		if (nvars > 0)
+			EMIT_W(&cg->ibuf, ZPUSH, nvars);
+
 		if (cg_stmt(cg, (union pml_node *)r->stmts) < 0)
 			return -1;
+
+		if (nvars > 0)
+			EMIT_W(&cg->ibuf, POP, nvars);
 
 		eaddr = nexti(&cg->ibuf);
 		if (pat != NULL) {
@@ -1987,7 +2002,7 @@ static int cg_rules(struct pmlncg *cg)
 		pcg_resolve_nextrules(cg, eaddr);
 	}
 
-	EMIT_W(&cg->ibuf, PUSH, 0);
+	EMIT_W(&cg->ibuf, PUSH, 1);
 	EMIT_NULL(&cg->ibuf, HALT);
 
 	return 0;
