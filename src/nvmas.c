@@ -42,6 +42,8 @@ label:	add
 struct clopt options[] = { 
 	CLOPT_INIT(CLOPT_NOARG, 'h', "--help", "print help and exit"), 
 	CLOPT_INIT(CLOPT_NOARG, 'd', "--disassemble", "disassemble file"),
+	CLOPT_INIT(CLOPT_NOARG, 'e', "--skip_error", 
+				     "skip any errors during disassembly"),
 };
 struct clopt_parser optparser = CLOPTPARSER_INIT(options, array_length(options));
 
@@ -52,6 +54,9 @@ struct nvmop {
 	uchar 		nargs;
 	ushort		argmask;
 };
+
+
+int skip_errors = 0;
 
 
 /* in argmask */
@@ -145,13 +150,13 @@ struct nvmop Operations[] = {
 	{ "uge",    NETVM_OC_UGE,    0, ASWAP },
 	{ "ugei",   NETVM_OC_UGEI,   1, ARGW|ASWAP },
 	{ "min",    NETVM_OC_MIN,    0, ASWAP },
-	{ "mini",   NETVM_OC_MIN,    1, ARGW|ASWAP },
+	{ "mini",   NETVM_OC_MINI,   1, ARGW|ASWAP },
 	{ "max",    NETVM_OC_MAX,    0, ASWAP },
-	{ "maxi",   NETVM_OC_MAX,    1, ARGW|ASWAP },
+	{ "maxi",   NETVM_OC_MAXI,   1, ARGW|ASWAP },
 	{ "umin",   NETVM_OC_UMIN,   0, ASWAP },
-	{ "umini",  NETVM_OC_UMIN,   1, ARGW|ASWAP },
+	{ "umini",  NETVM_OC_UMINI,  1, ARGW|ASWAP },
 	{ "umax",   NETVM_OC_UMAX,   0, ASWAP },
-	{ "umaxi",  NETVM_OC_UMAX,   1, ARGW|ASWAP },
+	{ "umaxi",  NETVM_OC_UMAXI,  1, ARGW|ASWAP },
 	{ "getcpt", NETVM_OC_GETCPT, 0, 0 },
 	{ "cpopi",  NETVM_OC_CPOPI,  4, ARGX|ARGY|ARGZ|ARGW },
 	{ "bri",    NETVM_OC_BRI,    1, ARGW|BRREL },
@@ -1244,11 +1249,22 @@ void disassemble(FILE *infile, FILE *outfile)
 	fprintf(outfile, "\n# Instructions (%u total)\n", prog.ninst);
 	for (i = 0; i < prog.ninst; ++i) {
 		struct netvm_inst *ni = &prog.inst[i];
-		if (inst2str(ni, line, sizeof(line), i) < 0)
-			err("error disassembling instruction %u\n", i);
-		fprintf(outfile, "#%4u: 0x%02x 0x%02x 0x%02x 0x%02x "
-				 "0x%08lx\n\t%s\n", 
-			i, ni->op, ni->x, ni->y, ni->z, (ulong)ni->w, line);
+		if (inst2str(ni, line, sizeof(line), i) < 0) {
+			if (skip_errors) {
+				fprintf(outfile, "#%4u: 0x%02x 0x%02x 0x%02x "
+						 "0x%02x 0x%08lx\n",
+					i, ni->op, ni->x, ni->y, ni->z,
+					(ulong)ni->w);
+				fprintf(outfile, "*Could not disassemble*\n");
+			} else {
+				err("error disassembling instruction %u\n", i);
+			}
+		} else {
+			fprintf(outfile, "#%4u: 0x%02x 0x%02x 0x%02x 0x%02x "
+					 "0x%08lx\n\t%s\n", 
+				i, ni->op, ni->x, ni->y, ni->z, (ulong)ni->w,
+				line);
+		}
 	}
 
 	nvmp_clear(&prog);
@@ -1282,6 +1298,8 @@ int main(int argc, char *argv[])
 			usage();
 		if (opt->ch == 'd')
 			do_assemble = 0;
+		if (opt->ch == 'e')
+			skip_errors = 1;
 	}
 	if (rv < 0)
 		usage();

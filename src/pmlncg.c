@@ -832,7 +832,7 @@ static int cg_pdop(struct pml_ibuf *b, struct pml_ast *ast,
 
 
 int cg_adjlen(struct pml_ibuf *b, struct pml_ast *ast,
-	      struct pml_locator *loc)
+	      struct pml_locator *loc, uint64_t *known_len)
 {
 	struct cg_pdesc cgpd;
 	struct pml_variable *var;
@@ -841,6 +841,8 @@ int cg_adjlen(struct pml_ibuf *b, struct pml_ast *ast,
 	struct ns_pktfld *pf;
 	struct locval loff;
 	uint64_t len;
+
+	*known_len = 0;
 
 	if (loc->reftype == PML_REF_LITERAL) {
 		lit = loc->u.litref;
@@ -858,12 +860,14 @@ int cg_adjlen(struct pml_ibuf *b, struct pml_ast *ast,
 				if (loff.val >= len)
 					return -1;
 				PUSH64(b, len - loff.val);
+				*known_len = len - loff.val;
 			} else {
 				EMIT_IBINOP(b, UMAX, len);
 				EMIT_SWAP_IBINOP(b, SUB, len);
 			}
 		} else { 
 			PUSH64(b, len);
+			*known_len = len;
 		}
 	} else if (loc->reftype == PML_REF_VAR) {
 		var = loc->u.varref;
@@ -875,11 +879,13 @@ int cg_adjlen(struct pml_ibuf *b, struct pml_ast *ast,
 				if (loff.val >= var->width)
 					return -1;
 				PUSH64(b, var->width - loff.val);
+				*known_len = var->width - loff.val;
 			} else {
 				EMIT_IBINOP(b, UMAX, var->width);
 				EMIT_SWAP_IBINOP(b, SUB, var->width);
 			}
 		} else {
+			*known_len = var->width;
 			PUSH64(b, var->width);
 		}
 	} else if (loc->rpfld != PML_RPF_NONE) {
@@ -936,12 +942,14 @@ int cg_adjlen(struct pml_ibuf *b, struct pml_ast *ast,
 					if (loff.val >= pf->len)
 						return -1;
 					PUSH64(b, pf->len - loff.val);
+					*known_len = pf->len -= loff.val;
 				} else {
 					EMIT_IBINOP(b, UMAX, pf->len);
 					EMIT_SWAP_IBINOP(b, SUB, pf->len);
 				}
 			} else {
 				PUSH64(b, pf->len);
+				*known_len = pf->len;
 			}
 		}
 
@@ -955,15 +963,30 @@ int cg_loclen(struct pml_ibuf *b, struct pml_ast *ast,
 	      struct pml_locator *loc)
 {
 	struct locval llen;
+	uint64_t len = 0;
+	int npush;
 
-	if (cg_adjlen(b, ast, loc) < 0)
+	if (cg_adjlen(b, ast, loc, &len) < 0)
 		return -1;
 
 	if (loc->len != NULL) {
 		if (cg_locval(b, ast, loc->len, &llen) < 0)
 			return -1;
 		if (!llen.onstack) {
-			EMIT_IBINOP(b, MIN, llen.val);
+			if (len == 0) {
+				EMIT_IBINOP(b, MIN, llen.val);
+			} else if (llen.val < len) {
+				/*
+				 * we have a a known field length and a known
+				 * locator length less than the field length.
+				 * The last one or two operations on the stack
+				 * are a push of the length.  Replace these
+				 * push(es) with pushes of the locator length.
+				 */
+				npush = ((llen.val >> 32) == 0) ? 1 : 2;
+				b->ninst -= npush;
+				PUSH64(b, len);
+			}
 		} else {
 			EMIT_NULL(b, MIN);
 		}

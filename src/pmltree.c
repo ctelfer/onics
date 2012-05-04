@@ -1829,11 +1829,15 @@ int pml_locator_resolve_nsref(struct pml_ast *ast, struct pml_locator *l)
 		/* a namespace with no offset or length is the same as */
 		/* an 'exists' reserved namespace if referred to by a */
 		/* locator or 'header' if referred to by a locaddr.  */
-		if (rpf == PML_RPF_NONE && l->off == NULL && l->len == NULL) {
-			if (l->type == PMLTT_LOCATOR) {
-				rpf = PML_RPF_EXISTS;
+		if (rpf == PML_RPF_NONE) {
+			if (l->off == NULL && l->len == NULL) {
+				if (l->type == PMLTT_LOCATOR) {
+					rpf = PML_RPF_EXISTS;
+				} else {
+					abort_unless(PMLTT_LOCADDR);
+					rpf = PML_RPF_PARSE;
+				}
 			} else {
-				abort_unless(PMLTT_LOCADDR);
 				rpf = PML_RPF_PARSE;
 			}
 		}
