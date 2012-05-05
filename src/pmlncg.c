@@ -74,13 +74,17 @@ int pib_add(struct pml_ibuf *b, struct netvm_inst *i)
 		if (b->size == 0) {
 			sz = 1;
 		} else {
-			if (b->size > (maxsize >> 2))
+			if (b->size > (maxsize >> 2)) {
+				fprintf(stderr, "out of space for code\n");
 				return -1;
+			}
 			sz = b->size << 2;
 		}
 		inst = realloc(b->inst, sz * sizeof(struct netvm_inst));
-		if (inst == NULL)
+		if (inst == NULL) {
+			fprintf(stderr, "out of space for code\n");
 			return -1;
+		}
 		b->inst = inst;
 		b->size = sz;
 	}
@@ -655,8 +659,12 @@ static int cg_locval(struct pml_ibuf *b, struct pml_ast *ast,
 			return -1;
 	} else {
 		val->onstack = 0;
-		if (pml_lit_val64(ast, &e->literal, &val->val) < 0)
+		if (pml_lit_val64(ast, &e->literal, &val->val) < 0) {
+			fprintf(stderr,
+				"error determining literal value of type %d\n",
+				e->literal.type);
 			return -1;
+		}
 	}
 
 	return 0;
@@ -857,8 +865,14 @@ int cg_adjlen(struct pml_ibuf *b, struct pml_ast *ast,
 			if (cg_locval(b, ast, loc->off, &loff) < 0)
 				return -1;
 			if (!loff.onstack) {
-				if (loff.val >= len)
+				if (loff.val >= len) {
+					fprintf(stderr, 
+						"offset out of range for '%s'"
+						": %llu >= %llu\n", loc->name,
+						(ullong)loff.val,
+						(ullong)len);
 					return -1;
+				}
 				PUSH64(b, len - loff.val);
 				*known_len = len - loff.val;
 			} else {
@@ -876,8 +890,14 @@ int cg_adjlen(struct pml_ibuf *b, struct pml_ast *ast,
 			if (cg_locval(b, ast, loc->off, &loff) < 0)
 				return -1;
 			if (!loff.onstack) {
-				if (loff.val >= var->width)
+				if (loff.val >= var->width) {
+					fprintf(stderr, 
+						"offset out of range for '%s'"
+						": %llu >= %llu\n", loc->name,
+						(ullong)loff.val,
+						(ullong)var->width);
 					return -1;
+				}
 				PUSH64(b, var->width - loff.val);
 				*known_len = var->width - loff.val;
 			} else {
@@ -939,8 +959,16 @@ int cg_adjlen(struct pml_ibuf *b, struct pml_ast *ast,
 				if (cg_locval(b, ast, loc->off, &loff) < 0)
 					return -1;
 				if (!loff.onstack) {
-					if (loff.val >= pf->len)
+					if (loff.val >= pf->len) {
+						fprintf(stderr, 
+							"offset out of range"
+							"for '%s': "
+							"%llu >= %llu\n",
+							loc->name,
+							(ullong)loff.val,
+							(ullong)pf->len);
 						return -1;
+					}
 					PUSH64(b, pf->len - loff.val);
 					*known_len = pf->len -= loff.val;
 				} else {
@@ -1035,6 +1063,10 @@ static int cg_memref(struct pml_ibuf *b, struct pml_ast *ast,
 			if (pml_lit_val64(ast, lit, &n) < 0)
 				return -1;
 			if (n >= len) {
+				fprintf(stderr,
+					"offset for out of range for '%s':"
+					" %llu >= %llu\n", loc->name,
+					(ullong)n, (ullong)len);
 				return -1;
 			} else {
 				addr += n;
@@ -1192,8 +1224,13 @@ static int cg_pfbytefield(struct pml_ibuf *b, struct pml_ast *ast,
 			lit = (struct pml_literal *)loc->off;
 			if (pml_lit_val64(ast, lit, &n) < 0)
 				return -1;
-			if (n >= len)
+			if (n >= len) {
+				fprintf(stderr,
+					"offset for out of range for '%s':"
+					" %llu >= %llu\n", loc->name,
+					(ullong)n, (ullong)len);
 				return -1;
+			}
 			len -= n;
 		} else {
 			fixedlen = 0;
@@ -1204,8 +1241,13 @@ static int cg_pfbytefield(struct pml_ibuf *b, struct pml_ast *ast,
 			lit = (struct pml_literal *)loc->len;
 			if (pml_lit_val64(ast, lit, &n) < 0)
 				return -1;
-			if (n > len)
+			if (n > len) {
+				fprintf(stderr,
+					"length for out of range for '%s':"
+					" %llu >= %llu\n", loc->name,
+					(ullong)n, (ullong)len);
 				return -1;
+			}
 			len = n;
 		} else {
 			fixedlen = 0;
@@ -1382,15 +1424,14 @@ static int w_expr_pre(union pml_node *n, void *auxp, void *xstk)
 	struct cgeaux *ea = auxp;
 	struct cgestk *es = xstk;
 	struct pml_op *op;
-	struct pml_locator *loc;
 
 	/* save the expected type */
 	es->etype = ea->etype;
-	
 	ea->etype = PML_ETYPE_UNKNOWN;
+
 	switch (n->base.type) {
 	case PMLTT_BINOP:
-		op = (struct pml_op *)n;
+		op = &n->op;
 		/* TODO: optimize for constant on RHS or on LHS of */
 		/* commutative operation. */
 		switch (op->op) {
@@ -1410,17 +1451,23 @@ static int w_expr_pre(union pml_node *n, void *auxp, void *xstk)
 		ea->etype = PML_ETYPE_SCALAR;
 		break;
 
+	case PMLTT_CALL:
+		abort_unless(es->etype == PML_ETYPE_SCALAR ||
+			     es->etype == PML_ETYPE_UNKNOWN);
+		/* prune walk for calls:  cg_call will walk subfields */
+		if (cg_call(ea->ibuf, ea->ast, &n->call) < 0)
+			return -1;
+		return 1;
+
 	case PMLTT_LOCATOR:
-		loc = (struct pml_locator *)n;
-		/* prune walk for locators:  cg_locator will walk it's own */
+		/* prune walk for locators:  cg_locator will walk its own */
 		/* sub-fields as needed.  */
-		if (cg_locator(ea->ibuf, ea->ast, loc, es->etype) < 0)
+		if (cg_locator(ea->ibuf, ea->ast, &n->locator, es->etype) < 0)
 			return -1;
 		return 1;
 
 	case PMLTT_LOCADDR:
-		loc = (struct pml_locator *)n;
-		if (cg_locaddr(ea->ibuf, ea->ast, loc) < 0)
+		if (cg_locaddr(ea->ibuf, ea->ast, &n->locator) < 0)
 			return -1;
 		/* prune walk for locators:  no need to walk subfields */
 		return 1;
@@ -1486,8 +1533,6 @@ static int w_expr_post(union pml_node *n, void *auxp, void *xstk)
 		rv = cg_op(b, &n->op, es);
 		break;
 	case PMLTT_CALL:
-		rv = cg_call(b, ea->ast, &n->call);
-		break;
 	case PMLTT_LOCADDR:
 	case PMLTT_LOCATOR:
 	default:
@@ -1714,7 +1759,8 @@ int cg_assign_bytestr_var(struct pmlncg *cg, struct pml_assign *a)
 }
 
 
-static int pfref_is_fixed(struct pml_locator *loc, struct pml_ast *ast)
+static int pfref_check_fixed(struct pml_locator *loc, struct pml_ast *ast,
+			     uint64_t *outlen)
 {
 	uint64_t v, len, off;
 	struct pml_literal *lit;
@@ -1751,6 +1797,7 @@ static int pfref_is_fixed(struct pml_locator *loc, struct pml_ast *ast)
 		if (v > NETVM_PD_IDX_MASK)
 			return 0;
 	}
+	off = 0;
 	if (loc->off != NULL) {
 		if (!PML_EXPR_IS_LITERAL(loc->off))
 			return 0;
@@ -1759,8 +1806,14 @@ static int pfref_is_fixed(struct pml_locator *loc, struct pml_ast *ast)
 			return -1;
 		if (off > NETVM_PD_IDX_MASK)
 			return 0;
-		if (off > len)
+		if (off >= len) {
+			fprintf(stderr,
+				"offset out of range for field '%s':"
+				" %llu >= %llu\n", loc->name,
+				(ullong)off, (ullong)len);
 			return -1;
+		}
+		len -= off;
 	}
 	if (loc->len != NULL) {
 		if (!PML_EXPR_IS_LITERAL(loc->len))
@@ -1770,7 +1823,19 @@ static int pfref_is_fixed(struct pml_locator *loc, struct pml_ast *ast)
 			return -1;
 		if (v > NETVM_PD_IDX_MASK)
 			return 0;
+		if (v > len) {
+			fprintf(stderr,
+				"length out of range for field '%s'"
+				" with offset %llu: %llu >= %llu\n",
+				loc->name, (ullong)off, (ullong)v,
+				(ullong)len);
+			return -1;
+		}
+		len = v;
 	}
+
+	if (outlen != NULL)
+		*outlen = len;
 
 	return 1;
 }
@@ -1783,17 +1848,19 @@ int cg_assign_pktfld(struct pmlncg *cg, struct pml_assign *a)
 	int etype = a->expr->expr.etype;
 	int rv;
 	struct cg_pdesc cgpd;
+	uint64_t flen;
 
 	if (cg_expr(b, cg->ast, (union pml_node *)a->expr, etype) < 0)
 		return -1;
 
 	if (etype == PML_ETYPE_SCALAR) {
-		rv = pfref_is_fixed(loc, cg->ast);
+		rv = pfref_check_fixed(loc, cg->ast, &flen);
 		if (rv < 0) {
 			return -1;
 		} else if (rv > 0) {
-			/* TODO: calculate length */
-			cgpd_init(&cgpd, NETVM_OC_STPD, 0, loc);
+			if (flen > sizeof(uint64_t))
+				flen = sizeof(uint64_t);
+			cgpd_init(&cgpd, NETVM_OC_STPD, flen , loc);
 			if (cg_pdop(b, cg->ast, &cgpd) < 0)
 				return -1;
 			return 0;
@@ -1881,6 +1948,8 @@ int cg_stmt(struct pmlncg *cg, union pml_node *n)
 	case PMLTT_PRINT:
 		return cg_print(cg, &n->print);
 	default:
+		fprintf(stderr, "cg_stmt(): unknown statement type %d\n",
+			n->base.type);
 		return -1;
 	}
 
@@ -1922,8 +1991,10 @@ static int cg_funcs(struct pmlncg *cg)
 
 	l_for_each(n, flist) {
 		f = (struct pml_function *)l_to_node(n);
-		if (cg_func(cg, f) < 0)
-			return -1;
+		if (!PML_FUNC_IS_INTRINSIC(f) && !PML_FUNC_IS_INLINE(f)) {
+			if (cg_func(cg, f) < 0)
+				return -1;
+		}
 	}
 
 	return 0;

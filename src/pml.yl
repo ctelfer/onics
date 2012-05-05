@@ -528,12 +528,12 @@ pktpat(PP) ::= PPBEGIN expr(E) PPEND. { PP = E; }
 
 expr(E) ::= orexpr(OE). { E = OE; }
 
-orexpr(E) ::= orexpr(LHS) OR andexpr(RHS). {
+orexpr(E) ::= andexpr(LHS) OR orexpr(RHS). {
 	E = pml_binop_alloc(PMLOP_OR, LHS, RHS); 
 }
 orexpr(E) ::= andexpr(AE). { E = AE; }
 
-andexpr(E) ::= andexpr(LHS) AND cmpexpr(RHS). {
+andexpr(E) ::= cmpexpr(LHS) AND andexpr(RHS). {
 	E = pml_binop_alloc(PMLOP_AND, LHS, RHS); 
 }
 andexpr(E) ::= cmpexpr(CE). { E = CE; }
@@ -648,41 +648,41 @@ cmpop(OP) ::= GT. { OP = PMLOP_GT; }
 cmpop(OP) ::= LEQ. { OP = PMLOP_LEQ; }
 cmpop(OP) ::= GEQ. { OP = PMLOP_GEQ; }
 
-borexpr(E) ::= borexpr(LHS) BOR bxorexpr(RHS). {
+borexpr(E) ::= bxorexpr(LHS) BOR borexpr(RHS). {
 	E = pml_binop_alloc(PMLOP_BOR, LHS, RHS); 
 }
 borexpr(E) ::= bxorexpr(BX). { E = BX; }
 
-bxorexpr(E) ::= bxorexpr(LHS) BXOR bandexpr(RHS). {
+bxorexpr(E) ::= bandexpr(LHS) BXOR bxorexpr(RHS). {
 	E = pml_binop_alloc(PMLOP_BXOR, LHS, RHS); 
 }
 bxorexpr(E) ::= bandexpr(BA). { E = BA; }
 
-bandexpr(E) ::= bandexpr(LHS) AMP addexpr(RHS). {
+bandexpr(E) ::= addexpr(LHS) AMP bandexpr(RHS). {
 	E = pml_binop_alloc(PMLOP_BAND, LHS, RHS); 
 }
 bandexpr(E) ::= addexpr(A). { E = A; }
 
-addexpr(E) ::= addexpr(LHS) PLUS mulexpr(RHS). {
+addexpr(E) ::= mulexpr(LHS) PLUS addexpr(RHS). {
 	E = pml_binop_alloc(PMLOP_PLUS, LHS, RHS); 
 }
-addexpr(E) ::= addexpr(LHS) MINUS mulexpr(RHS). {
+addexpr(E) ::= mulexpr(LHS) MINUS addexpr(RHS). {
 	E = pml_binop_alloc(PMLOP_MINUS, LHS, RHS); 
 }
 addexpr(E) ::= mulexpr(M). { E = M; }
 
-mulexpr(E) ::= mulexpr(LHS) TIMES shiftexpr(RHS). {
+mulexpr(E) ::= shiftexpr(LHS) TIMES mulexpr(RHS). {
 	E = pml_binop_alloc(PMLOP_TIMES, LHS, RHS); 
 }
-mulexpr(E) ::= mulexpr(LHS) DIV shiftexpr(RHS). {
+mulexpr(E) ::= shiftexpr(LHS) DIV mulexpr(RHS). {
 	E = pml_binop_alloc(PMLOP_DIV, LHS, RHS); 
 }
-mulexpr(E) ::= mulexpr(LHS) MOD shiftexpr(RHS). {
+mulexpr(E) ::= shiftexpr(LHS) MOD mulexpr(RHS). {
 	E = pml_binop_alloc(PMLOP_MOD, LHS, RHS); 
 }
 mulexpr(E) ::= shiftexpr(S). { E = S; }
 
-shiftexpr(E) ::= shiftexpr(LHS) shiftop(OP) uexpr(RHS). {
+shiftexpr(E) ::= uexpr(LHS) shiftop(OP) shiftexpr(RHS). {
 	E = pml_binop_alloc(OP, LHS, RHS); 
 }
 shiftexpr(E) ::= uexpr(U). { E = U; }

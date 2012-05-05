@@ -942,7 +942,7 @@ static const char *rtype_strs[] = {
 static const char *rts(struct pml_locator *l)
 {
 	abort_unless(l && l->reftype >= PML_REF_UNKNOWN &&
-		     l->reftype <= PML_REF_UNKNOWN_NS_ELEM);
+		     l->reftype <= PML_REF_LITERAL);
 	return rtype_strs[l->reftype];
 }
 
