@@ -1983,7 +1983,7 @@ static struct ns_pktfld ipv4_ns_opt =
 
 extern struct ns_elem *stdproto_ipv4_addr_ns_elems[STDPROTO_NS_SUB_ELEN];
 static struct ns_namespace ipv4_addr_ns = 
-	NS_NAMESPACE_I("addr", &ipv4_ns, PRID_IPV4, PRID_NONE,
+	NS_NAMESPACE_I("addr", &ipv4_ns, PRID_INVALID, PRID_NONE,
 		"Reserved IP addresses and address masks",
 		stdproto_ipv4_addr_ns_elems, 
 		array_length(stdproto_ipv4_addr_ns_elems));

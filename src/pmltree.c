@@ -1846,6 +1846,10 @@ int pml_locator_resolve_nsref(struct pml_ast *ast, struct pml_locator *l)
 			} else {
 				rpf = PML_RPF_PARSE;
 			}
+		} else if (ns->prid == PRID_INVALID) {
+			pml_ast_err(ast, "'%s' is not a protocol format\n",
+				    ns->name);
+			return -1;
 		}
 		l->rpfld = rpf;
 		break;

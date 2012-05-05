@@ -718,8 +718,16 @@ static void cgpd_init(struct cg_pdesc *cgpd, int oc, uint8_t x,
 
 	if (e->type == NST_NAMESPACE) {
 		ns = (struct ns_namespace *)e;
+		abort_unless(ns->prid != PRID_INVALID);
+
 		if (PML_RPF_IS_BYTESTR(loc->rpfld)) {
-			cgpd->field = PML_RPF_TO_NVMOFF(loc->rpfld);
+			if (ns->oidx == PRP_OI_SOFF) {
+				cgpd->field = PML_RPF_TO_NVMOFF(loc->rpfld);
+			} else {
+				abort_unless(loc->rpfld == PML_RPF_PARSE ||
+					     loc->rpfld == PML_RPF_EXISTS);
+				cgpd->field = NETVM_PRP_OFF_BASE + ns->oidx;
+			}
 		} else {
 			if (loc->rpfld == PML_RPF_EXISTS) {
 				/*
@@ -734,7 +742,8 @@ static void cgpd_init(struct cg_pdesc *cgpd, int oc, uint8_t x,
 				if (ns->oidx == PRP_OI_SOFF)
 					cgpd->field = NETVM_PRP_PIDX;
 				else
-					cgpd->field = NETVM_PRP_OFF_BASE + ns->oidx;
+					cgpd->field = NETVM_PRP_OFF_BASE +
+						      ns->oidx;
 			} else {
 				cgpd->field = PML_RPF_TO_NVMFIELD(loc->rpfld);
 			}
@@ -743,6 +752,8 @@ static void cgpd_init(struct cg_pdesc *cgpd, int oc, uint8_t x,
 	} else {
 		abort_unless(e->type == NST_PKTFLD);
 		pf = (struct ns_pktfld *)e;
+		abort_unless(pf->prid != PRID_INVALID);
+
 		cgpd->field = NETVM_PRP_OFF_BASE + pf->oidx;
 		cgpd->prid = pf->prid;
 		cgpd->pfoff = pf->off;
@@ -839,6 +850,13 @@ static int cg_pdop(struct pml_ibuf *b, struct pml_ast *ast,
 }
 
 
+static int must_calc_ns_len(struct ns_namespace *ns)
+{
+	return NSF_IS_VARLEN(ns->flags) &&
+		ns->oidx != PRP_OI_SOFF;
+}
+
+
 int cg_adjlen(struct pml_ibuf *b, struct pml_ast *ast,
 	      struct pml_locator *loc, uint64_t *known_len)
 {
@@ -913,7 +931,7 @@ int cg_adjlen(struct pml_ibuf *b, struct pml_ast *ast,
 		abort_unless(ns->type == NST_NAMESPACE);
 		abort_unless(PML_RPF_IS_BYTESTR(loc->rpfld));
 
-		if (NSF_IS_VARLEN(ns->flags)) {
+		if (must_calc_ns_len(ns)) {
 			cgpd_init(&cgpd, NETVM_OC_LDPF, 0, loc);
 			cgpd.off = NULL;
 			cgpd.field = NETVM_PRP_OFF_BASE + ns->len;

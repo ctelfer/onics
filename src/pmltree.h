@@ -315,11 +315,17 @@ enum {
 };
 #define PML_RPF_IS_BYTESTR(f) (((f) >= PML_RPF_HEADER) && \
 			       ((f) <= PML_RPF_PARSE))
+
+/* get the corresponding netvm offset index for a given reserved field */
 #define PML_RPF_TO_NVMFIELD(f)  ((f) - PML_RPF_HLEN)
+
+/* get the netvm offset index for a given reserved byte string field */
 #define PML_RPF_TO_NVMOFF(f)  (((f) == PML_RPF_PARSE) ? \
 			        NETVM_PRP_SOFF : \
 			        ((f) - PML_RPF_HEADER + NETVM_PRP_SOFF))
-#define PML_RPF_TO_NVMLEN(f)  ((f) - PML_RPF_HEADER + PML_RPF_HLEN)
+
+/* get the length field for a given reserved byte string field */
+#define PML_RPF_TO_NVMLEN(f)  ((f) - PML_RPF_HEADER)
 
 struct pml_locator {
 	int			type;
