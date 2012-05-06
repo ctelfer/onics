@@ -1,1 +1,1 @@
-?- udp.dport[0,2] != 53 -? { print "hi"; }
+?- udp.dport != 53 -? { print "hi"; }

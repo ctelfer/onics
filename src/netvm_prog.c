@@ -695,6 +695,8 @@ int nvmp_run_all(struct netvm *vm, struct netvm_program *prog, FILE *pin,
 	nvmp_init_mem(vm, prog);
 
 	rv = _nvmp_run(vm, prog, NVMP_EP_START, dout, &tos, flags);
+	pass = (rv == 1) && tos;
+	rv = flushpkts(vm, !vm->matchonly || pass, pout, dout, flags);
 	if (rv < 0 && !ignerr)
 		return rv;
 
@@ -757,6 +759,8 @@ int nvmp_run_all(struct netvm *vm, struct netvm_program *prog, FILE *pin,
 
 
 	rv = _nvmp_run(vm, prog, NVMP_EP_END, dout, &tos, debug);
+	pass = (rv == 1) && tos;
+	rv = flushpkts(vm, !vm->matchonly || pass, pout, dout, flags);
 	if (rv < 0 && !ignerr)
 		return rv;
 

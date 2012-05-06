@@ -151,7 +151,7 @@ void print_ns(struct ns_namespace *ns, struct prparse *prp, ulong soff,
 	r.data = line + plen;
 	r.len = MAXLINE - plen;
 
-	if (ns->oidx == PRP_OI_SOFF) {
+	if (ns->prid != PRID_INVALID && ns->oidx == PRP_OI_SOFF) {
 		printsep();
 		rv = (*ns->fmt)((struct ns_elem *)ns, g_p, prp, &r);
 		if (rv >= 0) {

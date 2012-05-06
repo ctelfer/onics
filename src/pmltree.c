@@ -153,57 +153,31 @@ int pml_ast_init(struct pml_ast *ast)
 
 
 static struct pml_idef stdintr[] = {
-	{ "pnew", 3, 0, NULL, { "pnum", "hdrm", "len" } },
-
-	{ "pdel", 2, 0, NULL, { "pnum" } },
-
-	{ "pswap", 2, 0, NULL, { "pnum1", "pnum2" } },
-
-	{ "pcopy", 2, 0, NULL, { "pnsrc", "pndst" } },
-
-	{ "pinsu", 3, 0, NULL, { "pnum", "off", "len" } },
-
-	{ "pinsd", 3, 0, NULL, { "pnum", "off", "len" } },
-
-	{ "pcutu", 3, 0, NULL, { "pnum", "off", "len" } },
-
-	{ "pcutu", 3, 0, NULL, { "pnum", "off", "len" } },
-
-	{ "happend", 3, 0, NULL, { "pnum", "prid", "hlen" } },
-
-	{ "hchop", 1, 0, NULL, { "pnum" } },
-
-	{ "hpush", 3, 0, NULL, { "pnum", "prid", "plen" } },
-
-	{ "hpop", 1, 0, NULL, { "pnum" } },
-
-	{ "hadj", 3, 0, NULL, { "ploc", "oidx", "amt" } },
-
-	{ "fixdlt", 1, 0, NULL, { "pnum" } },
-
-	{ "reparse", 1, 0, NULL, { "pnum" } },
-
-	{ "fixlen", 1, 0, NULL, { "ploc" } },
-
-	{ "fixlens", 1, 0, NULL, { "pnum" } },
-
-	{ "fixcksum", 1, 0, NULL, { "ploc" } },
-
-	{ "fixcksums", 1, 0, NULL, { "pnum" } },
-
-	{ "nbset", 1, PML_FF_PCONST|PML_FF_INLINE, NULL, { "num" } },
-
-	{ "fbsetl", 1, PML_FF_PCONST|PML_FF_INLINE, NULL, { "num" } },
-
-	{ "fbsetr", 1, PML_FF_PCONST|PML_FF_INLINE, NULL, { "num" } },
-
+	{ "pkt_new", 3, 0, NULL, { "pnum", "hdrm", "len" } },
+	{ "pkt_swap", 2, 0, NULL, { "pndst", "pnsrc" } },
+	{ "pkt_copy", 2, 0, NULL, { "pnum" } },
+	{ "pkt_del", 2, 0, NULL, { "pnum" } },
+	{ "pkt_ins_u", 3, 0, NULL, { "pnum", "off", "len" } },
+	{ "pkt_ins_d", 3, 0, NULL, { "pnum", "off", "len" } },
+	{ "pkt_cut_u", 3, 0, NULL, { "pnum", "off", "len" } },
+	{ "pkt_cut_d", 3, 0, NULL, { "pnum", "off", "len" } },
+	{ "pkt_parse", 1, 0, NULL, { "pnum" } },
+	{ "parse_push_back", 3, 0, NULL, { "pnum", "prid", "hlen" } },
+	{ "parse_pop_back", 1, 0, NULL, { "pnum" } },
+	{ "parse_push_front", 3, 0, NULL, { "pnum", "prid", "plen" } },
+	{ "parse_pop_front", 1, 0, NULL, { "pnum" } },
+	{ "parse_adjust", 3, 0, NULL, { "pdesc", "oidx", "amt" } },
+	{ "parse_update", 1, 0, NULL, { "pdesc" } },
+	{ "fix_dltype", 1, 0, NULL, { "pnum" } },
+	{ "fix_len", 1, 0, NULL, { "pdesc" } },
+	{ "fix_all_len", 1, 0, NULL, { "pnum" } },
+	{ "fix_csum", 1, 0, NULL, { "pdesc" } },
+	{ "fix_all_csum", 1, 0, NULL, { "pnum" } },
+	{ "pop", 1, PML_FF_PCONST|PML_FF_INLINE, NULL, { "num" } },
 	{ "log2", 1, PML_FF_PCONST|PML_FF_INLINE, NULL, { "num" } },
-
-	{ "clog2", 1, PML_FF_PCONST|PML_FF_INLINE, NULL, { "num" } },
-
 	{ "min", 2, PML_FF_PCONST|PML_FF_INLINE, NULL, { "num1", "num2" } },
-
 	{ "max", 2, PML_FF_PCONST|PML_FF_INLINE, NULL, { "num1", "num2" } },
+	{ "signx", 2, PML_FF_PCONST|PML_FF_INLINE, NULL, { "val", "sbit" } },
 };
 
 

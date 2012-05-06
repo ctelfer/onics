@@ -1058,6 +1058,7 @@ static void ni_pknew(struct netvm *vm)
 	/* NOTE: prid must be a PKDL_* value, not a PRID_* value */
 	pnew = pkb_create(pd0.offset);
 	FATAL(vm, NETVM_ERR_NOMEM, !pnew);
+	pkb_set_dltype(pnew, pd0.prid);
 	pkb_free(vm->packets[pd0.pktnum]);
 	vm->packets[pd0.pktnum] = pnew;
 }
@@ -1141,16 +1142,28 @@ static void ni_pkppop(struct netvm *vm)
 }
 
 
-static void ni_pkdel(struct netvm *vm)
+static void ni_pkprs(struct netvm *vm)
 {
 	struct netvm_inst *inst = &vm->inst[vm->pc];
 	uint64_t pktnum;
 	struct pktbuf *pkb;
-	if (inst->op == NETVM_OC_PKDELI) {
-		pktnum = inst->w;
-	} else {
-		S_POP(vm, pktnum);
-	}
+
+	S_POP(vm, pktnum);
+	FATAL(vm, NETVM_ERR_PKTNUM, pktnum >= NETVM_MAXPKTS);
+	FATAL(vm, NETVM_ERR_NOPKT, !(pkb = vm->packets[pktnum]));
+
+	pkb_clear_parse(pkb);
+	if (!inst->x)
+		FATAL(vm, NETVM_ERR_PARSE, pkb_parse(pkb) < 0);
+}
+
+
+static void ni_pkdel(struct netvm *vm)
+{
+	uint64_t pktnum;
+	struct pktbuf *pkb;
+
+	S_POP(vm, pktnum);
 	FATAL(vm, NETVM_ERR_PKTNUM, pktnum >= NETVM_MAXPKTS);
 	pkb = vm->packets[pktnum];
 	if (pkb) {
@@ -1162,15 +1175,10 @@ static void ni_pkdel(struct netvm *vm)
 
 static void ni_pkfxd(struct netvm *vm)
 {
-	struct netvm_inst *inst = &vm->inst[vm->pc];
 	uint64_t pktnum;
 	struct pktbuf *pkb;
 
-	if (inst->op == NETVM_OC_PKFXDI) {
-		pktnum = inst->w;
-	} else {
-		S_POP(vm, pktnum);
-	}
+	S_POP(vm, pktnum);
 	FATAL(vm, NETVM_ERR_PKTNUM, (pktnum >= NETVM_MAXPKTS));
 	FATAL(vm, NETVM_ERR_NOPKT, !(pkb = vm->packets[pktnum]));
 	pkb_fix_dltype(pkb);
@@ -1179,12 +1187,11 @@ static void ni_pkfxd(struct netvm *vm)
 
 static void ni_pkpup(struct netvm *vm)
 {
-	struct netvm_inst *inst = &vm->inst[vm->pc];
 	struct netvm_prp_desc pd0;
 	struct prparse *prp;
 	struct pktbuf *pkb;
 
-	prp = netvm_find_header(vm, &pd0, (inst->op == NETVM_OC_PKPUP));
+	prp = netvm_find_header(vm, &pd0, 1);
 	if (vm->error)
 		return;
 	FATAL(vm, NETVM_ERR_NOPRP, prp == NULL);
@@ -1447,20 +1454,20 @@ netvm_op g_netvm_ops[NETVM_OC_MAXOP + 1] = {
 
 	ni_move,		/* MOVE */
 
-	ni_pkswap,		/* PKSWAP */
 	ni_pknew,		/* PKNEW */
+	ni_pkswap,		/* PKSWAP */
 	ni_pkcopy,		/* PKCOPY */
+	ni_pkdel,		/* PKDEL */
+
 	ni_pksla,		/* PKSLA */
 	ni_pkcla,		/* PKCLA */
 	ni_pkppsh,		/* PKPPSH */
 	ni_pkppop,		/* PKPPOP */
 
-	ni_pkdel,		/* PKDEL */
-	ni_pkdel,		/* PKDELI */
+	ni_pkprs,		/* PKPRS */
 	ni_pkfxd,		/* PKFXD */
-	ni_pkfxd,		/* PKFXDI */
 	ni_pkpup,		/* PKPUP */
-	ni_pkpup,		/* PKPUPI */
+
 	ni_pkfxl,		/* PKFXL */
 	ni_pkfxl,		/* PKFXLI */
 	ni_pkfxc,		/* PKFXC */
@@ -1807,6 +1814,7 @@ static const char *rt_error_strings[NETVM_ERR_MAX+1] = {
 	"error inserting into packet",
 	"error cutting data from packet",
 	"error adjusting header field",
+	"error parsing packet",
 	"out of memory",
 	"integer overflow",
 	"bad co-processor index",

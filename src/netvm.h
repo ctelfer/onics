@@ -424,10 +424,12 @@ enum {
 				/*    a1 to a2.  (note unified addresses) */
 
 	/* packet specific operations */
-	NETVM_OC_PKSWAP,	/* [p1,p2] swap packets p1 and p2  */
 	NETVM_OC_PKNEW,		/* [pdesc] create packet: */
 	                        /*   offset == len, ptype == dl type */
+	NETVM_OC_PKSWAP,	/* [p1,p2] swap packets p1 and p2  */
 	NETVM_OC_PKCOPY,	/* [pkn2,pkn1] copy packet from pkn1 to pkn2 */
+	NETVM_OC_PKDEL,		/* [pkn] delete packet */
+
 	NETVM_OC_PKSLA,		/* [pdesc] set layer 'x' to prp in pdesc */
 	NETVM_OC_PKCLA,		/* [pkn] clear layer 'x' */
 	NETVM_OC_PKPPSH,	/* [pdesc] "push" prp of ptype in packet pkn */
@@ -435,12 +437,10 @@ enum {
 	NETVM_OC_PKPPOP,	/* [pkn] pop the top prp off of packet pkn */
 	                        /*   if x then pop from front else innermost */
 
-	NETVM_OC_PKDEL,		/* [pkn] delete packet */
-	NETVM_OC_PKDELI,	/* delete packet 'x' */
+	NETVM_OC_PKPRS,		/* [pkn] delete parse and if 'x' == 0 reparse */
 	NETVM_OC_PKFXD,		/* [pkn] set dltype to PRID_ of 2nd prp */
-	NETVM_OC_PKFXDI,	/* set dltype of pkt 'x' to PRID_ of 2nd prp */
 	NETVM_OC_PKPUP,		/* [pdesc] update parse fields (stack pdesc) */
-	NETVM_OC_PKPUPI,	/* update the parse fields (packed pdesc) */
+
 	NETVM_OC_PKFXL,		/* [pdesc] fix length fields in the packet */
 				/*   If pdesc refers to the base parse, fix */
 				/*   all lengths that are in a layer */
@@ -527,6 +527,7 @@ enum {
 	NETVM_ERR_PKTINS,
 	NETVM_ERR_PKTCUT,
 	NETVM_ERR_PRPADJ,
+	NETVM_ERR_PARSE,
 	NETVM_ERR_NOMEM,
 	NETVM_ERR_IOVFL,
 	NETVM_ERR_BADCOPROC,
