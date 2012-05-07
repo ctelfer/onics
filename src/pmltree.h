@@ -494,7 +494,7 @@ struct pml_retval {
 
 /* structure definition for an intrinsic function to add */
 #define PML_MAXIARGS		4
-struct pml_idef {
+struct pml_intrinsic {
 	char *			name;
 	int			arity;
 	int			flags;
@@ -527,7 +527,7 @@ struct pml_call *pml_call_alloc(struct pml_ast *ast, struct pml_function *func,
 /* -- helper functions for symbol values PML (vars, functions, etc) -- */
 int  pml_func_add_param(struct pml_function *func, struct pml_variable *var);
 int  pml_ast_add_func(struct pml_ast *ast, struct pml_function *func);
-int  pml_ast_add_intrinsic(struct pml_ast *ast, struct pml_idef *intr);
+int  pml_ast_add_intrinsic(struct pml_ast *ast, struct pml_intrinsic *intr);
 struct pml_function *pml_ast_lookup_func(struct pml_ast *ast, char *name);
 struct pml_variable *pml_func_lookup_param(struct pml_function *func, 
 					   char *name);

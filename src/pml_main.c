@@ -97,7 +97,10 @@ void parse_pml_program(FILE *f, struct netvm_program *prog)
 
 	if (!(parser = pml_alloc()))
 		errsys("pml_alloc: ");
-	pml_ast_init(&ast);
+	if (pml_ast_init(&ast) < 0)
+		errsys("pml_ast_init(): ");
+	if (pml_ast_add_std_intrinsics(&ast) < 0)
+		errsys("pml_ast_add_std_intrinsics(): ");
 
 	if (verbosity > 0)
 		fprintf(stderr, "Starting program parse\n");

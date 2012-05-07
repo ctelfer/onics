@@ -152,11 +152,90 @@ int pml_ast_init(struct pml_ast *ast)
 }
 
 
-static struct pml_idef stdintr[] = {
+static int _e_pop(struct pml_ast *ast, struct pml_stack_frame *fr,
+		  union pml_node *node, struct pml_retval *v)
+{
+	uint64_t n;
+
+	abort_unless(fr->psz >= sizeof(uint64_t));
+	n = *(uint64_t *)fr->stack;
+	v->etype = PML_ETYPE_SCALAR;
+	v->val = pop_64(n);
+
+	return 0;
+}
+
+
+static int _e_log2(struct pml_ast *ast, struct pml_stack_frame *fr,
+		   union pml_node *node, struct pml_retval *v)
+{
+	uint64_t n;
+
+	abort_unless(fr->psz >= sizeof(uint64_t));
+	n = *(uint64_t *)fr->stack;
+	v->etype = PML_ETYPE_SCALAR;
+	v->val = ilog2_64(n);
+
+	return 0;
+}
+
+
+static int _e_min(struct pml_ast *ast, struct pml_stack_frame *fr,
+		  union pml_node *node, struct pml_retval *v)
+{
+	int64_t n1, n2;
+
+	abort_unless(fr->psz >= 2 * sizeof(uint64_t));
+	n1 = *(uint64_t *)fr->stack;
+	n2 = *(uint64_t *)(fr->stack + sizeof(uint64_t));
+	v->etype = PML_ETYPE_SCALAR;
+	v->val = (n1 < n2) ? n1 : n2;
+
+	return 0;
+}
+
+
+static int _e_max(struct pml_ast *ast, struct pml_stack_frame *fr,
+		  union pml_node *node, struct pml_retval *v)
+{
+	int64_t n1, n2;
+
+	abort_unless(fr->psz >= 2 * sizeof(uint64_t));
+	n1 = *(uint64_t *)fr->stack;
+	n2 = *(uint64_t *)(fr->stack + sizeof(uint64_t));
+	v->etype = PML_ETYPE_SCALAR;
+	v->val = (n1 > n2) ? n1 : n2;
+
+	return 0;
+}
+
+
+static int _e_signx(struct pml_ast *ast, struct pml_stack_frame *fr,
+		    union pml_node *node, struct pml_retval *v)
+{
+	int64_t n1, n2;
+
+	abort_unless(fr->psz >= 2 * sizeof(uint64_t));
+	n1 = *(uint64_t *)fr->stack;
+	n2 = *(uint64_t *)(fr->stack + sizeof(uint64_t));
+	if (n2 > 8) {
+		pml_ast_err(ast,
+			    "signx() call with width of > 8 bytes: %llu\n",
+			    n2);
+		return -1;
+	}
+	v->etype = PML_ETYPE_SCALAR;
+	v->val = n1 | -(n1 & (1 << (n2 * 8 - 1)));
+
+	return 0;
+}
+
+
+static struct pml_intrinsic stdintr[] = {
 	{ "pkt_new", 3, 0, NULL, { "pnum", "hdrm", "len" } },
 	{ "pkt_swap", 2, 0, NULL, { "pndst", "pnsrc" } },
-	{ "pkt_copy", 2, 0, NULL, { "pnum" } },
-	{ "pkt_del", 2, 0, NULL, { "pnum" } },
+	{ "pkt_copy", 2, 0, NULL, { "pndst", "pnsrc" } },
+	{ "pkt_del", 1, 0, NULL, { "pnum" } },
 	{ "pkt_ins_u", 3, 0, NULL, { "pnum", "off", "len" } },
 	{ "pkt_ins_d", 3, 0, NULL, { "pnum", "off", "len" } },
 	{ "pkt_cut_u", 3, 0, NULL, { "pnum", "off", "len" } },
@@ -173,11 +252,11 @@ static struct pml_idef stdintr[] = {
 	{ "fix_all_len", 1, 0, NULL, { "pnum" } },
 	{ "fix_csum", 1, 0, NULL, { "pdesc" } },
 	{ "fix_all_csum", 1, 0, NULL, { "pnum" } },
-	{ "pop", 1, PML_FF_PCONST|PML_FF_INLINE, NULL, { "num" } },
-	{ "log2", 1, PML_FF_PCONST|PML_FF_INLINE, NULL, { "num" } },
-	{ "min", 2, PML_FF_PCONST|PML_FF_INLINE, NULL, { "num1", "num2" } },
-	{ "max", 2, PML_FF_PCONST|PML_FF_INLINE, NULL, { "num1", "num2" } },
-	{ "signx", 2, PML_FF_PCONST|PML_FF_INLINE, NULL, { "val", "sbit" } },
+	{ "pop", 1, PML_FF_PCONST|PML_FF_INLINE, _e_pop, { "num" } },
+	{ "log2", 1, PML_FF_PCONST|PML_FF_INLINE, _e_log2, { "num" } },
+	{ "min", 2, PML_FF_PCONST|PML_FF_INLINE, _e_min, { "num1", "num2" } },
+	{ "max", 2, PML_FF_PCONST|PML_FF_INLINE, _e_max, { "num1", "num2" } },
+	{ "signx", 2, PML_FF_PCONST|PML_FF_INLINE, _e_signx, { "val", "sbit" }},
 };
 
 
@@ -257,7 +336,7 @@ int pml_ast_add_func(struct pml_ast *ast, struct pml_function *func)
 }
 
 
-int pml_ast_add_intrinsic(struct pml_ast *ast, struct pml_idef *intr)
+int pml_ast_add_intrinsic(struct pml_ast *ast, struct pml_intrinsic *intr)
 {
 	char *ncpy;
 	struct pml_function *f = NULL;
@@ -269,9 +348,10 @@ int pml_ast_add_intrinsic(struct pml_ast *ast, struct pml_idef *intr)
 			~(PML_FF_INLINE|PML_FF_INTRINSIC|PML_FF_PCONST)) == 0);
 	
 
-	if (symtab_lookup(&ast->funcs, intr->name) != NULL)
+	if (symtab_lookup(&ast->funcs, intr->name) != NULL) {
 		pml_ast_err(ast, "Duplicate function: %s\n", intr->name);
 		return -1;
+	}
 
 	f = (struct pml_function *)pmln_alloc(PMLTT_FUNCTION);
 	if (f == NULL)
@@ -295,6 +375,8 @@ int pml_ast_add_intrinsic(struct pml_ast *ast, struct pml_idef *intr)
 	f->arity = intr->arity;
 	f->ieval = intr->eval;
 	f->flags = intr->flags | PML_FF_INTRINSIC;
+	f->pstksz = f->arity * sizeof(uint64_t);
+	f->vstksz = 0;
 
 	abort_unless(symtab_add(&ast->funcs, (struct pml_sym *)f) >= 0);
 

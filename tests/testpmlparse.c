@@ -50,6 +50,7 @@ int main(int argc, char *argv[])
 	if (!(parser = pml_alloc()))
 		errsys("pml_alloc:");
 	pml_ast_init(&tree);
+	pml_ast_add_std_intrinsics(&tree);
 
 	if (printmask & VERBOSE) {
 		printf("#########\n");
