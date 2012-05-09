@@ -18,7 +18,6 @@ const J = wierd(E, A);
 const K = wierd(square(A), wierd(E, A));
 
 const L = pop(0x1818181818181818);
-const M = signx(0x80000000, 4);
-const N = min(300, -5);
-const O = max(300, -5);
-const P = log2(0x4321);
+const M = min(300, -5);
+const N = max(300, -5);
+const O = log2(0x4321);

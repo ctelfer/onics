@@ -2,6 +2,7 @@
 #include <errno.h>
 #include <limits.h>
 #include <cat/cat.h>
+#include <string.h>
 
 #include "pmlncg.h"
 #include "netvm_std_coproc.h"
@@ -24,6 +25,7 @@ struct cgeaux {
 	int			etype;
 };
 
+
 struct cgestk {
 	uint			etype;
 	uint			iaddr;
@@ -33,6 +35,20 @@ struct cgestk {
 struct locval {
 	int			onstack;
 	uint64_t		val;
+};
+
+
+struct cg_intr;
+typedef int (*cg_intr_call_f)(struct pml_ibuf *b, struct pml_ast *ast,
+			      struct pml_call *c, struct cg_intr *intr);
+
+
+#define CG_INTR_MAXOPS	3
+struct cg_intr {
+	const char *		name;
+	cg_intr_call_f		cgf;
+	uint			numop;
+	struct netvm_inst	ops[CG_INTR_MAXOPS];
 };
 
 
@@ -115,6 +131,22 @@ static int pib_add_ixyzw(struct pml_ibuf *b, uint8_t oc, uint8_t x, uint8_t y,
 #define EMIT_XY(_ibuf, SYM, _x, _y) EMIT_XYZW(_ibuf, SYM, _x, _y, 0, 0)
 #define EMIT_XYW(_ibuf, SYM, _x, _y, _w) EMIT_XYZW(_ibuf, SYM, _x, _y, 0, _w)
 
+
+static int push64(struct pml_ibuf *b, uint64_t v)
+{
+	EMIT_W(b, PUSH, (uint32_t)(v & 0xFFFFFFFF));
+	if ((v >> 32) != 0)
+		EMIT_W(b, ORHI, (uint32_t)((v >> 32) & 0xFFFFFFFF));
+	return 0;
+}
+
+
+#define PUSH64(_b, _v)					\
+	do { 						\
+		if (push64(_b, _v) < 0) return -1;	\
+	} while (0)
+
+
 #define EMIT_IBINOP(_ibuf, SYM, _w)			\
 	do {						\
 		if ((_w) <= 0xFFFFFFFF) {		\
@@ -148,6 +180,131 @@ static uint nexti(struct pml_ibuf *b)
 {
 	abort_unless(b);
 	return b->ninst;
+}
+
+
+static int isimmed(union pml_node *node)
+{
+	return (node->base.type == PMLTT_SCALAR ||
+	        node->base.type == PMLTT_BYTESTR || 
+	        node->base.type == PMLTT_MASKVAL);
+}
+
+
+STATIC_BUG_ON(NETVM_PD_OFF_OFF_is_0, NETVM_PD_OFF_OFF != 0);
+
+static int _pkt_new(struct pml_ibuf *b, struct pml_ast *ast, struct pml_call *c,
+		    struct cg_intr *intr)
+{
+	struct pml_list *pl = c->args;
+	union pml_node *pkt, *dltype, *len;
+
+	abort_unless(l_length(&pl->list) == 3);
+
+	pkt = l_to_node(l_head(&pl->list));
+	dltype = l_to_node(l_next(&pkt->base.ln));
+	len = l_to_node(l_next(&dltype->base.ln));
+	
+	if (cg_expr(b, ast, pkt, PML_ETYPE_SCALAR) < 0)
+		return -1;
+	EMIT_W(b, SHLI, NETVM_PD_PKT_OFF);
+	if (cg_expr(b, ast, dltype, PML_ETYPE_SCALAR) < 0)
+		return -1;
+	EMIT_W(b, SHLI, NETVM_PD_PRID_OFF);
+	if (cg_expr(b, ast, len, PML_ETYPE_SCALAR) < 0)
+		return -1;
+	EMIT_NULL(b, OR);
+	EMIT_NULL(b, OR);
+	EMIT_NULL(b, PKNEW);
+
+	return -1;
+}
+
+
+static int _i_scarg(struct pml_ibuf *b, struct pml_ast *ast, struct pml_call *c,
+		    struct cg_intr *intr)
+{
+	struct pml_list *pl = c->args;
+	struct pml_function *f = c->func;
+	union pml_node *e;
+	int i;
+
+	e = l_to_node(l_head(&pl->list));
+	if (cg_expr(b, ast, e, PML_ETYPE_SCALAR) < 0)
+		return -1;
+	for (i = 1; i < f->arity; ++i) {
+		e = l_to_node(l_next(&e->base.ln));
+		if (cg_expr(b, ast, e, PML_ETYPE_SCALAR) < 0)
+			return -1;
+	}
+
+	for (i = 0; i < intr->numop; ++i) {
+		if (pib_add(b, &intr->ops[i]) < 0)
+			return -1;
+	}
+
+	return 0;
+}
+
+
+struct cg_intr intrinsics[] = { 
+	{ "pkt_new", _pkt_new, 0, { {0} } },
+	{ "pkt_swap", _i_scarg, 1, { NETVM_OP(PKSWAP,0,0,0,0) } },
+	{ "pkt_copy", _i_scarg, 1, { NETVM_OP(PKCOPY,0,0,0,0) } },
+	{ "pkt_del", _i_scarg, 1, { NETVM_OP(PKDEL,0,0,0,0) }  },
+	{ "pkt_ins_u", NULL, 1, {  } },
+	{ "pkt_ins_d", NULL, 1, {  } },
+	{ "pkt_cut_u", NULL, 1, {  } },
+	{ "pkt_cut_d", NULL, 1, {  } },
+	{ "pkt_parse", _i_scarg, 1, { NETVM_OP(PKPRS,0,0,0,0) } },
+	{ "parse_push_back",  NULL, 1, { NETVM_OP(PKPPSH,0,0,0,0) } },
+	{ "parse_pop_back",   NULL, 1, { NETVM_OP(PKPPOP,0,0,0,0) } },
+	{ "parse_push_front", NULL, 1, { NETVM_OP(PKPPSH,1,0,0,0) } },
+	{ "parse_pop_front",  NULL, 1, { NETVM_OP(PKPPOP,1,0,0,0) } },
+	{ "parse_adjust",     NULL, 0, { {0} } },
+	{ "parse_update",     NULL, 0, { {0} } },
+	{ "fix_dltype", NULL, 1, { NETVM_OP(PKFXD,0,0,0,0) } },
+	{ "fix_len",      NULL, 0, { {0} } },
+	{ "fix_all_len",  _i_scarg, 1, 
+		{ NETVM_OP(ORI,0,0,0,(PRID_NONE<<4)),
+		  NETVM_OP(SHLI,0,0,0,44),
+		  NETVM_OP(PKFXL,0,0,0,44), } },
+	{ "fix_csum",     NULL, 0, { {0} } },
+	{ "fix_all_csum", _i_scarg, 1,
+		{ NETVM_OP(ORI,0,0,0,(PRID_NONE<<4)),
+		  NETVM_OP(SHLI,0,0,0,44),
+		  NETVM_OP(PKFXL,0,0,0,44), } },
+	{ "pop", _i_scarg, 1, { NETVM_OP(POPL,0,0,0,0) } },
+	{ "log2", _i_scarg, 2, 
+		{ NETVM_OP(NLZ,0,0,0,0), NETVM_OP(SUBI,1,0,0,64) } },
+	{ "min", _i_scarg, 1, { NETVM_OP(MIN,0,0,0,0) } },
+	{ "max", _i_scarg, 1, { NETVM_OP(MAX,0,0,0,0) } },
+	{ NULL, NULL, 0, { {0} } },
+};
+
+
+static int cg_intrinsic(struct pml_ibuf *b, struct pml_ast *ast,
+			struct pml_call *c)
+{
+	struct cg_intr *intr;
+	struct pml_function *f = c->func;
+
+	for (intr = intrinsics; 
+	     intr->name != NULL && (strcmp(intr->name, f->name) != 0);
+	     ++intr) ;
+
+	if (intr->name == NULL) {
+		fprintf(stderr, "intrinsic function '%s' not found\n", f->name);
+		return -1;
+	}
+
+	if (intr->cgf == NULL) {
+		fprintf(stderr, "intrinsic function '%s' is unimplemented\n",
+			f->name);
+		return -1;
+	}
+
+	return (*intr->cgf)(b, ast, c, intr);
 }
 
 
@@ -387,21 +544,6 @@ static int init_pktact(struct pmlncg *cg)
 }
 
 
-static int push64(struct pml_ibuf *b, uint64_t v)
-{
-	EMIT_W(b, PUSH, (uint32_t)(v & 0xFFFFFFFF));
-	if ((v >> 32) != 0)
-		EMIT_W(b, ORHI, (uint32_t)((v >> 32) & 0xFFFFFFFF));
-	return 0;
-}
-
-
-#define PUSH64(_b, _v)					\
-	do { 						\
-		if (push64(_b, _v) < 0) return -1;	\
-	} while (0)
-
-
 static int cg_scalar(struct pml_ibuf *b, struct pml_literal *l)
 {
 	abort_unless(b && l);
@@ -627,20 +769,22 @@ static int cg_call(struct pml_ibuf *b, struct pml_ast *ast, struct pml_call *c)
 	abort_unless(c->args && c->func);
 	f = c->func;
 
+	if (PML_FUNC_IS_INTRINSIC(f))
+		return cg_intrinsic(b, ast, c);
+
 	l_for_each_rev(n, &c->args->list) {
 		if (cg_expr(b, ast, l_to_node(n), PML_ETYPE_SCALAR) < 0)
 			return -1;
 	}
 
-	if (PML_FUNC_IS_INTRINSIC(f)) {
-		UNIMPL(intrinsics);
-	} else if (PML_FUNC_IS_INLINE(f)) {
+	if (PML_FUNC_IS_INLINE(f)) {
 		EMIT_NULL(b, PUSHFR);
 		if (cg_expr(b, ast, f->body, PML_ETYPE_SCALAR) < 0)
 			return -1;
 		EMIT_XW(b, POPFR, 1, f->arity);
 	} else {
 		PUSH64(b, f->addr);
+		EMIT_NULL(b, CALL);
 	}
 
 	return 0;
@@ -1982,6 +2126,9 @@ static int cg_func(struct pmlncg *cg, struct pml_function *f)
 
 	abort_unless(cg->curfunc == NULL);
 	cg->curfunc = f;
+
+	/* XXX TODO:  this really doesn't belong in the AST does it? */
+	f->addr = nexti(b);
 
 	if (f->vstksz > 0) {
 		abort_unless(f->vstksz % 8 == 0);

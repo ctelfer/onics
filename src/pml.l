@@ -202,6 +202,7 @@ static void c_translate(struct raw *r, const char *s, size_t len)
 		} else {
 			switch (s[1]) {
 			case '\\': *d++ = '\\'; s += 2; len -= 2; break;
+			case '0':  *d++ = '\0'; s += 2; len -= 2; break;
 			case 'a':  *d++ = '\a'; s += 2; len -= 2; break;
 			case 'b':  *d++ = '\b'; s += 2; len -= 2; break;
 			case 't':  *d++ = '\t'; s += 2; len -= 2; break;

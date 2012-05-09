@@ -106,7 +106,6 @@ struct nvmop Operations[] = {
 	{ "tobool", NETVM_OC_TOBOOL, 0, 0 },
 	{ "popl",   NETVM_OC_POPL,   0, 0 },
 	{ "nlz",    NETVM_OC_NLZ,    0, 0 },
-	{ "signx",  NETVM_OC_SIGNX,  1, ARGX },
 	{ "add",    NETVM_OC_ADD,    0, ASWAP },
 	{ "addi",   NETVM_OC_ADDI,   1, ARGW|ASWAP },
 	{ "sub",    NETVM_OC_SUB,    0, ASWAP },
@@ -1240,7 +1239,7 @@ void disassemble(FILE *infile, FILE *outfile)
 
 	for (i = 0; i < NETVM_MAXCOPROC; ++i) {
 		if (prog.cpreqs[i] != NETVM_CPT_NONE)
-			fprintf(outfile, ".coproc %u %llu", i, 
+			fprintf(outfile, ".coproc %u %llu\n", i, 
 			        (unsigned long long)prog.cpreqs[i]);
 	}
 

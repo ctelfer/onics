@@ -210,27 +210,6 @@ static int _e_max(struct pml_ast *ast, struct pml_stack_frame *fr,
 }
 
 
-static int _e_signx(struct pml_ast *ast, struct pml_stack_frame *fr,
-		    union pml_node *node, struct pml_retval *v)
-{
-	int64_t n1, n2;
-
-	abort_unless(fr->psz >= 2 * sizeof(uint64_t));
-	n1 = *(uint64_t *)fr->stack;
-	n2 = *(uint64_t *)(fr->stack + sizeof(uint64_t));
-	if (n2 > 8) {
-		pml_ast_err(ast,
-			    "signx() call with width of > 8 bytes: %llu\n",
-			    n2);
-		return -1;
-	}
-	v->etype = PML_ETYPE_SCALAR;
-	v->val = n1 | -(n1 & (1 << (n2 * 8 - 1)));
-
-	return 0;
-}
-
-
 static struct pml_intrinsic stdintr[] = {
 	{ "pkt_new", 3, 0, NULL, { "pnum", "hdrm", "len" } },
 	{ "pkt_swap", 2, 0, NULL, { "pndst", "pnsrc" } },
@@ -256,7 +235,6 @@ static struct pml_intrinsic stdintr[] = {
 	{ "log2", 1, PML_FF_PCONST|PML_FF_INLINE, _e_log2, { "num" } },
 	{ "min", 2, PML_FF_PCONST|PML_FF_INLINE, _e_min, { "num1", "num2" } },
 	{ "max", 2, PML_FF_PCONST|PML_FF_INLINE, _e_max, { "num1", "num2" } },
-	{ "signx", 2, PML_FF_PCONST|PML_FF_INLINE, _e_signx, { "val", "sbit" }},
 };
 
 
@@ -313,6 +291,13 @@ void pml_ast_err(struct pml_ast *ast, const char *fmt, ...)
 	va_end(ap);
 
 	ast->error = 1;
+}
+
+
+void pml_ast_clear_err(struct pml_ast *ast)
+{
+	ast->errbuf[0] = '\0';
+	ast->error = 0;
 }
 
 
@@ -2959,11 +2944,13 @@ static int e_locator(struct pml_ast *ast, struct pml_stack_frame *fr,
 		} else {
 			byte_t *p;
 
+			if (fr == NULL)
+				return -1;
+
 			abort_unless(v->vtype == PML_VTYPE_PARAM ||
 			             v->vtype == PML_VTYPE_LOCAL);
 			abort_unless(l->etype == PML_ETYPE_SCALAR);
 			abort_unless(l->off == NULL && l->len == NULL);
-			abort_unless(fr);
 			if (fr->ssz < 8 || fr->ssz - 8 < v->addr) {
 				pml_ast_err(ast,
 					    "eval: stack overflow in var '%s':"
@@ -3109,8 +3096,10 @@ static int pml_opt_cexpr(union pml_expr_u *e, void *astp, union pml_expr_u **ne)
 	if (e != NULL && PML_EXPR_IS_CONST(e) && !PML_EXPR_IS_LITERAL(e)) {
 
 		rv = pml_eval(astp, NULL, (union pml_node *)e, &r);
-		if (rv < 0)
-			return -1;
+		if (rv < 0) {
+			pml_ast_clear_err(astp);
+			return 0;
+		}
 
 		switch(r.etype) {
 		case PML_ETYPE_SCALAR:

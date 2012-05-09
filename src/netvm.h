@@ -319,7 +319,6 @@ enum {
 	NETVM_OC_TOBOOL,	/* [v] if v != 0, 1, otherwise 0 */
 	NETVM_OC_POPL,		/* [v] # of bits in v for lower x bytes */
 	NETVM_OC_NLZ,		/* [v] # leading 0s in v for lower x bytes */
-	NETVM_OC_SIGNX,		/* [v] sign extend based on width x */
 
 	NETVM_OC_ADD,		/* [v1,v2] add v1 and v2 */
 	NETVM_OC_ADDI,		/* [v] add v1 and w */
@@ -432,8 +431,8 @@ enum {
 
 	NETVM_OC_PKSLA,		/* [pdesc] set layer 'x' to prp in pdesc */
 	NETVM_OC_PKCLA,		/* [pkn] clear layer 'x' */
-	NETVM_OC_PKPPSH,	/* [pdesc] "push" prp of ptype in packet pkn */
-				/*   to inner header if !x or outer if x */
+	NETVM_OC_PKPPSH,	/* [pkn,prid] "push" prp of prid in packet */
+				/*   pkn to inner header if !x or outer if x */
 	NETVM_OC_PKPPOP,	/* [pkn] pop the top prp off of packet pkn */
 	                        /*   if x then pop from front else innermost */
 
@@ -450,11 +449,11 @@ enum {
 				/*   all checksums that are in a layer */
 	NETVM_OC_PKFXCI,	/* fix checksums in the packet (packed pdesc) */
 
-	NETVM_OC_PKINS,		/* [len,pdesc] insert len bytes @ pd.offset */
+	NETVM_OC_PKINS,		/* [pdesc,len] insert len bytes @ pd.offset */
 				/*   move new bytes down if x or up if !x */
-	NETVM_OC_PKCUT,		/* [len,pdesc] cut len bytes @ pd.offset */
+	NETVM_OC_PKCUT,		/* [pdesc,len] cut len bytes @ pd.offset */
 				/*   move new bytes down if x or up if !x */
-	NETVM_OC_PKADJ,		/* [amt,pdesc] adjust offset 'field' by */
+	NETVM_OC_PKADJ,		/* [pdesc,amt] adjust offset 'field' by */
 	                        /*   amt (signed) bytes in parse */
 
 	NETVM_OC_MAXOP = NETVM_OC_PKADJ

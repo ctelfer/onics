@@ -626,11 +626,6 @@ static void ni_unop(struct netvm *vm)
 			val = nlz_64(val) - (64 - inst->x * 8);
 		}
 		break;
-	case NETVM_OC_SIGNX:
-		switch(inst->x) {
-		FATAL(vm, NETVM_ERR_WIDTH, inst->x > 8);
-		val = val | -(val & (1 << (inst->x * 8 - 1)));
-		}
 	default:
 		val = 0;
 		abort_unless(0);
@@ -1112,19 +1107,19 @@ static void ni_pkcla(struct netvm *vm)
 static void ni_pkppsh(struct netvm *vm)
 {
 	struct netvm_inst *inst = &vm->inst[vm->pc];
-	struct netvm_prp_desc pd0;
+	uint64_t pktnum, prid;
 	struct pktbuf *pkb;
 
-	netvm_get_pd(vm, &pd0, 0);
-	if (vm->error)
-		return;
-	FATAL(vm, NETVM_ERR_PKTNUM, (pd0.pktnum >= NETVM_MAXPKTS));
-	FATAL(vm, NETVM_ERR_NOPKT, !(pkb = vm->packets[pd0.pktnum]));
+	FATAL(vm, NETVM_ERR_STKUNDF, !S_HAS(vm, 2));
+	S_POP_NOCK(vm, prid);
+	S_POP_NOCK(vm, pktnum);
+	FATAL(vm, NETVM_ERR_PKTNUM, (pktnum >= NETVM_MAXPKTS));
+	FATAL(vm, NETVM_ERR_NOPKT, !(pkb = vm->packets[pktnum]));
 	/* XXX is this the right error? */
 	if (inst->x) {	/* outer push */
-		FATAL(vm, NETVM_ERR_NOMEM, pkb_wrapprp(pkb, pd0.prid) < 0);
+		FATAL(vm, NETVM_ERR_NOMEM, pkb_wrapprp(pkb, prid) < 0);
 	} else {		/* inner push */
-		FATAL(vm, NETVM_ERR_NOMEM, pkb_pushprp(pkb, pd0.prid) < 0);
+		FATAL(vm, NETVM_ERR_NOMEM, pkb_pushprp(pkb, prid) < 0);
 	}
 }
 
@@ -1283,12 +1278,12 @@ static void ni_pkins(struct netvm *vm)
 	struct pktbuf *pkb;
 	uint64_t len;
 
-	netvm_get_pd(vm, &pd0, 0);
+	S_POP(vm, len);
+	netvm_get_pd(vm, &pd0, 1);
 	if (vm->error)
 		return;
 	FATAL(vm, NETVM_ERR_PKTNUM, (pd0.pktnum >= NETVM_MAXPKTS));
 	FATAL(vm, NETVM_ERR_NOPKT, !(pkb = vm->packets[pd0.pktnum]));
-	S_POP(vm, len);
 	FATAL(vm, NETVM_ERR_PKTINS, (len > (ulong)-1));
 	FATAL(vm, NETVM_ERR_PKTINS,
 	      prp_insert(&pkb->prp, pkb->buf, pd0.offset, len, inst->x) < 0);
@@ -1302,12 +1297,12 @@ static void ni_pkcut(struct netvm *vm)
 	struct pktbuf *pkb;
 	uint64_t len;
 
-	netvm_get_pd(vm, &pd0, 0);
+	S_POP(vm, len);
+	netvm_get_pd(vm, &pd0, 1);
 	if (vm->error)
 		return;
 	FATAL(vm, NETVM_ERR_PKTNUM, (pd0.pktnum >= NETVM_MAXPKTS));
 	FATAL(vm, NETVM_ERR_NOPKT, !(pkb = vm->packets[pd0.pktnum]));
-	S_POP(vm, len);
 	FATAL(vm, NETVM_ERR_PKTINS, (len > (ulong)-1));
 	FATAL(vm, NETVM_ERR_PKTCUT,
 	      prp_cut(&pkb->prp, pkb->buf, pd0.offset, len, inst->x) < 0);
@@ -1323,12 +1318,12 @@ static void ni_pkadj(struct netvm *vm)
 	ulong amt;
 	int rv;
 
-	prp = netvm_find_header(vm, &pd0, 0);
+	S_POP(vm, val);
+	prp = netvm_find_header(vm, &pd0, 1);
 	if (vm->error)
 		return;
 
 	FATAL(vm, NETVM_ERR_NOPRP, prp == NULL);
-	S_POP(vm, val);
 	amt = (ulong)val;
 	if ((pd0.field < NETVM_PRP_OFF_BASE) ||
 	    (prp_list_head(prp) &&
@@ -1373,7 +1368,6 @@ netvm_op g_netvm_ops[NETVM_OC_MAXOP + 1] = {
 	ni_unop,		/* TOBOOL */
 	ni_unop,		/* POPL */
 	ni_unop,		/* NLZ */
-	ni_unop,		/* SIGNX */
 
 	/* binary operations */
 	ni_binop,		/* ADD */
@@ -1418,7 +1412,6 @@ netvm_op g_netvm_ops[NETVM_OC_MAXOP + 1] = {
 	ni_binopi,		/* UGTI */
 	ni_binop,		/* UGE */
 	ni_binopi,		/* UGEI */
-
 	ni_binop,		/* MIN */
 	ni_binopi,		/* MINI */
 	ni_binop,		/* MAX */
@@ -1544,8 +1537,7 @@ int netvm_validate(struct netvm *vm)
 		           (inst->op == NETVM_OC_STLI) ||
 		           (inst->op == NETVM_OC_STI) ||
 			   (inst->op == NETVM_OC_POPL) ||
-			   (inst->op == NETVM_OC_NLZ) ||
-			   (inst->op == NETVM_OC_SIGNX)) {
+			   (inst->op == NETVM_OC_NLZ)) {
 			if (((inst->x & 0x7F) < 1) || ((inst->x & 0x7F) > 8))
 				return NETVM_ERR_BADWIDTH;
 

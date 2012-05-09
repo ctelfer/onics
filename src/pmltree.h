@@ -508,6 +508,7 @@ int  pml_ast_init(struct pml_ast *ast);
 int  pml_ast_add_std_intrinsics(struct pml_ast *ast);
 void pml_ast_clear(struct pml_ast *ast);
 void pml_ast_err(struct pml_ast *ast, const char *fmt, ...);
+void pml_ast_clear_err(struct pml_ast *ast);
 
 /* -- PML AST node allocation -- */
 union pml_node *pmln_alloc(int pmltt);

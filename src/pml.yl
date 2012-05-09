@@ -703,21 +703,25 @@ call(C) ::= ID(N) LPAREN exprlist(A) RPAREN. {
 	struct pml_function *f;
 	char *name = (char *)N.u.raw.data;
 	f = pml_ast_lookup_func(ast, name); 
-	if (f == NULL)
+	if (f != NULL) {
+		C = pml_call_alloc(ast, f, A);
+	} else {
 		pml_ast_err(ast, "Undefined function: %s\n", name);
+	}
 	free(name);
-	C = pml_call_alloc(ast, f, A);
 }
 call(C) ::= ID(N) LPAREN RPAREN. { 
 	struct pml_function *f;
 	struct pml_list *args;
 	char *name = (char *)N.u.raw.data;
 	f = pml_ast_lookup_func(ast, name);
-	if (f == NULL)
+	if (f != NULL) {
+		args = (struct pml_list *)pmln_alloc(PMLTT_LIST);
+		C = pml_call_alloc(ast, f, args);
+	} else {
 		pml_ast_err(ast, "Undefined function: %s\n", name);
+	}
 	free(name);
-	args = (struct pml_list *)pmln_alloc(PMLTT_LIST);
-	C = pml_call_alloc(ast, f, args);
 }
 exprlist(EL1) ::= exprlist(EL0) COMMA expr(E). { 
 	l_enq(&EL0->list, &E->base.ln);
