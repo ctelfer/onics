@@ -224,7 +224,6 @@ static struct pml_intrinsic stdintr[] = {
 	{ "parse_pop_back", 1, 0, NULL, { "pnum" } },
 	{ "parse_push_front", 3, 0, NULL, { "pnum", "prid", "plen" } },
 	{ "parse_pop_front", 1, 0, NULL, { "pnum" } },
-	{ "parse_adjust", 3, 0, NULL, { "pdesc", "oidx", "amt" } },
 	{ "parse_update", 1, 0, NULL, { "pdesc" } },
 	{ "fix_dltype", 1, 0, NULL, { "pnum" } },
 	{ "fix_len", 1, 0, NULL, { "pdesc" } },

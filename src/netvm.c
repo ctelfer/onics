@@ -157,8 +157,7 @@ static void ni_orhi(struct netvm *vm)
 	uint64_t val;
 	struct netvm_inst *inst = &vm->inst[vm->pc];
 	S_POP(vm, val);
-	val |= (uint64_t)inst->w << 32;
-	S_PUSH(vm, (val | ((uint64_t)inst->w << 32)));
+	S_PUSH_NOCK(vm, (val | ((uint64_t)inst->w << 32)));
 }
 
 
@@ -1274,38 +1273,46 @@ static void ni_pkfxc(struct netvm *vm)
 static void ni_pkins(struct netvm *vm)
 {
 	struct netvm_inst *inst = &vm->inst[vm->pc];
-	struct netvm_prp_desc pd0;
 	struct pktbuf *pkb;
+	uint64_t addr;
 	uint64_t len;
+	uint pktnum;
 
 	S_POP(vm, len);
-	netvm_get_pd(vm, &pd0, 1);
-	if (vm->error)
-		return;
-	FATAL(vm, NETVM_ERR_PKTNUM, (pd0.pktnum >= NETVM_MAXPKTS));
-	FATAL(vm, NETVM_ERR_NOPKT, !(pkb = vm->packets[pd0.pktnum]));
+	S_POP(vm, addr);
+
+	FATAL(vm, NETVM_ERR_PKTNUM, !NETVM_UA_ISPKT(addr));
+	pktnum = (addr >> NETVM_UA_SEG_OFF) & NETVM_SEG_SEGMASK;
+	addr &= NETVM_UA_OFF_MASK;
+
+	FATAL(vm, NETVM_ERR_PKTNUM, (pktnum >= NETVM_MAXPKTS));
+	FATAL(vm, NETVM_ERR_NOPKT, !(pkb = vm->packets[pktnum]));
 	FATAL(vm, NETVM_ERR_PKTINS, (len > (ulong)-1));
 	FATAL(vm, NETVM_ERR_PKTINS,
-	      prp_insert(&pkb->prp, pkb->buf, pd0.offset, len, inst->x) < 0);
+	      prp_insert(&pkb->prp, pkb->buf, addr, len, inst->x) < 0);
 }
 
 
 static void ni_pkcut(struct netvm *vm)
 {
 	struct netvm_inst *inst = &vm->inst[vm->pc];
-	struct netvm_prp_desc pd0;
 	struct pktbuf *pkb;
+	uint64_t addr;
 	uint64_t len;
+	uint pktnum;
 
 	S_POP(vm, len);
-	netvm_get_pd(vm, &pd0, 1);
-	if (vm->error)
-		return;
-	FATAL(vm, NETVM_ERR_PKTNUM, (pd0.pktnum >= NETVM_MAXPKTS));
-	FATAL(vm, NETVM_ERR_NOPKT, !(pkb = vm->packets[pd0.pktnum]));
+	S_POP(vm, addr);
+
+	FATAL(vm, NETVM_ERR_PKTNUM, !NETVM_UA_ISPKT(addr));
+	pktnum = (addr >> NETVM_UA_SEG_OFF) & NETVM_SEG_SEGMASK;
+	addr &= NETVM_UA_OFF_MASK;
+
+	FATAL(vm, NETVM_ERR_PKTNUM, (pktnum >= NETVM_MAXPKTS));
+	FATAL(vm, NETVM_ERR_NOPKT, !(pkb = vm->packets[pktnum]));
 	FATAL(vm, NETVM_ERR_PKTINS, (len > (ulong)-1));
 	FATAL(vm, NETVM_ERR_PKTCUT,
-	      prp_cut(&pkb->prp, pkb->buf, pd0.offset, len, inst->x) < 0);
+	      prp_cut(&pkb->prp, pkb->buf, addr, len, inst->x) < 0);
 }
 
 
@@ -1315,7 +1322,7 @@ static void ni_pkadj(struct netvm *vm)
 	struct prparse *prp;
 	uint64_t val;
 	uint oid;
-	ulong amt;
+	long amt;
 	int rv;
 
 	S_POP(vm, val);
@@ -1324,11 +1331,12 @@ static void ni_pkadj(struct netvm *vm)
 		return;
 
 	FATAL(vm, NETVM_ERR_NOPRP, prp == NULL);
-	amt = (ulong)val;
 	if ((pd0.field < NETVM_PRP_OFF_BASE) ||
 	    (prp_list_head(prp) &&
 	     ((pd0.field == NETVM_PRP_SOFF) || (pd0.field == NETVM_PRP_EOFF))))
 		VMERR(vm, NETVM_ERR_PRPFLD);
+	FATAL(vm, NETVM_ERR_PRPFLD, pd0.field < NETVM_PRP_OFF_BASE);
+	amt = (long)val;
 	oid = pd0.field - NETVM_PRP_OFF_BASE;
 	rv = prp_adj_off(prp, oid, amt);
 	FATAL(vm, NETVM_ERR_PRPADJ, rv < 0);

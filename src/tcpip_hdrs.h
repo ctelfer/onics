@@ -303,7 +303,7 @@ struct tcph {
 #define TCPH_HLEN(tcph)         (((tcph).doff >> 2) & ~3)
 #define TCPH_ECNN(tcph)         ((tcph).doff & 1)
 #define TCPH_MINLEN		20
-#define TCPH_MAXLEN		20
+#define TCPH_MAXLEN		60
 #define TCPF_FIN                0x01
 #define TCPF_SYN                0x02
 #define TCPF_RST                0x04

@@ -215,7 +215,8 @@ int main(int argc, char *argv[])
 			flags |= NVMP_RUN_PRSTK;
 
 		if (nvmp_run_all(&vm, &prog, stdin, stdout, stderr, flags) < 0)
-			err("error running netvm program\n");
+			err("error running netvm program: %s\n",
+			    netvm_estr(vm.error));
 
 		nvmp_clear(&prog);
 

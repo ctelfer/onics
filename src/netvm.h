@@ -45,6 +45,8 @@ struct netvm_inst {
 
 #define NETVM_UA_SEG_OFF	56
 #define NETVM_UA_SEG_HI_OFF	24
+#define NETVM_UA_OFF_MASK	((((uint64_t)1 << NETVM_UA_SEG_OFF))-1)
+#define NETVM_UA_ISPKT(addr)	(((addr) >> 63) != 0)
 #define NETVM_UADDR(ispkt, idx, addr) \
 	((uint64_t)(ispkt) << 63 | (uint64_t)(idx) << 56 | (addr))
 
@@ -271,7 +273,7 @@ enum {
 	NETVM_OC_POP,		/* discards top 'w' entries of stack */
 	NETVM_OC_POPTO,		/* discard all but last 'w' in stack frame */
 	NETVM_OC_PUSH,		/* pushes 'w' onto stack */
-	NETVM_OC_ORHI,		/* [v] binary OR 'w << 32' with top of stack */
+	NETVM_OC_ORHI,		/* [v] binary OR 'w' << 32 with top of stack */
 	NETVM_OC_ZPUSH,		/* pushes 'w' 0s onto the stack */
 	NETVM_OC_DUP,		/* dups 'w' from the top of the stack */
 	NETVM_OC_SWAP,		/* swap stack pos 0 and 'w' from SP down */
@@ -449,11 +451,13 @@ enum {
 				/*   all checksums that are in a layer */
 	NETVM_OC_PKFXCI,	/* fix checksums in the packet (packed pdesc) */
 
-	NETVM_OC_PKINS,		/* [pdesc,len] insert len bytes @ pd.offset */
+				/* for these 3 operations, it is an error */
+				/* if the address doesn't refer to a packet */
+	NETVM_OC_PKINS,		/* [addr,len] insert len bytes @ pd.offset */
 				/*   move new bytes down if x or up if !x */
-	NETVM_OC_PKCUT,		/* [pdesc,len] cut len bytes @ pd.offset */
+	NETVM_OC_PKCUT,		/* [addr,len] cut len bytes @ pd.offset */
 				/*   move new bytes down if x or up if !x */
-	NETVM_OC_PKADJ,		/* [pdesc,amt] adjust offset 'field' by */
+	NETVM_OC_PKADJ,		/* [addr,amt] adjust offset 'field' by */
 	                        /*   amt (signed) bytes in parse */
 
 	NETVM_OC_MAXOP = NETVM_OC_PKADJ
