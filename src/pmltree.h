@@ -83,20 +83,24 @@ enum {
 	PMLTT_SCALAR,
 	PMLTT_BYTESTR,
 	PMLTT_MASKVAL,
-	PMLTT_VAR,
 	PMLTT_BINOP,
 	PMLTT_UNOP,
 	PMLTT_CALL,
-	PMLTT_IF,
-	PMLTT_WHILE,
 	PMLTT_LOCATOR,
 	PMLTT_LOCADDR,
+	PMLTT_IF,
+	PMLTT_WHILE,
 	PMLTT_ASSIGN,
 	PMLTT_CFMOD,
 	PMLTT_PRINT,
+	PMLTT_VAR,
 	PMLTT_FUNCTION,
 	PMLTT_RULE,
 };
+
+#define PML_TYPE_IS_EXPR(t) ((t) >= PMLTT_SCALAR && (t) <= PMLTT_LOCADDR)
+#define PML_TYPE_IS_STMT(t) ((t) >= PMLTT_IF && (t) <= PMLTT_PRINT)
+#define PML_TYPE_IS_DECL(t) ((t) >= PMLTT_VAR && (t) <= PMLTT_RULE)
 
 
 enum {
@@ -212,37 +216,6 @@ struct pml_literal {
 };
 
 
-enum {
-	PML_VTYPE_UNKNOWN, 
-	PML_VTYPE_CONST,
-	PML_VTYPE_GLOBAL,
-	PML_VTYPE_PARAM,
-	PML_VTYPE_LOCAL,
-};
-
-
-/*
- * The address of each variable should be interpreted according to its type:
- *  - const -> offset in read-only segment
- *  - global -> offset is in the read-write segment
- *  - local -> offset (in bytes) from bottom of the stack frame.
- */
-struct pml_variable {
-	/* pml_sym_base fields */
-	int			type;
-	struct list		ln;
-	struct hnode		hn;
-	char *			name;
-
-	union pml_expr_u *	init;
-	struct pml_function *	func;
-	ushort			vtype;
-	ushort			etype;
-	ulong			width;
-	ulong			addr;	/* depends on type:  see above */
-};
-
-
 struct pml_op {
 	int			type;
 	struct list		ln;
@@ -265,25 +238,6 @@ struct pml_call {
 
 	struct pml_function *	func;
 	struct pml_list *	args;		/* expressions */
-};
-
-
-struct pml_if {
-	int			type;
-	struct list		ln;
-
-	union pml_expr_u *	test;
-	struct pml_list *	tbody;
-	struct pml_list *	fbody;
-};
-
-
-struct pml_while {
-	int			type;
-	struct list		ln;
-
-	union pml_expr_u *	test;
-	struct pml_list *	body;
 };
 
 
@@ -349,6 +303,25 @@ struct pml_locator {
 };
 
 
+struct pml_if {
+	int			type;
+	struct list		ln;
+
+	union pml_expr_u *	test;
+	struct pml_list *	tbody;
+	struct pml_list *	fbody;
+};
+
+
+struct pml_while {
+	int			type;
+	struct list		ln;
+
+	union pml_expr_u *	test;
+	struct pml_list *	body;
+};
+
+
 struct pml_assign {
 	int			type;
 	struct list		ln;
@@ -391,6 +364,37 @@ struct pml_sym {
 	struct list		ln;
 	struct hnode		hn;
 	char *			name;
+};
+
+
+enum {
+	PML_VTYPE_UNKNOWN, 
+	PML_VTYPE_CONST,
+	PML_VTYPE_GLOBAL,
+	PML_VTYPE_PARAM,
+	PML_VTYPE_LOCAL,
+};
+
+
+/*
+ * The address of each variable should be interpreted according to its type:
+ *  - const -> offset in read-only segment
+ *  - global -> offset is in the read-write segment
+ *  - local -> offset (in bytes) from bottom of the stack frame.
+ */
+struct pml_variable {
+	/* pml_sym_base fields */
+	int			type;
+	struct list		ln;
+	struct hnode		hn;
+	char *			name;
+
+	union pml_expr_u *	init;
+	struct pml_function *	func;
+	ushort			vtype;
+	ushort			etype;
+	ulong			width;
+	ulong			addr;	/* depends on type:  see above */
 };
 
 

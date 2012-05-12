@@ -2193,6 +2193,8 @@ int cg_print(struct pmlncg *cg, struct pml_print *pr)
 
 int cg_stmt(struct pmlncg *cg, union pml_node *n)
 {
+	union pml_expr_u *e;
+
 	if (n == NULL)
 		return 0;
 
@@ -2210,9 +2212,27 @@ int cg_stmt(struct pmlncg *cg, union pml_node *n)
 	case PMLTT_PRINT:
 		return cg_print(cg, &n->print);
 	default:
-		fprintf(stderr, "cg_stmt(): unknown statement type %d\n",
-			n->base.type);
-		return -1;
+		if (!PML_TYPE_IS_EXPR(n->base.type)) {
+			fprintf(stderr, "cg_stmt(): unknown statement type %d\n",
+				n->base.type);
+			return -1;
+		}
+
+		e = (union pml_expr_u *)n;
+		if (cg_expr(&cg->ibuf, cg->ast, n, e->expr.etype) < 0)
+			return -1;
+		if (e->expr.etype == PML_ETYPE_SCALAR) {
+			EMIT_W(&cg->ibuf, POP, 1);
+		} else if (e->expr.etype == PML_ETYPE_BYTESTR) {
+			EMIT_W(&cg->ibuf, POP, 2);
+		} else if (e->expr.etype == PML_ETYPE_MASKVAL) {
+			EMIT_W(&cg->ibuf, POP, 3);
+		} else {
+			fprintf(stderr,
+				"unknown expression return type in expression"
+				" statement.  Type = %d\n", e->expr.etype);
+			return -1;
+		}
 	}
 
 	return 0;

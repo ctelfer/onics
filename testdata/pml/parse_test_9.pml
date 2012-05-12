@@ -1,1 +1,1 @@
- { x = fix_all_len(0); }
+ { fix_all_len(0); }

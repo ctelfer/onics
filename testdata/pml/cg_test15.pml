@@ -1,3 +1,6 @@
+# 
+# numeric intrinsics
+#
 BEGIN {
 	x = 5;
 	y = 7;

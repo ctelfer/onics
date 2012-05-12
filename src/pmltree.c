@@ -25,10 +25,7 @@ static int is_expr(void *nodep)
 	if (nodep == NULL)
 		return 0;
 	type = ((union pml_node *)nodep)->base.type;
-	return (type == PMLTT_SCALAR || type == PMLTT_BYTESTR ||
-		type == PMLTT_MASKVAL || type == PMLTT_BINOP ||
-		type == PMLTT_UNOP || type == PMLTT_CALL ||
-		type == PMLTT_LOCATOR || type == PMLTT_LOCADDR);
+	return PML_TYPE_IS_EXPR(type);
 }
 
 
@@ -542,17 +539,6 @@ union pml_node *pmln_alloc(int type)
 		}
 	} break;
 
-	case PMLTT_VAR: {
-		struct pml_variable *p = &np->variable;
-		ht_ninit(&p->hn, "", p);
-		p->vtype = PML_VTYPE_UNKNOWN;
-		p->etype = PML_ETYPE_UNKNOWN;
-		p->width = 0;
-		p->name = NULL;
-		p->init = NULL;
-		p->func = NULL;
-	} break;
-
 	case PMLTT_UNOP:
 	case PMLTT_BINOP: {
 		struct pml_op *p = &np->op;
@@ -572,19 +558,6 @@ union pml_node *pmln_alloc(int type)
 		p->width = 8;
 		p->func = NULL;
 		p->args = NULL;
-	} break;
-
-	case PMLTT_IF: {
-		struct pml_if *p = &np->ifstmt;
-		p->test = NULL;
-		p->tbody = NULL;
-		p->fbody = NULL;
-	} break;
-
-	case PMLTT_WHILE: {
-		struct pml_while *p = &np->whilestmt;;
-		p->test = NULL;
-		p->body = NULL;
 	} break;
 
 	case PMLTT_LOCATOR:
@@ -607,6 +580,19 @@ union pml_node *pmln_alloc(int type)
 		p->len = NULL;
 	} break;
 
+	case PMLTT_IF: {
+		struct pml_if *p = &np->ifstmt;
+		p->test = NULL;
+		p->tbody = NULL;
+		p->fbody = NULL;
+	} break;
+
+	case PMLTT_WHILE: {
+		struct pml_while *p = &np->whilestmt;;
+		p->test = NULL;
+		p->body = NULL;
+	} break;
+
 	case PMLTT_ASSIGN: {
 		struct pml_assign *p = &np->assign;
 		p->loc = NULL;
@@ -625,6 +611,17 @@ union pml_node *pmln_alloc(int type)
 		p->fmt.len = 0;
 		p->fmt.segnum = PML_SEG_NONE;
 		p->args = NULL;
+	} break;
+
+	case PMLTT_VAR: {
+		struct pml_variable *p = &np->variable;
+		ht_ninit(&p->hn, "", p);
+		p->vtype = PML_VTYPE_UNKNOWN;
+		p->etype = PML_ETYPE_UNKNOWN;
+		p->width = 0;
+		p->name = NULL;
+		p->init = NULL;
+		p->func = NULL;
 	} break;
 
 	case PMLTT_FUNCTION: {
@@ -687,13 +684,6 @@ void pmln_free(union pml_node *node)
 	case PMLTT_MASKVAL:
 		break;
 
-	case PMLTT_VAR: {
-		struct pml_variable *p = &node->variable;
-		ht_rem(&p->hn);
-		free(p->name);
-		pmln_free((union pml_node *)p->init);
-	} break;
-
 	case PMLTT_BINOP: {
 		struct pml_op *p = &node->op;
 		pmln_free((union pml_node *)p->arg1);
@@ -710,6 +700,16 @@ void pmln_free(union pml_node *node)
 		pmln_free((union pml_node *)p->args);
 	} break;
 
+	case PMLTT_LOCATOR:
+	case PMLTT_LOCADDR: {
+		struct pml_locator *p = &node->locator;
+		free(p->name);
+		pmln_free((union pml_node *)p->pkt);
+		pmln_free((union pml_node *)p->idx);
+		pmln_free((union pml_node *)p->off);
+		pmln_free((union pml_node *)p->len);
+	} break;
+
 	case PMLTT_IF: {
 		struct pml_if *p = &node->ifstmt;
 		pmln_free((union pml_node *)p->test);
@@ -721,16 +721,6 @@ void pmln_free(union pml_node *node)
 		struct pml_while *p = &node->whilestmt;
 		pmln_free((union pml_node *)p->test);
 		pmln_free((union pml_node *)p->body);
-	} break;
-
-	case PMLTT_LOCATOR:
-	case PMLTT_LOCADDR: {
-		struct pml_locator *p = &node->locator;
-		free(p->name);
-		pmln_free((union pml_node *)p->pkt);
-		pmln_free((union pml_node *)p->idx);
-		pmln_free((union pml_node *)p->off);
-		pmln_free((union pml_node *)p->len);
 	} break;
 
 	case PMLTT_ASSIGN: {
@@ -747,6 +737,13 @@ void pmln_free(union pml_node *node)
 	case PMLTT_PRINT: {
 		struct pml_print *p = &node->print;
 		pmln_free((union pml_node *)p->args);
+	} break;
+
+	case PMLTT_VAR: {
+		struct pml_variable *p = &node->variable;
+		ht_rem(&p->hn);
+		free(p->name);
+		pmln_free((union pml_node *)p->init);
 	} break;
 
 	case PMLTT_FUNCTION: {
@@ -1120,18 +1117,6 @@ void pmlt_print(struct pml_ast *ast, union pml_node *np, uint depth)
 		print_bytes(ast, &p->u.maskval.mask, depth);
 	} break;
 
-	case PMLTT_VAR: {
-		struct pml_variable *p = &np->variable;
-		indent(depth);
-		printf("Variable: %s [%s; width=%lu, addr=%lu]\n", p->name,
-		       vts(p), (ulong)p->width, (ulong)p->addr);
-		if (p->init != NULL) {
-			indent(depth+1);
-			printf("Initialization value -- \n");
-			pmlt_print(ast, (union pml_node *)p->init, depth+1);
-		}
-	} break;
-
 	case PMLTT_UNOP: {
 		struct pml_op *p = &np->op;
 		indent(depth);
@@ -1164,40 +1149,6 @@ void pmlt_print(struct pml_ast *ast, union pml_node *np, uint depth)
 		indent(depth);
 		printf("Arguments -- \n");
 		pmlt_print(ast, (union pml_node *)p->args, depth+1);
-	} break;
-
-	case PMLTT_IF: {
-		struct pml_if *p = &np->ifstmt;
-		indent(depth);
-		printf("If Statement\n");
-
-		indent(depth);
-		printf("Test -- \n");
-		pmlt_print(ast, (union pml_node *)p->test, depth+1);
-
-		indent(depth);
-		printf("True body -- \n");
-		pmlt_print(ast, (union pml_node *)p->tbody, depth+1);
-
-		if (p->fbody != NULL) {
-			indent(depth);
-			printf("False body -- \n");
-			pmlt_print(ast, (union pml_node *)p->fbody, depth+1);
-		}
-	} break;
-
-	case PMLTT_WHILE: {
-		struct pml_while *p = &np->whilestmt;
-		indent(depth);
-		printf("While Statement\n");
-
-		indent(depth);
-		printf("Loop Test -- \n");
-		pmlt_print(ast, (union pml_node *)p->test, depth+1);
-
-		indent(depth);
-		printf("Loop Body -- \n");
-		pmlt_print(ast, (union pml_node *)p->body, depth+1);
 	} break;
 
 	case PMLTT_LOCATOR:
@@ -1252,6 +1203,40 @@ void pmlt_print(struct pml_ast *ast, union pml_node *np, uint depth)
 		}
 	} break;
 
+	case PMLTT_IF: {
+		struct pml_if *p = &np->ifstmt;
+		indent(depth);
+		printf("If Statement\n");
+
+		indent(depth);
+		printf("Test -- \n");
+		pmlt_print(ast, (union pml_node *)p->test, depth+1);
+
+		indent(depth);
+		printf("True body -- \n");
+		pmlt_print(ast, (union pml_node *)p->tbody, depth+1);
+
+		if (p->fbody != NULL) {
+			indent(depth);
+			printf("False body -- \n");
+			pmlt_print(ast, (union pml_node *)p->fbody, depth+1);
+		}
+	} break;
+
+	case PMLTT_WHILE: {
+		struct pml_while *p = &np->whilestmt;
+		indent(depth);
+		printf("While Statement\n");
+
+		indent(depth);
+		printf("Loop Test -- \n");
+		pmlt_print(ast, (union pml_node *)p->test, depth+1);
+
+		indent(depth);
+		printf("Loop Body -- \n");
+		pmlt_print(ast, (union pml_node *)p->body, depth+1);
+	} break;
+
 	case PMLTT_ASSIGN: {
 		struct pml_assign *p = &np->assign;
 		indent(depth);
@@ -1282,6 +1267,18 @@ void pmlt_print(struct pml_ast *ast, union pml_node *np, uint depth)
 			indent(depth);
 			printf("Arguments -- \n");
 			pmlt_print(ast, (union pml_node *)p->args, depth+1);
+		}
+	} break;
+
+	case PMLTT_VAR: {
+		struct pml_variable *p = &np->variable;
+		indent(depth);
+		printf("Variable: %s [%s; width=%lu, addr=%lu]\n", p->name,
+		       vts(p), (ulong)p->width, (ulong)p->addr);
+		if (p->init != NULL) {
+			indent(depth+1);
+			printf("Initialization value -- \n");
+			pmlt_print(ast, (union pml_node *)p->init, depth+1);
 		}
 	} break;
 
@@ -1411,18 +1408,6 @@ int pmln_walk(union pml_node *np, void *ctx, pml_walk_f pre, pml_walk_f in,
 		}
 	} break;
 
-	case PMLTT_VAR: {
-		struct pml_variable *p = &np->variable;
-		if (p->init != NULL) {
-			rv = pmln_walk((union pml_node *)p->init, ctx, pre, in,
-				       post);
-			if (rv < 0)
-				return rv;
-			else if (rv > 0)
-				return 0;
-		}
-	} break;
-
 	case PMLTT_UNOP: {
 		struct pml_op *p = &np->op;
 		rv = pmln_walk((union pml_node *)p->arg1, ctx, pre, in, post);
@@ -1463,6 +1448,47 @@ int pmln_walk(union pml_node *np, void *ctx, pml_walk_f pre, pml_walk_f in,
 			return rv;
 		else if (rv > 0)
 			return 0;
+	} break;
+
+	case PMLTT_LOCATOR:
+	case PMLTT_LOCADDR: {
+		struct pml_locator *p = &np->locator;
+
+		if (p->pkt != NULL) {
+			rv = pmln_walk((union pml_node *)p->pkt, ctx, pre, in,
+				       post);
+			if (rv < 0)
+				return rv;
+			else if (rv > 0)
+				return 0;
+		}
+
+		if (p->idx != NULL) {
+			rv = pmln_walk((union pml_node *)p->idx, ctx, pre, in,
+				       post);
+			if (rv < 0)
+				return rv;
+			else if (rv > 0)
+				return 0;
+		}
+
+		if (p->off != NULL) {
+			rv = pmln_walk((union pml_node *)p->off, ctx, pre, in,
+				       post);
+			if (rv < 0)
+				return rv;
+			else if (rv > 0)
+				return 0;
+		}
+
+		if (p->len != NULL) {
+			rv = pmln_walk((union pml_node *)p->len, ctx, pre, in,
+				       post);
+			if (rv < 0)
+				return rv;
+			else if (rv > 0)
+				return 0;
+		}
 	} break;
 
 	case PMLTT_IF: {
@@ -1530,47 +1556,6 @@ int pmln_walk(union pml_node *np, void *ctx, pml_walk_f pre, pml_walk_f in,
 			return 0;
 	} break;
 
-	case PMLTT_LOCATOR:
-	case PMLTT_LOCADDR: {
-		struct pml_locator *p = &np->locator;
-
-		if (p->pkt != NULL) {
-			rv = pmln_walk((union pml_node *)p->pkt, ctx, pre, in,
-				       post);
-			if (rv < 0)
-				return rv;
-			else if (rv > 0)
-				return 0;
-		}
-
-		if (p->idx != NULL) {
-			rv = pmln_walk((union pml_node *)p->idx, ctx, pre, in,
-				       post);
-			if (rv < 0)
-				return rv;
-			else if (rv > 0)
-				return 0;
-		}
-
-		if (p->off != NULL) {
-			rv = pmln_walk((union pml_node *)p->off, ctx, pre, in,
-				       post);
-			if (rv < 0)
-				return rv;
-			else if (rv > 0)
-				return 0;
-		}
-
-		if (p->len != NULL) {
-			rv = pmln_walk((union pml_node *)p->len, ctx, pre, in,
-				       post);
-			if (rv < 0)
-				return rv;
-			else if (rv > 0)
-				return 0;
-		}
-	} break;
-
 	case PMLTT_ASSIGN: {
 		struct pml_assign *p = &np->assign;
 
@@ -1613,6 +1598,18 @@ int pmln_walk(union pml_node *np, void *ctx, pml_walk_f pre, pml_walk_f in,
 			return rv;
 		else if (rv > 0)
 			return 0;
+	} break;
+
+	case PMLTT_VAR: {
+		struct pml_variable *p = &np->variable;
+		if (p->init != NULL) {
+			rv = pmln_walk((union pml_node *)p->init, ctx, pre, in,
+				       post);
+			if (rv < 0)
+				return rv;
+			else if (rv > 0)
+				return 0;
+		}
 	} break;
 
 	case PMLTT_FUNCTION: {
@@ -2652,8 +2649,8 @@ static int e_binop(struct pml_ast *ast, struct pml_stack_frame *fr,
 	int rv;
 
 	r->etype = PML_ETYPE_SCALAR;
-	abort_unless(op->arg1 != NULL && is_expr(op->arg1));
-	abort_unless(op->arg2 != NULL && is_expr(op->arg2));
+	abort_unless(is_expr(op->arg1));
+	abort_unless(is_expr(op->arg2));
 
 	if (pml_eval(ast, fr, (union pml_node *)op->arg1, &lr) < 0)
 		return -1;
@@ -2756,7 +2753,7 @@ static int e_unop(struct pml_ast *ast, struct pml_stack_frame *fr,
 	uint64_t arg;
 
 	abort_unless(op->etype == PML_ETYPE_SCALAR);
-	abort_unless(op->arg1 != NULL && is_expr(op->arg1));
+	abort_unless(is_expr(op->arg1));
 
 	if (pml_eval(ast, fr, (union pml_node *)op->arg1, &lr) < 0)
 		return -1;
@@ -3013,17 +3010,17 @@ static pml_eval_f evaltab[] = {
 	e_scalar,		/* PMLTT_SCALAR */
 	e_bytestr,		/* PMLTT_BYTESTR */
 	e_maskval,		/* PMLTT_MASKVAL */
-	unimplemented,		/* PMLTT_VAR */
 	e_binop,		/* PMLTT_BINOP */
 	e_unop,			/* PMLTT_UNOP */
 	e_call,			/* PMLTT_CALL */
-	unimplemented,		/* PMLTT_IF */
-	unimplemented,		/* PMLTT_WHILE */
 	e_locator,		/* PMLTT_LOCATOR */
 	e_locaddr,		/* PMLTT_LOCADDR */
+	unimplemented,		/* PMLTT_IF */
+	unimplemented,		/* PMLTT_WHILE */
 	unimplemented,		/* PMLTT_ASSIGN */
 	unimplemented,		/* PMLTT_CFMOD */
 	unimplemented,		/* PMLTT_PRINT */
+	unimplemented,		/* PMLTT_VAR */
 	unimplemented,		/* PMLTT_FUNCTION */
 	unimplemented,		/* PMLTT_RULE */
 };
@@ -3185,14 +3182,6 @@ static int pml_cexpr_walker(union pml_node *node, void *astp, void *xstk)
 
 	switch(node->base.type) {
 
-	case PMLTT_VAR: {
-		struct pml_variable *v = &node->variable;
-		if (v->init != NULL) {
-			if (pml_opt_e_cexpr(&v->init, astp) < 0)
-				return -1;
-		}
-	} break;
-
 	case PMLTT_BINOP:
 	case PMLTT_UNOP: {
 		struct pml_op *op = &node->op;
@@ -3213,6 +3202,16 @@ static int pml_cexpr_walker(union pml_node *node, void *astp, void *xstk)
 		}
 	} break;
 
+	case PMLTT_LOCATOR:
+	case PMLTT_LOCADDR: {
+		struct pml_locator *l = &node->locator;
+		if ((pml_opt_e_cexpr(&l->pkt, astp) < 0) ||
+		    (pml_opt_e_cexpr(&l->idx, astp) < 0) ||
+		    (pml_opt_e_cexpr(&l->off, astp) < 0) ||
+		    (pml_opt_e_cexpr(&l->len, astp) < 0))
+			return -1;
+	} break;
+
 	case PMLTT_IF: {
 		struct pml_if *pif = &node->ifstmt;
 		if (pml_opt_e_cexpr(&pif->test, astp) < 0)
@@ -3222,16 +3221,6 @@ static int pml_cexpr_walker(union pml_node *node, void *astp, void *xstk)
 	case PMLTT_WHILE: {
 		struct pml_while *w = &node->whilestmt;
 		if (pml_opt_e_cexpr(&w->test, astp) < 0)
-			return -1;
-	} break;
-
-	case PMLTT_LOCATOR:
-	case PMLTT_LOCADDR: {
-		struct pml_locator *l = &node->locator;
-		if ((pml_opt_e_cexpr(&l->pkt, astp) < 0) ||
-		    (pml_opt_e_cexpr(&l->idx, astp) < 0) ||
-		    (pml_opt_e_cexpr(&l->off, astp) < 0) ||
-		    (pml_opt_e_cexpr(&l->len, astp) < 0))
 			return -1;
 	} break;
 
@@ -3247,6 +3236,14 @@ static int pml_cexpr_walker(union pml_node *node, void *astp, void *xstk)
 		l_for_each_safe(n, x, &p->args->list) {
 			arg = (union pml_expr_u *)l_to_node(n);
 			if (pml_opt_l_cexpr(arg, astp) < 0)
+				return -1;
+		}
+	} break;
+
+	case PMLTT_VAR: {
+		struct pml_variable *v = &node->variable;
+		if (v->init != NULL) {
+			if (pml_opt_e_cexpr(&v->init, astp) < 0)
 				return -1;
 		}
 	} break;

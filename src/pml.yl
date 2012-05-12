@@ -524,6 +524,8 @@ stmt(S) ::= PRINT STRING(FMT) COMMA exprlist(EL) SEMICOLON. {
 	S = (union pml_node *)p;
 }
 
+stmt(S) ::= expr(E) SEMICOLON. { S = (union pml_node *)E; }
+
 pktpat(PP) ::= PPBEGIN expr(E) PPEND. { PP = E; }
 
 expr(E) ::= orexpr(OE). { E = OE; }

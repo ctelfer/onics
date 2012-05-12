@@ -1,3 +1,10 @@
+# IP header checksum computation
+#
+# variables, packet fields, loops, packet byte strings
+# if statements, print, multiply, equals, greater than
+# plus, minus, right-shift, binary AND, packet header pattern
+#
+
 ?- ip -? {
 	off = 0;
 	hlen = ip.hlen;

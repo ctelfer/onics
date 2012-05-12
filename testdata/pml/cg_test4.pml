@@ -1,3 +1,6 @@
+#
+# Packet fields and bit fields
+#
 ?- eth.vlan0 and eth.vlan0.pcp > 1 -? 
 { 
 	drop; 
