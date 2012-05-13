@@ -208,7 +208,7 @@ static int _e_max(struct pml_ast *ast, struct pml_stack_frame *fr,
 
 
 static struct pml_intrinsic stdintr[] = {
-	{ "pkt_new", 3, 0, NULL, { "pnum", "hdrm", "len" } },
+	{ "pkt_new", 2, 0, NULL, { "pnum", "len" } },
 	{ "pkt_swap", 2, 0, NULL, { "pndst", "pnsrc" } },
 	{ "pkt_copy", 2, 0, NULL, { "pndst", "pnsrc" } },
 	{ "pkt_del", 1, 0, NULL, { "pnum" } },
@@ -217,9 +217,9 @@ static struct pml_intrinsic stdintr[] = {
 	{ "pkt_cut_u", 3, 0, NULL, { "pnum", "off", "len" } },
 	{ "pkt_cut_d", 3, 0, NULL, { "pnum", "off", "len" } },
 	{ "pkt_parse", 1, 0, NULL, { "pnum" } },
-	{ "parse_push_back", 3, 0, NULL, { "pnum", "prid", "hlen" } },
+	{ "parse_push_back", 2, 0, NULL, { "pnum", "prid" } },
 	{ "parse_pop_back", 1, 0, NULL, { "pnum" } },
-	{ "parse_push_front", 3, 0, NULL, { "pnum", "prid", "plen" } },
+	{ "parse_push_front", 2, 0, NULL, { "pnum", "prid" } },
 	{ "parse_pop_front", 1, 0, NULL, { "pnum" } },
 	{ "parse_update", 1, 0, NULL, { "pdesc" } },
 	{ "fix_dltype", 1, 0, NULL, { "pnum" } },
@@ -819,8 +819,8 @@ struct pml_call *pml_call_alloc(struct pml_ast *ast, struct pml_function *func,
 	alen = l_length(&args->list);
 	if (alen != func->arity) {
 		pml_ast_err(ast, "argument length for call of '%s' does"
-				 "not match function arity (%u vs %u)\n)",
-			    alen, func->arity);
+				 "not match function arity (%u vs %u)\n",
+			    func->name, alen, func->arity);
 		return NULL;
 	}
 

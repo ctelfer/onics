@@ -425,9 +425,8 @@ enum {
 				/*    a1 to a2.  (note unified addresses) */
 
 	/* packet specific operations */
-	NETVM_OC_PKNEW,		/* [pdesc] create packet: */
-	                        /*   offset == len, ptype == dl type */
-	NETVM_OC_PKSWAP,	/* [p1,p2] swap packets p1 and p2  */
+	NETVM_OC_PKNEW,		/* [pkn,len] create packet of length 'len' */
+	NETVM_OC_PKSWAP,	/* [pkn1,pkn2] swap packets pkn1 and pkn2  */
 	NETVM_OC_PKCOPY,	/* [pkn2,pkn1] copy packet from pkn1 to pkn2 */
 	NETVM_OC_PKDEL,		/* [pkn] delete packet */
 

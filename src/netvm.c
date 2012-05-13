@@ -1039,22 +1039,23 @@ static void ni_pkswap(struct netvm *vm)
 }
 
 
+#define HDRPAD	384
 static void ni_pknew(struct netvm *vm)
 {
-	struct netvm_prp_desc pd0;
+	uint64_t pktnum;
+	uint64_t len;
 	struct pktbuf *pnew;
 
-	netvm_get_pd(vm, &pd0, 0);
-	if (vm->error)
-		return;
-
-	FATAL(vm, NETVM_ERR_PKTNUM, pd0.pktnum >= NETVM_MAXPKTS);
-	/* NOTE: prid must be a PKDL_* value, not a PRID_* value */
-	pnew = pkb_create(pd0.offset);
+	S_POP(vm, len);
+	S_POP(vm, pktnum);
+	FATAL(vm, NETVM_ERR_PKTNUM, pktnum >= NETVM_MAXPKTS);
+	FATAL(vm, NETVM_ERR_NOMEM, (PKB_MAX_PKTLEN - HDRPAD) < len);
+	pnew = pkb_create(len + HDRPAD);
 	FATAL(vm, NETVM_ERR_NOMEM, !pnew);
-	pkb_set_dltype(pnew, pd0.prid);
-	pkb_free(vm->packets[pd0.pktnum]);
-	vm->packets[pd0.pktnum] = pnew;
+	pkb_set_len(pnew, len);
+	pkb_set_off(pnew, HDRPAD);
+	pkb_free(vm->packets[pktnum]);
+	vm->packets[pktnum] = pnew;
 }
 
 
@@ -1062,6 +1063,7 @@ static void ni_pkcopy(struct netvm *vm)
 {
 	uint64_t pktnum, slot;
 	struct pktbuf *pkb, *pnew;
+
 	S_POP(vm, pktnum);
 	FATAL(vm, NETVM_ERR_PKTNUM, pktnum >= NETVM_MAXPKTS);
 	FATAL(vm, NETVM_ERR_NOPKT, !(pkb = vm->packets[pktnum]));

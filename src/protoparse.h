@@ -207,6 +207,9 @@ void prp_init_parse(struct prparse *base, ulong len);
 /* Insert a parse into the parse list */
 void prp_insert_parse(struct prparse *from, struct prparse *toins);
 
+/* remove a parse from a parse list */
+void prp_remove_parse(struct prparse *prp);
+
 /* Given an initialized protocol parse header for a buffer (PRID_NONE) and */
 /* an initial protocol id, parse the packet and add to the list */
 /* of PRPs.  Returns -1 on an allocation error.  Otherwise, parse errors */
@@ -227,8 +230,8 @@ int prp_get_spec(uint prid, struct prparse *prp, int enclose,
 /* outermost parse. If the 'buf parameter is not NULL the operation */
 /* will also create a 'default' packet format in the buffer at the */
 /* offsets indicated by the prpspec.  If enclose is non-zero, then the */
-/* operation will search for all parses in 'reg' that fall within the new */
-/* parse's region and reassign them to refer to the new parse as their */
+/* operation will search for outermost parses in 'reg' that fall within the */
+/* new parse's region and reassign them to refer to the new parse as their */
 /* region */
 int prp_add(struct prparse *reg, byte_t *buf, struct prpspec *ps, int enclose);
 

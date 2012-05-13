@@ -204,36 +204,6 @@ static uint nexti(struct pml_ibuf *b)
 }
 
 
-STATIC_BUG_ON(NETVM_PD_OFF_OFF_is_0, NETVM_PD_OFF_OFF != 0);
-
-static int _pkt_new(struct pml_ibuf *b, struct pml_ast *ast, struct pml_call *c,
-		    struct cg_intr *intr)
-{
-	struct pml_list *pl = c->args;
-	union pml_node *pkt, *dltype, *len;
-
-	abort_unless(l_length(&pl->list) == 3);
-
-	pkt = l_to_node(l_head(&pl->list));
-	dltype = l_to_node(l_next(&pkt->base.ln));
-	len = l_to_node(l_next(&dltype->base.ln));
-	
-	if (cg_expr(b, ast, pkt, PML_ETYPE_SCALAR) < 0)
-		return -1;
-	EMIT_W(b, SHLI, NETVM_PD_PKT_OFF);
-	if (cg_expr(b, ast, dltype, PML_ETYPE_SCALAR) < 0)
-		return -1;
-	EMIT_W(b, SHLI, NETVM_PD_PRID_OFF);
-	if (cg_expr(b, ast, len, PML_ETYPE_SCALAR) < 0)
-		return -1;
-	EMIT_NULL(b, OR);
-	EMIT_NULL(b, OR);
-	EMIT_NULL(b, PKNEW);
-
-	return -1;
-}
-
-
 static int _i_scarg(struct pml_ibuf *b, struct pml_ast *ast, struct pml_call *c,
 		    struct cg_intr *intr)
 {
@@ -350,7 +320,7 @@ static int _i_inscut(struct pml_ibuf *b, struct pml_ast *ast,
 
 
 struct cg_intr intrinsics[] = { 
-	{ "pkt_new", _pkt_new, 1, 0, { {0} } },
+	{ "pkt_new", _i_scarg, 1, 1, { NETVM_OP(PKNEW,0,0,0,0) } },
 	{ "pkt_swap", _i_scarg, 1, 1, { NETVM_OP(PKSWAP,0,0,0,0) } },
 	{ "pkt_copy", _i_scarg, 1, 1, { NETVM_OP(PKCOPY,0,0,0,0) } },
 	{ "pkt_del", _i_scarg, 1, 1, { NETVM_OP(PKDEL,0,0,0,0) }  },

@@ -109,13 +109,15 @@ int pp_unregister(uint prid)
 }
 
 
-/* -- ops for the "NONE" protocol type -- */
+/* -- ops for the "NONE" and "NONE" base type protocol type -- */
 
 static void none_update(struct prparse *prp, byte_t *buf);
 static int none_fixlen(struct prparse *prp, byte_t *buf);
 static int none_fixcksum(struct prparse *prp, byte_t *buf);
 static struct prparse *none_copy(struct prparse *oprp);
 static void none_free(struct prparse *prp);
+static struct prparse *base_copy(struct prparse *oprp);
+static void base_free(struct prparse *prp);
 
 static struct prparse_ops none_prparse_ops = {
 	none_update,
@@ -126,12 +128,21 @@ static struct prparse_ops none_prparse_ops = {
 };
 
 
-static void none_init(struct prparse *prp, ulong off, ulong hlen, ulong plen, 
+static struct prparse_ops base_prparse_ops = {
+	none_update,
+	none_fixlen,
+	none_fixcksum,
+	base_copy,
+	base_free
+};
+
+
+static void base_init(struct prparse *prp, ulong off, ulong hlen, ulong plen, 
 		      ulong tlen)
 {
 	prp->prid = PRID_NONE;
 	prp->error = 0;
-	prp->ops = &none_prparse_ops;
+	prp->ops = &base_prparse_ops;
 	l_init(&prp->node);
 	prp->region = NULL;
 	prp->noff = PRP_OI_MIN_NUM;
@@ -139,7 +150,6 @@ static void none_init(struct prparse *prp, ulong off, ulong hlen, ulong plen,
 	prp_poff(prp) = prp_soff(prp) + hlen;
 	prp_toff(prp) = prp_poff(prp) + plen;
 	prp_eoff(prp) = prp_toff(prp) + tlen;
-
 	abort_unless(prp_soff(prp) <= prp_poff(prp));
 	abort_unless(prp_poff(prp) <= prp_toff(prp));
 	abort_unless(prp_toff(prp) <= prp_eoff(prp));
@@ -149,10 +159,25 @@ static void none_init(struct prparse *prp, ulong off, ulong hlen, ulong plen,
 static struct prparse *none_new(struct prpspec *ps)
 {
 	struct prparse *prp;
+
 	prp = malloc(sizeof(*prp));
 	if (!prp)
 		return NULL;
-	none_init(prp, ps->off, ps->hlen, ps->plen, ps->tlen);
+
+	prp->prid = PRID_NONE;
+	prp->error = 0;
+	prp->ops = &none_prparse_ops;
+	l_init(&prp->node);
+	prp->region = NULL;
+	prp->noff = PRP_OI_MIN_NUM;
+	prp_soff(prp) = ps->off;
+	prp_poff(prp) = prp_soff(prp) + ps->hlen;
+	prp_toff(prp) = prp_poff(prp) + ps->plen;
+	prp_eoff(prp) = prp_toff(prp) + ps->tlen;
+	abort_unless(prp_soff(prp) <= prp_poff(prp));
+	abort_unless(prp_poff(prp) <= prp_toff(prp));
+	abort_unless(prp_toff(prp) <= prp_eoff(prp));
+
 	return prp;
 }
 
@@ -263,6 +288,17 @@ static void none_free(struct prparse *prp)
 }
 
 
+static struct prparse *base_copy(struct prparse *oprp)
+{
+	return NULL;
+}
+
+
+static void base_free(struct prparse *prp)
+{
+	abort_unless(0);
+}
+
 
 /* -- Protocol Parse Functions -- */
 struct prparse *prp_next_in_region(struct prparse *from, struct prparse *reg)
@@ -289,7 +325,7 @@ int prp_region_empty(struct prparse *reg)
 void prp_init_parse(struct prparse *base, ulong len)
 {
 	abort_unless(base && (len >= 0));
-	none_init(base, 0, 0, len, 0);
+	base_init(base, 0, 0, len, 0);
 }
 
 
@@ -380,6 +416,9 @@ int prp_get_spec(uint prid, struct prparse *prp, int enclose,
 		 struct prpspec *ps)
 {
 	const struct proto_parser *pp;
+	struct prparse dummy;
+	int rv;
+
 	if (!prp || !ps) {
 		errno = EINVAL;
 		return -1;
@@ -391,7 +430,21 @@ int prp_get_spec(uint prid, struct prparse *prp, int enclose,
 		return -1;
 	}
 
-	return (*pp->ops->getspec)(prp, enclose, ps);
+	/* If we are wrapping an empty data block, treat the payload */
+	/* as an embedded none-type parse to wrap around and pop afterwards. */
+	if (enclose && prp_empty(prp)) {
+		base_init(&dummy, prp_poff(prp), 0, prp_plen(prp), 0);
+		dummy.region = prp;
+		prp_insert_parse(prp, &dummy);
+		prp = &dummy;
+	}
+
+	rv = (*pp->ops->getspec)(prp, enclose, ps);
+
+	if (prp == &dummy)
+		prp_remove_parse(&dummy);
+
+	return rv;
 }
 
 
@@ -437,6 +490,19 @@ void prp_clear(struct prparse *prp)
 		l_rem(&next->node);
 		(*next->ops->free)(next);
 	}
+}
+
+
+void prp_remove_parse(struct prparse *prp)
+{
+	struct prparse *next;
+	if (!prp)
+		return;
+	abort_unless(prp->region != NULL);
+	for (next = prp_next_in_region(prp, prp); next != NULL;
+	     next = prp_next_in_region(next, prp))
+		next->region = prp->region;
+	l_rem(&prp->node);
 }
 
 

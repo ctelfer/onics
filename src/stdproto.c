@@ -265,7 +265,7 @@ static int eth_add(struct prparse *reg, byte_t *buf, struct prpspec *ps,
 		return -1;
 	}
 
-	prp = crtprp(sizeof(struct prparse), PRID_ETHERNET2, 
+	prp = crtprp(sizeof(struct eth_parse), PRID_ETHERNET2, 
 		     ps->off, ps->hlen, ps->plen, ps->tlen,
 		     &eth_prparse_ops, PRP_ETH_NXFIELDS);
 	if (!prp)

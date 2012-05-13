@@ -210,34 +210,34 @@ uint16_t pkb_get_dltype(struct pktbuf *pkb)
 
 void pkb_set_off(struct pktbuf *pkb, ulong off)
 {
-	ulong l;
+	ulong len;
 
 	abort_unless(!pkb_is_parsed(pkb));
 
-	l = prp_plen(&pkb->prp);
+	len = prp_plen(&pkb->prp);
 
 	/* check for overflow/underflow:  integer then buffer */
-	abort_unless(l + off >= off);
-	abort_unless(l + off <= prp_totlen(&pkb->prp));
+	abort_unless(len + off >= off);
+	abort_unless(len + off <= prp_totlen(&pkb->prp));
 
 	prp_poff(&pkb->prp) = off;
-	prp_toff(&pkb->prp) = off + l;
+	prp_toff(&pkb->prp) = off + len;
 }
 
 
 void pkb_set_len(struct pktbuf *pkb, ulong len)
 {
-	ulong l;
+	ulong off;
 
 	abort_unless(!pkb_is_parsed(pkb));
 
-	l = prp_poff(&pkb->prp);
+	off = prp_poff(&pkb->prp);
 
 	/* check for overflow/underflow:  integer then buffer */
-	abort_unless(l + len >= len);
-	abort_unless(l + len <= prp_totlen(&pkb->prp));
+	abort_unless(off + len >= len);
+	abort_unless(off + len <= prp_totlen(&pkb->prp));
 
-	prp_toff(&pkb->prp) = len + l;
+	prp_toff(&pkb->prp) = off + len;
 }
 
 
@@ -632,8 +632,6 @@ int pkb_pushprp(struct pktbuf *pkb, int prid)
 int pkb_wrapprp(struct pktbuf *pkb, int prid)
 {
 	struct prpspec ps;
-	if (prp_empty(&pkb->prp)) /* nothing to wrap */
-		return -1;
 	if (prp_get_spec(prid, prp_next(&pkb->prp), 1, &ps) < 0)
 		return -1;
 	if (prp_add(&pkb->prp, pkb->buf, &ps, 1) < 0)
