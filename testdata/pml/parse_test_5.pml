@@ -12,7 +12,7 @@ BEGIN {
 }
 
 
-func true() {
+int true() {
 	while (1) {
 		return 1;
 	}
@@ -27,7 +27,7 @@ func true() {
 	if ( true() ) {
 		drop;
 	}
-	nextpkt;
+	sendpkt;
 }
 
 ?- ip -? { 
@@ -36,7 +36,7 @@ func true() {
 	if ( 1 and true() ) {
 		drop;
 	}
-	nextpkt;
+	sendpkt;
 }
 
 ?- ip -? { 
@@ -45,7 +45,7 @@ func true() {
 	if ( 1 and true() ) {
 		drop;
 	}
-	nextpkt;
+	sendpkt;
 }
 
 ?- ip -? { 
@@ -53,6 +53,6 @@ func true() {
 	if ( @tcp{0,i} and true() ) {
 		drop;
 	}
-	nextpkt;
+	sendpkt;
 }
 

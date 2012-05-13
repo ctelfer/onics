@@ -3,7 +3,7 @@
 #
 # addition, call, local variables, parameters, equals, print
 # 
-func test(a, b) { 
+int test(a, b) { 
 	return a + b;
 }
 

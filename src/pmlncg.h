@@ -36,8 +36,6 @@ struct pmlncg {
 	struct pml_ast *	ast;		/* AST we are building from */
 	struct netvm_program *	prog;		/* program we are generating */
 	struct pml_ibuf		ibuf;		/* current instruction buf */
-	uint			dropaddr;	/* address of 'drop' code */
-	uint			nxtpaddr;	/* address of 'nextpkt' code */
 
 	struct pml_function *	curfunc;
 	struct pml_while *	curloop;

@@ -153,6 +153,7 @@ enum {
 	PML_ETYPE_SCALAR,
 	PML_ETYPE_BYTESTR,
 	PML_ETYPE_MASKVAL,
+	PML_ETYPE_VOID,
 };
 
 enum {
@@ -337,7 +338,7 @@ enum {
 	PML_CFM_BREAK,
 	PML_CFM_CONTINUE,
 	PML_CFM_NEXTRULE,
-	PML_CFM_NEXTPKT,
+	PML_CFM_SENDPKT,
 	PML_CFM_DROP,
 
 };
@@ -413,6 +414,7 @@ struct pml_function {
 	struct hnode		hn;	/* node for lookup in the AST */
 	char *			name;
 
+	ushort			rtype;	/* return type */
 	uint			arity;	/* number of arguments */
 	struct pml_symtab	vars;
 	union pml_node *	body;	/* expr for pred, list for func */
@@ -421,7 +423,6 @@ struct pml_function {
 	int			flags;
 	ulong			pstksz;
 	ulong			vstksz;
-	ulong			width;	/* of return value: always 8 for now */
 	ulong			addr;
 };
 
@@ -500,6 +501,7 @@ struct pml_retval {
 #define PML_MAXIARGS		4
 struct pml_intrinsic {
 	char *			name;
+	int			rtype;
 	int			arity;
 	int			flags;
 	pml_eval_f		eval;

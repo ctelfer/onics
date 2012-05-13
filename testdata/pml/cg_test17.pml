@@ -1,7 +1,7 @@
 #
 # expressions as statements
 #
-func dummy(a, b, c) {
+int dummy(a, b, c) {
 	return 2 * b + c << a;
 }
 

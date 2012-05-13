@@ -1,4 +1,4 @@
-func test(a, b) { 
+int test(a, b) { 
 	return a + b;
 }
 

@@ -330,13 +330,17 @@ decl ::= rule(R). {
 		pmln_free((union pml_node *)R);
 }
 
-funcdecl(F) ::= FUNC ID(N) LPAREN idlist(P) RPAREN LBRACE 
+type(T) ::= INT. { T = PML_ETYPE_SCALAR; }
+type(T) ::= VOID. { T = PML_ETYPE_VOID; }
+
+funcdecl(F) ::= type(T) ID(N) LPAREN idlist(P) RPAREN LBRACE 
                 stmts(S) RBRACE. {
 	struct list *t, *x; 
 	struct pml_variable *p;
 
 	F = (struct pml_function *)pmln_alloc(PMLTT_FUNCTION);
 	F->name = (char *)N.u.raw.data;
+	F->rtype = T;
 
 	l_for_each_safe(t, x, &P->list) {
 		F->arity += 1;
@@ -360,6 +364,7 @@ inlinedecl(I) ::= INLINE ID(N) LPAREN idlist(P) RPAREN LBRACE expr(E) RBRACE. {
 
 	I = (struct pml_function *)pmln_alloc(PMLTT_FUNCTION);
 	I->name = (char *)N.u.raw.data;
+	I->rtype = PML_ETYPE_SCALAR;
 
 	l_for_each_safe(t, x, &P->list) {
 		I->arity += 1;
@@ -503,7 +508,7 @@ stmt(S) ::= cfmkw(C) SEMICOLON. {
 cfmkw(C) ::= BREAK. { C = PML_CFM_BREAK; }
 cfmkw(C) ::= CONTINUE. { C = PML_CFM_CONTINUE; }
 cfmkw(C) ::= NEXTRULE. { C = PML_CFM_NEXTRULE; }
-cfmkw(C) ::= NEXTPKT. { C = PML_CFM_NEXTPKT; }
+cfmkw(C) ::= SENDPKT. { C = PML_CFM_SENDPKT; }
 cfmkw(C) ::= DROP. { C = PML_CFM_DROP; }
 
 stmt(S) ::= PRINT STRING(FMT) SEMICOLON. {

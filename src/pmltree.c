@@ -208,29 +208,33 @@ static int _e_max(struct pml_ast *ast, struct pml_stack_frame *fr,
 
 
 static struct pml_intrinsic stdintr[] = {
-	{ "pkt_new", 2, 0, NULL, { "pnum", "len" } },
-	{ "pkt_swap", 2, 0, NULL, { "pndst", "pnsrc" } },
-	{ "pkt_copy", 2, 0, NULL, { "pndst", "pnsrc" } },
-	{ "pkt_del", 1, 0, NULL, { "pnum" } },
-	{ "pkt_ins_u", 3, 0, NULL, { "pnum", "off", "len" } },
-	{ "pkt_ins_d", 3, 0, NULL, { "pnum", "off", "len" } },
-	{ "pkt_cut_u", 3, 0, NULL, { "pnum", "off", "len" } },
-	{ "pkt_cut_d", 3, 0, NULL, { "pnum", "off", "len" } },
-	{ "pkt_parse", 1, 0, NULL, { "pnum" } },
-	{ "parse_push_back", 2, 0, NULL, { "pnum", "prid" } },
-	{ "parse_pop_back", 1, 0, NULL, { "pnum" } },
-	{ "parse_push_front", 2, 0, NULL, { "pnum", "prid" } },
-	{ "parse_pop_front", 1, 0, NULL, { "pnum" } },
-	{ "parse_update", 1, 0, NULL, { "pdesc" } },
-	{ "fix_dltype", 1, 0, NULL, { "pnum" } },
-	{ "fix_len", 1, 0, NULL, { "pdesc" } },
-	{ "fix_all_len", 1, 0, NULL, { "pnum" } },
-	{ "fix_csum", 1, 0, NULL, { "pdesc" } },
-	{ "fix_all_csum", 1, 0, NULL, { "pnum" } },
-	{ "pop", 1, PML_FF_PCONST|PML_FF_INLINE, _e_pop, { "num" } },
-	{ "log2", 1, PML_FF_PCONST|PML_FF_INLINE, _e_log2, { "num" } },
-	{ "min", 2, PML_FF_PCONST|PML_FF_INLINE, _e_min, { "num1", "num2" } },
-	{ "max", 2, PML_FF_PCONST|PML_FF_INLINE, _e_max, { "num1", "num2" } },
+	{ "pkt_new", PML_ETYPE_VOID, 2, 0, NULL, { "pnum", "len" } },
+	{ "pkt_swap", PML_ETYPE_VOID, 2, 0, NULL, { "pndst", "pnsrc" } },
+	{ "pkt_copy", PML_ETYPE_VOID, 2, 0, NULL, { "pndst", "pnsrc" } },
+	{ "pkt_del", PML_ETYPE_VOID, 1, 0, NULL, { "pnum" } },
+	{ "pkt_ins_u", PML_ETYPE_VOID, 3, 0, NULL, { "pnum", "off", "len" } },
+	{ "pkt_ins_d", PML_ETYPE_VOID, 3, 0, NULL, { "pnum", "off", "len" } },
+	{ "pkt_cut_u", PML_ETYPE_VOID, 3, 0, NULL, { "pnum", "off", "len" } },
+	{ "pkt_cut_d", PML_ETYPE_VOID, 3, 0, NULL, { "pnum", "off", "len" } },
+	{ "pkt_parse", PML_ETYPE_VOID, 1, 0, NULL, { "pnum" } },
+	{ "parse_push_back", PML_ETYPE_VOID, 2, 0, NULL, { "pnum", "prid" } },
+	{ "parse_pop_back", PML_ETYPE_VOID, 1, 0, NULL, { "pnum" } },
+	{ "parse_push_front", PML_ETYPE_VOID, 2, 0, NULL, { "pnum", "prid" } },
+	{ "parse_pop_front", PML_ETYPE_VOID, 1, 0, NULL, { "pnum" } },
+	{ "parse_update", PML_ETYPE_VOID, 1, 0, NULL, { "pdesc" } },
+	{ "fix_dltype", PML_ETYPE_VOID, 1, 0, NULL, { "pnum" } },
+	{ "fix_len", PML_ETYPE_VOID, 1, 0, NULL, { "pdesc" } },
+	{ "fix_all_len", PML_ETYPE_VOID, 1, 0, NULL, { "pnum" } },
+	{ "fix_csum", PML_ETYPE_VOID, 1, 0, NULL, { "pdesc" } },
+	{ "fix_all_csum", PML_ETYPE_VOID, 1, 0, NULL, { "pnum" } },
+	{ "pop", PML_ETYPE_SCALAR, 1, PML_FF_PCONST|PML_FF_INLINE,
+		_e_pop, { "num" } },
+	{ "log2", PML_ETYPE_SCALAR, 1, PML_FF_PCONST|PML_FF_INLINE,
+		_e_log2, { "num" } },
+	{ "min", PML_ETYPE_SCALAR, 2, PML_FF_PCONST|PML_FF_INLINE,
+		_e_min, { "num1", "num2" } },
+	{ "max", PML_ETYPE_SCALAR, 2, PML_FF_PCONST|PML_FF_INLINE,
+		_e_max, { "num1", "num2" } },
 };
 
 
@@ -353,6 +357,7 @@ int pml_ast_add_intrinsic(struct pml_ast *ast, struct pml_intrinsic *intr)
 			return -1;
 		}
 	}
+	f->rtype = intr->rtype;
 	f->arity = intr->arity;
 	f->ieval = intr->eval;
 	f->flags = intr->flags | PML_FF_INTRINSIC;
@@ -633,7 +638,6 @@ union pml_node *pmln_alloc(int type)
 			return NULL;
 		}
 		p->flags = 0;
-		p->width = 8;
 		p->name = NULL;
 		p->arity = 0;
 		p->body = NULL;
@@ -826,8 +830,8 @@ struct pml_call *pml_call_alloc(struct pml_ast *ast, struct pml_function *func,
 
 	c->func = func;
 	c->args = args;
-	c->width = func->width;
-	c->etype = PML_ETYPE_SCALAR;
+	c->etype = func->rtype;
+	c->width = (c->etype == PML_ETYPE_SCALAR) ? 8 : 0;
 	c->eflags = 0;
 
 	/* a call is a constant expression if the function is an inline */
@@ -950,14 +954,22 @@ static const char *efs(void *p, char s[80])
 
 
 static const char *etype_strs[] = {
-	"unknown", "scalar", "byte string", "masked string"
+	"unknown", "scalar", "byte string", "masked string", "void"
 };
 static const char *ets(void *p) {
 	struct pml_expr_base *e = p;
 	abort_unless(p);
 	abort_unless(e->etype >= PML_ETYPE_UNKNOWN && 
-		     e->etype <= PML_ETYPE_MASKVAL);
+		     e->etype <= PML_ETYPE_VOID);
 	return etype_strs[e->etype];
+}
+
+static const char *rtstr(void *p) {
+	struct pml_function *f = p;
+	abort_unless(p);
+	abort_unless(f->rtype >= PML_ETYPE_UNKNOWN && 
+		     f->rtype <= PML_ETYPE_VOID);
+	return etype_strs[f->rtype];
 }
 
 
@@ -1011,7 +1023,7 @@ static const char *opstr(struct pml_op *op)
 
 
 static const char *cfm_strs[] = {
-	"unknown", "return", "break", "continue", "nextrule", "nextpkt",
+	"unknown", "return", "break", "continue", "nextrule", "sendpkt",
 	"drop"
 };
 static const char *cfmstr(struct pml_cfmod *m)
@@ -1286,9 +1298,9 @@ void pmlt_print(struct pml_ast *ast, union pml_node *np, uint depth)
 		struct pml_function *p = &np->function;
 		struct list *n;
 		indent(depth);
-		printf("%s: %s() -- %d args, %d vars, return width=%lu\n",
+		printf("%s: %s() -- %d args, %d vars, return type=%s\n",
 		       funcstr(p, estr), p->name, p->arity, (int)p->vstksz,
-		       (ulong)p->width);
+		       rtstr(p));
 
 		indent(depth);
 		printf("Parameters & Variables -- \n");

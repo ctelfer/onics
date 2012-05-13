@@ -13,10 +13,12 @@
 	 (((uint64_t)(_s) & NETVM_SEG_SEGMASK) << NETVM_UA_SEG_OFF))
 #define PKTADDR(_a, _p) MEMADDR(_a, ((_p) | NETVM_SEG_ISPKT))
 
+/* some forward declarations of commonly needed functions */
 static int val64(struct pml_ast *ast, union pml_node *n, uint64_t *v);
 int cg_expr(struct pml_ibuf *b, struct pml_ast *ast, union pml_node *n,
 	    int etype);
 int cg_stmt(struct pmlncg *cg, union pml_node *n);
+static int typecast(struct pml_ibuf *b, int otype, int ntype);
 
 
 struct cg_pdesc {
@@ -67,7 +69,6 @@ typedef int (*cg_intr_call_f)(struct pml_ibuf *b, struct pml_ast *ast,
 struct cg_intr {
 	const char *		name;
 	cg_intr_call_f		cgf;
-	uint			noret;
 	uint			numop;
 	struct netvm_inst	ops[CG_INTR_MAXOPS];
 };
@@ -320,42 +321,42 @@ static int _i_inscut(struct pml_ibuf *b, struct pml_ast *ast,
 
 
 struct cg_intr intrinsics[] = { 
-	{ "pkt_new", _i_scarg, 1, 1, { NETVM_OP(PKNEW,0,0,0,0) } },
-	{ "pkt_swap", _i_scarg, 1, 1, { NETVM_OP(PKSWAP,0,0,0,0) } },
-	{ "pkt_copy", _i_scarg, 1, 1, { NETVM_OP(PKCOPY,0,0,0,0) } },
-	{ "pkt_del", _i_scarg, 1, 1, { NETVM_OP(PKDEL,0,0,0,0) }  },
-	{ "pkt_ins_u", _i_inscut, 1, 1, { NETVM_OP(PKINS,0,0,0,0) } },
-	{ "pkt_ins_d", _i_inscut, 1, 1, { NETVM_OP(PKINS,0,0,0,0) } },
-	{ "pkt_cut_u", _i_inscut, 1, 1, { NETVM_OP(PKCUT,0,0,0,0) } },
-	{ "pkt_cut_d", _i_inscut, 1, 1, { NETVM_OP(PKCUT,0,0,0,0) } },
-	{ "pkt_parse", _i_scarg, 1, 1, { NETVM_OP(PKPRS,0,0,0,0) } },
-	{ "parse_push_back",  _i_scarg, 1, 1, { NETVM_OP(PKPPSH,0,0,0,0) } },
-	{ "parse_pop_back",   _i_scarg, 1, 1, { NETVM_OP(PKPPOP,0,0,0,0) } },
-	{ "parse_push_front", _i_scarg, 1, 1, { NETVM_OP(PKPPSH,1,0,0,0) } },
-	{ "parse_pop_front",  _i_scarg, 1, 1, { NETVM_OP(PKPPOP,1,0,0,0) } },
-	{ "parse_update", _i_pdarg, 1, 1, { NETVM_OP(PKPUP,0,0,0,0) } },
-	{ "fix_dltype", _i_scarg, 1, 1, { NETVM_OP(PKFXD,0,0,0,0) } },
-	{ "fix_len", _i_pdarg, 1, 1, { NETVM_OP(PKFXL,0,0,0,0) } },
-	{ "fix_all_len",  _i_scarg, 1, 3, 
+	{ "pkt_new", _i_scarg, 1, { NETVM_OP(PKNEW,0,0,0,0) } },
+	{ "pkt_swap", _i_scarg, 1, { NETVM_OP(PKSWAP,0,0,0,0) } },
+	{ "pkt_copy", _i_scarg, 1, { NETVM_OP(PKCOPY,0,0,0,0) } },
+	{ "pkt_del", _i_scarg, 1, { NETVM_OP(PKDEL,0,0,0,0) }  },
+	{ "pkt_ins_u", _i_inscut, 1, { NETVM_OP(PKINS,0,0,0,0) } },
+	{ "pkt_ins_d", _i_inscut, 1, { NETVM_OP(PKINS,0,0,0,0) } },
+	{ "pkt_cut_u", _i_inscut, 1, { NETVM_OP(PKCUT,0,0,0,0) } },
+	{ "pkt_cut_d", _i_inscut, 1, { NETVM_OP(PKCUT,0,0,0,0) } },
+	{ "pkt_parse", _i_scarg, 1, { NETVM_OP(PKPRS,0,0,0,0) } },
+	{ "parse_push_back",  _i_scarg, 1, { NETVM_OP(PKPPSH,0,0,0,0) } },
+	{ "parse_pop_back",   _i_scarg, 1, { NETVM_OP(PKPPOP,0,0,0,0) } },
+	{ "parse_push_front", _i_scarg, 1, { NETVM_OP(PKPPSH,1,0,0,0) } },
+	{ "parse_pop_front",  _i_scarg, 1, { NETVM_OP(PKPPOP,1,0,0,0) } },
+	{ "parse_update", _i_pdarg, 1, { NETVM_OP(PKPUP,0,0,0,0) } },
+	{ "fix_dltype", _i_scarg, 1, { NETVM_OP(PKFXD,0,0,0,0) } },
+	{ "fix_len", _i_pdarg, 1, { NETVM_OP(PKFXL,0,0,0,0) } },
+	{ "fix_all_len",  _i_scarg, 3, 
 		{ NETVM_OP(ORI,0,0,0,(PRID_NONE<<4)),
 		  NETVM_OP(SHLI,0,0,0,44),
 		  NETVM_OP(PKFXL,0,0,0,0), } },
-	{ "fix_csum", _i_pdarg, 1, 1, { NETVM_OP(PKFXC,0,0,0,0) } },
-	{ "fix_all_csum", _i_scarg, 1, 3,
+	{ "fix_csum", _i_pdarg, 1, { NETVM_OP(PKFXC,0,0,0,0) } },
+	{ "fix_all_csum", _i_scarg, 3,
 		{ NETVM_OP(ORI,0,0,0,(PRID_NONE<<4)),
 		  NETVM_OP(SHLI,0,0,0,44),
 		  NETVM_OP(PKFXC,0,0,0,0), } },
-	{ "pop", _i_scarg, 0, 1, { NETVM_OP(POPL,8,0,0,0) } },
-	{ "log2", _i_scarg, 0, 2, 
+	{ "pop", _i_scarg, 1, { NETVM_OP(POPL,8,0,0,0) } },
+	{ "log2", _i_scarg, 2, 
 		{ NETVM_OP(NLZ,8,0,0,0), NETVM_OP(SUBI,1,0,0,64) } },
-	{ "min", _i_scarg, 0, 1, { NETVM_OP(MIN,0,0,0,0) } },
-	{ "max", _i_scarg, 0, 1, { NETVM_OP(MAX,0,0,0,0) } },
-	{ NULL, NULL, 0, 0, { {0} } },
+	{ "min", _i_scarg, 1, { NETVM_OP(MIN,0,0,0,0) } },
+	{ "max", _i_scarg, 1, { NETVM_OP(MAX,0,0,0,0) } },
+	{ NULL, NULL, 0, { {0} } },
 };
 
 
 static int cg_intrinsic(struct pml_ibuf *b, struct pml_ast *ast,
-			struct pml_call *c)
+			struct pml_call *c, int etype)
 {
 	struct cg_intr *intr;
 	struct pml_function *f = c->func;
@@ -378,8 +379,8 @@ static int cg_intrinsic(struct pml_ibuf *b, struct pml_ast *ast,
 	if ((*intr->cgf)(b, ast, c, intr) < 0)
 		return -1;
 
-	if (intr->noret)
-		EMIT_W(b, PUSH, 0);
+	if (typecast(b, c->etype, etype) < 0)
+		return -1;
 
 	return 0;
 }
@@ -675,11 +676,15 @@ static int typecast(struct pml_ibuf *b, int otype, int ntype)
 	case PML_ETYPE_SCALAR:
 		if (otype == PML_ETYPE_MASKVAL) {
 			return mask2scalar(b);
-		} else {
+		} else if (otype == PML_ETYPE_BYTESTR) {
 			EMIT_W(b, UMINI, 8);
 			EMIT_NULL(b, LD);
 			return 0;
+		} else {
+			abort_unless(otype == PML_ETYPE_VOID);
+			EMIT_W(b, PUSH, 0);
 		}
+		break;
 
 	case PML_ETYPE_BYTESTR:
 		if (otype != PML_ETYPE_MASKVAL) {
@@ -695,6 +700,17 @@ static int typecast(struct pml_ibuf *b, int otype, int ntype)
 		fprintf(stderr, "Can not convert type '%d' to mask value\n",
 			otype);
 		return -1;
+
+	case PML_ETYPE_VOID:
+		if (otype == PML_ETYPE_SCALAR) {
+			EMIT_W(b, POP, 1);
+		} else if (otype == PML_ETYPE_BYTESTR) {
+			EMIT_W(b, POP, 2);
+		} else {
+			abort_unless(otype == PML_ETYPE_MASKVAL);
+			EMIT_W(b, POP, 3);
+		}
+		break;
 
 	default:
 		abort_unless(0);
@@ -816,7 +832,8 @@ static int cg_op(struct pml_ibuf *b, struct pml_op *op, struct cgestk *es)
 }
 
 
-static int cg_call(struct pml_ibuf *b, struct pml_ast *ast, struct pml_call *c)
+static int cg_call(struct pml_ibuf *b, struct pml_ast *ast, struct pml_call *c,
+		   int etype)
 {
 	struct list *n;
 	struct pml_function *f;
@@ -825,7 +842,7 @@ static int cg_call(struct pml_ibuf *b, struct pml_ast *ast, struct pml_call *c)
 	f = c->func;
 
 	if (PML_FUNC_IS_INTRINSIC(f))
-		return cg_intrinsic(b, ast, c);
+		return cg_intrinsic(b, ast, c, etype);
 
 	l_for_each_rev(n, &c->args->list) {
 		if (cg_expr(b, ast, l_to_node(n), PML_ETYPE_SCALAR) < 0)
@@ -841,6 +858,9 @@ static int cg_call(struct pml_ibuf *b, struct pml_ast *ast, struct pml_call *c)
 		PUSH64(b, f->addr);
 		EMIT_NULL(b, CALL);
 	}
+
+	if (typecast(b, c->etype, etype) < 0)
+		return -1;
 
 	return 0;
 }
@@ -1683,9 +1703,10 @@ static int w_expr_pre(union pml_node *n, void *auxp, void *xstk)
 
 	case PMLTT_CALL:
 		abort_unless(es->etype == PML_ETYPE_SCALAR ||
+			     es->etype == PML_ETYPE_VOID ||
 			     es->etype == PML_ETYPE_UNKNOWN);
 		/* prune walk for calls:  cg_call will walk subfields */
-		if (cg_call(ea->ibuf, ea->ast, &n->call) < 0)
+		if (cg_call(ea->ibuf, ea->ast, &n->call, es->etype) < 0)
 			return -1;
 		return 1;
 
@@ -1840,6 +1861,19 @@ static int cg_if(struct pmlncg *cg, struct pml_if *ifstmt)
 }
 
 
+static uint8_t retlen(struct pml_function *f)
+{
+	if (f->rtype == PML_ETYPE_SCALAR) {
+		return 1;
+	} else if (f->rtype == PML_ETYPE_VOID) {
+		return 0;
+	} else {
+		abort_unless(0);
+		return 255;
+	}
+}
+
+
 static int cg_cfmod(struct pmlncg *cg, struct pml_cfmod *cfm)
 {
 	struct pml_ibuf *b = &cg->ibuf;
@@ -1851,7 +1885,7 @@ static int cg_cfmod(struct pmlncg *cg, struct pml_cfmod *cfm)
 		n = (union pml_node *)cfm->expr;
 		if (cg_expr(b, cg->ast, n, PML_ETYPE_SCALAR) < 0)
 			return -1;
-		EMIT_XW(b, RET, 1, cg->curfunc->arity);
+		EMIT_XW(b, RET, retlen(cg->curfunc), cg->curfunc->arity);
 		break;
 	case PML_CFM_BREAK:
 		EMIT_W(b, BRI, 0);
@@ -1868,7 +1902,7 @@ static int cg_cfmod(struct pmlncg *cg, struct pml_cfmod *cfm)
 		if (pcg_save_nextrule(cg) < 0)
 			return -1;
 		break;
-	case PML_CFM_NEXTPKT:
+	case PML_CFM_SENDPKT:
 		EMIT_W(b, PUSH, 1);
 		EMIT_NULL(b, HALT);
 		break;
@@ -2163,8 +2197,6 @@ int cg_print(struct pmlncg *cg, struct pml_print *pr)
 
 int cg_stmt(struct pmlncg *cg, union pml_node *n)
 {
-	union pml_expr_u *e;
-
 	if (n == NULL)
 		return 0;
 
@@ -2187,22 +2219,8 @@ int cg_stmt(struct pmlncg *cg, union pml_node *n)
 				n->base.type);
 			return -1;
 		}
-
-		e = (union pml_expr_u *)n;
-		if (cg_expr(&cg->ibuf, cg->ast, n, e->expr.etype) < 0)
+		if (cg_expr(&cg->ibuf, cg->ast, n, PML_ETYPE_VOID) < 0)
 			return -1;
-		if (e->expr.etype == PML_ETYPE_SCALAR) {
-			EMIT_W(&cg->ibuf, POP, 1);
-		} else if (e->expr.etype == PML_ETYPE_BYTESTR) {
-			EMIT_W(&cg->ibuf, POP, 2);
-		} else if (e->expr.etype == PML_ETYPE_MASKVAL) {
-			EMIT_W(&cg->ibuf, POP, 3);
-		} else {
-			fprintf(stderr,
-				"unknown expression return type in expression"
-				" statement.  Type = %d\n", e->expr.etype);
-			return -1;
-		}
 	}
 
 	return 0;
@@ -2213,6 +2231,7 @@ static int cg_func(struct pmlncg *cg, struct pml_function *f)
 {
 	struct pml_ibuf *b = &cg->ibuf;
 	ulong vlen;
+	int rl;
 
 	abort_unless(cg->curfunc == NULL);
 	cg->curfunc = f;
@@ -2229,9 +2248,12 @@ static int cg_func(struct pmlncg *cg, struct pml_function *f)
 	if (cg_stmt(cg, f->body) < 0)
 		return -1;
 
-	/* XXX just to be safe */
-	EMIT_W(b, PUSH, 0);
-	EMIT_XW(b, RET, 1, f->arity);
+	rl = retlen(f);
+	if (retlen > 0) {
+		/* XXX just to be safe */
+		EMIT_W(b, PUSH, 0);
+	}
+	EMIT_XW(b, RET, rl, f->arity);
 
 	cg->curfunc = NULL;
 	return 0;
