@@ -1,0 +1,287 @@
+PML is a simple scripting language intended to be similar to 'awk' for packet
+streams instead of text records.  PML stands for Packet Manipulation
+Language.  The PML implementation in this distribution compiles to the
+NetVM virtual machine.  Like AWK, PML programs consist of three
+sections, the 'BEGIN segment' that executes at program start, the
+'packet segment' that executes on once on every packet and the 'END
+segment' that executes after the program receives notification that no
+further packets will arrive.
+
+The packet segment consists of a series of rules each with a pattern and
+an action.  Each packet gets compared against the rules sequentially.
+If the packet matches the pattern then the program executes the rule
+action.  A rule action can execute multiple statements.  These
+statements can include operations to create and delete packets.  They
+can also halt processing on the current packet to circumvent the
+remaining rules.
+
+PML supports named fields in network protocols.  The language (supported
+by NetVM) parses packets according to the 'protoparse' API when each
+packet arrives.  This API divides each protocol header into a header,
+payload and trailer section.  Thus, at a minimum, a PML program knows
+the offsets of the start, payload, trailer and end of each parsed
+protocol.  A specific protocol can include further offsets of interest
+and, more importantly, defines packet fields based on these offsets.
+The protocol definition can supports variable length fields through a
+starting and ending offset.  So the protocol field defines each named
+protocol field as a fixed offset from a parsed offset, and either a
+fixed length or an ending offset.  The framework also supports
+fixed-length bitfields up to 32-bits in length.
+
+The upshot of all of this for PML is that the actual "vocabulary" of a
+PML program depends on the protocol definitions that the PML
+compiler/interpreter loads.  This makes the language readily extensible
+to new protocols.  The NetVM can support and future work will
+include making the protocol namespaces and fields discoverable and
+allowing access to packet fields based on protocol identifiers and
+indices, rather than field names.
+
+PML supports five data types.  These are: signed 64-bit integers, byte
+strings, masked byte strings, regular expressions and the 'void' type
+meaning no value.  It supports global and local variables.  Global
+variables can have a type of byte string or scalar.  Local variables
+(and function parameters which are a type of local variable) can only be
+scalar values.  Masked byte strings and regular expressions are only
+available as literal constants currently.  PML also supports a constant
+type.  This is a symbolic name for a constant value.  A program can not
+modify its value and it may not have any associated memory space.  These
+values are used like #defines in the C language.  A program can define
+these constant symbols to PML expressions as long as the expression
+itself is constant and the compiler can determine its final value at
+compile time.  Thus a program can define a constant in terms of
+operations on other constants.
+
+PML supports two types of functions both of which take a fixed number of
+scalar parameters.  A regular function can return a scalar value or a void value
+(meaning no return type).  A regular function executes a list of
+statements and can be recursive (TODO: support this in parsing).  An inline
+function contains only a single scalar expression and can not be
+recursive.  One use of inline functions is as safe macros.  The
+compiler can even use constant propagation to determine their result at
+compile time provided the parameters to the function are themselves
+constant.  Inline functions can invoke other inline functions but again,
+can not recurse directly or indirectly.  (An inline function that
+invokes a regular function that invokes the inline function does not recurse,
+the regular function does.)
+
+
+
+Locators:
+
+  name		-- could be: variable, constant, packet field,
+		   protocol name, protocol constant
+  name.name2...	-- could be: packet field, protocol name or protocol constant
+
+  @name{p}
+  @name{p}.name2...
+  @name{p,i}
+  @name{p,i}.name2...
+		-- could be: packet field, protocol name
+
+  name[0]	-- could be: variable, byte string or mask value constant,
+  		   packet field as a byte string.
+
+  @@name
+  @@name.name2	-- could be: protocol name
+
+  &name		-- could be variable, packet field, protocol name
+  &name.name2	-- could be packet field, protocol name
+
+  Resolution lookup order is:  protocol namespace, parameters, 
+	global variables, local variables
+
+	- local/global seems backwards but global vars are explicitly
+	  declared and local vars are not.
+
+  Types:
+   - scalar, byte string, mask string
+
+  Value types:
+   local variable    -> scalar
+   parameter	     -> scalar
+   global variable   -> scalar if size unspecified, byte string otherwise
+		        can always be accessed as a byte string?
+   constant          -> any
+   protocol constant -> any
+   protocol name     -> scalar when no offset/length:  boolean indicating
+			presence of the header
+	 	        byte string when offset length (protocol header)
+   packet field	     -> if bitfields then scalar
+			otherwise byte string
+   operator result   -> scalar
+   inline return     -> scalar
+   function return   -> scalar
+
+
+  
+  
+
+
+Codegen issues:
+ - inline operations may be more efficient if expanded at each instance
+   * but more annoying to codegen
+ - We need a stack of function, rule and  loop pointers control flow
+   statements like nextpkt, break, return, etc...
+
+Self reference issues:
+  - e.g. var g[10] = g[1,2];
+  - prevented since g[1,2] is not a constant expression.
+
+Constant bytestrings:
+  - consider optimization for byte strings < 8 bytes.
+
+
+
+Byte strings:
+  - constant variables can refer to byte strings or mask values
+  - expressions can refer to byte strings or mask values
+  - constant expressions can have constant offsets/lengths into constants.
+    * optimization replaces these with a new literal byte string/mask value.
+  - global variables can have a byte string or mask value initializer
+  - We need read-only space for constant byte strings/mask values that
+    the rules and functions refer to.
+  - We need global variables initialized by constant byte strings/mask values
+    to to have a memory initializer, but not a read-only segment area.
+    * can we?
+      + group all initialized read-write variables into one initializer
+      + group all uninitialized read-write variables into one zero-initializer
+      + group all read-only byte strings into one initializer
+    * yes this is feasible.  Unlike nvmas, we define the segments so we can
+      make them non-overlapping, etc.
+    * how do we extract the read-only byte strings that we need?
+      + walk the rules and functions after constant propagation.
+    * can we add them during parsing to make less passes over the data?
+
+
+Code Generation Core:
+  - Core is statement list walker:
+    * while
+    * if
+    * return
+    * cfm
+    * print
+   and expression walker:
+    * literal
+    * locator
+    * op
+    * call
+
+  - Expression walker can use pmln_walk
+  - All expressions push a value onto the stack
+
+Locators (rhs):
+  - Literal (symbolic from namespace)
+    * Scalar (must not have pkt, idx, off, len)
+      - push and be done.. optimized out?
+    * Bytestr (must not have pkt, idx)
+       - calc off if given:  bounds check?
+       - add address (UA)
+       - calc (if given) or push length (bounds check?)
+    * Maskval (must not have pkt, idx)
+       - calc off if given:  bounds check?
+       - add value address (UA)
+       - add mask address (UA)
+       - calc (if given) or push length (bounds check?)
+  - Parameter (must not have pkt, idx, off, len)
+    * push addr+1 below BP for inlines or addr+2 for functions
+  - Local variables (must not have pkt, idx, off, len)
+    * push addr above BP for inlines, functions and rules
+  - Global variables (must not have pkt, idx)
+
+
+Maybe do the following.  Each type has a representation on the stack.
+  - scalars = 64-bit value 
+  - byte strings = 64 bit len then 64-bit UA
+  - mask strings = 64 bit len, 64 bit mask addr (UA), 64-bit val addr (UA)
+  - in scalar context:
+    * for byte strings:  use ldu to convert to scalar
+    * for mask strings:  
+      ** swap the mask and length, drop the mask, use ldu to get scalar
+        - or -
+      ** dup length, swap top w/ val, swap top w/ len,
+         ldu to get val, swap top with len, ldu to get mask,
+	 AND to get value
+
+
+Functions:
+
+  - function call should
+    * evaluate arguments (reverse order)
+    * push the function address
+    * invoke 'call'
+
+  - function prolog should:
+    * zpush local variables
+
+  - function body
+    * evaluate the statement list
+    * parameters refs should be ldbp(i) x = 1, y = (addr+2)
+    * local variable refs should be ldbp(i) x = 0, y = addr
+
+  - function epilog should
+    * a return statement should end each function with a 'x' value of 1
+      (for one return value) and a 'w' value of the function arity.
+      (return zero implied if not given?)
+
+
+Inlines:
+
+  - evaluate arguments 
+  - invoke pushfr
+  - encode expression
+    * every parameter ref should be replaced with ldbp(i) x = 1, y = (addr+1)
+  - popfr with x = 1, w = number of args
+
+
+Rules:
+
+  - evaluate pattern
+  - push test for zero: if true skip action
+  - evaluate action statement list
+
+  - put a 'nextpkt' after the last rule:  (push 1 ; halt)
+
+
+
+TODO:
+ - code generation for intrinsics (lots to do here)
+ - code generation for formated print statements
+ - code generation and (real) netvm support for regular expressions
+ - test read references and assignemnts thoroughly
+ - add support for null-expression statements
+ - clean up the syntax for packets?  looks ugly
+ - add universal "mem" variable for low level access?
+ - obviously document
+
+
+
+Intrinsics:
+
+  -- void pkt_new(pnum, dltype, len)
+  -- void pkt_swap(pn1, pn2)
+  -- void pkt_copy(pndst, pnsrc)
+  -- void pkt_del(pnum)
+
+  -- void pkt_ins_u(pnum, off, len)
+  -- void pkt_ins_d(pnum, off, len)
+  -- void pkt_cut_u(pnum, off, len)
+  -- void pkt_cut_d(pnum, off, len)
+  -- void pkt_parse(pnum)
+
+  -- void parse_push_back(pnum, prid)
+  -- void parse_pop_back(pnum)
+  -- void parse_push_front(pnum, prid)
+  -- void parse_pop_front(pnum)
+  -- void parse_update(pdesc)
+
+  -- void fix_dltype(pnum)
+  -- void fix_len(pdesc)
+  -- void fix_all_len(pnum)
+  -- void fix_csum(pdesc)
+  -- void fix_all_csum(pnum)
+
+  -- int pop(scalar) -- population count of the scalar
+  -- int log2(scalar) -- floor of the base 2 log of scalar
+  -- int min(scalar1, scalar2)
+  -- int max(scalar1, scalar2)
+

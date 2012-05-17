@@ -1,0 +1,43 @@
+Key:
+  + -- Should do this
+  * -- Nice to have
+  ? -- Not sure if we should do this but should consider
+
+PML
+ + Fix up command line options
+ + Regular expression matching
+ + Add metadata manipulation
+ + Add "standard include path/files"
+ + More test cases (control flow especially)
+ + Fix/allow recursion for functions (not inlines).
+ + Fix code gen error reporting:  put somewhere sane.
+ + Proper checking for allocation failures in parser.
+ ? Revise netvm cmp, pcmp and mskcmp to check lengths ?
+ * Optimize binary operations with at least one constant operand.
+ * Hash table support
+ * Data structure support (maybe just hash tables)
+ * AST-based interpreter for comparison with code generated version
+
+
+Proto parsing
+ * More checking of ICMP packets by type.
+ * Check restrictions on parsing to ensure termination.
+
+
+x2hpkt:
+ * Add field printing for xpkt header
+
+
+netvm_prog API:
+ * Alter format to allow for coprocessor patching.
+
+
+netvm:
+ * Resolver coprocessor
+ * Hash table coprocessor
+ * Backing store coprocessor for packets
+
+
+pktdiff:
+ + everything
+

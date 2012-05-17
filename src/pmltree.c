@@ -3022,7 +3022,6 @@ static int e_locator(struct pml_ast *ast, struct pml_stack_frame *fr,
 		}
 	} else if (l->reftype == PML_REF_PKTFLD) {
 
-		/* TODO */
 		pml_ast_err(ast, "eval: Packet fields unimplemented\n");
 		return -1;
 
@@ -3052,7 +3051,6 @@ static int e_locaddr(struct pml_ast *ast, struct pml_stack_frame *fr,
 		r->etype = PML_ETYPE_SCALAR;
 		r->val = l->u.varref->addr;
 	} else if (l->reftype == PML_REF_PKTFLD) {
-		/* TODO */
 		pml_ast_err(ast, 
 			    "eval: Packet field addresses unimplemented\n");
 		return -1;
