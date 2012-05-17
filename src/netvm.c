@@ -510,7 +510,7 @@ static void ni_cmp(struct netvm *vm)
 	val = memcmp(p1, p2, len);
 
 	/* We've already popped 3 values from the stack */
-	S_PUSH_NOCK(vm, val);
+	S_PUSH_NOCK(vm, !val);
 }
 
 
@@ -556,7 +556,7 @@ static void ni_pcmp(struct netvm *vm)
 	}
 
 	/* We've already popped 3 values from the stack */
-	S_PUSH_NOCK(vm, val);
+	S_PUSH_NOCK(vm, !val);
 }
 
 

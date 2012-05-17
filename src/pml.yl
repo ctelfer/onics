@@ -558,6 +558,13 @@ cmpexpr(E) ::= borexpr(LHS) matchop(OP) BYTESTR(T1) DIV BYTESTR(T2). {
 	free(T2.u.raw.data);
 	E = pml_binop_alloc(OP, LHS, (union pml_expr_u *)v); 
 }
+cmpexpr(E) ::= borexpr(LHS) matchop(OP) BYTESTR(T). {
+	struct pml_literal *v = (struct pml_literal *)pmln_alloc(PMLTT_BYTESTR);
+	pml_bytestr_copy(ast, &v->u.bytestr, PML_SEG_ROMEM, T.u.raw.data,
+			 T.u.raw.len);
+	free(T.u.raw.data);
+	E = pml_binop_alloc(OP, LHS, (union pml_expr_u *)v); 
+}
 cmpexpr(E) ::= borexpr(LHS) matchop(OP) IPV4ADDR(A) DIV NUM(L). {
 	struct pml_literal *v = (struct pml_literal *)pmln_alloc(PMLTT_MASKVAL);
 	uchar mask[4] = { 0 };

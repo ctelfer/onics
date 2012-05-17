@@ -486,6 +486,7 @@ static int copy_meminits(struct pml_ast *ast, struct netvm_program *prog,
 	struct netvm_meminit *inits = prog->inits;
 	struct pml_symtab *st;
 	struct dynbuf tb;
+	void *p;
 	int esave;
 	uint len;
 	int i;
@@ -513,17 +514,18 @@ static int copy_meminits(struct pml_ast *ast, struct netvm_program *prog,
 		++prog->ninits;
 	}
 
-	len = ast->mi_bufs[PML_SEG_RWMEM].len;
+	len = ast->vars.addr_rw1;
 	if (len > 0) {
 		inits->segnum = PML_SEG_RWMEM;
 		inits->off = 0;
 		inits->val.len = len;
+		p = ast->mi_bufs[PML_SEG_RWMEM].data;
 		if (copy) {
-			if (dyb_copy(&tb, &ast->mi_bufs[PML_SEG_RWMEM]) < 0)
+			if (dyb_set_a(&tb, 0, p, len) < 0)
 				goto err_free;
 			inits->val.data = dyb_release(&tb);
 		} else {
-			inits->val.data = ast->mi_bufs[PML_SEG_RWMEM].data;
+			inits->val.data = p;
 		}
 		++inits;
 		++prog->ninits;
@@ -722,16 +724,38 @@ static int typecast(struct pml_ibuf *b, int otype, int ntype)
 
 static int cg_matchop(struct pml_ibuf *b, struct pml_op *op)
 {
+	union pml_expr_u *lhs;
 	union pml_expr_u *rhs;
 
 	abort_unless(b && op);
+	lhs = op->arg1;
 	rhs = op->arg2;
 
 	if (rhs->base.type == PMLTT_BYTESTR) {
+		abort_unless(lhs->expr.etype == PML_ETYPE_BYTESTR);
+		/* We start with: len2, addr2, len1, addr1 */
+		EMIT_XW(b, SWAP, 1, 2); /* now we have: len2, len1, addr2, addr1 */
+		EMIT_W(b, DUP, 0);
+		EMIT_XW(b, SWAP, 0, 2); /* now we have: len1, len2, len2, addr1, addr2 */
+		EMIT_NULL(b, EQ);
+		EMIT_W(b, BZI, 3);
 		EMIT_NULL(b, CMP);
+		EMIT_W(b, BRI, 3);
+		EMIT_W(b, POP, 3);
+		EMIT_W(b, PUSH, 0);
 	} else {
+		/* We start with: len2, mkaddr, paddr, len1, addr1 */
 		abort_unless(rhs->base.type == PMLTT_MASKVAL);
+		EMIT_XW(b, SWAP, 1, 3); /* len2, len1, paddr, mkaddr, addr1 */
+		EMIT_XW(b, SWAP, 2, 3); /* len2, len1, mkaddr, paddr, addr1 */
+		EMIT_W(b, DUP, 0);
+		EMIT_XW(b, SWAP, 0, 2); /* len1, len2, len2, mkaddr, paddr, addr1 */
+		EMIT_NULL(b, EQ);
+		EMIT_W(b, BZI, 3); /* (eq?), len2, mkaddr, paddr, addr1 */
 		EMIT_NULL(b, MSKCMP);
+		EMIT_W(b, BRI, 3);
+		EMIT_W(b, POP, 4);
+		EMIT_W(b, PUSH, 0);
 	}
 	if (op->op == PMLOP_NOTMATCH)
 		EMIT_NULL(b, NOT);
@@ -1256,9 +1280,9 @@ int cg_loclen(struct pml_ibuf *b, struct pml_ast *ast,
 				 * are a push of the length.  Replace these
 				 * push(es) with pushes of the locator length.
 				 */
-				npush = ((llen.val >> 32) == 0) ? 1 : 2;
+				npush = ((len >> 32) == 0) ? 1 : 2;
 				b->ninst -= npush;
-				PUSH64(b, len);
+				PUSH64(b, llen.val);
 			}
 		} else {
 			EMIT_NULL(b, MIN);
@@ -1305,8 +1329,13 @@ static int cg_memref(struct pml_ibuf *b, struct pml_ast *ast,
 	loff.onstack = 0;
 	if (loc->off != NULL) {
 		if (PML_EXPR_IS_LITERAL(loc->off)) {
-			if (pml_lit_val64(ast, lit, &n) < 0)
+			lit = &loc->off->literal;
+			if (pml_lit_val64(ast, lit, &n) < 0) {
+				fprintf(stderr, "error reading literal offset "
+						"for locator '%s'\n",
+					loc->name);
 				return -1;
+			}
 			if (n >= len) {
 				fprintf(stderr,
 					"offset for out of range for '%s':"
@@ -1467,8 +1496,12 @@ static int cg_pfbytefield(struct pml_ibuf *b, struct pml_ast *ast,
 	if (loc->off != NULL) {
 		if (PML_EXPR_IS_LITERAL(loc->off) && fixedlen) {
 			lit = (struct pml_literal *)loc->off;
-			if (pml_lit_val64(ast, lit, &n) < 0)
+			if (pml_lit_val64(ast, lit, &n) < 0) {
+				fprintf(stderr, "error reading literal offset "
+						"for locator '%s'\n",
+					loc->name);
 				return -1;
+			}
 			if (n >= len) {
 				fprintf(stderr,
 					"offset for out of range for '%s':"
@@ -1484,8 +1517,12 @@ static int cg_pfbytefield(struct pml_ibuf *b, struct pml_ast *ast,
 	if (loc->len != NULL) {
 		if (PML_EXPR_IS_LITERAL(loc->len) && fixedlen) {
 			lit = (struct pml_literal *)loc->len;
-			if (pml_lit_val64(ast, lit, &n) < 0)
+			if (pml_lit_val64(ast, lit, &n) < 0) {
+				fprintf(stderr, "error reading literal length "
+						"for locator '%s'\n",
+					loc->name);
 				return -1;
+			}
 			if (n > len) {
 				fprintf(stderr,
 					"length for out of range for '%s':"
@@ -1551,6 +1588,7 @@ static int cg_varref(struct pml_ibuf *b, struct pml_ast *ast,
 	} else if (var->vtype == PML_VTYPE_GLOBAL) {
 
 		if (var->etype == PML_ETYPE_SCALAR) {
+			abort_unless(loc->off == NULL && loc->len == NULL);
 			EMIT_XYW(b, LDI, var->width, PML_SEG_RWMEM, var->addr);
 		} else {
 			if (cg_memref(b, ast, loc) < 0)
@@ -1642,13 +1680,13 @@ static int cg_locaddr(struct pml_ibuf *b, struct pml_ast *ast,
 			addr = lvaraddr(var);
 		} else {
 			abort_unless(var->vtype == PML_VTYPE_GLOBAL);
-			addr = MEMADDR(var->addr, PML_SEG_RWMEM);
+			addr = var->addr;
 		}
 		PUSH64(b, addr);
 		break;
 
 	case PML_REF_PKTFLD:
-		cgpd_init2(&cgpd, NETVM_OC_LDPF, 1, loc);
+		cgpd_init2(&cgpd, NETVM_OC_LDPF, 0, loc);
 		if (cg_pdop(b, ast, &cgpd) < 0)
 			return -1;
 		break;
@@ -1689,6 +1727,7 @@ static int w_expr_pre(union pml_node *n, void *auxp, void *xstk)
 		case PMLOP_NOTMATCH:
 		case PMLOP_REXMATCH:
 		case PMLOP_NOTREXMATCH:
+			ea->etype = PML_ETYPE_BYTESTR;
 			break;
 		default:
 			/* coerce non-mask expressions to scalars */
@@ -1752,7 +1791,12 @@ static int w_expr_in(union pml_node *n, void *auxp, void *xstk)
 			es->iaddr = nexti(b);
 			EMIT_W(b, BRI, 0); /* fill in during post */
 		}
-		ea->etype = PML_ETYPE_SCALAR;
+		/* TODO: handle regular expressions as a type here */
+		if (op->op == PMLOP_MATCH || op->op == PMLOP_NOTMATCH) {
+			ea->etype = n->op.arg2->expr.etype;
+		} else {
+			ea->etype = PML_ETYPE_SCALAR;
+		}
 		break;
 	}
 
@@ -2049,8 +2093,12 @@ static int pfref_check_fixed(struct pml_locator *loc, struct pml_ast *ast,
 		if (!PML_EXPR_IS_LITERAL(loc->pkt))
 			return 0;
 		lit = &loc->pkt->literal;
-		if (pml_lit_val64(ast, lit, &v) < 0)
+		if (pml_lit_val64(ast, lit, &v) < 0) {
+			fprintf(stderr, "error reading literal packet "
+					"for locator '%s'\n",
+				loc->name);
 			return -1;
+		}
 		if (v > NETVM_PD_PKT_MASK)
 			return 0;
 	}
@@ -2058,8 +2106,12 @@ static int pfref_check_fixed(struct pml_locator *loc, struct pml_ast *ast,
 		if (!PML_EXPR_IS_LITERAL(loc->idx))
 			return 0;
 		lit = &loc->idx->literal;
-		if (pml_lit_val64(ast, lit, &v) < 0)
+		if (pml_lit_val64(ast, lit, &v) < 0) {
+			fprintf(stderr, "error reading literal index "
+					"for locator '%s'\n",
+				loc->name);
 			return -1;
+		}
 		if (v > NETVM_PD_IDX_MASK)
 			return 0;
 	}
@@ -2068,8 +2120,12 @@ static int pfref_check_fixed(struct pml_locator *loc, struct pml_ast *ast,
 		if (!PML_EXPR_IS_LITERAL(loc->off))
 			return 0;
 		lit = &loc->off->literal;
-		if (pml_lit_val64(ast, lit, &off) < 0)
+		if (pml_lit_val64(ast, lit, &off) < 0) {
+			fprintf(stderr, "error reading literal offset "
+					"for locator '%s'\n",
+				loc->name);
 			return -1;
+		}
 		if (off > NETVM_PD_IDX_MASK)
 			return 0;
 		if (off >= len) {
@@ -2085,8 +2141,12 @@ static int pfref_check_fixed(struct pml_locator *loc, struct pml_ast *ast,
 		if (!PML_EXPR_IS_LITERAL(loc->len))
 			return 0;
 		lit = &loc->len->literal;
-		if (pml_lit_val64(ast, lit, &v) < 0)
+		if (pml_lit_val64(ast, lit, &v) < 0) {
+			fprintf(stderr, "error reading literal length "
+					"for locator '%s'\n",
+				loc->name);
 			return -1;
+		}
 		if (v > NETVM_PD_IDX_MASK)
 			return 0;
 		if (v > len) {

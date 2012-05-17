@@ -1793,6 +1793,14 @@ struct prparse_ops tcp_prparse_ops = {
 #define STDPROTO_NS_ELEN	64
 #define STDPROTO_NS_SUB_ELEN	16
 
+/* Packet Namespace */
+extern struct ns_elem *stdproto_pkt_ns_elems[STDPROTO_NS_ELEN];
+static struct ns_namespace pkt_ns =
+	NS_NAMESPACE_I("pkt", NULL, PRID_NONE, PRID_NONE,
+		"Packet Data -- Offset %lu, Length %lu",
+		stdproto_pkt_ns_elems, array_length(stdproto_pkt_ns_elems));
+struct ns_elem *stdproto_pkt_ns_elems[STDPROTO_NS_ELEN];
+
 /* Ethernet Namespace */
 extern struct ns_elem *stdproto_eth2_ns_elems[STDPROTO_NS_ELEN];
 static struct ns_namespace eth2_ns = 
@@ -2414,6 +2422,8 @@ int register_std_proto()
 	if (pp_register(PRID_TCP, &tcp_proto_parser_ops) < 0)
 		goto fail;
 
+	if (ns_add_elem(NULL, (struct ns_elem *)&pkt_ns) < 0)
+		goto fail;
 	if (ns_add_elem(NULL, (struct ns_elem *)&eth2_ns) < 0)
 		goto fail;
 	if (ns_add_elem(NULL, (struct ns_elem *)&arp_ns) < 0)
@@ -2449,6 +2459,7 @@ void unregister_std_proto()
 	pp_unregister(PRID_UDP);
 	pp_unregister(PRID_TCP);
 
+	ns_rem_elem((struct ns_elem *)&pkt_ns);
 	ns_rem_elem((struct ns_elem *)&eth2_ns);
 	ns_rem_elem((struct ns_elem *)&arp_ns);
 	ns_rem_elem((struct ns_elem *)&ipv4_ns);

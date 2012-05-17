@@ -281,11 +281,12 @@ static int copy_bytestr(yyscan_t scanner, const char *hex, int tok)
 	abort_unless(len >= 4 && (len % 2 == 0));
 	len -= 2;
 	hex += 2;
-	if ( (v.u.raw.data = malloc(len+1)) == NULL )
+	bp = malloc(len + 1);
+	if ( bp == NULL )
 		return -1;
 	len /= 2;
 	v.u.raw.len = len;
-	bp = v.u.raw.data;
+	v.u.raw.data = bp;
 	while ( len > 0 ) {
 		*bp++ = chnval(hex[0]) * 16 + chnval(hex[1]);
 		hex += 2;

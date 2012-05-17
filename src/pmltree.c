@@ -127,6 +127,32 @@ static void symtab_adj_var_addrs(struct pml_symtab *t)
 }
 
 
+static int add_resv_var(struct pml_symtab *t, const char *name,
+			int type, ulong size)
+{
+	char *vname = strdup(name);
+	struct pml_variable *v;
+	int rv;
+
+	if (vname == NULL)
+		return -1;
+	v = (struct pml_variable *)pmln_alloc(PMLTT_VAR);
+	if (v == NULL) {
+		free(vname);
+		return -1;
+	}
+	v->vtype = PML_VTYPE_GLOBAL;
+	v->etype = type;
+	v->width = size;
+	v->name = vname;
+	
+	rv = symtab_add(t, (struct pml_sym *)v);
+	abort_unless(rv >= 0);
+	
+	return 0;
+}
+
+
 int pml_ast_init(struct pml_ast *ast)
 {
 	int i;
@@ -139,6 +165,8 @@ int pml_ast_init(struct pml_ast *ast)
 		symtab_destroy(&ast->vars);
 		return -1;
 	}
+	if (add_resv_var(&ast->vars, "mem", PML_ETYPE_BYTESTR, 0) < 0)
+		return -1;
 	ast->b_rule = NULL;
 	l_init(&ast->p_rules);
 	ast->e_rule = NULL;
@@ -480,7 +508,9 @@ int pml_func_add_param(struct pml_function *f, struct pml_variable *v)
 
 void pml_ast_finalize(struct pml_ast *ast)
 {
+	struct pml_variable *v;
 	ulong gsz;
+
 	if (ast->error)
 		return;
 
@@ -492,6 +522,13 @@ void pml_ast_finalize(struct pml_ast *ast)
 		ast->error = 1;
 		return;
 	}
+	pml_ast_mem_init(ast);
+
+	/* adjust the size of the global memory region */
+	v = (struct pml_variable *)symtab_lookup(&ast->vars, "mem");
+	abort_unless(v != NULL);
+	v->addr = 0;
+	v->width = gsz;
 }
 
 
@@ -2268,6 +2305,17 @@ static int resolve_node_post(union pml_node *node, void *ctxp, void *xstk)
 				/* function, then it can be considered constant */
 				if (PML_FUNC_IS_INLINE(f))
 					l->eflags |= PML_EFLAG_PCONST;
+			} else if (v->vtype == PML_VTYPE_GLOBAL) {
+				if ((v->etype == PML_ETYPE_SCALAR) && 
+				    ((l->off != NULL) || (l->len != NULL))) {
+					pml_ast_err(ctx->ast,
+						    "'%s' is a scalar global"
+						    " and can not be accessed"
+						    " as a byte string\n",
+						    l->name);
+					return -1;
+				}
+
 			}
 			l->width = v->width;
 		} else {
@@ -3071,7 +3119,8 @@ void pml_ast_mem_init(struct pml_ast *ast)
 
 	l_for_each(n, &ast->vars.list) {
 		v = (struct pml_variable *)l_to_node(n);
-		if (v->type != PML_VTYPE_GLOBAL || v->init == NULL)
+		if (v->vtype != PML_VTYPE_GLOBAL || v->init == NULL ||
+		    v->width == 0)
 			continue;
 
 		err = pml_eval(ast, NULL, (union pml_node *)v->init, &r);
