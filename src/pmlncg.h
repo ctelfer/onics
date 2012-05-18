@@ -31,6 +31,12 @@ enum {
 };
 
 
+struct callsite {
+	struct pml_function *	func;
+	uint			iaddr;
+};
+
+
 struct pmlncg {
 
 	struct pml_ast *	ast;		/* AST we are building from */
@@ -39,6 +45,9 @@ struct pmlncg {
 
 	struct pml_function *	curfunc;
 	struct pml_while *	curloop;
+
+	/* resolve these after function geration */
+	struct dynbuf		calls;
 
 	/* resolve these after codegen for loops */
 	struct dynbuf		breaks; 	/* unresolved 'break's */

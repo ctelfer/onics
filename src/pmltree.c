@@ -88,6 +88,13 @@ static int symtab_add(struct pml_symtab *t, struct pml_sym *sym)
 }
 
 
+static void symtab_rem(struct pml_sym *sym) 
+{
+	ht_rem(&sym->hn);
+	l_rem(&sym->ln);
+}
+
+
 static void symtab_destroy(struct pml_symtab *t)
 {
 	struct list *n, *x;
@@ -335,11 +342,99 @@ struct pml_function *pml_ast_lookup_func(struct pml_ast *ast, char *name)
 }
 
 
+static int funceq(struct pml_function *f1, struct pml_function *f2)
+{
+	return (f1->rtype == f2->rtype) &&
+	       (f1->arity == f2->arity) &&
+	       (f1->flags == f2->flags);
+}
+
+
+int pml_ast_add_func_proto(struct pml_ast *ast, struct pml_function *func)
+{
+	struct pml_function *ofunc;
+
+	if (PML_FUNC_IS_INLINE(func)) {
+		pml_ast_err(ast,
+			    "Attempt to add protoype for inline function: %s\n",
+			    func->name);
+		return -1;
+	}
+
+	if (PML_FUNC_IS_INTRINSIC(func)) {
+		pml_ast_err(ast,
+			    "Attempt to add protoype for intrinsic function:"
+			    " %s\n", func->name);
+		return -1;
+	}
+
+	ofunc = (struct pml_function *)symtab_lookup(&ast->funcs, func->name);
+	if (ofunc != NULL) {
+		if (!funceq(ofunc, func)) {
+			pml_ast_err(ast, "Protoype for %s does not match %s\n",
+				    func->name, 
+				    ((ofunc->body == NULL && 
+				      ofunc->ieval == NULL) ? 
+				     "declaration" : "earlier prototype"));
+			return -1;
+		}
+		pmln_free((union pml_node *)func);
+	} else {
+		abort_unless(l_isempty(&func->vars.list));
+		abort_unless(func->body == NULL);
+		symtab_add(&ast->funcs, (struct pml_sym *)func);
+	}
+
+	return 0;
+}
+
+
 int pml_ast_add_func(struct pml_ast *ast, struct pml_function *func)
 {
-	if (symtab_add(&ast->funcs, (struct pml_sym *)func) < 0) {
-		pml_ast_err(ast, "Duplicate function: %s\n", func->name);
-		return -1;
+	struct pml_function *ofunc;
+	struct list *n, *x;
+	struct pml_variable *v;
+
+	ofunc = (struct pml_function *)symtab_lookup(&ast->funcs, func->name);
+	if (ofunc != NULL) {
+		abort_unless(!PML_FUNC_IS_INLINE(func));
+
+		/* check for duplicate function */
+		if (ofunc->body != NULL || PML_FUNC_IS_INTRINSIC(ofunc)) {
+			pml_ast_err(ast, "Duplicate function: %s\n",
+				    func->name);
+			return -1;
+		}
+
+		/* check for signature mismatch */
+		if (!funceq(ofunc, func)) {
+			pml_ast_err(ast,
+				    "Function %s does not match prototype\n",
+				    func->name);
+			return -1;
+		}
+
+		/* at this point we have a function whose prototype we */
+		/* have seen before and which matches the prototype. */
+		/* move the body and args to the original and free the */
+		/* new one. */
+		l_for_each_safe(n, x, &func->vars.list) {
+			v = container(n, struct pml_variable, ln);
+			symtab_rem((struct pml_sym *)v);
+			if (pml_func_add_param(ofunc, v) < 0) {
+				pml_ast_err(ast,
+					    "Duplicate parameter name: %s\n",
+					    v->name);
+				return -1;
+			}
+		}
+
+		ofunc->body = func->body;
+		func->body = NULL;
+		pmln_free((union pml_node *)func);
+		func = ofunc;
+	} else {
+		symtab_add(&ast->funcs, (struct pml_sym *)func);
 	}
 
 	if (pml_resolve_refs(ast, (union pml_node *)func) < 0)
@@ -506,11 +601,33 @@ int pml_func_add_param(struct pml_function *f, struct pml_variable *v)
 }
 
 
+static void check_undefined_funcs(struct pml_ast *ast)
+{
+	struct list *n;
+	struct pml_function *func;
+
+	l_for_each(n, &ast->funcs.list) {
+		func = (struct pml_function *)l_to_node(n);
+		if ((func->callers > 0) && PML_FUNC_IS_REGULAR(func) &&
+		    (func->body == NULL)) {
+			pml_ast_err(ast,
+				    "Undefined function '%s' called %u times\n",
+				    func->name, func->callers);
+			return;
+		}
+	}
+}
+
+
 void pml_ast_finalize(struct pml_ast *ast)
 {
 	struct pml_variable *v;
 	ulong gsz;
 
+	if (ast->error)
+		return;
+
+	check_undefined_funcs(ast);
 	if (ast->error)
 		return;
 
@@ -677,11 +794,12 @@ union pml_node *pmln_alloc(int type)
 		p->flags = 0;
 		p->name = NULL;
 		p->arity = 0;
+		p->callers = 0;
 		p->body = NULL;
 		p->ieval = NULL;
 		p->pstksz = 0;
 		p->vstksz = 0;
-		p->addr = 0;
+		p->addr = (ulong)-1;
 	} break;
 
 	case PMLTT_RULE: {
@@ -870,6 +988,7 @@ struct pml_call *pml_call_alloc(struct pml_ast *ast, struct pml_function *func,
 	c->etype = func->rtype;
 	c->width = (c->etype == PML_ETYPE_SCALAR) ? 8 : 0;
 	c->eflags = 0;
+	func->callers++;
 
 	/* a call is a constant expression if the function is an inline */
 	/* and if the arguments to the function are all constant */

@@ -195,6 +195,9 @@ var Count;
 %type decl { union pml_node * }
 %destructor decl { pmln_free($$); }
 
+%type funcproto { struct pml_function * }
+%destructor funcproto { pmln_free((union pml_node *)$$); }
+
 %type funcdecl { struct pml_function * }
 %destructor funcdecl { pmln_free((union pml_node *)$$); }
 
@@ -313,6 +316,10 @@ decllist ::= decllist decl. /* nothing to do: resolved below. */
 
 decllist ::= . /* nothing to do */
 
+decl ::= funcproto(F). {
+	if (pml_ast_add_func_proto(ast, F) < 0)
+		pmln_free((union pml_node *)F);
+}
 decl ::= funcdecl(F). {
 	if (pml_ast_add_func(ast, F) < 0)
 		pmln_free((union pml_node *)F);
@@ -332,6 +339,14 @@ decl ::= rule(R). {
 
 type(T) ::= INT. { T = PML_ETYPE_SCALAR; }
 type(T) ::= VOID. { T = PML_ETYPE_VOID; }
+
+funcproto (F) ::= type(T) ID(N) LPAREN idlist(P) RPAREN SEMICOLON. {
+	F = (struct pml_function *)pmln_alloc(PMLTT_FUNCTION);
+	F->name = (char *)N.u.raw.data;
+	F->rtype = T;
+	F->arity = l_length(&P->list);
+	pmln_free((union pml_node *)P);
+}
 
 funcdecl(F) ::= type(T) ID(N) LPAREN idlist(P) RPAREN LBRACE 
                 stmts(S) RBRACE. {

@@ -407,6 +407,8 @@ enum {
 #define PML_FUNC_IS_INLINE(f)		((f)->flags & PML_FF_INLINE)
 #define PML_FUNC_IS_PCONST(f)		((f)->flags & PML_FF_PCONST)
 #define PML_FUNC_IS_INTRINSIC(f)	((f)->flags & PML_FF_INTRINSIC)
+#define PML_FUNC_IS_REGULAR(f) \
+	(((f)->flags & (PML_FF_INTRINSIC|PML_FF_INLINE)) == 0)
 struct pml_function {
 	/* pml_sym_base fields */
 	int			type;
@@ -416,6 +418,7 @@ struct pml_function {
 
 	ushort			rtype;	/* return type */
 	uint			arity;	/* number of arguments */
+	uint			callers;
 	struct pml_symtab	vars;
 	union pml_node *	body;	/* expr for pred, list for func */
 	pml_eval_f		ieval;	/* call to eval intrinsic */
@@ -533,6 +536,7 @@ struct pml_call *pml_call_alloc(struct pml_ast *ast, struct pml_function *func,
 
 /* -- helper functions for symbol values PML (vars, functions, etc) -- */
 int  pml_func_add_param(struct pml_function *func, struct pml_variable *var);
+int pml_ast_add_func_proto(struct pml_ast *ast, struct pml_function *func);
 int  pml_ast_add_func(struct pml_ast *ast, struct pml_function *func);
 int  pml_ast_add_intrinsic(struct pml_ast *ast, struct pml_intrinsic *intr);
 struct pml_function *pml_ast_lookup_func(struct pml_ast *ast, char *name);

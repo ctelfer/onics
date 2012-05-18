@@ -9,8 +9,8 @@ int fib2c(x);
 
 # self recursion
 int fib(x) {
-	if (x < 2) {
-		return 0;
+	if (x <= 2) {
+		return 1;
 	}
 	return fib(x-1) + fib(x-2);
 }
@@ -18,8 +18,8 @@ int fib(x) {
 
 # mutual recursion
 int fib2a(x) {
-	if (x < 2) {
-		return 0;
+	if (x <= 2) {
+		return 1;
 	}
 	return fib2b(x) + fib2c(x);
 }
@@ -36,11 +36,15 @@ int fib2c(x) {
 
 
 BEGIN {
-	if (fib(7) == 21) {
-		print "got fib(7) == 21";
+	if (fib(7) == 13) {
+		print "got fib(7) == 13\n";
 	}
 
-	if (fib2a(7) == 21) {
-		print "got fib(7) == 21";
+	if (fib2a(3) == 2) {
+		print "got fib2a(3) == 2\n";
+	}
+
+	if (fib2a(8) == 21) {
+		print "got fib2a(8) == 21\n";
 	}
 }

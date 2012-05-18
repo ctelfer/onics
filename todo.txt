@@ -6,6 +6,7 @@ Key:
 PML
  + Fix up command line options
  + Regular expression matching
+ + Formatted printing
  + Add metadata manipulation
  + Add "standard include path/files"
  + More test cases (control flow especially)
