@@ -589,21 +589,68 @@ static int rex_validate(struct netvm_inst *inst, struct netvm *vm)
 }
 
 
+static void nci_rex_init(struct netvm *vm, struct netvm_coproc *ncp, int cpi)
+{
+	struct netvm_rex_cp *cp = container(ncp, struct netvm_rex_cp, coproc);
+	uint64_t addr, len, ridx;
+	struct raw r;
+	int rv;
+	struct rex_pat *pat;
+	byte_t *p;
+
+	S_POP(vm, ridx);
+	S_POP(vm, len);
+	S_POP(vm, addr);
+
+	FATAL(vm, NETVM_ERR_BADCPOP, (ridx >= NETVM_MAXREXPAT));
+	netvm_get_uaddr_ptr(vm, addr, 0, len, &p);
+	if (vm->error)
+		return;
+
+	pat = &cp->rexes[ridx];
+	if (cp->rinit[ridx]) {
+		rex_free(pat);
+		cp->rinit[ridx] = 0;
+	}
+
+	r.data = p;
+	r.len = len;
+	rv = rex_init(pat, &r, cp->rexmm, NULL);
+	FATAL(vm, NETVM_ERR_BADCPOP, (rv < 0));
+	cp->rinit[ridx] = 1;
+}
+
+
+static void nci_rex_clear(struct netvm *vm, struct netvm_coproc *ncp, int cpi)
+{
+	struct netvm_rex_cp *cp = container(ncp, struct netvm_rex_cp, coproc);
+	uint64_t ridx;
+
+	S_POP(vm, ridx);
+	FATAL(vm, NETVM_ERR_BADCPOP, (ridx >= NETVM_MAXREXPAT));
+	if (cp->rinit[ridx]) {
+		rex_free(&cp->rexes[ridx]);
+		cp->rinit[ridx] = 0;
+	}
+}
+
+
 static void rexmatch(struct netvm *vm, struct rex_pat *pat, struct raw *loc,
-		     int32_t nm)
+		     int32_t nm, uint64_t seg)
 {
 	struct rex_match_loc m[NETVM_MAXREXMATCH];
 	int rv, i;
+
 	rv = rex_match(pat, loc, m, nm);
 	FATAL(vm, NETVM_ERR_BADCPOP, (rv == REX_ERROR));
 	if (rv == REX_MATCH) {
 		for (i = nm - 1; i >= 0; --i) {
 			S_PUSH(vm, m[i].valid);
 			if (!m[i].valid) {
-				S_PUSH(vm, 0 - (uint32_t)1);
-				S_PUSH(vm, 0 - (uint32_t)1);
+				S_PUSH(vm, NETVM_PF_INVALID);
+				S_PUSH(vm, NETVM_PF_INVALID);
 			} else {
-				S_PUSH(vm, (uint32_t) m[i].start);
+				S_PUSH(vm, (uint32_t) m[i].start + seg);
 				S_PUSH(vm, (uint32_t) m[i].len);
 			}
 		}
@@ -612,40 +659,60 @@ static void rexmatch(struct netvm *vm, struct rex_pat *pat, struct raw *loc,
 }
 
 
-static void nci_rex(struct netvm *vm, struct netvm_coproc *ncp, int cpi)
+static void _rex_match(struct netvm *vm, struct netvm_coproc *ncp, int cpi,
+		       int domatch)
 {
 	struct netvm_rex_cp *cp = container(ncp, struct netvm_rex_cp, coproc);
 	struct netvm_inst *inst = &vm->inst[vm->pc];
-	uint64_t addr, len, ridx;
+	uint64_t addr, len, nmatch, ridx;
 	byte_t *p;
 	struct raw r;
 
 	S_POP(vm, ridx);
-	FATAL(vm, NETVM_ERR_BADCPOP, (ridx >= cp->nrexes));
+	if (domatch)
+		S_POP(vm, nmatch);
+	else
+		nmatch = 0;
 	S_POP(vm, len);
 	S_POP(vm, addr);
-	FATAL(vm, NETVM_ERR_IOVFL, (len + addr < len));
 
-	FATAL(vm, NETVM_ERR_BADCPOP, (inst->w > NETVM_MAXREXMATCH));
-
-	netvm_get_seg_ptr(vm, inst->z, addr, 0, len, &p);
+	FATAL(vm, NETVM_ERR_BADCPOP, (ridx >= NETVM_MAXREXPAT));
+	FATAL(vm, NETVM_ERR_BADCPOP, (cp->rinit[ridx] == 0));
+	FATAL(vm, NETVM_ERR_BADCPOP, (nmatch > NETVM_MAXREXMATCH));
+	netvm_get_uaddr_ptr(vm, addr, 0, len, &p);
 	if (vm->error)
 		return;
 
+	/* regular expression matches reside within the lower 32 bits of */
+	/* address space. */
+	FATAL(vm, NETVM_ERR_MEMADDR, 
+	     (addr & NETVM_UA_OFF_MASK) + len >= NETVM_PF_INVALID);
+
+	if (!inst->z)
+		addr = 0;
 	r.data = p;
 	r.len = len;
-	rexmatch(vm, cp->rexes[ridx], &r, inst->w);
+	rexmatch(vm, &cp->rexes[ridx], &r, nmatch, addr);
+}
+
+
+static void nci_rex_match(struct netvm *vm, struct netvm_coproc *ncp, int cpi)
+{
+	return _rex_match(vm, ncp, cpi, 0);
+}
+
+
+static void nci_rex_matchx(struct netvm *vm, struct netvm_coproc *ncp, int cpi)
+{
+	return _rex_match(vm, ncp, cpi, 1);
 }
 
 
 int init_rex_cp(struct netvm_rex_cp *cp, struct memmgr *rexmm, uint nrex)
 {
-	struct rex_pat **ra;
 	netvm_cpop *opp;
 	abort_unless(cp);
 
-	if ((ra = malloc(sizeof(struct rex_pat *) * nrex)) == NULL)
-		return -1;
 	cp->coproc.type = NETVM_CPT_REX;
 	cp->coproc.numops = NETVM_CPOC_NUMREX;
 	cp->coproc.ops = cp->ops;
@@ -653,40 +720,12 @@ int init_rex_cp(struct netvm_rex_cp *cp, struct memmgr *rexmm, uint nrex)
 	cp->coproc.reset = &rex_reset;
 	cp->coproc.validate = &rex_validate;
 	opp = cp->ops;
-	opp[NETVM_CPOC_REX] = nci_rex;
-	cp->rexes = ra;
-	memset(ra, 0, sizeof(struct rex_pat *) * nrex);
-	cp->nrexes = 0;
-	cp->ralen = nrex;
+	opp[NETVM_CPOC_REX_INIT] = nci_rex_init;
+	opp[NETVM_CPOC_REX_CLEAR] = nci_rex_clear;
+	opp[NETVM_CPOC_REX_MATCH] = nci_rex_match;
+	opp[NETVM_CPOC_REX_MATCHX] = nci_rex_matchx;
+	memset(cp->rinit, 0, sizeof(cp->rinit));
 	cp->rexmm = rexmm;
-	return 0;
-}
-
-
-void set_rexmm_cp(struct netvm_rex_cp *cp, struct memmgr *rexmm)
-{
-	abort_unless(cp);
-	cp->rexmm = rexmm;
-}
-
-
-int add_rex_cp(struct netvm_rex_cp *cp, struct rex_pat *rex)
-{
-	abort_unless(cp && rex);
-
-	if (cp->nrexes == cp->ralen) {
-		struct rex_pat **ra;
-		uint nralen = cp->ralen << 1;
-		if (nralen < cp->ralen)
-			return -1;
-		ra = realloc(cp->rexes, nralen * sizeof(struct rex_pat *));
-		if (ra == NULL)
-			return -1;
-		cp->rexes = ra;
-		cp->ralen = nralen;
-	}
-
-	cp->rexes[cp->nrexes++] = rex;
 
 	return 0;
 }
@@ -695,11 +734,11 @@ int add_rex_cp(struct netvm_rex_cp *cp, struct rex_pat *rex)
 void fini_rex_cp(struct netvm_rex_cp *cp)
 {
 	uint i;
-	struct memmgr *mm;
-	if ((mm = cp->rexmm) != NULL)
-		for (i = 0; i < cp->nrexes; ++i)
-			mem_free(mm, cp->rexes[i]);
-	free(cp->rexes);
+	for (i = 0; i < NETVM_MAXREXPAT; ++i)
+		if (cp->rinit[i]) {
+			rex_free(&cp->rexes[i]);
+			cp->rinit[i] = 0;
+		}
 }
 
 

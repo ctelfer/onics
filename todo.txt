@@ -4,13 +4,11 @@ Key:
   ? -- Not sure if we should do this but should consider
 
 PML
- + Fix up command line options
- + Regular expression matching
  + Formatted printing
+ + Fix up command line options
  + Add metadata manipulation
  + Add "standard include path/files"
  + More test cases (control flow especially)
- + Fix/allow recursion for functions (not inlines).
  + Fix code gen error reporting:  put somewhere sane.
  + Proper checking for allocation failures in parser.
  ? Revise netvm cmp, pcmp and mskcmp to check lengths ?
@@ -18,6 +16,10 @@ PML
  * Hash table support
  * Data structure support (maybe just hash tables)
  * AST-based interpreter for comparison with code generated version
+ * Clean up AST to remove:
+   - function addresses
+   - literal regex indices
+   - others?  Put codegen buffer in each node.  (instead of void *cgx)
 
 
 Proto parsing
@@ -34,11 +36,30 @@ netvm_prog API:
 
 
 netvm:
- * Resolver coprocessor
+ * DNS Resolver coprocessor
  * Hash table coprocessor
  * Backing store coprocessor for packets
 
 
 pktdiff:
  + everything
+
+
+
+
+Regular expressions in NetVM
+ * There are a max # of patterns at one time.  All operations get an error
+   if the pattern index is out of bounds.
+ - Load Pattern [addr, len, idx] -> []
+	* frees previous pattern if present
+	* May give an error if we run out of memory or if the pattern
+	  requires too many matches.
+ - Clear Pattern [idx] -> []
+ - Match [addr, len, idx] -> [0 or 1]
+	* Error if pattern not loaded
+ - MatchX [addr, len, nmatch, idx] ->
+	[0]
+	[offn, offn-1, offn-2 .. off1, pos]
+	* Error if pattern not loaded
+	* Error if nmatch is too large for the pattern
 

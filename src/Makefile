@@ -7,7 +7,7 @@ INCS=-I${CATLIB_ROOT}/include
 #DEFS=
 # Some of these are gcc-specific.  TODO: remove/group compiler specific flags.
 OPTS=-g -Wall -Wno-sign-conversion -Wno-pointer-sign -fno-strict-aliasing
-LIBS=-L${CATLIB_ROOT}/lib -lcat -lpcap
+LIBS=-L${CATLIB_ROOT}/lib -lcat_dbg -lpcap
 DEFS=
 BINDIR=../bin
 LIBOBJS= xpkt.o ns.o netvm.o netvm_prog.o pktbuf.o stdproto.o \

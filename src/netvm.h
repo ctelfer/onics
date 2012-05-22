@@ -46,6 +46,7 @@ struct netvm_inst {
 #define NETVM_UA_SEG_OFF	56
 #define NETVM_UA_SEG_HI_OFF	24
 #define NETVM_UA_OFF_MASK	((((uint64_t)1 << NETVM_UA_SEG_OFF))-1)
+#define NETVM_UA_SEG_MASK	((uint64_t)0xFF << NETVM_UA_SEG_OFF)
 #define NETVM_UA_ISPKT(addr)	(((addr) >> 63) != 0)
 #define NETVM_UADDR(ispkt, idx, addr) \
 	((uint64_t)(ispkt) << 63 | (uint64_t)(idx) << 56 | (addr))

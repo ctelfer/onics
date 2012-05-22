@@ -659,11 +659,14 @@ cmpexpr(E) ::= borexpr(LHS) matchop(OP) locname(L). {
 	pmln_free((union pml_node *)L);
 }
 cmpexpr(E) ::= borexpr(LHS) matchop(OP) REGEX(R). {
-	struct pml_literal *v = (struct pml_literal *)pmln_alloc(PMLTT_BYTESTR);
+	struct pml_literal *lit = 
+		(struct pml_literal *)pmln_alloc(PMLTT_BYTESTR);
 	int op = (OP == PMLOP_MATCH) ? PMLOP_REXMATCH : PMLOP_NOTREXMATCH;
-	pml_bytestr_copy(ast, &v->u.bytestr, PML_SEG_ROMEM, R.u.raw.data, R.u.raw.len);
+	pml_bytestr_copy(ast, &lit->u.bytestr, PML_SEG_ROMEM, R.u.raw.data,
+			 R.u.raw.len);
 	free(R.u.raw.data);
-	E = pml_binop_alloc(op, LHS, (union pml_expr_u *)v); 
+	pml_ast_add_regex(ast, lit);
+	E = pml_binop_alloc(op, LHS, (union pml_expr_u *)lit); 
 }
 cmpexpr(E) ::= borexpr(LHS). { E = LHS; }
 

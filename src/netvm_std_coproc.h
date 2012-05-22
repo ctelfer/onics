@@ -115,19 +115,25 @@ void fini_pktq_cp(struct netvm_pktq_cp *cp);
 
 /* for *REX, width == # of submatches to push */
 enum {
-	NETVM_CPOC_REX,		/* [addr,len,rxidx]: z is the memory seg */
-				/* w is the number of matches to push */
+	NETVM_CPOC_REX_INIT,	/* [addr,len,rxidx]: init pattern 'rxidx' */
+				/* on the string given in (addr/len) */
+	NETVM_CPOC_REX_CLEAR,
+	NETVM_CPOC_REX_MATCH,	/* [addr,len,rxidx]: return 0 or 1 on match */
+	NETVM_CPOC_REX_MATCHX,	/* [addr,len,nm,rxidx]: Return a set of nm */
+				/* offsets or 0xFFFFFFFF on no match with */
+				/* a match offset for the whole pattern at */
+				/* the top of the stack.  */
 	NETVM_CPOC_NUMREX,
 };
 
-#define NETVM_MAXREXMATCH 16
+#define NETVM_MAXREXMATCH	16
+#define NETVM_MAXREXPAT		128
 
 struct netvm_rex_cp {
 	struct netvm_coproc	coproc;
 	netvm_cpop		ops[NETVM_CPOC_NUMREX];
-	struct rex_pat **	rexes;
-	uint			nrexes;
-	uint			ralen;
+	struct rex_pat		rexes[NETVM_MAXREXPAT];
+	char			rinit[NETVM_MAXREXPAT];
 	struct memmgr *		rexmm;
 };
 

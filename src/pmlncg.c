@@ -1734,6 +1734,30 @@ static int cg_locaddr(struct pmlncg *cg, struct pml_locator *loc)
 }
 
 
+static int cg_rexmatch(struct pmlncg *cg, struct pml_op *op, int etype)
+{
+	struct pml_literal *lit;
+
+	if (etype != PML_ETYPE_SCALAR) {
+		fprintf(stderr,
+			"Unable to type cast regex match to non-scalar"
+			" return type '%d'\n", etype);
+		return -1;
+	}
+
+	/* generate the byte string on top */
+	if (cg_expr(cg, (union pml_node *)op->arg1, PML_ETYPE_BYTESTR) < 0)
+		return -1;
+
+	abort_unless(op->arg2->base.type == PMLTT_BYTESTR);
+	lit = &op->arg2->literal;
+	EMIT_W(&cg->ibuf, PUSH, lit->rexidx);
+	EMIT_XY(&cg->ibuf, CPOPI, NETVM_CPI_REX, NETVM_CPOC_REX_MATCH);
+
+	return 0;
+}
+
+
 static int w_expr_pre(union pml_node *n, void *auxp, void *xstk)
 {
 	struct cgeaux *ea = auxp;
@@ -1752,10 +1776,16 @@ static int w_expr_pre(union pml_node *n, void *auxp, void *xstk)
 		switch (op->op) {
 		case PMLOP_MATCH:
 		case PMLOP_NOTMATCH:
-		case PMLOP_REXMATCH:
-		case PMLOP_NOTREXMATCH:
 			ea->etype = PML_ETYPE_BYTESTR;
 			break;
+
+		case PMLOP_REXMATCH:
+		case PMLOP_NOTREXMATCH:
+			if (cg_rexmatch(ea->cg, op, es->etype) < 0)
+				return -1;
+			return 1;
+			break;
+
 		default:
 			/* coerce non-mask expressions to scalars */
 			ea->etype = PML_ETYPE_SCALAR;
@@ -1818,7 +1848,6 @@ static int w_expr_in(union pml_node *n, void *auxp, void *xstk)
 			es->iaddr = nexti(b);
 			EMIT_W(b, BRI, 0); /* fill in during post */
 		}
-		/* TODO: handle regular expressions as a type here */
 		if (op->op == PMLOP_MATCH || op->op == PMLOP_NOTMATCH) {
 			ea->etype = n->op.arg2->expr.etype;
 		} else {
@@ -2372,21 +2401,66 @@ static int cg_funcs(struct pmlncg *cg)
 }
 
 
-static int cg_be(struct pmlncg *cg)
+STATIC_BUG_ON(UINTMAX_LT_MAXREXPAT, UINT_MAX < NETVM_MAXREXPAT);
+static int add_regexes(struct pml_ibuf *b, struct pml_literal **rexarr,
+		       ulong nrex)
+{
+	struct pml_literal *lit;
+	uint i = 0;
+
+	if (nrex > NETVM_MAXREXPAT) {
+		fprintf(stderr,
+			"Too many regular expressions (> %d) for the "
+			"netvm regex coprocessor\n", NETVM_MAXREXPAT);
+		return -1;
+	}
+	while (nrex > 0) {
+		lit = *rexarr;
+		abort_unless(lit->type == PMLTT_BYTESTR);
+
+		PUSH64(b, MEMADDR(lit->u.bytestr.addr, PML_SEG_ROMEM));
+		abort_unless(lit->u.bytestr.len > 0);
+		PUSH64(b, lit->u.bytestr.len - 1); /* chop ending '\0' */
+		PUSH64(b, i);
+		EMIT_XY(b, CPOPI, NETVM_CPI_REX, NETVM_CPOC_REX_INIT);
+		lit->rexidx = i;
+
+		--nrex;
+		++rexarr;
+	}
+	
+	return 0;
+}
+
+
+static int cg_begin_end(struct pmlncg *cg)
 {
 	struct pml_rule *r;
 	ulong nvars;
+	struct pml_literal **rexarr;
+	ulong nrex;
+
+	pml_ast_get_rexarr(cg->ast, &rexarr, &nrex);
+
+	/* Do BEGIN if there's a rule OR if there are regexes to initialize */
+	if (nrex > 0 || cg->ast->b_rule != NULL)
+		cg->prog->eps[NVMP_EP_START] = nexti(&cg->ibuf);
+
+	if (add_regexes(&cg->ibuf, rexarr, nrex) < 0)
+		return -1;
 
 	if (cg->ast->b_rule != NULL) {
-		cg->prog->eps[NVMP_EP_START] = nexti(&cg->ibuf);
 		r = cg->ast->b_rule;
 		nvars = r->vars.addr_rw2;
 		if (nvars > 0)
 			EMIT_W(&cg->ibuf, ZPUSH, nvars);
 		if (cg_stmt(cg, (union pml_node *)r->stmts) < 0)
 			return -1;
-		EMIT_NULL(&cg->ibuf, HALT);
 	}
+
+	/* Close up BEGIN */
+	if (nrex > 0 || cg->ast->b_rule != NULL)
+		EMIT_NULL(&cg->ibuf, HALT);
 
 	if (cg->ast->e_rule != NULL) {
 		cg->prog->eps[NVMP_EP_END] = nexti(&cg->ibuf);
@@ -2462,6 +2536,7 @@ static void clearcg(struct pmlncg *cg, int copied, int clearall)
 
 	abort_unless(cg);
 
+	dyb_clear(&cg->calls);
 	dyb_clear(&cg->breaks);
 	dyb_clear(&cg->continues);
 	dyb_clear(&cg->nextrules);
@@ -2519,7 +2594,7 @@ int pml_to_nvmp(struct pml_ast *ast, struct netvm_program *prog, int copy)
 	if (cg_funcs(&cg) < 0)
 		goto err;
 
-	if (cg_be(&cg) < 0)
+	if (cg_begin_end(&cg) < 0)
 		goto err;
 
 	if (cg_rules(&cg) < 0)
@@ -2528,7 +2603,7 @@ int pml_to_nvmp(struct pml_ast *ast, struct netvm_program *prog, int copy)
 	/* if we got to here we are good to go! */
 
 	/* clean up memory if this was a destructive transformation */
-	if (copy) {
+	if (!copy) {
 		/* the program keeps the initializations: remove from AST */
 		dyb_release(&ast->mi_bufs[PML_SEG_ROMEM]);
 		dyb_release(&ast->mi_bufs[PML_SEG_RWMEM]);

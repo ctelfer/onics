@@ -179,6 +179,7 @@ int pml_ast_init(struct pml_ast *ast)
 	ast->e_rule = NULL;
 	for (i = PML_SEG_MIN; i <= PML_SEG_MAX; ++i)
 		dyb_init(&ast->mi_bufs[i], NULL);
+	dyb_init(&ast->regexes, NULL);
 	str_copy(ast->errbuf, "", sizeof(ast->errbuf));
 	return 0;
 }
@@ -312,6 +313,7 @@ void pml_ast_clear(struct pml_ast *ast)
 
 	for (i = PML_SEG_MIN; i <= PML_SEG_MAX; ++i)
 		dyb_clear(&ast->mi_bufs[i]);
+	dyb_clear(&ast->regexes);
 
 	str_copy(ast->errbuf, "", sizeof(ast->errbuf));
 }
@@ -601,6 +603,25 @@ int pml_func_add_param(struct pml_function *f, struct pml_variable *v)
 }
 
 
+int pml_ast_add_regex(struct pml_ast *ast, struct pml_literal *lit)
+{
+	if (dyb_cat_a(&ast->regexes, &lit, sizeof(lit)) < 0) {
+		pml_ast_err(ast, "out of memory adding regex\n");
+		return -1;
+	}
+	return 0;
+}
+
+
+void pml_ast_get_rexarr(struct pml_ast *ast, struct pml_literal ***larr,
+			ulong *alen)
+{
+	struct dynbuf *db = &ast->regexes;
+	*larr = (struct pml_literal **)db->data;
+	*alen = db->len / sizeof(struct pml_literal *);
+}
+
+
 static void check_undefined_funcs(struct pml_ast *ast)
 {
 	struct list *n;
@@ -678,6 +699,7 @@ union pml_node *pmln_alloc(int type)
 	case PMLTT_MASKVAL: {
 		struct pml_literal *p = &np->literal;
 		p->eflags = PML_EFLAG_CONST;
+		p->rexidx = 0;
 		if (type == PMLTT_SCALAR) {
 			p->etype = PML_ETYPE_SCALAR;
 			p->u.scalar = 0;

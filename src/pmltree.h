@@ -55,6 +55,7 @@ struct pml_ast {
 	struct list		p_rules;
 	struct pml_rule *	e_rule;
 	struct dynbuf		mi_bufs[2];
+	struct dynbuf		regexes;
 	char			errbuf[256];
 };
 
@@ -214,6 +215,7 @@ struct pml_literal {
 		struct pml_bytestr	bytestr;
 		struct pml_maskval	maskval;
 	} u;
+	ulong			rexidx;
 };
 
 
@@ -535,16 +537,19 @@ struct pml_call *pml_call_alloc(struct pml_ast *ast, struct pml_function *func,
 				struct pml_list *args);
 
 /* -- helper functions for symbol values PML (vars, functions, etc) -- */
-int  pml_func_add_param(struct pml_function *func, struct pml_variable *var);
+int pml_func_add_param(struct pml_function *func, struct pml_variable *var);
 int pml_ast_add_func_proto(struct pml_ast *ast, struct pml_function *func);
-int  pml_ast_add_func(struct pml_ast *ast, struct pml_function *func);
-int  pml_ast_add_intrinsic(struct pml_ast *ast, struct pml_intrinsic *intr);
+int pml_ast_add_func(struct pml_ast *ast, struct pml_function *func);
+int pml_ast_add_intrinsic(struct pml_ast *ast, struct pml_intrinsic *intr);
 struct pml_function *pml_ast_lookup_func(struct pml_ast *ast, char *name);
 struct pml_variable *pml_func_lookup_param(struct pml_function *func, 
 					   char *name);
-int  pml_ast_add_var(struct pml_ast *ast, struct pml_variable *var);
-int  pml_ast_add_rule(struct pml_ast *ast, struct pml_rule *rule);
+int pml_ast_add_var(struct pml_ast *ast, struct pml_variable *var);
+int pml_ast_add_rule(struct pml_ast *ast, struct pml_rule *rule);
 struct pml_variable *pml_ast_lookup_var(struct pml_ast *ast, char *name);
+int pml_ast_add_regex(struct pml_ast *ast, struct pml_literal *lit);
+void pml_ast_get_rexarr(struct pml_ast *ast, struct pml_literal ***larr,
+			ulong *alen);
 
 /* -- Functions to finalize the AST or portions of it. -- */
 
