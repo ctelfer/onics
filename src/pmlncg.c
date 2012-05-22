@@ -21,15 +21,26 @@ static int typecast(struct pml_ibuf *b, int otype, int ntype);
 
 
 struct cg_pdesc {
-	int oc;
-	int oci;
-	uint8_t x;
-	uint field;
-	uint prid;
-	ulong pfoff;
-	union pml_expr_u *pkt;
-	union pml_expr_u *idx;
-	union pml_expr_u *off;
+	int 			oc;
+	int 			oci;
+	uint8_t			x;
+	uint			field;
+	uint			prid;
+	ulong			pfoff;
+	union pml_expr_u *	pkt;
+	union pml_expr_u *	idx;
+	union pml_expr_u *	off;
+};
+
+
+struct cg_func_ctx {
+	uint resolved;
+	uint addr;
+};
+
+
+struct cg_lit_ctx {
+	uint rexidx;
 };
 
 
@@ -878,6 +889,7 @@ static int cg_call(struct pmlncg *cg, struct pml_call *c, int etype)
 	struct pml_ibuf *b = &cg->ibuf;
 	struct list *n;
 	struct pml_function *f;
+	struct cg_func_ctx *fc;
 
 	abort_unless(c->args && c->func);
 	f = c->func;
@@ -896,8 +908,9 @@ static int cg_call(struct pmlncg *cg, struct pml_call *c, int etype)
 			return -1;
 		EMIT_XW(b, POPFR, 1, f->arity);
 	} else {
+		fc = (struct cg_func_ctx *)f->cgctx;
 		/* if unresolved: save the site */
-		if (f->addr == (ulong)-1) {
+		if (!fc->resolved) {
 			PUSH64(b, 0xFFFFFFFFull);
 			if (pcg_save_callsite(b, &cg->calls, f) < 0) {
 				fprintf(stderr,
@@ -906,7 +919,7 @@ static int cg_call(struct pmlncg *cg, struct pml_call *c, int etype)
 				return -1;
 			}
 		} else {
-			PUSH64(b, f->addr);
+			PUSH64(b, fc->addr);
 		}
 		EMIT_NULL(b, CALL);
 	}
@@ -1737,6 +1750,7 @@ static int cg_locaddr(struct pmlncg *cg, struct pml_locator *loc)
 static int cg_rexmatch(struct pmlncg *cg, struct pml_op *op, int etype)
 {
 	struct pml_literal *lit;
+	struct cg_lit_ctx *lc;
 
 	if (etype != PML_ETYPE_SCALAR) {
 		fprintf(stderr,
@@ -1751,7 +1765,8 @@ static int cg_rexmatch(struct pmlncg *cg, struct pml_op *op, int etype)
 
 	abort_unless(op->arg2->base.type == PMLTT_BYTESTR);
 	lit = &op->arg2->literal;
-	EMIT_W(&cg->ibuf, PUSH, lit->rexidx);
+	lc = (struct cg_lit_ctx *)lit->cgctx;
+	EMIT_W(&cg->ibuf, PUSH, lc->rexidx);
 	EMIT_XY(&cg->ibuf, CPOPI, NETVM_CPI_REX, NETVM_CPOC_REX_MATCH);
 
 	return 0;
@@ -2344,12 +2359,13 @@ static int cg_func(struct pmlncg *cg, struct pml_function *f)
 	struct pml_ibuf *b = &cg->ibuf;
 	ulong vlen;
 	int rl;
+	struct cg_func_ctx *fc = (struct cg_func_ctx *)f->cgctx;
 
 	abort_unless(cg->curfunc == NULL);
 	cg->curfunc = f;
 
-	/* XXX TODO:  this really doesn't belong in the AST does it? */
-	f->addr = nexti(b);
+	fc->addr = nexti(b);
+	fc->resolved = 1;
 
 	if (f->vstksz > 0) {
 		abort_unless(f->vstksz % 8 == 0);
@@ -2375,6 +2391,7 @@ static int cg_func(struct pmlncg *cg, struct pml_function *f)
 static int cg_funcs(struct pmlncg *cg)
 {
 	struct pml_function *f;
+	struct cg_func_ctx *fc;
 	struct list *flist, *n;
 	struct callsite *csarr;
 	uint cslen;
@@ -2392,7 +2409,9 @@ static int cg_funcs(struct pmlncg *cg)
 	pcg_get_saved_callsites(&cg->calls, &csarr, &cslen);
 	while (cslen > 0) {
 		inst = &cg->ibuf.inst[csarr->iaddr];
-		inst->w = csarr->func->addr;
+		f = csarr->func;
+		fc = (struct cg_func_ctx *)f->cgctx;
+		inst->w = fc->addr;
 		++csarr;
 		--cslen;
 	}
@@ -2406,6 +2425,7 @@ static int add_regexes(struct pml_ibuf *b, struct pml_literal **rexarr,
 		       ulong nrex)
 {
 	struct pml_literal *lit;
+	struct cg_lit_ctx *lc;
 	uint i = 0;
 
 	if (nrex > NETVM_MAXREXPAT) {
@@ -2423,7 +2443,8 @@ static int add_regexes(struct pml_ibuf *b, struct pml_literal **rexarr,
 		PUSH64(b, lit->u.bytestr.len - 1); /* chop ending '\0' */
 		PUSH64(b, i);
 		EMIT_XY(b, CPOPI, NETVM_CPI_REX, NETVM_CPOC_REX_INIT);
-		lit->rexidx = i;
+		lc = (struct cg_lit_ctx *)lit->cgctx;
+		lc->rexidx = i;
 
 		--nrex;
 		++rexarr;

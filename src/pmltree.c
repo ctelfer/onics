@@ -683,6 +683,7 @@ union pml_node *pmln_alloc(int type)
 	node = &np->base;
 	node->type = type;
 	l_init(&node->ln);
+	memset(&node->cgctx, 0, PML_CGCTX_SIZE);
 
 	/* Initialize the rest of the fields based on type. */
 	/* A function pointer table based on type would be more */
@@ -699,7 +700,6 @@ union pml_node *pmln_alloc(int type)
 	case PMLTT_MASKVAL: {
 		struct pml_literal *p = &np->literal;
 		p->eflags = PML_EFLAG_CONST;
-		p->rexidx = 0;
 		if (type == PMLTT_SCALAR) {
 			p->etype = PML_ETYPE_SCALAR;
 			p->u.scalar = 0;
@@ -821,7 +821,6 @@ union pml_node *pmln_alloc(int type)
 		p->ieval = NULL;
 		p->pstksz = 0;
 		p->vstksz = 0;
-		p->addr = (ulong)-1;
 	} break;
 
 	case PMLTT_RULE: {
