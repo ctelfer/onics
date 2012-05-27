@@ -41,7 +41,7 @@ struct pml_symtab {
 	struct htab		tab;
 
 	ulong			addr_rw1; /* size of read-write block 1 */
-	ulong			addr_rw2; /* size of read-write block 2*/
+	ulong			addr_rw2; /* size of read-write block 2 */
 };
 
 

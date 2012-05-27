@@ -471,8 +471,8 @@ stmts(SS) ::= . {
 	struct pml_list *l = (struct pml_list *)pmln_alloc(PMLTT_LIST);
 	SS = l;
 }
-stmts(SSO) ::= stmt(S) stmts(SSI) . {
-	l_ins(&SSI->list, &S->base.ln);
+stmts(SSO) ::= stmts(SSI) stmt(S). {
+	l_enq(&SSI->list, &S->base.ln);
 	SSO = SSI;
 }
 

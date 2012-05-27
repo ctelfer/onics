@@ -63,3 +63,25 @@ Regular expressions in NetVM
 	* Error if pattern not loaded
 	* Error if nmatch is too large for the pattern
 
+
+Formatted printing in PML
+ - print <expr>[:<fmt>]
+ - print "Hello ":%15s, "World":%-15s;
+ - print ip.daddr:IP, @ipv6{1}.daddr:IP6:-20
+ - <fmt> is one of:
+    %[<w>]d - signed decimal (scalar, default for scalar)
+    %[<w>]u - unsigned decimal (scalar)
+    %[<w>]x - unsigned hex (scalar)
+    %[<w>]o - unsigned oct (scalar)
+    %[<w>]b - binary (scalar)
+    %[<w>]s - string (byte string, length == any, default for byte string)
+    %[<w>]hex - hex string (byte string, length any)
+    %[<w>]ip - IPv4 address (byte string, length == 4)
+    %[<w>]ipv6 - IPv6 address (byte string, length == 16)
+    %[<w>]eth - 802.11 address (byte string, length == 6)
+ - <w> is a positive or negative integer.
+   * positive = min width right justify
+   * negative = min width left justify
+   * starts with 0 = zero-pad to width
+   
+  

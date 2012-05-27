@@ -7,7 +7,7 @@ INCS=-I${CATLIB_ROOT}/include
 #DEFS=
 # Some of these are gcc-specific.  TODO: remove/group compiler specific flags.
 OPTS=-g -Wall -Wno-sign-conversion -Wno-pointer-sign -fno-strict-aliasing
-LIBS=-L${CATLIB_ROOT}/lib -lcat_dbg -lpcap
+LIBS=-L${CATLIB_ROOT}/lib -lcat_dbg
 DEFS=
 BINDIR=../bin
 LIBOBJS= xpkt.o ns.o netvm.o netvm_prog.o pktbuf.o stdproto.o \
@@ -30,12 +30,12 @@ all: ${LIBOBJS} ${TARGETS}
 ${BINDIR}/pcapin: pcapin.o pktbuf.o xpkt.o protoparse.o ns.o util.o
 	${CC} -o ${BINDIR}/pcapin pcapin.o pktbuf.o xpkt.o protoparse.o ns.o \
 		util.o \
-		${DEFS} ${OPTS} ${INCS} ${LIBS}
+		${DEFS} ${OPTS} ${INCS} ${LIBS} -lpcap
 
 ${BINDIR}/pcapout: pcapout.o pktbuf.o xpkt.o protoparse.o ns.o util.o
 	${CC} -o ${BINDIR}/pcapout pcapout.o pktbuf.o xpkt.o protoparse.o ns.o \
 		util.o \
-		${DEFS} ${OPTS} ${INCS} ${LIBS}
+		${DEFS} ${OPTS} ${INCS} ${LIBS} -lpcap
 
 ${BINDIR}/pktmux: pktmux.o pktbuf.o xpkt.o protoparse.o ns.o util.o
 	${CC} -o ${BINDIR}/pktmux pktmux.o pktbuf.o xpkt.o protoparse.o ns.o \
