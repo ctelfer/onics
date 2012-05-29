@@ -127,6 +127,7 @@ dnum		0|[1-9][0-9]*
 "-?"		{ return PMLTOK_PPEND; }
 ","		{ return PMLTOK_COMMA; }
 ";"		{ return PMLTOK_SEMICOLON; }
+":"		{ return PMLTOK_COLON; }
 
 [a-zA-Z_][a-zA-Z0-9_]* { 
 	return copy_string(yyscanner, yytext, PMLTOK_ID, 0);

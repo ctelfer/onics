@@ -256,8 +256,6 @@ static int outport_validate(struct netvm_inst *inst, struct netvm *vm)
 {
 	if ((inst->y == NETVM_CPOC_PRBIN) || (inst->y == NETVM_CPOC_PROCT) || 
 	    (inst->y == NETVM_CPOC_PRDEC) || (inst->y == NETVM_CPOC_PRHEX)) {
-		if (!netvm_valid_width(inst->z))
-			return NETVM_ERR_BADWIDTH;
 		if (inst->w > 64)
 			return NETVM_ERR_CPERR;
 	}
@@ -270,109 +268,139 @@ static void nci_prnum(struct netvm *vm, struct netvm_coproc *ncp, int cpi)
 	struct netvm_outport_cp *cp =
 	    container(ncp, struct netvm_outport_cp, coproc);
 	struct netvm_inst *inst = &vm->inst[vm->pc];
-	char fmtbuf[12];
+	char fmtbuf[32];
 	uint64_t val;
-	int width, nb;
+	int i;
 
 	abort_unless(cp->outport);	/* guaranteed by netvm_init() */
-	abort_unless(inst->w <= 64);
 
-	width = inst->z;
-	nb = width & 0x7F;
+	S_POP(vm, val);
+
+	fmtbuf[0] = '%';
+	i = 1;
+	if (inst->w > 0) {
+		if (inst->z) 
+			fmtbuf[i++] = '-';
+		i += snprintf(&fmtbuf[i], sizeof(fmtbuf)-i, "0%lull", 
+			      (ulong)inst->w);
+	} else {
+		i += snprintf(&fmtbuf[i], sizeof(fmtbuf)-i, "ll");
+	}
 
 	switch (inst->y) {
 	case NETVM_CPOC_PRBIN:
-		if (inst->w)
-			sprintf(fmtbuf, "%%0%d" FMT32 "b", inst->w);
-		else
-			sprintf(fmtbuf, "%%" FMT32 "b");
+		fmtbuf[i++] = 'b';
 		break;
 	case NETVM_CPOC_PROCT:
-		if (inst->w)
-			sprintf(fmtbuf, "%%0%d" FMT32 "o", inst->w);
-		else
-			sprintf(fmtbuf, "%%" FMT32 "o");
+		fmtbuf[i++] = 'o';
 		break;
 	case NETVM_CPOC_PRDEC:
-		if (inst->w) {
-			if (width & 0x80)
-				sprintf(fmtbuf, "%%0%d" FMT32 "d", inst->w);
-			else
-				sprintf(fmtbuf, "%%0%d" FMT32 "u", inst->w);
-		} else {
-			if (width & 0x80)
-				sprintf(fmtbuf, "%%" FMT32 "d");
-			else
-				sprintf(fmtbuf, "%%" FMT32 "u");
-		}
+		fmtbuf[i++] = 'd';
+		break;
+	case NETVM_CPOC_PRUDEC:
+		fmtbuf[i++] = 'u';
 		break;
 	case NETVM_CPOC_PRHEX:
-		if (inst->w)
-			sprintf(fmtbuf, "%%0%d" FMT32 "x", inst->w);
-		else
-			sprintf(fmtbuf, "%%" FMT32 "x");
+		fmtbuf[i++] = 'x';
 		break;
 	default:
 		abort_unless(0);
 	}
-
-	S_POP(vm, val);
-
-	/* mask out all irrelevant bits */
-	if (nb < 8)
-		val &= ((uint64_t)1 << (nb * 8)) - 1;
+	fmtbuf[i++] = '\0';
 
 	/* sign extend the result if we are printing a signed decimal */
-	if ((width & 0x80) && (inst->y == NETVM_CPOC_PRDEC))
-		val |= -(val & (1 << (nb * 8 - 1)));
-	emit_format(cp->outport, fmtbuf, (uint)val);
+	emit_format(cp->outport, fmtbuf, (ullong)val);
+}
+
+
+static void padspc(struct emitter *e, uint len)
+{
+	const static char spaces[17] = "                ";
+	while (len < 16) {
+		emit_raw(e, spaces, 16);
+		len -= 16;
+	}
+	emit_raw(e, spaces, len);
+}
+
+
+static void outstr(struct emitter *e, char *s, ulong len, ulong pad, int left)
+{
+	/* left pad */
+	if (left && (len < pad))
+		padspc(e, len - pad);
+
+	emit_raw(e, s, len);
+
+	/* right pad */
+	if (!left && (len < pad))
+		padspc(e, len - pad);
 }
 
 
 static void nci_prip(struct netvm *vm, struct netvm_coproc *ncp, int cpi)
 {
+	struct netvm_inst *inst = &vm->inst[vm->pc];
 	struct netvm_outport_cp *cp =
 	    container(ncp, struct netvm_outport_cp, coproc);
-	uint64_t val;
+	uint64_t addr;
+	byte_t *p;
+	char str[64];
+	uint len;
+
 	abort_unless(cp->outport);
-	S_POP(vm, val);
-	emit_format(cp->outport, "%u.%u.%u.%u", (val >> 24) & 0xFF, 
-		    (val >> 16) & 0xFF, (val >> 8) & 0xFF, val & 0xFF);
+	S_POP(vm, addr);
+	netvm_get_uaddr_ptr(vm, addr, 0, 4, &p);
+	if (vm->error)
+		return;
+
+	len = snprintf(str, sizeof(str), "%u.%u.%u.%u", p[0], p[1], p[2], p[3]);
+	outstr(cp->outport, str, len, inst->w, inst->z);
 }
 
 
 static void nci_preth(struct netvm *vm, struct netvm_coproc *ncp, int cpi)
 {
+	struct netvm_inst *inst = &vm->inst[vm->pc];
 	struct netvm_outport_cp *cp =
 	    container(ncp, struct netvm_outport_cp, coproc);
-	uint64_t val;
+	uint64_t addr;
+	byte_t *p;
+	char str[64];
+	uint len;
+
 	abort_unless(cp->outport);
-	S_POP(vm, val);
-	emit_format(cp->outport, "%02x:%02x:%02x:%02x:%02x:%02x",
-	            (val >> 40) & 0xFF, (val >> 32) & 0xFF, (val >> 24) & 0xFF,
-		    (val >> 16) & 0xFF, (val >> 8) & 0xFF, val & 0xFF);
+	S_POP(vm, addr);
+	netvm_get_uaddr_ptr(vm, addr, 0, 6, &p);
+	if (vm->error)
+		return;
+	len = snprintf(str, sizeof(str), "%02x:%02x:%02x:%02x:%02x:%02x",
+		       p[0], p[1], p[2], p[3], p[4], p[5]);
+	outstr(cp->outport, str, len, inst->w, inst->z);
 }
 
 
 static void nci_pripv6(struct netvm *vm, struct netvm_coproc *ncp, int cpi)
 {
+	struct netvm_inst *inst = &vm->inst[vm->pc];
 	struct netvm_outport_cp *cp =
 	    container(ncp, struct netvm_outport_cp, coproc);
-	uint64_t v1, v2;
+	uint64_t addr;
+	byte_t *p;
+	char str[64];
+	uint len;
+
 	abort_unless(cp->outport);
-	S_POP(vm, v2);
-	S_POP(vm, v1);
-	emit_format(cp->outport,
-		    "%02x%02x:%02x%02x:%02x%02x:%02x%02x:"
-		    "%02x%02x:%02x%02x:%02x%02x:%02x%02x",
-		    (v1 >> 56) & 0xFF, (v1 >> 48) & 0xFF, 
-		    (v1 >> 40) & 0xFF, (v1 >> 32) & 0xFF, 
-		    (v1 >> 24) & 0xFF, (v1 >> 16) & 0xFF, 
-		    (v1 >> 8) & 0xFF, v1  & 0xFF, 
-		    (v2 >> 56) & 0xFF, (v2 >> 48) & 0xFF, 
-		    (v2 >> 40) & 0xFF, (v2 >> 32) & 0xFF, 
-		    (v2 >> 24) & 0xFF, (v2 >> 16) & 0xFF, 
-		    (v2 >> 8) & 0xFF, v2  & 0xFF);
+	S_POP(vm, addr);
+	netvm_get_uaddr_ptr(vm, addr, 0, 16, &p);
+	if (vm->error)
+		return;
+	len = snprintf(str, sizeof(str), 
+		       "%02x%02x:%02x%02x:%02x%02x:%02x%02x:"
+		       "%02x%02x:%02x%02x:%02x%02x:%02x%02x",
+		       p[0], p[1], p[2], p[3], p[4], p[5], p[6], p[7],
+		       p[8], p[9], p[10], p[11], p[12], p[13], p[14], p[15]);
+	outstr(cp->outport, str, len, inst->w, inst->z);
 }
 
 
@@ -397,8 +425,53 @@ static void nci_prstr(struct netvm *vm, struct netvm_coproc *ncp, int cpi)
 		seg = inst->z;
 		netvm_get_seg_ptr(vm, seg, addr, 0, len, &p);
 	}
-	if (!vm->error)
+
+	if (!vm->error) {
+		if ((inst->y == NETVM_CPOC_PRSTR) && (len < inst->w) && 
+		    (inst->z != 0))
+			padspc(cp->outport, len - inst->w);
+
 		emit_raw(cp->outport, p, len);
+
+		if ((inst->y == NETVM_CPOC_PRSTR) && (len < inst->w) && 
+		    (inst->z == 0))
+			padspc(cp->outport, len - inst->w);
+	}
+}
+
+
+static void nci_prxstr(struct netvm *vm, struct netvm_coproc *ncp, int cpi)
+{
+	struct netvm_outport_cp *cp =
+	    container(ncp, struct netvm_outport_cp, coproc);
+	struct netvm_inst *inst = &vm->inst[vm->pc];
+	uint64_t addr, len;
+	byte_t *p;
+	char xd[2];
+	int i;
+
+	abort_unless(cp->outport);
+	S_POP(vm, len);
+	S_POP(vm, addr);
+	netvm_get_uaddr_ptr(vm, addr, 0, len, &p);
+	if (vm->error)
+		return;
+
+	if ((2*len < inst->w) && (inst->z != 0))
+		padspc(cp->outport, 2*len - inst->w);
+
+	while (len > 0) {
+		i = *p >> 4;
+		xd[0] = (i > 10) ? ('A' + i - 10) : ('0' + i);
+		i = *p & 0xF;
+		xd[1] = (i > 10) ? ('A' + i - 10) : ('0' + i);
+		emit_raw(cp->outport, xd, 2);
+		++p;
+		--len;
+	}
+
+	if ((2*len < inst->w) && (inst->z == 0))
+		padspc(cp->outport, 2*len - inst->w);
 }
 
 
@@ -415,12 +488,13 @@ void init_outport_cp(struct netvm_outport_cp *cp, struct emitter *em)
 	set_outport_emitter(cp, em);
 	opp = cp->ops;
 	opp[NETVM_CPOC_PRBIN] = opp[NETVM_CPOC_PROCT] = opp[NETVM_CPOC_PRDEC] =
-	    opp[NETVM_CPOC_PRHEX] = &nci_prnum;
+	    opp[NETVM_CPOC_PRUDEC] = opp[NETVM_CPOC_PRHEX] = &nci_prnum;
 	opp[NETVM_CPOC_PRIP] = nci_prip;
 	opp[NETVM_CPOC_PRETH] = nci_preth;
 	opp[NETVM_CPOC_PRIPV6] = nci_pripv6;
 	opp[NETVM_CPOC_PRSTR] = nci_prstr;
 	opp[NETVM_CPOC_PRSTRI] = nci_prstr;
+	opp[NETVM_CPOC_PRXSTR] = nci_prxstr;
 }
 
 

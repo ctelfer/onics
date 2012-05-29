@@ -2306,17 +2306,50 @@ int cg_assign(struct pmlncg *cg, struct pml_assign *a)
 int cg_print(struct pmlncg *cg, struct pml_print *pr)
 {
 	struct pml_ibuf *b = &cg->ibuf;
-	struct list *arglist;
-	
-	abort_unless(pr->args);
+	uint8_t y;
+	int etype;
 
-	arglist = &pr->args->list;
-	if (!l_isempty(arglist))
-		UNIMPL(cg_argument_print);
+	abort_unless(cg && pr);
 
-	PUSH64(b, MEMADDR(pr->fmt.addr, pr->fmt.segnum));
-	PUSH64(b, pr->fmt.len);
-	EMIT_XY(b, CPOPI, NETVM_CPI_OUTPORT, NETVM_CPOC_PRSTR);
+	etype = PML_FMT_TO_ETYPE(pr->fmt);
+	if (cg_expr(cg, (union pml_node *)pr->expr, etype) < 0)
+		return -1;
+
+	switch(pr->fmt) {
+	case PML_FMT_BIN: y = NETVM_CPOC_PRBIN; break;
+	case PML_FMT_OCT: y = NETVM_CPOC_PROCT; break;
+	case PML_FMT_DEC: y = NETVM_CPOC_PRDEC; break;
+	case PML_FMT_UDEC: y = NETVM_CPOC_PRUDEC; break;
+	case PML_FMT_HEX: y = NETVM_CPOC_PRHEX; break;
+	case PML_FMT_STR: y = NETVM_CPOC_PRSTR; break;
+	case PML_FMT_HEXSTR: y = NETVM_CPOC_PRXSTR; break;
+
+	case PML_FMT_IPA:
+		EMIT_W(b, EQI, 4);
+		EMIT_W(b, BRI, 3);
+		EMIT_W(b, PUSH, 0); /* TODO: allow software generated runtime errors */
+		EMIT_NULL(b, HALT);
+		break;
+	case PML_FMT_IP6A:
+		EMIT_W(b, EQI, 16);
+		EMIT_W(b, BRI, 3);
+		EMIT_W(b, PUSH, 0); /* TODO: allow software generated runtime errors */
+		EMIT_NULL(b, HALT);
+		break;
+	case PML_FMT_ETHA:
+		EMIT_W(b, EQI, 6);
+		EMIT_W(b, BRI, 3);
+		EMIT_W(b, PUSH, 0); /* TODO: allow software generated runtime errors */
+		EMIT_NULL(b, HALT);
+		break;
+
+	default:
+		abort_unless(0);
+	}
+
+	EMIT_XYZW(b, CPOPI, NETVM_CPI_OUTPORT, y, 
+		  ((pr->flags & PML_PFLAG_LJUST) != 0),
+		  pr->width);
 
 	return 0;
 }

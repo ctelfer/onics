@@ -788,10 +788,10 @@ union pml_node *pmln_alloc(int type)
 
 	case PMLTT_PRINT: {
 		struct pml_print *p = &np->print;
-		p->fmt.addr = 0;
-		p->fmt.len = 0;
-		p->fmt.segnum = PML_SEG_NONE;
-		p->args = NULL;
+		p->expr = NULL;
+		p->width = 0;
+		p->fmt = PML_FMT_UNKNOWN;
+		p->flags = 0;
 	} break;
 
 	case PMLTT_VAR: {
@@ -916,7 +916,7 @@ void pmln_free(union pml_node *node)
 
 	case PMLTT_PRINT: {
 		struct pml_print *p = &node->print;
-		pmln_free((union pml_node *)p->args);
+		pmln_free((union pml_node *)p->expr);
 	} break;
 
 	case PMLTT_VAR: {
@@ -1026,6 +1026,48 @@ struct pml_call *pml_call_alloc(struct pml_ast *ast, struct pml_function *func,
 	}
 
 	return c;
+}
+
+
+struct pml_print *pml_print_alloc(struct pml_ast *ast, union pml_expr_u *expr,
+				  const struct pml_print_fmt *fmt)
+{
+	struct pml_print *p = (struct pml_print *)pmln_alloc(PMLTT_PRINT);
+
+	abort_unless(expr);
+	if (!p)
+		return NULL;
+
+	p->expr = expr;
+	if (fmt != NULL) {
+		p->width = fmt->width;
+		p->fmt = fmt->fmt;
+		p->flags = fmt->flags;
+	}
+
+	return p;
+}
+
+
+static const char *fmt_strs[] = {
+	NULL, "b", "o", "d", "u", "x", "s", "hex", "ip", "ip6", "eth"
+};
+int pml_print_strtofmt(const char *s)
+{
+	int i;
+	for (i = 1; i < PML_FMT_NUM; ++i)
+		if (strcmp(fmt_strs[i], s) == 0)
+			return i;
+	return PML_FMT_UNKNOWN;
+}
+
+
+void pml_prlist_free(struct pml_print *p)
+{
+	union pml_node *n;
+	while ((n = l_to_node(l_pop(&p->ln))) != NULL)
+		pmln_free(n);
+	pmln_free((union pml_node *)p);
 }
 
 
@@ -1181,6 +1223,30 @@ const char *rulestr(struct pml_rule *r)
 	abort_unless(r && r->trigger >= PML_RULE_BEGIN &&
 		     r->trigger <= PML_RULE_END);
 	return rule_trigger_strs[r->trigger];
+}
+
+
+static const char *fmt_names[] = {
+	"unknown", "binary", "octal", "signed decimal", "unsigned",
+	"hexadecimal", "string", "hex string", "IP address", "IPv6 Address",
+	"802 Address"
+};
+const char *fmtstr(struct pml_print *p)
+{
+	abort_unless(p && p->fmt >= PML_FMT_UNKNOWN &&
+		     p->fmt < PML_FMT_NUM);
+	return fmt_names[p->fmt];
+}
+
+
+char *fflagstr(struct pml_print *p)
+{
+	static char s[16];
+	str_copy(s, "[", sizeof(s));
+	if (p->flags & PML_PFLAG_LJUST)
+		str_cat(s, "l", sizeof(s));
+	str_cat(s, "]", sizeof(s));
+	return s;
 }
 
 
@@ -1450,12 +1516,12 @@ void pmlt_print(struct pml_ast *ast, union pml_node *np, uint depth)
 	case PMLTT_PRINT: {
 		struct pml_print *p = &np->print;
 		indent(depth);
-		printf("Print Statement: \"%s\"\n", 
-		       (char *)pml_bytestr_ptr(ast, &p->fmt));
-		if (p->args != NULL) {
+		printf("Print Statement: type: %s, width:%lu, flags:%s\n", 
+		       fmtstr(p), p->width, fflagstr(p));
+		if (p->expr != NULL) {
 			indent(depth);
-			printf("Arguments -- \n");
-			pmlt_print(ast, (union pml_node *)p->args, depth+1);
+			printf("Expression -- \n");
+			pmlt_print(ast, (union pml_node *)p->expr, depth+1);
 		}
 	} break;
 
@@ -1782,7 +1848,7 @@ int pmln_walk(union pml_node *np, void *ctx, pml_walk_f pre, pml_walk_f in,
 	case PMLTT_PRINT: {
 		struct pml_print *p = &np->print;
 
-		rv = pmln_walk((union pml_node *)p->args, ctx, pre, in, post);
+		rv = pmln_walk((union pml_node *)p->expr, ctx, pre, in, post);
 		if (rv < 0)
 			return rv;
 		else if (rv > 0)
@@ -2264,6 +2330,7 @@ static int resolve_locsym(struct pml_resolve_ctx *ctx, struct pml_locator *l)
 	t->addr_rw2 += 1;
 	abort_unless(symtab_add(t, (struct pml_sym *)v) >= 0);
 	v->func = ctx->livefunc;
+	v->etype = PML_ETYPE_SCALAR;
 	l->reftype = PML_REF_VAR;
 	l->u.varref = v;
 
@@ -2518,6 +2585,16 @@ static int resolve_node_post(union pml_node *node, void *ctxp, void *xstk)
 			abort_unless(a->loc->reftype == PML_REF_PKTFLD);
 			if (check_nsref_assignment(ctx->ast, a) < 0)
 				return -1;
+		}
+	} break;
+
+	case PMLTT_PRINT: {
+		struct pml_print *p = (struct pml_print *)node;
+		if (p->fmt == PML_FMT_UNKNOWN) {
+			if (p->expr->expr.etype == PML_ETYPE_SCALAR)
+				p->fmt = PML_FMT_DEC;
+			else
+				p->fmt = PML_FMT_STR;
 		}
 	} break;
 
@@ -2891,7 +2968,6 @@ static int e_binop(struct pml_ast *ast, struct pml_stack_frame *fr,
 		break;
 	case PMLOP_REXMATCH:
 	case PMLOP_NOTREXMATCH:
-		/* TODO */
 		pml_ast_err(ast, "eval: regex matching unimplemented\n");
 		return -1;
 		break;
@@ -3431,12 +3507,8 @@ static int pml_cexpr_walker(union pml_node *node, void *astp, void *xstk)
 
 	case PMLTT_PRINT: {
 		struct pml_print *p = (struct pml_print *)node;
-		union pml_expr_u *arg;
-		l_for_each_safe(n, x, &p->args->list) {
-			arg = (union pml_expr_u *)l_to_node(n);
-			if (pml_opt_l_cexpr(arg, astp) < 0)
-				return -1;
-		}
+		if (pml_opt_e_cexpr(&p->expr, astp) < 0)
+			return -1;
 	} break;
 
 	case PMLTT_VAR: {

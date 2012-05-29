@@ -364,13 +364,53 @@ struct pml_cfmod {
 };
 
 
+enum {
+	PML_FMT_UNKNOWN,
+
+	/* these take scalars */
+	PML_FMT_BIN,
+	PML_FMT_OCT,
+	PML_FMT_DEC,
+	PML_FMT_UDEC,
+	PML_FMT_HEX,
+
+	/* these take byte strings */
+	PML_FMT_STR,
+	PML_FMT_HEXSTR,
+
+	/* these take byte string addresses of 4, 16 and 6 bytes */
+	PML_FMT_IPA,
+	PML_FMT_IP6A,
+	PML_FMT_ETHA,
+
+	PML_FMT_NUM,
+};
+
+#define PML_FMT_TO_ETYPE(f) \
+	(((f) >= PML_FMT_STR) ? PML_ETYPE_BYTESTR : PML_ETYPE_SCALAR)
+
+
+enum {
+	PML_PFLAG_LJUST = 1,
+};
+
+
+struct pml_print_fmt {
+	ulong			width;
+	int			fmt;
+	int			flags;
+};
+
+
 struct pml_print {
 	int			type;
 	struct list		ln;
 	byte_t			cgctx[PML_CGCTX_SIZE];
 
-	struct pml_bytestr	fmt;
-	struct pml_list *	args;	/* expressions */
+	union pml_expr_u *	expr;
+	ulong			width;
+	int			fmt;
+	int			flags;
 };
 
 
@@ -550,6 +590,10 @@ struct pml_variable *pml_var_alloc(char *name, int width, int vtype,
 				   union pml_expr_u *init);
 struct pml_call *pml_call_alloc(struct pml_ast *ast, struct pml_function *func,
 				struct pml_list *args);
+struct pml_print *pml_print_alloc(struct pml_ast *ast, union pml_expr_u *expr,
+				  const struct pml_print_fmt *fmt);
+void pml_prlist_free(struct pml_print *p);
+int pml_print_strtofmt(const char *s);
 
 /* -- helper functions for symbol values PML (vars, functions, etc) -- */
 int pml_func_add_param(struct pml_function *func, struct pml_variable *var);

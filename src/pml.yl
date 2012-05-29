@@ -225,6 +225,12 @@ var Count;
 %type stmts { struct pml_list * }
 %destructor stmts { pmln_free((union pml_node *)$$); }
 
+%type prlist { struct pml_print * }
+%destructor prlist { pml_prlist_free($$); }
+
+%type prfmt { struct pml_print_fmt }
+%destructor prfmt {  }
+
 %type locator { struct pml_locator * }
 %destructor locator { pmln_free((union pml_node *)$$); }
 
@@ -475,6 +481,12 @@ stmts(SSO) ::= stmts(SSI) stmt(S). {
 	l_enq(&SSI->list, &S->base.ln);
 	SSO = SSI;
 }
+stmts(SSO) ::= stmts(SSI) PRINT prlist(P) SEMICOLON. {
+	struct list l;
+	l_enq(&P->ln, &l); /* XXX equivalent to making l new list head */
+	l_append(&SSI->list, &l);
+	SSO = SSI;
+}
 
 
 /* Specific types of statements */
@@ -526,22 +538,52 @@ cfmkw(C) ::= NEXTRULE. { C = PML_CFM_NEXTRULE; }
 cfmkw(C) ::= SENDPKT. { C = PML_CFM_SENDPKT; }
 cfmkw(C) ::= DROP. { C = PML_CFM_DROP; }
 
-stmt(S) ::= PRINT STRING(FMT) SEMICOLON. {
-	struct pml_print *p = (struct pml_print *)pmln_alloc(PMLTT_PRINT);
-	pml_bytestr_copy(ast, &p->fmt, PML_SEG_ROMEM, FMT.u.raw.data,
-			 FMT.u.raw.len);
-	p->args = (struct pml_list *)pmln_alloc(PMLTT_LIST);
-	free(FMT.u.raw.data);
-	S = (union pml_node *)p;
+prlist(N) ::= prlist(O) COMMA expr(E). {
+	struct pml_print *p = pml_print_alloc(ast, E, NULL);
+	l_enq(&O->ln, &p->ln);
+	N = O;
 }
 
-stmt(S) ::= PRINT STRING(FMT) COMMA exprlist(EL) SEMICOLON. {
-	struct pml_print *p = (struct pml_print *)pmln_alloc(PMLTT_PRINT);
-	pml_bytestr_copy(ast, &p->fmt, PML_SEG_ROMEM, FMT.u.raw.data,
-			 FMT.u.raw.len);
-	p->args = EL;
-	free(FMT.u.raw.data);
-	S = (union pml_node *)p;
+prlist(P) ::= expr(E). {
+	P = pml_print_alloc(ast, E, NULL);
+}
+
+prlist(N) ::= prlist(O) COMMA prfmt(F) expr(E). {
+	struct pml_print *p = pml_print_alloc(ast, E, &F);
+	l_enq(&O->ln, &p->ln);
+	N = O;
+}
+
+prlist(P) ::= prfmt(F) expr(E). {
+	P = pml_print_alloc(ast, E, &F);
+}
+
+prfmt(F) ::= MOD ID(T) COLON. {
+	F.width = 0;
+	F.flags = 0;
+	F.fmt = pml_print_strtofmt(T.u.raw.data);
+	if (F.fmt == PML_FMT_UNKNOWN)
+		pml_ast_err(ast, "Unknown print format type '%s'\n",
+			    T.u.raw.data);
+	free(T.u.raw.data);
+}
+prfmt(F) ::= MOD NUM(W) ID(T) COLON. {
+	F.width = W.u.num;
+	F.flags = 0;
+	F.fmt = pml_print_strtofmt(T.u.raw.data);
+	if (F.fmt == PML_FMT_UNKNOWN)
+		pml_ast_err(ast, "Unknown print format type '%s'\n",
+			    T.u.raw.data);
+	free(T.u.raw.data);
+}
+prfmt(F) ::= MOD MINUS NUM(W) ID(T) COLON. {
+	F.width = W.u.num;
+	F.flags = PML_PFLAG_LJUST;
+	F.fmt = pml_print_strtofmt(T.u.raw.data);
+	if (F.fmt == PML_FMT_UNKNOWN)
+		pml_ast_err(ast, "Unknown print format type '%s'\n",
+			    T.u.raw.data);
+	free(T.u.raw.data);
 }
 
 stmt(S) ::= expr(E) SEMICOLON. { S = (union pml_node *)E; }

@@ -74,6 +74,7 @@ Formatted printing in PML
     %[<w>]x - unsigned hex (scalar)
     %[<w>]o - unsigned oct (scalar)
     %[<w>]b - binary (scalar)
+
     %[<w>]s - string (byte string, length == any, default for byte string)
     %[<w>]hex - hex string (byte string, length any)
     %[<w>]ip - IPv4 address (byte string, length == 4)
@@ -85,3 +86,5 @@ Formatted printing in PML
    * starts with 0 = zero-pad to width
    
   
+
+print %-15s:"Hello World\n", %12ipv6:ipv6.daddr;

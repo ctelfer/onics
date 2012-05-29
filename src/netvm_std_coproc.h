@@ -53,19 +53,23 @@ void fini_xpkt_cp(struct netvm_xpkt_cp *cp);
 /* --------- Output Port Coprocessor --------- */
 
 enum {
-			 /* For PRBIN, PROCT, PRDEC, PRHEX, z == byte width */
-	NETVM_CPOC_PRBIN,/* [v] print v in binary: w == min string width */
-	NETVM_CPOC_PROCT,/* [v] print v in octal: w == min string width */
-	NETVM_CPOC_PRDEC,/* [v] print v in decimal: w == min str width */
-			 /*     signed if z. */
-	NETVM_CPOC_PRHEX,/* [v] print v in hex: w == min string width */
-	NETVM_CPOC_PRIP, /* [v] print IP address (network byte order) */
-	NETVM_CPOC_PRETH,/* [vhi, vlo] print ethernet addr (network byte order) */
+	/* For all operations except PRSTRI, w is the pad width.  */
+	/* pad to the left if z and right otherwise. Numbers get */
+	/* padded with spaces and other types get padded with spaces. */
+	NETVM_CPOC_PRBIN,/* [v] print v in binary */
+	NETVM_CPOC_PROCT,/* [v] print v in octal */
+	NETVM_CPOC_PRDEC,/* [v] print v in signed decimal */
+	NETVM_CPOC_PRUDEC,/* [v] print v in unsigned decimal */
+	NETVM_CPOC_PRHEX,/* [v] print v in hex */
+
+	NETVM_CPOC_PRIP, /* [addr] print IP address (network byte order) */
+	NETVM_CPOC_PRETH,/* [addr] print ethernet addr (network byte order) */
 	                 /*     vhi has only 2 MSB of address */
-	NETVM_CPOC_PRIPV6,/* [v0,v1,v2,v3] print IPv6 addr (network byte order) */
+	NETVM_CPOC_PRIPV6,/* [addr] print IPv6 addr (network byte order) */
 	NETVM_CPOC_PRSTR,/* [addr,len] print len bytes from addr */
 	NETVM_CPOC_PRSTRI,/* as PRSTR except w holds |len(8)|addr(24)| */
 			  /* and 'z' holds the segment to print from */
+	NETVM_CPOC_PRXSTR,/* [addr,len] print len bytes from addr */
 
 	NETVM_CPOC_NUMPR
 };
