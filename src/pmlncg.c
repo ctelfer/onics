@@ -811,7 +811,7 @@ static int cg_op(struct pml_ibuf *b, struct pml_op *op, struct cgestk *es)
 
 	case PMLOP_REXMATCH:
 	case PMLOP_NOTREXMATCH:
-		UNIMPL(rexmatch);
+		abort_unless(0);
 		break;
 
 	case PMLOP_EQ:
@@ -2472,8 +2472,7 @@ static int add_regexes(struct pml_ibuf *b, struct pml_literal **rexarr,
 		abort_unless(lit->type == PMLTT_BYTESTR);
 
 		PUSH64(b, MEMADDR(lit->u.bytestr.addr, PML_SEG_ROMEM));
-		abort_unless(lit->u.bytestr.len > 0);
-		PUSH64(b, lit->u.bytestr.len - 1); /* chop ending '\0' */
+		PUSH64(b, lit->u.bytestr.len);
 		PUSH64(b, i);
 		EMIT_XY(b, CPOPI, NETVM_CPI_REX, NETVM_CPOC_REX_INIT);
 		lc = (struct cg_lit_ctx *)lit->cgctx;

@@ -994,7 +994,6 @@ struct pml_call *pml_call_alloc(struct pml_ast *ast, struct pml_function *func,
 {
 	uint alen;
 	struct pml_call *c = (struct pml_call *)pmln_alloc(PMLTT_CALL);
-	struct list *n;
 
 	alen = l_length(&args->list);
 	if (alen != func->arity) {
@@ -1010,20 +1009,6 @@ struct pml_call *pml_call_alloc(struct pml_ast *ast, struct pml_function *func,
 	c->width = (c->etype == PML_ETYPE_SCALAR) ? 8 : 0;
 	c->eflags = 0;
 	func->callers++;
-
-	/* a call is a constant expression if the function is an inline */
-	/* and if the arguments to the function are all constant */
-	if (PML_FUNC_IS_PCONST(func)) {
-		c->eflags = PML_EFLAG_CONST;
-		l_for_each(n, &args->list) {
-			struct pml_expr_base *b = 
-				container(n, struct pml_expr_base, ln);
-			if (!PML_EXPR_IS_CONST(b)) {
-				c->eflags = 0;
-				break;
-			}
-		}
-	}
 
 	return c;
 }
@@ -2487,7 +2472,8 @@ static int resolve_node_post(union pml_node *node, void *ctxp, void *xstk)
 			c->eflags |= PML_EFLAG_CONST;
 			l_for_each(n, &c->args->list) {
 				if (!PML_EXPR_IS_PCONST(l_to_node(n))) {
-					c->eflags &= ~PML_EFLAG_PCONST;
+					c->eflags &= ~(PML_EFLAG_PCONST|
+						       PML_EFLAG_CONST);
 					break;
 				}
 			}

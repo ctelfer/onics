@@ -316,7 +316,7 @@ static void nci_prnum(struct netvm *vm, struct netvm_coproc *ncp, int cpi)
 static void padspc(struct emitter *e, uint len)
 {
 	const static char spaces[17] = "                ";
-	while (len < 16) {
+	while (len > 16) {
 		emit_raw(e, spaces, 16);
 		len -= 16;
 	}
@@ -324,17 +324,17 @@ static void padspc(struct emitter *e, uint len)
 }
 
 
-static void outstr(struct emitter *e, char *s, ulong len, ulong pad, int left)
+static void outstr(struct emitter *e, char *s, ulong len, ulong pad, int ljust)
 {
 	/* left pad */
-	if (left && (len < pad))
-		padspc(e, len - pad);
+	if (!ljust && (len < pad))
+		padspc(e, pad - len);
 
 	emit_raw(e, s, len);
 
 	/* right pad */
-	if (!left && (len < pad))
-		padspc(e, len - pad);
+	if (ljust && (len < pad))
+		padspc(e, pad - len);
 }
 
 
@@ -410,6 +410,7 @@ static void nci_prstr(struct netvm *vm, struct netvm_coproc *ncp, int cpi)
 	    container(ncp, struct netvm_outport_cp, coproc);
 	struct netvm_inst *inst = &vm->inst[vm->pc];
 	uint64_t addr, len;
+	ulong plen = 0;
 	byte_t *p;
 	uint8_t seg;
 
@@ -418,6 +419,8 @@ static void nci_prstr(struct netvm *vm, struct netvm_coproc *ncp, int cpi)
 		S_POP(vm, len);
 		S_POP(vm, addr);
 		netvm_get_uaddr_ptr(vm, addr, 0, len, &p);
+		if (len < inst->w)
+			plen = inst->w - len;
 	} else {
 		abort_unless(inst->y == NETVM_CPOC_PRSTRI);
 		len = (inst->w >> 24) & 0xFF;
@@ -427,15 +430,13 @@ static void nci_prstr(struct netvm *vm, struct netvm_coproc *ncp, int cpi)
 	}
 
 	if (!vm->error) {
-		if ((inst->y == NETVM_CPOC_PRSTR) && (len < inst->w) && 
-		    (inst->z != 0))
-			padspc(cp->outport, len - inst->w);
+		if (plen > 0 && inst->z == 0)
+			padspc(cp->outport, plen);
 
 		emit_raw(cp->outport, p, len);
 
-		if ((inst->y == NETVM_CPOC_PRSTR) && (len < inst->w) && 
-		    (inst->z == 0))
-			padspc(cp->outport, len - inst->w);
+		if (plen > 0 && inst->z != 0)
+			padspc(cp->outport, plen);
 	}
 }
 
@@ -446,6 +447,7 @@ static void nci_prxstr(struct netvm *vm, struct netvm_coproc *ncp, int cpi)
 	    container(ncp, struct netvm_outport_cp, coproc);
 	struct netvm_inst *inst = &vm->inst[vm->pc];
 	uint64_t addr, len;
+	ulong plen = 0;
 	byte_t *p;
 	char xd[2];
 	int i;
@@ -457,8 +459,11 @@ static void nci_prxstr(struct netvm *vm, struct netvm_coproc *ncp, int cpi)
 	if (vm->error)
 		return;
 
-	if ((2*len < inst->w) && (inst->z != 0))
-		padspc(cp->outport, 2*len - inst->w);
+	if (2*len < inst->w)
+		plen = inst->w - 2 * len;
+
+	if (plen > 0 && inst->z == 0)
+		padspc(cp->outport, plen);
 
 	while (len > 0) {
 		i = *p >> 4;
@@ -470,8 +475,8 @@ static void nci_prxstr(struct netvm *vm, struct netvm_coproc *ncp, int cpi)
 		--len;
 	}
 
-	if ((2*len < inst->w) && (inst->z == 0))
-		padspc(cp->outport, 2*len - inst->w);
+	if (plen > 0 && inst->z != 0)
+		padspc(cp->outport, plen);
 }
 
 

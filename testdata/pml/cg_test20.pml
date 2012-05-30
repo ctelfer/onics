@@ -15,7 +15,7 @@ BEGIN {
 	}
 
 	if (mem[&foo+5,3] == 0x345678) {
-		print "foo[5,3] == 0x345678\n";
+		print "good: foo[5,3] == 0x345678\n";
 	} else {
 		print "error: foo[3,3] != 0x345678\n";
 	}

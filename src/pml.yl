@@ -707,6 +707,7 @@ cmpexpr(E) ::= borexpr(LHS) matchop(OP) REGEX(R). {
 	pml_bytestr_copy(ast, &lit->u.bytestr, PML_SEG_ROMEM, R.u.raw.data,
 			 R.u.raw.len);
 	free(R.u.raw.data);
+	lit->u.bytestr.len -= 1;
 	pml_ast_add_regex(ast, lit);
 	E = pml_binop_alloc(op, LHS, (union pml_expr_u *)lit); 
 }
@@ -842,6 +843,8 @@ value(V) ::= STRING(I). {
 	pml_bytestr_copy(ast, &v->u.bytestr, PML_SEG_ROMEM, I.u.raw.data,
 			 I.u.raw.len);
 	free(I.u.raw.data);
+	/* copied the null terminator for sanity, but don't count in length */
+	v->u.bytestr.len -= 1;
 	V = (union pml_expr_u *)v;
 }
 value(V) ::= ATAT locname(L). {
