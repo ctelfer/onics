@@ -204,7 +204,6 @@ Maybe do the following.  Each type has a representation on the stack.
 
 
 Functions:
-
   - function call should
     * evaluate arguments (reverse order)
     * push the function address
@@ -225,7 +224,6 @@ Functions:
 
 
 Inlines:
-
   - evaluate arguments 
   - invoke pushfr
   - encode expression
@@ -234,29 +232,14 @@ Inlines:
 
 
 Rules:
-
   - evaluate pattern
   - push test for zero: if true skip action
   - evaluate action statement list
-
   - put a 'nextpkt' after the last rule:  (push 1 ; halt)
 
 
 
-TODO:
- - code generation for intrinsics (lots to do here)
- - code generation for formated print statements
- - code generation and (real) netvm support for regular expressions
- - test read references and assignemnts thoroughly
- - add support for null-expression statements
- - clean up the syntax for packets?  looks ugly
- - add universal "mem" variable for low level access?
- - obviously document
-
-
-
 Intrinsics:
-
   -- void pkt_new(pnum, dltype, len)
   -- void pkt_swap(pn1, pn2)
   -- void pkt_copy(pndst, pnsrc)
@@ -285,3 +268,23 @@ Intrinsics:
   -- int min(scalar1, scalar2)
   -- int max(scalar1, scalar2)
 
+
+Formatted printing in PML
+ - print [%<fmt>:]<expr> [,[%<fmt>:]<expr> ...]
+ - <fmt> is one of:
+    %[<w>]d - signed decimal (scalar, default for scalar)
+    %[<w>]u - unsigned decimal (scalar)
+    %[<w>]x - unsigned hex (scalar)
+    %[<w>]o - unsigned oct (scalar)
+    %[<w>]b - binary (scalar)
+
+    %[<w>]s - string (byte string, length == any, default for byte string)
+    %[<w>]hex - hex string (byte string, length any)
+    %[<w>]ip - IPv4 address (byte string, length == 4)
+    %[<w>]ipv6 - IPv6 address (byte string, length == 16)
+    %[<w>]eth - 802.11 address (byte string, length == 6)
+ - <w> is a positive or negative integer.
+   * positive = min width right justify
+   * negative = min width left justify
+   
+ - print %-15s:"Hello World\n", %12ipv6:ipv6.daddr;
