@@ -288,3 +288,18 @@ Formatted printing in PML
    * negative = min width left justify
    
  - print %-15s:"Hello World\n", %12ipv6:ipv6.daddr;
+
+
+Metadata:
+ - timestamp (64)
+ - snapinfo (32)
+ - inport (16)
+ - outport (16)
+ - flowid (64)
+ - traffic class (64)
+ - parse info (16, 32, 32)
+ - app info (16, 0-1020)
+ New locator type?
+ Use protoparse for it? 
+
+
