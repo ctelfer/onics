@@ -225,6 +225,7 @@ ulong pkb_get_bufsize(struct pktbuf *pkb)
 uint16_t pkb_get_dltype(struct pktbuf *pkb)
 {
 	abort_unless(pkb && pkb->xpkt);
+	abort_unless((pkb->flags & PKB_F_PACKED) == 0);
 	return pkb->xpkt->hdr.dltype;
 }
 
@@ -335,6 +336,9 @@ int pkb_file_read(struct pktbuf **pkbp, FILE *fp)
 	prp_poff(&pkb->prp) = hpad + off;
 	prp_toff(&pkb->prp) = hpad + off + xpkt_data_len(x);
 
+	/* In unpacked state, the hdr.len says there is no data: only tags */
+	x->hdr.len = x->hdr.tlen * 4 + XPKT_HLEN;
+
 	pkb->flags = 0;
 
 	*pkbp = pkb;
@@ -406,6 +410,9 @@ int pkb_fd_read(struct pktbuf **pkbp, int fd)
 
 	prp_poff(&pkb->prp) = hpad + off;
 	prp_toff(&pkb->prp) = hpad + off + xpkt_data_len(x);
+
+	/* In unpacked state, the hdr.len says there is no data: only tags */
+	x->hdr.len = x->hdr.tlen * 4 + XPKT_HLEN;
 
 	pkb->flags = 0;
 
@@ -535,7 +542,7 @@ int pkb_parse(struct pktbuf *pkb)
 
 	abort_unless(pkb);
 
-	if ((pkb->flags & PKB_F_PARSED))
+	if ((pkb->flags & (PKB_F_PARSED|PKB_F_PACKED)))
 		return -1;
 
 	prid = pkb->xpkt->hdr.dltype;
@@ -554,7 +561,7 @@ int pkb_parse(struct pktbuf *pkb)
 void pkb_clear_parse(struct pktbuf *pkb)
 {
 	abort_unless(pkb);
-	if (!(pkb->flags & PKB_F_PARSED)) {
+	if ((pkb->flags & PKB_F_PARSED)) {
 		prp_clear(&pkb->prp);
 		pkb->flags &= ~PKB_F_PARSED;
 	}
@@ -630,6 +637,7 @@ void pkb_clr_layer(struct pktbuf *pkb, int layer)
 void pkb_fix_dltype(struct pktbuf *pkb)
 {
 	uint16_t dltype = PRID_INVALID;
+	abort_unless((pkb->flags & PKB_F_PACKED) == 0);
 	if (pkb->layers[PKB_LAYER_DL] != NULL) {
 		dltype = pkb->layers[PKB_LAYER_DL]->prid;
 		abort_unless(dltype != PRID_INVALID);

@@ -1,4 +1,4 @@
-# Makefile for the nettools
+# Makefile for ONICS
 CC=gcc
 CATLIB_ROOT=../../catlib
 INCS=-I${CATLIB_ROOT}/include

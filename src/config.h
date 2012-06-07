@@ -19,15 +19,18 @@
  *  You should have received a copy of the GNU General Public License
  *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-#ifndef __pkttools_config_h
-#define __pkttools_config_h
+#ifndef __onics_config_h
+#define __onics_config_h
 
 #define HAS_PCAP
 
 #define FMT32   ""
 /* #define FMT32   "l" *//* use this one for 16-bit machines */
 
-/* #define NETTOOLS_INLINE  *//* use this for ANSI-C 89 compilers */
-#define NETTOOLS_INLINE inline
+/* #define ONICS_INLINE  *//* use this for ANSI-C 89 compilers */
+#define ONICS_INLINE inline
 
-#endif /* __pkttools_config_h */
+#define ONICS_PACK_DECL( __DECL__ ) \
+	__DECL__ __attribute__((packed))
+
+#endif /* __onics_config_h */

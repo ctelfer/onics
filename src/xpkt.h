@@ -36,27 +36,33 @@
 #define XPKT_HLEN	8
 #define XPKT_TAG_MINW	1
 #define XPKT_TAG_MAXW	255
+ONICS_PACK_DECL(
 struct xpkthdr {
 	uint32_t		len;
 	uint16_t		dltype;
 	uint16_t		tlen;
-};
+}
+);
 
 
+ONICS_PACK_DECL(
 struct xpkt {
 	struct xpkthdr		hdr;
 	uint32_t		tags[1];
-};
+}
+);
 
 
+ONICS_PACK_DECL(
 struct xpkt_tag_hdr {
 	byte_t			type;
 	byte_t			nwords;
 	uint16_t		xhword;
-};
+}
+);
 
 
-static NETTOOLS_INLINE uint32_t xpkt_doff(struct xpkt *x)
+static ONICS_INLINE uint32_t xpkt_doff(struct xpkt *x)
 {
 	abort_unless(x);
 	return XPKT_HLEN + x->hdr.tlen * 4;
@@ -64,7 +70,7 @@ static NETTOOLS_INLINE uint32_t xpkt_doff(struct xpkt *x)
 
 
 /* Returns the pointer to the beginning of data for an unpacked packet */
-static NETTOOLS_INLINE void *xpkt_data(struct xpkt *x)
+static ONICS_INLINE void *xpkt_data(struct xpkt *x)
 {
 	abort_unless(x);
 	return (byte_t *)x->tags + xpkt_doff(x);
@@ -72,7 +78,7 @@ static NETTOOLS_INLINE void *xpkt_data(struct xpkt *x)
 
 
 /* Returns the length of the data portion of an unpacked packet */
-static NETTOOLS_INLINE uint32_t xpkt_data_len(struct xpkt *x)
+static ONICS_INLINE uint32_t xpkt_data_len(struct xpkt *x)
 {
 	uint32_t doff;
 	abort_unless(x);
@@ -82,7 +88,7 @@ static NETTOOLS_INLINE uint32_t xpkt_data_len(struct xpkt *x)
 }
 
 
-static NETTOOLS_INLINE uint16_t xpkt_tag_size(struct xpkt_tag_hdr *xth)
+static ONICS_INLINE uint16_t xpkt_tag_size(struct xpkt_tag_hdr *xth)
 {
 	abort_unless(xth);
 	return 4 + xth->nwords * 4;
@@ -217,91 +223,107 @@ int xpkt_del_tag(struct xpkt *x, byte_t tag, int idx, int pulldown);
 
 
 #define XPKT_TAG_NOP_NWORDS		0
+ONICS_PACK_DECL(
 struct xpkt_tag_nop {
 	byte_t			type;	/* 0 */
 	byte_t			nwords; /* 0 */
 	uint16_t		zero;	/* 0 */
-};
+}
+);
 
 void xpkt_tag_nop_init(struct xpkt_tag_nop *t);
 
 
 #define XPKT_TAG_TIMESTAMP_NWORDS	2
+ONICS_PACK_DECL(
 struct xpkt_tag_ts {
 	byte_t			type;	/* 1 */
 	byte_t			nwords; /* 2 */
 	uint16_t		zero;	/* 0 */
 	uint32_t		sec;
 	uint32_t		nsec;
-};
+}
+);
 
 void xpkt_tag_ts_init(struct xpkt_tag_ts *t, uint32_t sec, uint32_t nsec);
 
 
 #define XPKT_TAG_SNAPINFO_NWORDS	1
+ONICS_PACK_DECL(
 struct xpkt_tag_snapinfo {
 	byte_t			type;	/* 2 */
 	byte_t			nwords; /* 1 */
 	uint16_t		zero;	/* 0 */
 	uint32_t		wirelen;
-};
+}
+);
 
 void xpkt_tag_si_init(struct xpkt_tag_snapinfo *t, uint32_t wirelen);
 
 
 #define XPKT_TAG_INIFACE_NWORDS		0
 #define XPKT_TAG_OUTIFACE_NWORDS	0
+ONICS_PACK_DECL(
 struct xpkt_tag_iface {
 	byte_t			type;	/* 3|4 */
 	byte_t			nwords; /* 0 */
 	uint16_t		iface;
-};
+}
+);
 
 void xpkt_tag_iif_init(struct xpkt_tag_iface *t, uint16_t iface);
 void xpkt_tag_oif_init(struct xpkt_tag_iface *t, uint16_t iface);
 
 
 #define XPKT_TAG_FLOW_NWORDS		2
+ONICS_PACK_DECL(
 struct xpkt_tag_flowid {
 	byte_t			type;	/* 5 */
 	byte_t			nwords; /* 2 */
 	uint16_t		zero;	/* 0 */
 	uint64_t		flowid;
-};
+}
+);
 
 void xpkt_tag_flowid_init(struct xpkt_tag_flowid *t, uint64_t id);
 
 
 #define XPKT_TAG_CLASS_NWORDS		2
+ONICS_PACK_DECL(
 struct xpkt_tag_class {
 	byte_t			type;	/* 6 */
 	byte_t			nwords; /* 2 */
 	uint16_t		zero;	/* 0 */
 	uint64_t		tag;
-};
+}
+);
 
 void xpkt_tag_class_init(struct xpkt_tag_class *t, uint64_t tag);
 
 
 #define XPKT_TAG_PARSEINFO_NWORDS	2
+ONICS_PACK_DECL(
 struct xpkt_tag_parseinfo {
 	byte_t			type;	/* 6 */
 	byte_t			nwords; /* 2 */
 	uint16_t		proto;
 	uint32_t		off;
 	uint32_t		len;
-};
+}
+);
 
 void xpkt_tag_pi_init(struct xpkt_tag_parseinfo *t, uint16_t proto,
 		      uint32_t off, uint32_t len);
 
 
+ONICS_PACK_DECL(
 struct xpkt_tag_appinfo {
 	byte_t			type;	/* 6 */
 	byte_t			nwords; /* 0+ */
 	uint16_t		subtype;
 	byte_t			data[255 * 4];
-};
+}
+);
 
 /* nw is the number of words of data in the tag */
 /* if nw == 0, then p must not be null and nw must be <= 254 */

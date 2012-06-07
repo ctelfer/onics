@@ -90,6 +90,8 @@ struct locval {
 
 
 struct cg_intr;
+typedef int (*cg_intr_func_f)(struct pmlncg *cg, struct pml_function *f,
+			      struct cg_intr *intr);
 typedef int (*cg_intr_call_f)(struct pmlncg *cg, struct pml_call *c,
 			      struct cg_intr *intr);
 
@@ -97,9 +99,20 @@ typedef int (*cg_intr_call_f)(struct pmlncg *cg, struct pml_call *c,
 #define CG_INTR_MAXOPS	4
 struct cg_intr {
 	const char *		name;
-	cg_intr_call_f		cgf;
+	cg_intr_func_f		cgfunc;
+	cg_intr_call_f		cgcall;
+	void *			ctx;
 	uint			numop;
 	struct netvm_inst	ops[CG_INTR_MAXOPS];
+};
+
+
+struct cg_meta_ctx {
+	uchar			len;
+	uchar			type;
+	uchar			addr;
+	uchar			ists;
+	ulong			taghdr;
 };
 
 
@@ -169,6 +182,12 @@ static int pib_add_ixyzw(struct pml_ibuf *b, uint8_t oc, uint8_t x, uint8_t y,
 	return pib_add(b, &in);
 }
 
+#define EMIT_I(_ibuf, _instrp)						\
+	do {					 			\
+		if (pib_add(_ibuf, _instrp) < 0) 			\
+			return -1;					\
+	} while (0)
+
 #define EMIT_XYZW(_ibuf, SYM, _x, _y, _z, _w) 				\
 	do { 		   						\
 		if (pib_add_ixyzw(_ibuf, NETVM_OC_##SYM,_x,_y,_z,_w) < 0)\
@@ -177,6 +196,7 @@ static int pib_add_ixyzw(struct pml_ibuf *b, uint8_t oc, uint8_t x, uint8_t y,
 
 #define EMIT_NULL(_ibuf, SYM) EMIT_XYZW(_ibuf, SYM, 0, 0, 0, 0)
 #define EMIT_X(_ibuf, SYM, _x) EMIT_XYZW(_ibuf, SYM, _x, 0, 0, 0)
+#define EMIT_Z(_ibuf, SYM, _z) EMIT_XYZW(_ibuf, SYM, 0, 0, _z, 0)
 #define EMIT_W(_ibuf, SYM, _w) EMIT_XYZW(_ibuf, SYM, 0, 0, 0, _w)
 #define EMIT_XW(_ibuf, SYM, _x, _w) EMIT_XYZW(_ibuf, SYM, _x, 0, 0, _w)
 #define EMIT_XY(_ibuf, SYM, _x, _y) EMIT_XYZW(_ibuf, SYM, _x, _y, 0, 0)
@@ -350,39 +370,214 @@ static int _i_inscut(struct pmlncg *cg, struct pml_call *c,
 }
 
 
+/*
+ * generate a metadata get function based on parameters from
+ * a cg_meta_ctx structure
+ */
+static int _i_cg_mget(struct pmlncg *cg, struct pml_function *f,
+		      struct cg_intr *intr)
+{
+	struct pml_ibuf *b = &cg->ibuf;
+	struct cg_meta_ctx *x = intr->ctx;;
+	struct cg_func_ctx *fc = (struct cg_func_ctx *)f->cgctx;
+
+	abort_unless(x);
+
+	fc->addr = nexti(b);
+	fc->resolved = 1;
+
+	/* [] form tag descriptor and copy */
+	EMIT_XW(b, LDBPI, 1, 2);
+	EMIT_W(b, ORI, x->type << 8);
+	EMIT_W(b, DUP, 0);
+
+	/* [td, td] check whether tag is present */
+	EMIT_W(b, PUSH, NETVM_CPOC_HASTAG);
+	EMIT_W(b, PUSH, NETVM_CPI_XPKT);
+	EMIT_NULL(b, CPOP);
+	EMIT_W(b, BNZI, 4);
+
+	/* [td] if no tag, then return -1  */
+	EMIT_W(b, PUSH, 0xFFFFFFFF);
+	EMIT_W(b, ORHI, 0xFFFFFFFF);
+	EMIT_XW(b, RET, 1, f->arity);
+
+	/* [td] read the tag into the coprocessor mem */
+	EMIT_W(b, PUSH, NETVM_CPOC_RDTAG);
+	EMIT_W(b, PUSH, NETVM_CPI_XPKT);
+	EMIT_NULL(b, CPOP);
+
+	/* [] copy the value out of coprocessor memory */
+	EMIT_W(b, PUSH, x->addr);
+	EMIT_W(b, PUSH, NETVM_CPOC_LDTAG);
+	EMIT_W(b, PUSH, NETVM_CPI_XPKT);
+	EMIT_Z(b, CPOP, x->len);
+
+	/* [val]: for timestamps, read 2nd val and convert to # nanoseconds */
+	if (x->ists) {
+		EMIT_W(b, MULI, 1000000000);
+		EMIT_W(b, PUSH, x->addr + x->len);
+		EMIT_W(b, PUSH, NETVM_CPOC_LDTAG);
+		EMIT_W(b, PUSH, NETVM_CPI_XPKT);
+		EMIT_Z(b, CPOP, x->len);
+		EMIT_NULL(b, ADD);
+	}
+
+	EMIT_XW(b, RET, 1, f->arity);
+
+	return 0;
+}
+
+
+/*
+ * generate a metadata set function based on parameters from
+ * a cg_meta_ctx structure
+ */
+static int _i_cg_mset(struct pmlncg *cg, struct pml_function *f,
+		      struct cg_intr *intr)
+{
+	struct pml_ibuf *b = &cg->ibuf;
+	struct cg_meta_ctx *x = intr->ctx;;
+	struct cg_func_ctx *fc = (struct cg_func_ctx *)f->cgctx;
+
+	abort_unless(x);
+	fc->addr = nexti(b);
+	fc->resolved = 1;
+
+	/* [] form tag descriptor and copy */
+	EMIT_XW(b, LDBPI, 1, 2);
+	EMIT_W(b, ORI, x->type << 8);
+	EMIT_W(b, DUP, 0);
+
+	/* [td,td]: check whether tag is present and skip if not so */
+	EMIT_W(b, PUSH, NETVM_CPOC_HASTAG);
+	EMIT_W(b, PUSH, NETVM_CPI_XPKT);
+	EMIT_NULL(b, CPOP);
+	EMIT_W(b, BZI, 5);
+
+	/* [td] delete the current tag */
+	EMIT_W(b, DUP, 0);
+	EMIT_W(b, PUSH, NETVM_CPOC_DELTAG);
+	EMIT_W(b, PUSH, NETVM_CPI_XPKT);
+	EMIT_NULL(b, CPOP);
+
+	/* [td] if tag to add is -1 then we are done:  return */
+	EMIT_XW(b, LDBPI, 1, 3);
+	EMIT_W(b, ADDI, 1);
+	EMIT_W(b, BNZI, 2);
+	EMIT_XW(b, RET, 0, f->arity);
+
+	/* [td] write the tag header */
+	EMIT_W(b, PUSH, x->taghdr);
+	EMIT_W(b, PUSH, 0);
+	EMIT_W(b, PUSH, NETVM_CPOC_STTAG);
+	EMIT_W(b, PUSH, NETVM_CPI_XPKT);
+	EMIT_Z(b, CPOP, 4);
+
+	/* [td] Load the value and if it is a timestamp, convert to 2 vals */
+	EMIT_XW(b, LDBPI, 1, 3);
+	if (x->ists) {
+		EMIT_W(b, MODI, 1000000000);
+		EMIT_XW(b, LDBPI, 1, 3);
+		EMIT_W(b, DIVI, 1000000000);
+	}
+
+	/* [td, val] or [td, val2, val1]: store the tag to the tag buffer */
+	EMIT_W(b, PUSH, x->addr);
+	EMIT_W(b, PUSH, NETVM_CPOC_STTAG);
+	EMIT_W(b, PUSH, NETVM_CPI_XPKT);
+	EMIT_Z(b, CPOP, x->len);
+	if (x->ists) {
+		EMIT_W(b, PUSH, x->addr + x->len);
+		EMIT_W(b, PUSH, NETVM_CPOC_STTAG);
+		EMIT_W(b, PUSH, NETVM_CPI_XPKT);
+		EMIT_Z(b, CPOP, x->len);
+	}
+
+	/* [td]: add the new tag */
+	EMIT_W(b, PUSH, NETVM_CPOC_ADDTAG);
+	EMIT_W(b, PUSH, NETVM_CPI_XPKT);
+	EMIT_NULL(b, CPOP);
+
+	EMIT_XW(b, RET, 0, f->arity);
+
+	return 0;
+}
+
+
+struct cg_meta_ctx _i_ts_ctx = { 4, XPKT_TAG_TIMESTAMP, 4, 1, 0x01020000 };
+struct cg_meta_ctx _i_snap_ctx = { 4, XPKT_TAG_SNAPINFO, 4, 0, 0x02010000 };
+struct cg_meta_ctx _i_inp_ctx = { 2, XPKT_TAG_INIFACE, 2, 0, 0x03000000 };
+struct cg_meta_ctx _i_outp_ctx = { 2, XPKT_TAG_OUTIFACE, 2, 0, 0x04000000 };
+struct cg_meta_ctx _i_flow_ctx = { 8, XPKT_TAG_FLOW, 4, 0, 0x05020000 };
+struct cg_meta_ctx _i_class_ctx = { 8, XPKT_TAG_CLASS, 4, 0, 0x06020000 };
+
 struct cg_intr intrinsics[] = { 
-	{ "pkt_new", _i_scarg, 1, { NETVM_OP(PKNEW,0,0,0,0) } },
-	{ "pkt_swap", _i_scarg, 1, { NETVM_OP(PKSWAP,0,0,0,0) } },
-	{ "pkt_copy", _i_scarg, 1, { NETVM_OP(PKCOPY,0,0,0,0) } },
-	{ "pkt_del", _i_scarg, 1, { NETVM_OP(PKDEL,0,0,0,0) }  },
-	{ "pkt_ins_u", _i_inscut, 1, { NETVM_OP(PKINS,0,0,0,0) } },
-	{ "pkt_ins_d", _i_inscut, 1, { NETVM_OP(PKINS,0,0,0,0) } },
-	{ "pkt_cut_u", _i_inscut, 1, { NETVM_OP(PKCUT,0,0,0,0) } },
-	{ "pkt_cut_d", _i_inscut, 1, { NETVM_OP(PKCUT,0,0,0,0) } },
-	{ "pkt_parse", _i_scarg, 1, { NETVM_OP(PKPRS,0,0,0,0) } },
-	{ "parse_push_back",  _i_scarg, 1, { NETVM_OP(PKPPSH,0,0,0,0) } },
-	{ "parse_pop_back",   _i_scarg, 1, { NETVM_OP(PKPPOP,0,0,0,0) } },
-	{ "parse_push_front", _i_scarg, 1, { NETVM_OP(PKPPSH,1,0,0,0) } },
-	{ "parse_pop_front",  _i_scarg, 1, { NETVM_OP(PKPPOP,1,0,0,0) } },
-	{ "parse_update", _i_pdarg, 1, { NETVM_OP(PKPUP,0,0,0,0) } },
-	{ "fix_dltype", _i_scarg, 1, { NETVM_OP(PKFXD,0,0,0,0) } },
-	{ "fix_len", _i_pdarg, 1, { NETVM_OP(PKFXL,0,0,0,0) } },
-	{ "fix_all_len",  _i_scarg, 3, 
+	{ "pkt_new", NULL, _i_scarg, NULL, 1, { NETVM_OP(PKNEW,0,0,0,0) } },
+	{ "pkt_swap", NULL, _i_scarg, NULL, 1, { NETVM_OP(PKSWAP,0,0,0,0) } },
+	{ "pkt_copy", NULL, _i_scarg, NULL, 1, { NETVM_OP(PKCOPY,0,0,0,0) } },
+	{ "pkt_del", NULL, _i_scarg, NULL, 1, { NETVM_OP(PKDEL,0,0,0,0) }  },
+	{ "pkt_ins_u", NULL, _i_inscut, NULL, 1, { NETVM_OP(PKINS,0,0,0,0) } },
+	{ "pkt_ins_d", NULL, _i_inscut, NULL, 1, { NETVM_OP(PKINS,0,0,0,0) } },
+	{ "pkt_cut_u", NULL, _i_inscut, NULL, 1, { NETVM_OP(PKCUT,0,0,0,0) } },
+	{ "pkt_cut_d", NULL, _i_inscut, NULL, 1, { NETVM_OP(PKCUT,0,0,0,0) } },
+	{ "pkt_parse", NULL, _i_scarg, NULL, 1, { NETVM_OP(PKPRS,0,0,0,0) } },
+	{ "parse_push_back",  NULL, _i_scarg, NULL, 1,
+		{ NETVM_OP(PKPPSH,0,0,0,0) } },
+	{ "parse_pop_back",   NULL, _i_scarg, NULL, 1,
+		{ NETVM_OP(PKPPOP,0,0,0,0) } },
+	{ "parse_push_front", NULL, _i_scarg, NULL, 1,
+		{ NETVM_OP(PKPPSH,1,0,0,0) } },
+	{ "parse_pop_front",  NULL, _i_scarg, NULL, 1,
+		{ NETVM_OP(PKPPOP,1,0,0,0) } },
+	{ "parse_update", NULL, _i_pdarg, NULL, 1, 
+		{ NETVM_OP(PKPUP,0,0,0,0) } },
+	{ "fix_dltype", NULL, _i_scarg, NULL, 1, { NETVM_OP(PKFXD,0,0,0,0) } },
+	{ "fix_len", NULL, _i_pdarg, NULL, 1, { NETVM_OP(PKFXL,0,0,0,0) } },
+	{ "fix_all_len",  NULL, _i_scarg, NULL, 3, 
 		{ NETVM_OP(ORI,0,0,0,(PRID_NONE<<4)),
 		  NETVM_OP(SHLI,0,0,0,44),
 		  NETVM_OP(PKFXL,0,0,0,0), } },
-	{ "fix_csum", _i_pdarg, 1, { NETVM_OP(PKFXC,0,0,0,0) } },
-	{ "fix_all_csum", _i_scarg, 3,
+	{ "fix_csum", NULL, _i_pdarg, NULL, 1, { NETVM_OP(PKFXC,0,0,0,0) } },
+	{ "fix_all_csum", NULL, _i_scarg, NULL, 3,
 		{ NETVM_OP(ORI,0,0,0,(PRID_NONE<<4)),
 		  NETVM_OP(SHLI,0,0,0,44),
 		  NETVM_OP(PKFXC,0,0,0,0), } },
-	{ "pop", _i_scarg, 1, { NETVM_OP(POPL,8,0,0,0) } },
-	{ "log2", _i_scarg, 2, 
+
+	/* 
+	 * these get full regular function implementations and require 
+	 * no special callling conventions.
+	 */
+	{ "meta_get_tstamp",  _i_cg_mget, NULL, &_i_ts_ctx,    0, { {0} } },
+	{ "meta_get_presnap", _i_cg_mget, NULL, &_i_snap_ctx,  0, { {0} } },
+	{ "meta_get_inport",  _i_cg_mget, NULL, &_i_inp_ctx,   0, { {0} } },
+	{ "meta_get_outport", _i_cg_mget, NULL, &_i_outp_ctx,  0, { {0} } },
+	{ "meta_get_flowid",  _i_cg_mget, NULL, &_i_flow_ctx,  0, { {0} } },
+	{ "meta_get_class",   _i_cg_mget, NULL, &_i_class_ctx, 0, { {0} } },
+	{ "meta_set_tstamp",  _i_cg_mset, NULL, &_i_ts_ctx,    0, { {0} } },
+	{ "meta_set_presnap", _i_cg_mset, NULL, &_i_snap_ctx,  0, { {0} } },
+	{ "meta_set_inport",  _i_cg_mset, NULL, &_i_inp_ctx,   0, { {0} } },
+	{ "meta_set_outport", _i_cg_mset, NULL, &_i_outp_ctx,  0, { {0} } },
+	{ "meta_set_flowid",  _i_cg_mset, NULL, &_i_flow_ctx,  0, { {0} } },
+	{ "meta_set_class",   _i_cg_mset, NULL, &_i_class_ctx, 0, { {0} } },
+
+	{ "pop", NULL, _i_scarg, 0, 1, { NETVM_OP(POPL,8,0,0,0) } },
+	{ "log2", NULL, _i_scarg, 0, 2, 
 		{ NETVM_OP(NLZ,8,0,0,0), NETVM_OP(SUBI,1,0,0,63) } },
-	{ "min", _i_scarg, 1, { NETVM_OP(MIN,0,0,0,0) } },
-	{ "max", _i_scarg, 1, { NETVM_OP(MAX,0,0,0,0) } },
-	{ NULL, NULL, 0, { {0} } },
+	{ "min", NULL, _i_scarg, 0, 1, { NETVM_OP(MIN,0,0,0,0) } },
+	{ "max", NULL, _i_scarg, 0, 1, { NETVM_OP(MAX,0,0,0,0) } },
+	{ NULL, NULL, NULL, 0, 0, { {0} } },
 };
+
+
+struct cg_intr *find_intrinsic(struct pml_function *f)
+{
+	struct cg_intr *intr;
+	for (intr = intrinsics; 
+	     intr->name != NULL && (strcmp(intr->name, f->name) != 0);
+	     ++intr) ;
+	return (intr->name == NULL) ? NULL : intr;
+}
 
 
 static int cg_intrinsic(struct pmlncg *cg, struct pml_call *c, int etype)
@@ -390,22 +585,20 @@ static int cg_intrinsic(struct pmlncg *cg, struct pml_call *c, int etype)
 	struct cg_intr *intr;
 	struct pml_function *f = c->func;
 
-	for (intr = intrinsics; 
-	     intr->name != NULL && (strcmp(intr->name, f->name) != 0);
-	     ++intr) ;
+	intr = find_intrinsic(f);
 
-	if (intr->name == NULL) {
-		fprintf(stderr, "intrinsic function '%s' not found\n", f->name);
-		return -1;
-	}
-
-	if (intr->cgf == NULL) {
-		fprintf(stderr, "intrinsic function '%s' is unimplemented\n",
+	if (intr == NULL) {
+		fprintf(stderr, 
+			"cg_intrinsic: intrinsic function '%s' not found\n",
 			f->name);
 		return -1;
 	}
 
-	if ((*intr->cgf)(cg, c, intr) < 0)
+	/* if callf == NULL, then the function call is by normal conventions */
+	if (intr->cgcall == NULL)
+		return 1;
+
+	if ((*intr->cgcall)(cg, c, intr) < 0)
 		return -1;
 
 	if (typecast(&cg->ibuf, c->etype, etype) < 0)
@@ -911,12 +1104,17 @@ static int cg_call(struct pmlncg *cg, struct pml_call *c, int etype)
 	struct list *n;
 	struct pml_function *f;
 	struct cg_func_ctx *fc;
+	int rv;
 
 	abort_unless(c->args && c->func);
 	f = c->func;
 
-	if (PML_FUNC_IS_INTRINSIC(f))
-		return cg_intrinsic(cg, c, etype);
+	if (PML_FUNC_IS_INTRINSIC(f)) {
+		rv = cg_intrinsic(cg, c, etype);
+		if (rv <= 0)
+			return rv;
+		/* if cg_intrinsic > 0 call as regular function */
+	}
 
 	l_for_each_rev(n, &c->args->list) {
 		if (cg_expr(cg, l_to_node(n), PML_ETYPE_SCALAR) < 0)
@@ -2415,6 +2613,11 @@ static int cg_func(struct pmlncg *cg, struct pml_function *f)
 	int rl;
 	struct cg_func_ctx *fc = (struct cg_func_ctx *)f->cgctx;
 
+	/* We don't support indirect calling at the moment, so it is safe */
+	/* to omit functions that don't actually have callers. */
+	if (f->callers == 0)
+		return 0;
+
 	abort_unless(cg->curfunc == NULL);
 	cg->curfunc = f;
 
@@ -2451,10 +2654,25 @@ static int cg_funcs(struct pmlncg *cg)
 	uint cslen;
 	flist = &cg->ast->funcs.list;
 	struct netvm_inst *inst;
+	struct cg_intr *intr;
 
 	l_for_each(n, flist) {
 		f = (struct pml_function *)l_to_node(n);
-		if (!PML_FUNC_IS_INTRINSIC(f) && !PML_FUNC_IS_INLINE(f)) {
+		if ((f->callers == 0) || PML_FUNC_IS_INLINE(f))
+			continue;
+		if (PML_FUNC_IS_INTRINSIC(f)) {
+			intr = find_intrinsic(f);
+			if (intr == NULL) {
+				fprintf(stderr,
+					"cg_funcs: unable to find codegen for"
+					" intrinsic function '%s'\n", f->name);
+				return -1;
+			}
+			abort_unless(intr->cgfunc || intr->cgcall);
+			if (intr->cgfunc != NULL)
+				if ((*intr->cgfunc)(cg, f, intr) < 0)
+					return -1;
+		} else {
 			if (cg_func(cg, f) < 0)
 				return -1;
 		}

@@ -49,12 +49,18 @@ struct netvm_xpktcp_tagdesc {
 };
 
 enum {
-	NETVM_CPOC_HASTAG,	/* (MO) val == tagdesc */
-	NETVM_CPOC_RDTAG,	/* (MO) val == tagdesc */
-	NETVM_CPOC_ADDTAG,	/* val == tagdesc */
-	NETVM_CPOC_DELTAG,	/* val == tagdesc */
-	NETVM_CPOC_LDTAG,	/* (MO) [addr] z == width, w = swap bytes */
-	NETVM_CPOC_STTAG,	/* [addr,v] z == width, w = swap bytes */
+	NETVM_CPOC_HASTAG,	/* [td]/'w' == td */
+	NETVM_CPOC_RDTAG,	/* [td]/'w' == td -- read tag into buf */
+	NETVM_CPOC_ADDTAG,	/* [td]/'w' == td -- add tag in buf to packet */
+	NETVM_CPOC_DELTAG,	/* [td]/'w' == td -- delete tag from packet */
+
+	/* NOTE: with these two, if the high order bit is set for width */
+	/* then the bytes will get swapped before storing.  This is only */
+	/* valid for widths 2, 4, 8. */
+	NETVM_CPOC_LDTAG,	/* [addr]/'w', z == width -- load from tag */
+				/*     buf onto stack  */
+	NETVM_CPOC_STTAG,	/* [v,addr]/[v](addr == 'w') z == width, */
+				/*     store 'v' into tag buffer */
 
 	NETVM_CPOC_NUMXPKT,
 };

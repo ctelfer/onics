@@ -40,10 +40,27 @@ BEGIN {
 		print "got fib(7) == 13\n";
 	}
 
+	if (fib2a(1) == 1) {
+		print "got fib2a(1) == 1\n";
+	}
+	if (fib2a(2) == 1) {
+		print "got fib2a(2) == 1\n";
+	}
 	if (fib2a(3) == 2) {
 		print "got fib2a(3) == 2\n";
 	}
-
+	if (fib2a(4) == 3) {
+		print "got fib2a(4) == 3\n";
+	}
+	if (fib2a(5) == 5) {
+		print "got fib2a(5) == 5\n";
+	}
+	if (fib2a(6) == 8) {
+		print "got fib2a(6) == 8\n";
+	}
+	if (fib2a(7) == 13) {
+		print "got fib2a(7) == 13\n";
+	}
 	if (fib2a(8) == 21) {
 		print "got fib2a(8) == 21\n";
 	}

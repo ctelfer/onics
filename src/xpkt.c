@@ -398,6 +398,7 @@ int xpkt_add_tag(struct xpkt *x, struct xpkt_tag_hdr *xth, int moveup)
 int xpkt_del_tag(struct xpkt *x, byte_t type, int idx, int pulldown)
 {
 	uint n;
+	uint ntw;
 	struct xpkt_tag_hdr *xth;
 
 	abort_unless(x);
@@ -408,9 +409,10 @@ int xpkt_del_tag(struct xpkt *x, byte_t type, int idx, int pulldown)
 
 	if (pulldown) {
 		n = xpkt_tag_size(xth);
+		ntw = xth->nwords + 1;
 		memmove(xth, (byte_t *)xth + n,
 			x->hdr.len - ((byte_t*)xth - (byte_t *)x + n));
-		x->hdr.tlen -= xth->nwords + 1;
+		x->hdr.tlen -= ntw;
 		x->hdr.len -= n;
 	} else {
 		n = xth->nwords + 1;

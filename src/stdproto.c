@@ -106,7 +106,7 @@ static struct prparse *crtprp(size_t sz, uint prid, ulong off, ulong hlen,
 }
 
 
-static NETTOOLS_INLINE void freeprp(struct prparse *prp)
+static ONICS_INLINE void freeprp(struct prparse *prp)
 {
 	free(prp);
 }
@@ -1375,7 +1375,6 @@ static struct prparse *ipv6_parse(struct prparse *reg, byte_t *buf,
 int ipv6_nxtcld(struct prparse *reg, byte_t *buf, struct prparse *cld,
 	        uint *prid, ulong *off, ulong *maxlen)
 {
-	struct ipv6h *ip6;
 	byte_t *p;
 	ushort foff;
 	uint8_t nexth;
@@ -1384,7 +1383,6 @@ int ipv6_nxtcld(struct prparse *reg, byte_t *buf, struct prparse *cld,
 		return 0;
 
 	abort_unless(buf);
-	ip6 = prp_header(reg, buf, struct ipv6h);
 
 	/* We treat AH and ESP as their own protocols, not IPv6 options */
 	/* ESP we can't parse past since the next header type is encrypted. */

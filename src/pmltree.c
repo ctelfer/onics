@@ -280,6 +280,18 @@ static struct pml_intrinsic stdintr[] = {
 	{ "fix_all_len", PML_ETYPE_VOID, 1, 0, NULL, { "pnum" } },
 	{ "fix_csum", PML_ETYPE_VOID, 1, 0, NULL, { "pdesc" } },
 	{ "fix_all_csum", PML_ETYPE_VOID, 1, 0, NULL, { "pnum" } },
+	{ "meta_get_tstamp", PML_ETYPE_SCALAR, 1, 0, NULL, { "pnum" } },
+	{ "meta_set_tstamp", PML_ETYPE_VOID, 2, 0, NULL, { "pnum", "val" } },
+	{ "meta_get_presnap", PML_ETYPE_SCALAR, 1, 0, NULL, { "pnum" } },
+	{ "meta_set_presnap", PML_ETYPE_VOID, 2, 0, NULL, { "pnum", "val" } },
+	{ "meta_get_inport", PML_ETYPE_SCALAR, 1, 0, NULL, { "pnum" } },
+	{ "meta_set_inport", PML_ETYPE_VOID, 2, 0, NULL, { "pnum", "val" } },
+	{ "meta_get_outport", PML_ETYPE_SCALAR, 1, 0, NULL, { "pnum" } },
+	{ "meta_set_outport", PML_ETYPE_VOID, 2, 0, NULL, { "pnum", "val" } },
+	{ "meta_get_flowid", PML_ETYPE_SCALAR, 1, 0, NULL, { "pnum" } },
+	{ "meta_set_flowid", PML_ETYPE_VOID, 2, 0, NULL, { "pnum", "val" } },
+	{ "meta_get_class", PML_ETYPE_SCALAR, 1, 0, NULL, { "pnum" } },
+	{ "meta_set_class", PML_ETYPE_VOID, 2, 0, NULL, { "pnum", "val" } },
 	{ "pop", PML_ETYPE_SCALAR, 1, PML_FF_PCONST|PML_FF_INLINE,
 		_e_pop, { "num" } },
 	{ "log2", PML_ETYPE_SCALAR, 1, PML_FF_PCONST|PML_FF_INLINE,
@@ -2081,7 +2093,6 @@ int pml_locator_resolve_nsref(struct pml_ast *ast, struct pml_locator *l)
 {
 	struct ns_elem *e;
 	struct ns_namespace *ns;
-	struct ns_pktfld *pf;
 	struct ns_scalar *sc;
 	struct ns_bytestr *nbs;
 	struct ns_maskstr *ms;
@@ -2150,7 +2161,6 @@ int pml_locator_resolve_nsref(struct pml_ast *ast, struct pml_locator *l)
 
 	case NST_PKTFLD:
 		l->u.nsref = e;
-		pf = (struct ns_pktfld *)e;
 		l->reftype = PML_REF_PKTFLD;
 		break;
 

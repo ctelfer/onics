@@ -5,16 +5,17 @@ Key:
   - -- Comment
 
 PML
- + Add metadata manipulation
- + Fix up command line options
+ + Fix up command line options: add parsing of command-line programs
  + Add "standard include path/files"
+ + Add exit() intrinsic.
  + More test cases (control flow especially)
  + Fix code gen error reporting:  no 'fprintf(stderr....)'
  + Proper checking for allocation failures in parser.
  * Optimize binary operations with at least one constant operand.
  * Hash table support
  * Data structure support (maybe just hash tables)
- * AST-based interpreter for comparison with code generated version
+ * random() intrinsic
+ ? AST-based interpreter for comparison with code generated version
 
 
 Proto parsing
@@ -30,14 +31,25 @@ netvm_prog API:
  * Alter format to allow for coprocessor patching.
 
 
-netvm:
+NetVM:
  ? Revise netvm cmp, pcmp and mskcmp to check lengths
 
 NetVM Coprocessors
  * DNS Resolver coprocessor
  * Hash table coprocessor
  * Backing store coprocessor for packets
+ * Coprocessor for RNG
  + Fix up / test regex compilation on error patterns (catlib).
+ ? Create compatible regex coprocessor for other regex libraries.
+
+
+pktmux/pktdemux:
+ * Allow easier specification of sources and sinks rather than just shell 
+   operations and conventions.  These are a bit too cumbersome. 
+
+
+pktrel:
+ + everyting
 
 
 pktdiff:

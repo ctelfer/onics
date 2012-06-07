@@ -119,7 +119,7 @@ void xpktcp_rdtag(struct netvm *vm, struct netvm_coproc *cp, int cpi)
 	FATAL(vm, NETVM_ERR_BADCPOP, (xth == NULL));
 	memcpy(xcp->tag, xth, xpkt_tag_size(xth));
 	/* The tag must be in packed form for the VM */
-	xpkt_pack_tags((uint32_t *)xcp->tag, xpkt_tag_size(xth));
+	xpkt_pack_tags((uint32_t *)xcp->tag, xth->nwords + 1);
 }
 
 
@@ -142,10 +142,8 @@ void xpktcp_addtag(struct netvm *vm, struct netvm_coproc *cp, int cpi)
 	FATAL(vm, NETVM_ERR_NOPKT, !(pkb = vm->packets[td.pktnum]));
 
 	/* Extract the length of the option we are trying to write */
-	/* it is an error to try to add an empty tag. */
-	n = xcp->tag[1] * 4;
-	FATAL(vm, NETVM_ERR_BADCPOP, n == 0);
-	rv = xpkt_unpack_tags((uint32_t *)xcp->tag, xcp->tag[1] * 4);
+	n = xcp->tag[1] + 1;
+	rv = xpkt_unpack_tags((uint32_t *)xcp->tag, n);
 	FATAL(vm, NETVM_ERR_BADCPOP, (rv < 0));
 	rv = pkb_add_tag(pkb, (struct xpkt_tag_hdr *)xcp->tag);
 	FATAL(vm, NETVM_ERR_BADCPOP, (rv < 0));
@@ -230,7 +228,7 @@ void xpktcp_sttag(struct netvm *vm, struct netvm_coproc *cp, int cpi)
 		}
 	}
 
-	netvm_stk2p(vm, (byte_t *)xcp->tag + addr, val, width);
+	netvm_stk2p(vm, p, val, width);
 }
 
 

@@ -263,6 +263,22 @@ Intrinsics:
   -- void fix_csum(pdesc)
   -- void fix_all_csum(pnum)
 
+  Per packet metadata that may or may not be present.
+  If the data is not present the m_get_* function returns -1.
+  Similarly, setting to -1 removes the tag rather than setting it.
+  -- int  meta_get_tstamp(pnum)
+  -- void meta_set_tstamp(pnum, ts)
+  -- int  meta_get_presnap(pnum)
+  -- void meta_set_presnap(pnum, len)
+  -- int  meta_get_inport(pnum)
+  -- void meta_set_inport(pnum, port)
+  -- int  meta_get_outport(pnum)
+  -- void meta_set_outport(pnum, port)
+  -- int  meta_get_flowid(pnum)
+  -- void meta_set_flowid(pnum, id)
+  -- int  meta_get_class(pnum)
+  -- void meta_set_class(pnum, tc)
+
   -- int pop(scalar) -- population count of the scalar
   -- int log2(scalar) -- floor of the base 2 log of scalar
   -- int min(scalar1, scalar2)
@@ -291,12 +307,18 @@ Formatted printing in PML
 
 
 Metadata:
- - timestamp (64)
- - snapinfo (32)
- - inport (16)
- - outport (16)
- - flowid (64)
- - traffic class (64)
+ PML currently exposes metadata through intrinsics.  It would be
+ relatively simple to expose xpkt headers as another type of protocol
+ parse.  This was deliberately NOT done at the present time with the
+ rationale that PML can exist in environments without xpkt as the core
+ packet format.  Furthermore, the user should not be required to know
+ xpkt to build and send packets.  (adjusting packets wouldn't be
+ impacted much since the fixlen code can take care of common cases.)
+ This design choice comes at the expense of ugly intrinsices to access
+ the data and less extensibility.  At some point this design choice will
+ deserve revisitation.
+
+
  - parse info (16, 32, 32)
  - app info (16, 0-1020)
  New locator type?

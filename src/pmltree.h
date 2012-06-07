@@ -320,8 +320,8 @@ struct pml_locator {
 	int			rpfld;	/* reserved packet field */
 	union pml_expr_u *	pkt;	/* packet number */
 	union pml_expr_u *	idx;	/* header index */
-	union pml_expr_u *	off;
-	union pml_expr_u *	len;
+	union pml_expr_u *	off;	/* offset into field in bytes */
+	union pml_expr_u *	len;	/* length from offset in bytes */
 	union {
 		struct pml_literal *	litref;
 		struct pml_variable *	varref;
