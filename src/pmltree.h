@@ -688,9 +688,11 @@ void pml_lexv_fini(int toknum, struct pml_lex_val *v);
 
 #ifndef THIS_IS_SCANNER
 typedef void *pml_scanner_t;
+typedef void *pml_buffer_t;
 int pmllex_init(pml_scanner_t *);
 void pmlset_in(FILE *input, pml_scanner_t);
-void *pml_scan_string(const char *, pml_scanner_t);
+pml_buffer_t pml_scan_string(const char *, pml_scanner_t);
+void pml_delete_buffer(pml_buffer_t, pml_scanner_t);
 int pmllex(pml_scanner_t);
 struct pml_lex_val pmlget_extra(pml_scanner_t);
 void pmlset_extra(struct pml_lex_val v, pml_scanner_t);

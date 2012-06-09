@@ -79,6 +79,7 @@ struct pmlinput isrc[MAXINPUT];
 int nisrc = 0;
 int iidx = 0;
 FILE *infile = NULL;
+pml_buffer_t inbuf = NULL;
 
 
 void usage()
@@ -99,6 +100,9 @@ int pmlwrap(pml_scanner_t scanner)
 	if (infile != NULL) {
 		fclose(infile);
 		infile = NULL;
+	} else if (inbuf != NULL) {
+		pml_delete_buffer(inbuf, scanner);
+		inbuf = NULL;
 	}
 
 	if (iidx == nisrc)
@@ -111,7 +115,7 @@ int pmlwrap(pml_scanner_t scanner)
 			errsys("Error opening file '%s'\n", pi->str);
 		pmlset_in(infile, scanner);
 	} else {
-		pml_scan_string(pi->str, scanner);
+		inbuf = pml_scan_string(pi->str, scanner);
 	}
 
 	return 0;
