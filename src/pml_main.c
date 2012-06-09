@@ -42,11 +42,12 @@
 
 struct clopt options[] = {
 	CLOPT_INIT(CLOPT_NOARG, 'h', "--help", "print help and exit"),
-	CLOPT_INIT(CLOPT_NOARG, 'e', "--ignore-err", "ignore netvm errors"),
+	CLOPT_INIT(CLOPT_NOARG, 'E', "--ignore-err", "ignore netvm errors"),
 	CLOPT_INIT(CLOPT_NOARG, 'v', "--verbose", "increase verbosity"),
 	CLOPT_INIT(CLOPT_NOARG, 'q', "--quiet", "decrease verbosity"),
 	CLOPT_INIT(CLOPT_NOARG, 's', "--step", "single step the program"),
-	CLOPT_INIT(CLOPT_STRING, 'i', "--infile", "input file"),
+	CLOPT_INIT(CLOPT_STRING, 'f', "--infile", "input file"),
+	CLOPT_INIT(CLOPT_STRING, 'e', "--expr", "input expression"),
 	CLOPT_INIT(CLOPT_STRING, 'c', "--compile", 
 		   "compile to netvm program file"),
 };
@@ -55,13 +56,29 @@ struct clopt_parser optparser =
 	CLOPTPARSER_INIT(options, array_length(options));
 
 
+enum {
+	I_FILE,
+	I_STR,
+};
+
+struct pmlinput {
+	int			type;
+	const char *		str;
+};
+
 uint64_t vm_stack[1024];
 int verbosity = 0;
 int ignore_errors = 0;
 int single_step = 0;
 char *progname;
 const char *ofname = NULL;
-const char *ifname = NULL;
+
+
+#define MAXINPUT	64
+struct pmlinput isrc[MAXINPUT];
+int nisrc = 0;
+int iidx = 0;
+FILE *infile = NULL;
 
 
 void usage()
@@ -75,6 +92,44 @@ void usage()
 }
 
 
+int pmlwrap(pml_scanner_t scanner)
+{
+	struct pmlinput *pi;
+
+	if (infile != NULL) {
+		fclose(infile);
+		infile = NULL;
+	}
+
+	if (iidx == nisrc)
+		return 1;
+
+	pi = &isrc[iidx++];
+	if (pi->type == I_FILE) {
+		infile = fopen(pi->str, "r");
+		if (!infile)
+			errsys("Error opening file '%s'\n", pi->str);
+		pmlset_in(infile, scanner);
+	} else {
+		pml_scan_string(pi->str, scanner);
+	}
+
+	return 0;
+}
+
+
+void add_isrc(const char *s, int type)
+{
+	if (nisrc == MAXINPUT)
+		err("Error: too many input sources.  Max set to %d\n",
+		    MAXINPUT);
+
+	isrc[nisrc].str = s;
+	isrc[nisrc].type = type;
+	++nisrc;
+}
+
+
 void parse_options(int argc, char *argv[])
 {
 	struct clopt *opt;
@@ -83,14 +138,16 @@ void parse_options(int argc, char *argv[])
 	while (!(rv = optparse_next(&optparser, &opt))) {
 		if (opt->ch == 'h') {
 			usage();
-		} else if (opt->ch == 'e') {
+		} else if (opt->ch == 'E') {
 			ignore_errors = 1;
 	        } else if (opt->ch == 'v') {
 			++verbosity;
 		} else if (opt->ch == 'q') {
 			--verbosity;
-		} else if (opt->ch == 'i') {
-			ifname = opt->val.str_val;
+		} else if (opt->ch == 'f') {
+			add_isrc(opt->val.str_val, I_FILE);
+		} else if (opt->ch == 'e') {
+			add_isrc(opt->val.str_val, I_STR);
 		} else if (opt->ch == 'c') {
 			ofname = opt->val.str_val;
 		} else if (opt->ch == 's') {
@@ -102,7 +159,7 @@ void parse_options(int argc, char *argv[])
 }
 
 
-void parse_pml_program(FILE *f, struct netvm_program *prog)
+void parse_pml_program(struct netvm_program *prog)
 {
 	int tok;
 	pml_scanner_t scanner;
@@ -113,7 +170,7 @@ void parse_pml_program(FILE *f, struct netvm_program *prog)
 	pml_lexv_init(&none);
 	if (pmllex_init(&scanner))
 		errsys("pmllex_init: ");
-	pmlset_in(f, scanner);
+	pmlwrap(scanner);
 	pmlset_extra(none, scanner);
 
 	if (!(parser = pml_alloc()))
@@ -195,23 +252,18 @@ int main(int argc, char *argv[])
 	struct netvm_std_coproc cproc;
 	struct file_emitter fe;
 	struct netvm_program prog;
-	FILE *fin, *fout;
+	FILE *fout;
 	int flags = 0;
 
 	parse_options(argc, argv);
 
+	if (nisrc == 0)
+		err("No program sources provided: use -f or -e\n");
+
 	register_std_proto();
 	pkb_init(1);
 
-	if (ifname != NULL) {
-		if ((fin = fopen(ifname , "r")) == NULL)
-			errsys("error opening input file '%s': ", ifname);
-	} else {
-		fin = stdin;
-	}
-
-	parse_pml_program(fin, &prog);
-	fclose(fin);
+	parse_pml_program(&prog);
 
 	if (ofname != NULL) {
 

@@ -33,6 +33,11 @@
 
 extern void PMLTrace(FILE *trace, char *pfx);
 
+int pmlwrap(pml_scanner_t s)
+{
+	return 1;
+}
+
 int main(int argc, char *argv[])
 {
 	int tok;

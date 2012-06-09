@@ -8,7 +8,7 @@ set -e
 cg() {
 	echo Building from $1
 	base=`echo $1 | sed -e 's/\.pml$//'`
-	../../bin/pml -i $1 -c $base.nprg
+	../../bin/pml -f $1 -c $base.nprg
 	../../bin/nvmas -d $base.nprg > $base.nvas
 	rm $base.nprg 
 }

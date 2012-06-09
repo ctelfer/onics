@@ -40,7 +40,6 @@ static int copy_bytestr(yyscan_t scanner, const char *hex, int tok);
 
 %option reentrant
 %option prefix="pml"
-%option noyywrap
 %option yylineno
 %option nounput
 

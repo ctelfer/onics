@@ -13,7 +13,7 @@ properly.
 
 QUICK START
 
- To build:
+To build:
      1) First download both Catlib and ONICS and put the distributions in
      the same top level directory.  You must also have 'flex' and 'libpcap'
      installed on the machine and currently gcc.  (All these deps will go
@@ -28,7 +28,7 @@ QUICK START
   The tool binaries as well as some test programs (named test*) are now
   in onics/bin.
 
-  Examples:
+Examples:
 
   # convert a pcap file to xpkt format
   pcapin PCAPFILE > XPKTFILE
@@ -58,18 +58,11 @@ QUICK START
   # Now for some cooler stuff
   #
 
-  # NOTE
-  # ***still working on parsing programs from the command line***
-  # That's why I 'cat' the programs to a file.
-
-
   # Read all packets from one interface, toggle their DF bits and send
   # them out a different interface.
-  cat > x.pml <<EOF
-    ?- ip -? { ip.df = ip.df ^ 1 ; fix_all_csum(0); }
-  EOF
-  pcapin -i IFACE1 | pml -i x.pml | pcapout -i IFACE2
-  rm x.pml
+  pcapin -i IFACE1 | 
+    pml -e '?- ip -? { ip.df = ip.df ^ 1 ; fix_all_csum(0); }'
+    pcapout -i IFACE2
 
 
   # Read in the first 5 TCP packets, drop the rest.
@@ -78,20 +71,18 @@ QUICK START
     ?- not tcp or n >= 5 -? { drop; }
     { n = n + 1; }
   EOF
-  pml -i x.pml < INXPKT > OUTXPKT
+  pml -f x.pml < INXPKT > OUTXPKT
 
 
   # Print an error for every TCP packet that has evil in it.
   # Note the '\' is for the shell: it is not part of PML
-  cat > x.pml <<EOF
-    var n = 0;
-    { n = n + 1; }
-    \?- tcp and tcp.payload =~ \`[eE][vV][iI][lL]\` -\? { 
-        print "Packet ", n, " is evil\n";
-    }
-  EOF
-  pcapin -i IFACE1 | pml -i x.pml 
-  rm x.pml
+  pcapin -i IFACE1 | 
+    pml -e '
+      var n = 0;
+      { n = n + 1; }
+      ?- tcp and tcp.payload =~ `[eE][vV][iI][lL]` -? { 
+          print "Packet ", n, " is evil\n";
+      }'
 
 
 

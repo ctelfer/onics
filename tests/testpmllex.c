@@ -21,6 +21,11 @@
  */
 int testpmllex();
 
+int pmlwrap(void)
+{
+	return 1;
+}
+
 int main(int argc, char *argv[])
 {
 	return testpmllex();
