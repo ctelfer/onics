@@ -44,7 +44,6 @@ NetVM Coprocessors
 
 
 nvas:
- * Allow full override of all operation values
  * Have disassembler produce memory segment declarations
 
 pktmux/pktdemux:

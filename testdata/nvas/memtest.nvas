@@ -9,8 +9,8 @@
 
 .define outport_type 2
 .define cpout 1
-.define prstri 8
-.define prhex 3
+.define prstri 9
+.define prhex 4
 .coproc cpout outport_type
 
 start:

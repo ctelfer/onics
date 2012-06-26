@@ -5,8 +5,8 @@
 # Define coprocessor decls for output port
 .define outport_type 2
 .define cpout 1
-.define prstri 8
-.define prnum 2
+.define prstri 9
+.define prnum 3
 
 .coproc cpout outport_type
 

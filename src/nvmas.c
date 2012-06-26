@@ -96,7 +96,7 @@ int skip_errors = 0;
 #define WS	" \n\t"
 #define LABELCHARS IDCHARS
 #define ARGCHARS "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ" \
-		 "0123456789_*[]@:.-%"
+		 "0123456789_*[]@:.-%+"
 
 
 struct nvmop Operations[] = {
@@ -514,28 +514,41 @@ static int read_pdesc(char *s, struct netvm_inst *ni, struct htab *ct)
 
 int str2inst(const char *s, struct htab *ct, uint inum, struct netvm_inst *ni)
 {
-	char ns[MAXSTR];
+	char ns[MAXSTR], *os;
 	struct raw toks[MAXTOKS], *r;
 	int nt, rv;
 	struct nvmop *op;
 	ulong v;
 	int argswap = 0;
+	int argmask = 0;
+	int nargs = 0;
 
 	if (str_copy(ns, s, sizeof(ns)) > sizeof(ns))
 		return ERR_TOOLONG;
 	if ((nt = tokenize(ns, toks, array_length(toks), 1)) <= 0)
 		return nt == 0 ? ERR_NARG : -nt;
-	if (toks[0].data[toks[0].len-1] == '%') {
-		toks[0].data[toks[0].len-1] = '\0';
-		toks[0].len--;
+
+	os = toks[0].data;
+	if (*os == '+') {
+		++os;
+		if (--toks[0].len == 0)
+			return ERR_BADNAME;
+		argmask = ARGX|ARGY|ARGZ|ARGW;
+		nargs = 4;
+	}
+	if (os[toks[0].len-1] == '%') {
+		os[--toks[0].len] = '\0';
 		argswap = 1;
 	}
-	if ((op = name2op(toks[0].data)) == NULL)
+
+	if ((op = name2op(os)) == NULL)
 		return ERR_BADNAME;
-	if (argswap && ((op->argmask & ASWAP) == 0)) {
-		abort_unless((op->argmask & ARGX) == 0);
+
+	argmask |= op->argmask;
+	if (op->nargs > nargs)
+		nargs = op->nargs;
+	if (argswap && ((argmask & ASWAP) == 0))
 		err("opcode '%s' can not be swapped\n");
-	}
 
 	ni->x = argswap;
 	ni->y = ni->z = ni->w = 0;
@@ -543,10 +556,10 @@ int str2inst(const char *s, struct htab *ct, uint inum, struct netvm_inst *ni)
 
 	if ((nt == 2 && toks[1].data[0] == '*') ||
 	    (nt == 3 && toks[2].data[0] == '*')) {
-		if (op->nargs != nt + 1)
+		if (nargs != nt + 1)
 			return ERR_NARG;
 		r = toks + 1;
-		if ((op->argmask & ARGX) != 0) {
+		if ((argmask & ARGX) != 0) {
 			if ((rv = intarg(r++, ct, &v)) != 0)
 				return rv;
 			ni->x = v;
@@ -554,27 +567,27 @@ int str2inst(const char *s, struct htab *ct, uint inum, struct netvm_inst *ni)
 		rv = read_pdesc(r->data + 1, ni, ct);
 		if (rv != 0)
 			return rv;
-	} else if (nt - 1 == op->nargs) {
+	} else if (nt - 1 == nargs) {
 		r = toks + 1;
-		if ((op->argmask & ARGX) != 0) {
+		if ((argmask & ARGX) != 0) {
 			if ((rv = intarg(r++, ct, &v)) != 0)
 				return rv;
 			ni->x = v;
 		}
-		if ((op->argmask & ARGY) != 0) {
+		if ((argmask & ARGY) != 0) {
 			if ((rv = intarg(r++, ct, &v)) != 0)
 				return rv;
 			ni->y = v;
 		}
-		if ((op->argmask & ARGZ) != 0) {
+		if ((argmask & ARGZ) != 0) {
 			if ((rv = intarg(r++, ct, &v)) != 0)
 				return rv;
 			ni->z = v;
 		}
-		if ((op->argmask & ARGW) != 0) {
+		if ((argmask & ARGW) != 0) {
 			if ((rv = intarg(r, ct, &v)) != 0)
 				return rv;
-			if (((op->argmask & BRREL) != 0) && 
+			if (((argmask & BRREL) != 0) && 
 			    (r->data[0] == '@')) {
 				abort_unless(v < UINT_MAX);
 				ni->w = (uint32_t)(v - inum);
@@ -597,11 +610,11 @@ static int pdesc2str(const struct netvm_inst *ni, char *s, size_t len, int xa)
 	uint prid = (ni->w >> NETVM_PPD_PRID_OFF) & NETVM_PPD_PRID_MASK;
 
 	if (xa)
-		str_fmt(pfx, sizeof(pfx), "%02x, ", ni->x);
+		str_fmt(pfx, sizeof(pfx), "%u, ", ni->x);
 
 	/* example: *0:0x0103.0.0[3] */
-	str_fmt(s, len, "%s*%u:%u.%u.%u[%u]", pfx, ni->y, prid, 
-		(ni->z >> NETVM_PPD_IDX_OFF) & NETVM_PPD_IDX_MASK,
+	str_fmt(s, len, "%s*%u:%u.%u.%u[%u]", pfx, (ni->y & ~NETVM_SEG_ISPKT), 
+		prid, (ni->z >> NETVM_PPD_IDX_OFF) & NETVM_PPD_IDX_MASK,
 		(ni->z >> NETVM_PPD_FLD_OFF) & NETVM_PPD_FLD_MASK,
 		(ni->w >> NETVM_PPD_OFF_OFF) & NETVM_PPD_OFF_MASK);
 
@@ -616,32 +629,50 @@ int inst2str(const struct netvm_inst *ni, char *s, size_t len, uint inum)
 	int fr = 0;
 	char a0p[2] = "";
 	char *iname;
-	char swname[11];
+	char swname[16];
+	int argmask = 0;
+	int nargs = 0;
+	int nnz = 0;
 
 	if ((op = oc2op(ni->op)) == NULL)
 		return -1;
 
-	if ((strlen(op->iname) > 8) || len < 11)
+	if ((strlen(op->iname) > 8) || len < sizeof(swname))
 		return -1;
 
 	iname = op->iname;
-	if (((op->argmask & ASWAP) != 0) && ni->x) {
+	argmask = op->argmask;
+	nargs = op->nargs;
+
+	if (((argmask & ARGX) == 0) && ni->x) ++nnz;
+	if (((argmask & ARGY) == 0) && ni->y) ++nnz;
+	if (((argmask & ARGZ) == 0) && ni->z) ++nnz;
+	if (((argmask & ARGW) == 0) && ni->w) ++nnz;
+
+	if (((argmask & ASWAP) != 0) && ni->x && (nnz == 1)) {
 		str_copy(swname, op->iname, sizeof(swname));
 		str_cat(swname, "%", sizeof(swname));
 		iname = swname;
+	} else if (nnz > 0) {
+		str_copy(swname, "+", sizeof(swname));
+		str_cat(swname, iname, sizeof(swname));
+		iname = swname;
+		argmask |= ARGX|ARGY|ARGZ|ARGW;
+		nargs = 4;
 	}
+
 	str_fmt(s, len, "%-10s", iname);
 	s += 10;
 	len -= 10;
 	
-	if ((op->argmask & PDONLY) != 0)
-		return pdesc2str(ni, s, len, (op->argmask & ARGX));
+	if ((argmask & PDONLY) != 0)
+		return pdesc2str(ni, s, len, (argmask & ARGX));
 
-	if ((op->argmask & ARGX) != 0) *ap++ = ni->x;
-	if ((op->argmask & ARGY) != 0) *ap++ = ni->y;
-	if ((op->argmask & ARGZ) != 0) *ap++ = ni->z;
-	if ((op->argmask & ARGW) != 0) {
-		if ((op->argmask & BRREL) != 0) {
+	if ((argmask & ARGX) != 0) *ap++ = ni->x;
+	if ((argmask & ARGY) != 0) *ap++ = ni->y;
+	if ((argmask & ARGZ) != 0) *ap++ = ni->z;
+	if ((argmask & ARGW) != 0) {
+		if ((argmask & BRREL) != 0) {
 			*ap++ = sxt64(ni->w, 32) + inum;
 			str_copy(a0p, "@", sizeof(a0p));
 		} else {
@@ -649,7 +680,7 @@ int inst2str(const struct netvm_inst *ni, char *s, size_t len, uint inum)
 		}
 	}
 
-	switch(op->nargs) {
+	switch(nargs) {
 	case 0: fr = 0;
 		break;
 	case 1: fr = str_fmt(s, len, "%s%lu", a0p, args[0]);
