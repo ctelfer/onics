@@ -53,6 +53,10 @@ Examples:
   # integration)
   pcapout XPKTFILE | tcpdump -vvvvs 0 -r - 
 
+  # Full pipeline of translations:
+  # pcap -> xpkt -> hexpkt -> xpkt -> pcap -> tcpdump output
+  pcapin < PCAPFILE | x2hpkt -x | h2xpkt | pcapout | tcpdump -nvXs 0 -r - | less
+
 
   #
   # Now for some cooler stuff

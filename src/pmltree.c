@@ -2639,10 +2639,11 @@ int pml_resolve_refs(struct pml_ast *ast, union pml_node *node)
 		ctx.symtabs[0] = &rule->vars;
 		ctx.symtabs[1] = &ast->vars;
 		ctx.ntab = 2;
-		ctx.vtidx = 0;
+		ctx.vtidx = -1; /* no local vars in the pattern */
 		rv = resolve_node(&ctx, (union pml_node *)rule->pattern);
 		if (rv < 0)
 			goto out;
+		ctx.vtidx = 0; /* local vars allowed in the statement */
 		rv = resolve_node(&ctx, (union pml_node *)rule->stmts);
 		if (rv < 0)
 			goto out;

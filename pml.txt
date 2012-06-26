@@ -325,3 +325,21 @@ Metadata:
  Use protoparse for it? 
 
 
+
+Regular expressions in NetVM
+ - There are a max # of patterns at one time.  All operations get an error
+   if the pattern index is out of bounds.
+ - Load Pattern [addr, len, idx] -> []
+	* frees previous pattern if present
+	* May give an error if we run out of memory or if the pattern
+	  requires too many matches.
+ - Clear Pattern [idx] -> []
+ - Match [addr, len, idx] -> [0 or 1]
+	* Error if pattern not loaded
+ - MatchX [addr, len, nmatch, idx] ->
+	[0]
+	[offn, offn-1, offn-2 .. off1, pos]
+	* Error if pattern not loaded
+	* Error if nmatch is too large for the pattern
+
+
