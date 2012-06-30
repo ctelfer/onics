@@ -22,8 +22,10 @@
 #include <stdlib.h>
 #include <errno.h>
 #include <limits.h>
-#include <cat/cat.h>
 #include <string.h>
+#include <stdarg.h>
+#include <cat/cat.h>
+#include <cat/str.h>
 
 #include "pmlncg.h"
 #include "netvm_std_coproc.h"
@@ -35,10 +37,10 @@
 #define PKTADDR(_a, _p) MEMADDR(_a, ((_p) | NETVM_SEG_ISPKT))
 
 /* some forward declarations of commonly needed functions */
-static int val64(struct pml_ast *ast, union pml_node *n, uint64_t *v);
-int cg_expr(struct pmlncg *cg, union pml_node *n, int etype);
-int cg_stmt(struct pmlncg *cg, union pml_node *n);
-static int typecast(struct pml_ibuf *b, int otype, int ntype);
+static int val64(struct pmlncg *cg, union pml_node *n, uint64_t *v);
+static int cg_expr(struct pmlncg *cg, union pml_node *n, int etype);
+static int cg_stmt(struct pmlncg *cg, union pml_node *n);
+static int typecast(struct pmlncg *cg, int otype, int ntype);
 
 
 struct cg_pdesc {
@@ -117,6 +119,16 @@ struct cg_meta_ctx {
 
 
 const static struct locval locval_0 = { 0, 0 };
+
+
+void cgerr(struct pmlncg *cg, const char *fmt, ...)
+{
+	va_list ap;
+
+	va_start(ap, fmt);
+	vsnprintf(cg->err, sizeof(cg->err), fmt, ap);
+	va_end(ap);
+}
 
 
 void pib_init(struct pml_ibuf *b)
@@ -240,9 +252,9 @@ static int push64(struct pml_ibuf *b, uint64_t v)
 
 
 
-#define UNIMPL(s)							\
+#define UNIMPL(cg, s)							\
 	do {								\
-		fprintf(stderr, "unimplemented operation" #s "\n"); 	\
+		cgerr(cg, "unimplemented operation" #s); 		\
 		return -1;						\
 	} while (0)
 
@@ -273,8 +285,11 @@ static int _i_scarg(struct pmlncg *cg, struct pml_call *c, struct cg_intr *intr)
 	}
 
 	for (i = 0; i < intr->numop; ++i) {
-		if (pib_add(b, &intr->ops[i]) < 0)
+		if (pib_add(b, &intr->ops[i]) < 0) {
+			cgerr(cg, "out of instructions adding scalar intrinsic"
+				  " '%s'", f->name);
 			return -1;
+		}
 	}
 
 	return 0;
@@ -286,15 +301,13 @@ int _i_loc_to_pdesc(struct pmlncg *cg, struct pml_locator *loc,
 {
 	struct cg_pdesc cgpd;
 	if (loc->off) {
-		fprintf(stderr,
-			"offset not allowed in locator for intrinsic '%s'\n",
-			intr->name);
+		cgerr(cg, "offset not allowed in locator for intrinsic '%s'",
+		      intr->name);
 		return -1;
 	}
 	if (loc->len) {
-		fprintf(stderr,
-			"length not allowed in locator for intrinsic '%s'\n",
-			intr->name);
+		cgerr(cg, "length not allowed in locator for intrinsic '%s'",
+		      intr->name);
 		return -1;
 	}
 	cgpd_init(&cgpd, -1, -1, 0, loc);
@@ -311,8 +324,8 @@ static int _i_pdarg(struct pmlncg *cg, struct pml_call *c, struct cg_intr *intr)
 
 	loc = (struct pml_locator *)l_to_node(l_head(&pl->list));
 	if (loc->type != PMLTT_LOCATOR) {
-		fprintf(stderr, "intrinsic '%s' requires a protocol field\n",
-			intr->name);
+		cgerr(cg, "intrinsic '%s' requires a protocol field",
+		      intr->name);
 		return -1;
 	}
 
@@ -320,8 +333,11 @@ static int _i_pdarg(struct pmlncg *cg, struct pml_call *c, struct cg_intr *intr)
 		return -1;
 
 	for (i = 0; i < intr->numop; ++i) {
-		if (pib_add(b, &intr->ops[i]) < 0)
+		if (pib_add(b, &intr->ops[i]) < 0) {
+			cgerr(cg, "out of instructions generating packet"
+				  " intrinsic %s", c->func->name);
 			return -1;
+		}
 	}
 
 	return 0;
@@ -341,9 +357,9 @@ static int _i_inscut(struct pmlncg *cg, struct pml_call *c,
 	len = l_to_node(l_next(&off->base.ln));
 
 	if (PML_EXPR_IS_LITERAL(pkt) && PML_EXPR_IS_LITERAL(off)) {
-		if (val64(cg->ast, pkt, &pv) < 0)
+		if (val64(cg, pkt, &pv) < 0)
 			return -1;
-		if (val64(cg->ast, off, &ov) < 0)
+		if (val64(cg, off, &ov) < 0)
 			return -1;
 		pv &= NETVM_SEG_SEGMASK;
 		pv |= NETVM_SEG_ISPKT;
@@ -363,8 +379,10 @@ static int _i_inscut(struct pmlncg *cg, struct pml_call *c,
 	if (cg_expr(cg, len, PML_ETYPE_SCALAR) < 0)
 		return -1;
 
-	if (pib_add(b, &intr->ops[0]) < 0)
+	if (pib_add(b, &intr->ops[0]) < 0) {
+		cgerr(cg, "out of instructions adding ins/cut intrinsic");
 		return -1;
+	}
 
 	return 0;
 }
@@ -588,9 +606,8 @@ static int cg_intrinsic(struct pmlncg *cg, struct pml_call *c, int etype)
 	intr = find_intrinsic(f);
 
 	if (intr == NULL) {
-		fprintf(stderr, 
-			"cg_intrinsic: intrinsic function '%s' not found\n",
-			f->name);
+		cgerr(cg, "cg_intrinsic: intrinsic function '%s' not found",
+		      f->name);
 		return -1;
 	}
 
@@ -601,7 +618,7 @@ static int cg_intrinsic(struct pmlncg *cg, struct pml_call *c, int etype)
 	if ((*intr->cgcall)(cg, c, intr) < 0)
 		return -1;
 
-	if (typecast(&cg->ibuf, c->etype, etype) < 0)
+	if (typecast(cg, c->etype, etype) < 0)
 		return -1;
 
 	return 0;
@@ -910,8 +927,9 @@ static int mask2bytes(struct pml_ibuf *b)
 }
 
 
-static int typecast(struct pml_ibuf *b, int otype, int ntype)
+static int typecast(struct pmlncg *cg, int otype, int ntype)
 {
+	struct pml_ibuf *b = &cg->ibuf;
 	if ((ntype == PML_ETYPE_UNKNOWN) || (otype == ntype))
 		return 0;
 
@@ -931,17 +949,15 @@ static int typecast(struct pml_ibuf *b, int otype, int ntype)
 
 	case PML_ETYPE_BYTESTR:
 		if (otype != PML_ETYPE_MASKVAL) {
-			fprintf(stderr, 
-				"Can not convert type '%d' to byte string\n",
-				otype);
+			cgerr(cg, "Can not convert type '%d' to byte string",
+			      otype);
 			return -1;
 		}
 		return mask2bytes(b);
 
 
 	case PML_ETYPE_MASKVAL:
-		fprintf(stderr, "Can not convert type '%d' to mask value\n",
-			otype);
+		cgerr(cg, "Can not convert type '%d' to mask value", otype);
 		return -1;
 
 	case PML_ETYPE_VOID:
@@ -1132,9 +1148,8 @@ static int cg_call(struct pmlncg *cg, struct pml_call *c, int etype)
 		if (!fc->resolved) {
 			PUSH64(b, 0xFFFFFFFFull);
 			if (pcg_save_callsite(b, &cg->calls, f) < 0) {
-				fprintf(stderr,
-					"out of memory saving call '%s'\n",
-					f->name);
+				cgerr(cg, "out of memory saving call '%s'",
+				      f->name);
 				return -1;
 			}
 		} else {
@@ -1143,23 +1158,23 @@ static int cg_call(struct pmlncg *cg, struct pml_call *c, int etype)
 		EMIT_NULL(b, CALL);
 	}
 
-	if (typecast(b, c->etype, etype) < 0)
+	if (typecast(cg, c->etype, etype) < 0)
 		return -1;
 
 	return 0;
 }
 
 
-static int val64(struct pml_ast *ast, union pml_node *n, uint64_t *v)
+static int val64(struct pmlncg *cg, union pml_node *n, uint64_t *v)
 {
 	if (!PML_EXPR_IS_LITERAL(n)) {
-		fprintf(stderr, "val64(): node of type '%d' is not literal\n",
-			n->base.type);
+		cgerr(cg, "val64(): node of type '%d' is not literal",
+		      n->base.type);
 		return -1;
 	}
-	if (pml_lit_val64(ast, &n->literal, v) < 0) {
-		fprintf(stderr, "error determining literal value of type %d\n",
-			n->literal.type);
+	if (pml_lit_val64(cg->ast, &n->literal, v) < 0) {
+		cgerr(cg, "error determining literal value of type %d\n",
+		      n->literal.type);
 		return -1;
 	}
 	return 0;
@@ -1177,7 +1192,7 @@ static int cg_locval(struct pmlncg *cg, union pml_expr_u *e, struct locval *val)
 			return -1;
 	} else {
 		val->onstack = 0;
-		if (val64(cg->ast, (union pml_node *)e, &val->val) < 0)
+		if (val64(cg, (union pml_node *)e, &val->val) < 0)
 			return -1;
 	}
 
@@ -1394,11 +1409,10 @@ int cg_adjlen(struct pmlncg *cg, struct pml_locator *loc, uint64_t *known_len)
 				return -1;
 			if (!loff.onstack) {
 				if (loff.val >= len) {
-					fprintf(stderr, 
-						"offset out of range for '%s'"
-						": %llu >= %llu\n", loc->name,
-						(ullong)loff.val,
-						(ullong)len);
+					cgerr(cg, 
+					      "offset out of range for '%s'"
+					      ": %llu >= %llu", loc->name,
+					      (ullong)loff.val, (ullong)len);
 					return -1;
 				}
 				PUSH64(b, len - loff.val);
@@ -1419,11 +1433,11 @@ int cg_adjlen(struct pmlncg *cg, struct pml_locator *loc, uint64_t *known_len)
 				return -1;
 			if (!loff.onstack) {
 				if (loff.val >= var->width) {
-					fprintf(stderr, 
-						"offset out of range for '%s'"
-						": %llu >= %llu\n", loc->name,
-						(ullong)loff.val,
-						(ullong)var->width);
+					cgerr(cg, 
+					      "offset out of range for '%s'"
+					      ": %llu >= %llu", loc->name,
+					      (ullong)loff.val,
+					      (ullong)var->width);
 					return -1;
 				}
 				PUSH64(b, var->width - loff.val);
@@ -1488,13 +1502,12 @@ int cg_adjlen(struct pmlncg *cg, struct pml_locator *loc, uint64_t *known_len)
 					return -1;
 				if (!loff.onstack) {
 					if (loff.val >= pf->len) {
-						fprintf(stderr, 
-							"offset out of range"
-							"for '%s': "
-							"%llu >= %llu\n",
-							loc->name,
-							(ullong)loff.val,
-							(ullong)pf->len);
+						cgerr(cg, 
+						      "offset out of range for"
+						      " '%s': %llu >= %llu",
+						      loc->name,
+						      (ullong)loff.val,
+						      (ullong)pf->len);
 						return -1;
 					}
 					PUSH64(b, pf->len - loff.val);
@@ -1591,16 +1604,15 @@ static int cg_memref(struct pmlncg *cg, struct pml_locator *loc)
 		if (PML_EXPR_IS_LITERAL(loc->off)) {
 			lit = &loc->off->literal;
 			if (pml_lit_val64(ast, lit, &n) < 0) {
-				fprintf(stderr, "error reading literal offset "
-						"for locator '%s'\n",
-					loc->name);
+				cgerr(cg, "error reading literal offset "
+					  "for locator '%s'",
+				      loc->name);
 				return -1;
 			}
 			if (n >= len) {
-				fprintf(stderr,
-					"offset for out of range for '%s':"
-					" %llu >= %llu\n", loc->name,
-					(ullong)n, (ullong)len);
+				cgerr(cg, "offset for out of range for '%s':"
+					  " %llu >= %llu",
+				      loc->name, (ullong)n, (ullong)len);
 				return -1;
 			} else {
 				addr += n;
@@ -1667,7 +1679,7 @@ static int cg_rpf(struct pmlncg *cg, struct pml_locator *loc, int etype)
 	}
 
 
-	if (typecast(b, loc->etype, etype) < 0)
+	if (typecast(cg, loc->etype, etype) < 0)
 		return -1;
 
 	return 0;
@@ -1687,10 +1699,9 @@ static int cg_pfbitfield(struct pmlncg *cg, struct pml_locator *loc)
 	abort_unless(loc->off == NULL && loc->len == NULL);
 
 	if (bytelen > 8) {
-		fprintf(stderr,
-			"Unable to generate bitfield %s:  "
-			"read byte length = %lu\n",
-			pf->name, bytelen);
+		cgerr(cg, "Unable to generate bitfield %s:  "
+			  "read byte length = %lu",
+		      pf->name, bytelen);
 		return -1;
 	}
 
@@ -1758,16 +1769,15 @@ static int cg_pfbytefield(struct pmlncg *cg, struct pml_locator *loc, int etype)
 		if (PML_EXPR_IS_LITERAL(loc->off) && fixedlen) {
 			lit = (struct pml_literal *)loc->off;
 			if (pml_lit_val64(ast, lit, &n) < 0) {
-				fprintf(stderr, "error reading literal offset "
-						"for locator '%s'\n",
-					loc->name);
+				cgerr(cg, "error reading literal offset "
+					   "for locator '%s'",
+				      loc->name);
 				return -1;
 			}
 			if (n >= len) {
-				fprintf(stderr,
-					"offset for out of range for '%s':"
-					" %llu >= %llu\n", loc->name,
-					(ullong)n, (ullong)len);
+				cgerr(cg, "offset for out of range for '%s':"
+					  " %llu >= %llu",
+				      loc->name, (ullong)n, (ullong)len);
 				return -1;
 			}
 			len -= n;
@@ -1779,16 +1789,15 @@ static int cg_pfbytefield(struct pmlncg *cg, struct pml_locator *loc, int etype)
 		if (PML_EXPR_IS_LITERAL(loc->len) && fixedlen) {
 			lit = (struct pml_literal *)loc->len;
 			if (pml_lit_val64(ast, lit, &n) < 0) {
-				fprintf(stderr, "error reading literal length "
-						"for locator '%s'\n",
-					loc->name);
+				cgerr(cg, "error reading literal length "
+					  "for locator '%s'",
+				      loc->name);
 				return -1;
 			}
 			if (n > len) {
-				fprintf(stderr,
-					"length for out of range for '%s':"
-					" %llu >= %llu\n", loc->name,
-					(ullong)n, (ullong)len);
+				cgerr(cg, "length for out of range for '%s':"
+					  " %llu >= %llu",
+				      loc->name, (ullong)n, (ullong)len);
 				return -1;
 			}
 			len = n;
@@ -1838,9 +1847,9 @@ static int cg_varref(struct pmlncg *cg, struct pml_locator *loc, int etype)
 		belowbp = (var->vtype == PML_VTYPE_PARAM);
 
 		if (func != NULL && PML_FUNC_IS_INTRINSIC(func)) {
-			fprintf(stderr, "can't generate varref code for"
-					"an intrinsic function (%s)\n",
-				func->name);
+			cgerr(cg, "can't generate varref code for an "
+				  "intrinsic function (%s)",
+			      func->name);
 			return -1;
 		} 
 		
@@ -1854,12 +1863,12 @@ static int cg_varref(struct pmlncg *cg, struct pml_locator *loc, int etype)
 		} else {
 			if (cg_memref(cg, loc) < 0)
 				return -1;
-			if (typecast(b, loc->etype, etype) < 0)
+			if (typecast(cg, loc->etype, etype) < 0)
 				return -1;
 		}
 
 	} else {
-		fprintf(stderr, "Unsupported variable type: %d\n", var->vtype);
+		cgerr(cg, "Unsupported variable type: %d", var->vtype);
 		return -1;
 	}
 
@@ -1899,7 +1908,7 @@ static int cg_litref(struct pmlncg *cg, struct pml_locator *loc, int etype)
 	if (cg_memref(cg, loc) , 0)
 		return -1;
 
-	if (typecast(b, loc->etype, etype) < 0)
+	if (typecast(cg, loc->etype, etype) < 0)
 		return -1;
 
 	return 0;
@@ -1917,7 +1926,7 @@ static int cg_locator(struct pmlncg *cg, struct pml_locator *loc, int etype)
 	case PML_REF_LITERAL:
 		return cg_litref(cg, loc, etype);
 	default:
-		fprintf(stderr, "unresolved locator '%s'\n", loc->name);
+		cgerr(cg, "unresolved locator '%s'", loc->name);
 		return -1;
 	}
 }
@@ -1972,9 +1981,8 @@ static int cg_rexmatch(struct pmlncg *cg, struct pml_op *op, int etype)
 	struct cg_lit_ctx *lc;
 
 	if (etype != PML_ETYPE_SCALAR) {
-		fprintf(stderr,
-			"Unable to type cast regex match to non-scalar"
-			" return type '%d'\n", etype);
+		cgerr(cg, "Unable to type cast regex match to non-scalar"
+		          " return type '%d'", etype);
 		return -1;
 	}
 
@@ -2099,7 +2107,8 @@ static int w_expr_post(union pml_node *n, void *auxp, void *xstk)
 	int rv = 0;
 	struct cgeaux *ea = auxp;
 	struct cgestk *es = xstk;
-	struct pml_ibuf *b = &ea->cg->ibuf;
+	struct pmlncg *cg = ea->cg;
+	struct pml_ibuf *b = &cg->ibuf;
 
 	switch (n->base.type) {
 	case PMLTT_SCALAR:
@@ -2126,7 +2135,7 @@ static int w_expr_post(union pml_node *n, void *auxp, void *xstk)
 	}
 
 	if (rv >= 0)
-		rv = typecast(b, n->expr.etype, es->etype);
+		rv = typecast(cg, n->expr.etype, es->etype);
 
 	return rv;
 }
@@ -2336,7 +2345,7 @@ int cg_assign_bytestr_var(struct pmlncg *cg, struct pml_assign *a)
 		} 
 		PUSH64(b, 8);
 	} else if (etype == PML_ETYPE_MASKVAL) {
-		if (typecast(b, PML_ETYPE_BYTESTR, etype) < 0)
+		if (typecast(cg, PML_ETYPE_BYTESTR, etype) < 0)
 			return -1;
 	}
 
@@ -2355,9 +2364,10 @@ int cg_assign_bytestr_var(struct pmlncg *cg, struct pml_assign *a)
 }
 
 
-static int pfref_check_fixed(struct pml_locator *loc, struct pml_ast *ast,
+static int pfref_check_fixed(struct pmlncg *cg, struct pml_locator *loc,
 			     uint64_t *outlen)
 {
+	struct pml_ast *ast = cg->ast;
 	uint64_t v, len, off;
 	struct pml_literal *lit;
 	struct ns_namespace *ns;
@@ -2380,9 +2390,8 @@ static int pfref_check_fixed(struct pml_locator *loc, struct pml_ast *ast,
 			return 0;
 		lit = &loc->pkt->literal;
 		if (pml_lit_val64(ast, lit, &v) < 0) {
-			fprintf(stderr, "error reading literal packet "
-					"for locator '%s'\n",
-				loc->name);
+			cgerr(cg, "error reading literal packet for locator "
+				  "'%s'", loc->name);
 			return -1;
 		}
 		if (v > NETVM_PD_PKT_MASK)
@@ -2393,9 +2402,8 @@ static int pfref_check_fixed(struct pml_locator *loc, struct pml_ast *ast,
 			return 0;
 		lit = &loc->idx->literal;
 		if (pml_lit_val64(ast, lit, &v) < 0) {
-			fprintf(stderr, "error reading literal index "
-					"for locator '%s'\n",
-				loc->name);
+			cgerr(cg, "error reading literal index for locator "
+				  "'%s'", loc->name);
 			return -1;
 		}
 		if (v > NETVM_PD_IDX_MASK)
@@ -2407,18 +2415,16 @@ static int pfref_check_fixed(struct pml_locator *loc, struct pml_ast *ast,
 			return 0;
 		lit = &loc->off->literal;
 		if (pml_lit_val64(ast, lit, &off) < 0) {
-			fprintf(stderr, "error reading literal offset "
-					"for locator '%s'\n",
-				loc->name);
+			cgerr(cg, "error reading literal offset for locator "
+				  "'%s'", loc->name);
 			return -1;
 		}
 		if (off > NETVM_PD_IDX_MASK)
 			return 0;
 		if (off >= len) {
-			fprintf(stderr,
-				"offset out of range for field '%s':"
-				" %llu >= %llu\n", loc->name,
-				(ullong)off, (ullong)len);
+			cgerr(cg, "offset out of range for field '%s':"
+				  " %llu >= %llu", 
+			      loc->name, (ullong)off, (ullong)len);
 			return -1;
 		}
 		len -= off;
@@ -2428,19 +2434,16 @@ static int pfref_check_fixed(struct pml_locator *loc, struct pml_ast *ast,
 			return 0;
 		lit = &loc->len->literal;
 		if (pml_lit_val64(ast, lit, &v) < 0) {
-			fprintf(stderr, "error reading literal length "
-					"for locator '%s'\n",
-				loc->name);
+			cgerr(cg, "error reading literal length for locator "
+				  "'%s'", loc->name);
 			return -1;
 		}
 		if (v > NETVM_PD_IDX_MASK)
 			return 0;
 		if (v > len) {
-			fprintf(stderr,
-				"length out of range for field '%s'"
-				" with offset %llu: %llu >= %llu\n",
-				loc->name, (ullong)off, (ullong)v,
-				(ullong)len);
+			cgerr(cg, "length out of range for field '%s'"
+				  " with offset %llu: %llu >= %llu",
+			      loc->name, (ullong)off, (ullong)v, (ullong)len);
 			return -1;
 		}
 		len = v;
@@ -2466,7 +2469,7 @@ int cg_assign_pktfld(struct pmlncg *cg, struct pml_assign *a)
 		return -1;
 
 	if (etype == PML_ETYPE_SCALAR) {
-		rv = pfref_check_fixed(loc, cg->ast, &flen);
+		rv = pfref_check_fixed(cg, loc, &flen);
 		if (rv < 0) {
 			return -1;
 		} else if (rv > 0) {
@@ -2478,7 +2481,7 @@ int cg_assign_pktfld(struct pmlncg *cg, struct pml_assign *a)
 			return 0;
 		} 
 	} else if (etype == PML_ETYPE_MASKVAL) {
-		if (typecast(b, PML_ETYPE_BYTESTR, etype) < 0)
+		if (typecast(cg, PML_ETYPE_BYTESTR, etype) < 0)
 			return -1;
 		etype = PML_ETYPE_BYTESTR;
 	}
@@ -2594,8 +2597,8 @@ int cg_stmt(struct pmlncg *cg, union pml_node *n)
 		return cg_print(cg, &n->print);
 	default:
 		if (!PML_TYPE_IS_EXPR(n->base.type)) {
-			fprintf(stderr, "cg_stmt(): unknown statement type %d\n",
-				n->base.type);
+			cgerr(cg, "cg_stmt(): unknown statement type %d",
+			      n->base.type);
 			return -1;
 		}
 		if (cg_expr(cg, n, PML_ETYPE_VOID) < 0)
@@ -2663,9 +2666,9 @@ static int cg_funcs(struct pmlncg *cg)
 		if (PML_FUNC_IS_INTRINSIC(f)) {
 			intr = find_intrinsic(f);
 			if (intr == NULL) {
-				fprintf(stderr,
-					"cg_funcs: unable to find codegen for"
-					" intrinsic function '%s'\n", f->name);
+				cgerr(cg, "cg_funcs: unable to find codegen "
+					  "for intrinsic function '%s'", 
+				      f->name);
 				return -1;
 			}
 			abort_unless(intr->cgfunc || intr->cgcall);
@@ -2693,17 +2696,17 @@ static int cg_funcs(struct pmlncg *cg)
 
 
 STATIC_BUG_ON(UINTMAX_LT_MAXREXPAT, UINT_MAX < NETVM_MAXREXPAT);
-static int add_regexes(struct pml_ibuf *b, struct pml_literal **rexarr,
+static int add_regexes(struct pmlncg *cg, struct pml_literal **rexarr,
 		       ulong nrex)
 {
+	struct pml_ibuf *b = &cg->ibuf;
 	struct pml_literal *lit;
 	struct cg_lit_ctx *lc;
 	uint i = 0;
 
 	if (nrex > NETVM_MAXREXPAT) {
-		fprintf(stderr,
-			"Too many regular expressions (> %d) for the "
-			"netvm regex coprocessor\n", NETVM_MAXREXPAT);
+		cgerr(cg, "Too many regular expressions (> %d) for the "
+			  "netvm regex coprocessor", NETVM_MAXREXPAT);
 		return -1;
 	}
 	while (nrex > 0) {
@@ -2738,7 +2741,7 @@ static int cg_begin_end(struct pmlncg *cg)
 	if (nrex > 0 || cg->ast->b_rule != NULL)
 		cg->prog->eps[NVMP_EP_START] = nexti(&cg->ibuf);
 
-	if (add_regexes(&cg->ibuf, rexarr, nrex) < 0)
+	if (add_regexes(cg, rexarr, nrex) < 0)
 		return -1;
 
 	if (cg->ast->b_rule != NULL) {
@@ -2844,20 +2847,11 @@ static void clearcg(struct pmlncg *cg, int copied, int clearall)
 }
 
 
-int pml_to_nvmp(struct pml_ast *ast, struct netvm_program *prog, int copy)
+int pml_to_nvmp(struct pml_ast *ast, struct netvm_program *prog, int copy,
+		char estr[PMLNCG_MAXERR])
 {
 	struct pmlncg cg;
 	struct netvm_meminit *inits;
-	int esave;
-
-	if (!ast || !prog || prog->inits != NULL || prog->inst != NULL) {
-		errno = EINVAL;
-		return -1;
-	}
-
-	inits = calloc(sizeof(struct netvm_meminit), PMLCG_MI_NUM);
-	if (inits == NULL)
-		return -1;
 
 	cg.ast = ast;
 	cg.prog = prog;
@@ -2868,6 +2862,19 @@ int pml_to_nvmp(struct pml_ast *ast, struct netvm_program *prog, int copy)
 	dyb_init(&cg.nextrules, NULL);
 	cg.curfunc = NULL;
 	cg.curloop = NULL;
+	str_copy(cg.err, "", sizeof(cg.err));
+
+	if (!ast || !prog || prog->inits != NULL || prog->inst != NULL) {
+		cgerr(&cg, "Invalid argument");
+		return -1;
+	}
+
+	inits = calloc(sizeof(struct netvm_meminit), PMLCG_MI_NUM);
+	if (inits == NULL) {
+		cgerr(&cg, "Out of memory for memory initializations base");
+		return -1;
+	}
+
 
 	prog->inits = inits;
 	prog->ninits = 0;
@@ -2876,8 +2883,10 @@ int pml_to_nvmp(struct pml_ast *ast, struct netvm_program *prog, int copy)
 	prog->eps[NVMP_EP_PACKET] = NVMP_EP_INVALID;
 	prog->eps[NVMP_EP_END] = NVMP_EP_INVALID;
 
-	if (copy_meminits(ast, prog, copy) < 0)
+	if (copy_meminits(ast, prog, copy) < 0) {
+		cgerr(&cg, "Out of memory for memory initializations");
 		goto err;
+	}
 
 	init_segs(&cg);
 
@@ -2911,8 +2920,7 @@ int pml_to_nvmp(struct pml_ast *ast, struct netvm_program *prog, int copy)
 	return 0;
 
 err:
-	esave = errno;
+	str_copy(estr, cg.err, PMLNCG_MAXERR);
 	clearcg(&cg, copy, 1);
-	errno = esave;
 	return -1;
 }

@@ -58,6 +58,9 @@ struct callsite {
 };
 
 
+#define PMLNCG_MAXERR		256
+
+
 struct pmlncg {
 
 	struct pml_ast *	ast;		/* AST we are building from */
@@ -76,6 +79,8 @@ struct pmlncg {
 
 	/* resolve these after codegen for rules */
 	struct dynbuf		nextrules;	/* unresolved 'nextrule's */
+
+	char 			err[PMLNCG_MAXERR];	/* error buffer */
 };
 
 /*
@@ -106,7 +111,8 @@ struct pmlncg {
  * otherwise, the ast gets cleared and some of the memory originally
  * used in the ast becomes owned by the program.
  */
-int pml_to_nvmp(struct pml_ast *ast, struct netvm_program *prog, int copy);
+int pml_to_nvmp(struct pml_ast *ast, struct netvm_program *prog, int copy,
+		char ebuf[PMLNCG_MAXERR]);
 
 
 /* Clear out the auxilliary data for a netvm program that was initialized */

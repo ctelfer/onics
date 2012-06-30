@@ -170,6 +170,7 @@ void parse_pml_program(struct netvm_program *prog)
 	pml_parser_t parser;
 	struct pml_ast ast;
 	struct pml_lex_val none, extra;
+	char estr[PMLNCG_MAXERR];
 	
 	pml_lexv_init(&none);
 	if (pmllex_init(&scanner))
@@ -215,8 +216,8 @@ void parse_pml_program(struct netvm_program *prog)
 		err("Error optimizing PML tree: %s\n", ast.errbuf);
 
 	nvmp_init(prog);
-	if (pml_to_nvmp(&ast, prog, 0) < 0)
-		errsys("Error generating code in pml_to_nvmp: ");
+	if (pml_to_nvmp(&ast, prog, 0, estr) < 0)
+		err("Error generating code in pml_to_nvmp:\n%s", estr);
 }
 
 
