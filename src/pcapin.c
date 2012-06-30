@@ -36,7 +36,7 @@ FILE *g_infile = NULL;
 uint g_ifnum = 0;
 
 struct clopt g_options[] = {
-	CLOPT_INIT(CLOPT_STRING, 'i', "--iface", "interfact to sniff from"),
+	CLOPT_INIT(CLOPT_STRING, 'i', "--iface", "interface to sniff from"),
 	CLOPT_INIT(CLOPT_STRING, 'f', "--file", "file to read from"),
 	CLOPT_INIT(CLOPT_UINT,   'n', "--iface-num",
 		   "interface number to tag packets with"),
