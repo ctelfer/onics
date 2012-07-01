@@ -2,24 +2,27 @@ Key:
   + -- Should do this
   * -- Nice to have
   ? -- Not sure if we should do this but should consider
+  > -- Future release
   - -- Comment
 
 PML
  + Add "standard include path/files"
- + Add exit() intrinsic.
  + More test cases (control flow especially)
- + Fix code gen error reporting:  no 'fprintf(stderr....)'
  + Proper checking for allocation failures in parser.
  * Optimize binary operations with at least one constant operand.
- * Hash table support
- * Data structure support (maybe just hash tables)
  * random() intrinsic
- ? AST-based interpreter for comparison with code generated version
+ * Add exit() intrinsic.
+ > Hash table support
+ > Data structure support (maybe just hash tables)
 
 
 Proto parsing
- * More checking of ICMP packets by type.
  * Check restrictions on parsing to ensure termination.
+ > More checking of ICMP/ICMPv6 packets by type.
+ > MPLS
+ > PPP
+ > GRE
+ > GTP
 
 
 x2hpkt:
@@ -27,19 +30,19 @@ x2hpkt:
 
 
 netvm_prog API:
- * Alter format to allow for coprocessor patching.
+ > Alter format to allow for coprocessor patching.
 
 
 NetVM:
  ? Revise netvm cmp, pcmp and mskcmp to check lengths
 
 NetVM Coprocessors
- * DNS Resolver coprocessor
- * Hash table coprocessor
- * Backing store coprocessor for packets
- * Coprocessor for RNG
- * Generic C library netvm coprocessor
  + Fix up / test regex compilation on error patterns (catlib).
+ * DNS Resolver coprocessor
+ * Generic C library netvm coprocessor
+ > Hash table coprocessor
+ > Backing store coprocessor for packets
+ > Coprocessor for RNG
  ? Create compatible regex coprocessor for other regex libraries.
 
 
