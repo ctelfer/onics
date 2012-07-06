@@ -594,17 +594,24 @@ void pml_ast_err(struct pml_ast *ast, const char *fmt, ...);
 void pml_ast_clear_err(struct pml_ast *ast);
 
 /* -- PML AST node allocation -- */
-union pml_node *pmln_alloc(int pmltt);
-void pmln_free(union pml_node *node);
+/* returns type (union pml_node *) */
+void *pmln_alloc(struct pml_ast *ast, int pmltt);
+/* takes type (union pml_node *) */
+void pmln_free(void *node);
 
 int  pml_locator_extend_name(struct pml_locator *l, char *name, ulong len);
 int  pml_bytestr_copy(struct pml_ast *ast, struct pml_bytestr *bs, int seg,
 		      void *data, ulong len);
-union pml_expr_u *pml_binop_alloc(int op, union pml_expr_u *left, 
+
+/* The following 'alloc()' calls all free their subtree arguments if */
+/* there is an error creating their respective node. */
+union pml_expr_u *pml_binop_alloc(struct pml_ast *ast, int op,
+				  union pml_expr_u *left, 
 		                  union pml_expr_u *right);
-union pml_expr_u *pml_unop_alloc(int op, union pml_expr_u *ex);
-struct pml_variable *pml_var_alloc(char *name, int width, int vtype,
-				   union pml_expr_u *init);
+union pml_expr_u *pml_unop_alloc(struct pml_ast *ast, int op,
+				 union pml_expr_u *ex);
+struct pml_variable *pml_var_alloc(struct pml_ast *ast, char *name, int width,
+				   int vtype, union pml_expr_u *init);
 struct pml_call *pml_call_alloc(struct pml_ast *ast, struct pml_function *func,
 				struct pml_list *args);
 struct pml_print *pml_print_alloc(struct pml_ast *ast, union pml_expr_u *expr,

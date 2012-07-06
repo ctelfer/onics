@@ -8,7 +8,6 @@ Key:
 PML
  + Add "standard include path/files"
  + More test cases (control flow especially)
- + Proper checking for allocation failures in parser.
  * Optimize binary operations with at least one constant operand.
  * random() intrinsic
  * Add exit() intrinsic.
