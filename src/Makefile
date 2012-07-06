@@ -2,13 +2,12 @@
 CC=gcc
 CATLIB_ROOT=../../catlib
 INCS=-I${CATLIB_ROOT}/include
-#OPTS=-O3 
-#LIBS=-L${CATLIB_ROOT}/lib -lcat -lpcap
-#DEFS=
-# Some of these are gcc-specific.  TODO: remove/group compiler specific flags.
-OPTS=-g -Wall -Wno-sign-conversion -Wno-pointer-sign -fno-strict-aliasing
-LIBS=-L${CATLIB_ROOT}/lib -lcat_dbg
+OPTS=-O3
+LIBS=-L${CATLIB_ROOT}/lib -lcat
 DEFS=
+#OPTS=-g
+#LIBS=-L${CATLIB_ROOT}/lib -lcat_dbg
+#DEFS=
 BINDIR=../bin
 LIBOBJS= xpkt.o ns.o netvm.o netvm_prog.o pktbuf.o stdproto.o \
 	 protoparse.o util.o lex.pml.o pmltree.o netvm_std_coproc.o \
@@ -87,13 +86,13 @@ ${BINDIR}/pml:   pml_main.c protoparse.o stdproto.o util.o pktbuf.o netvm.o \
 
 
 .c.o: $<
-	${CC} -Wall -c $< -o $@ ${DEFS} ${INCS} ${OPTS}
+	${CC} -c $< -o $@ ${DEFS} ${INCS} ${OPTS}
 
 lex.pml.c: pml.l pml.h
 	flex pml.l
 
 lex.pml.o: lex.pml.c
-	${CC} -Wall -c lex.pml.c -o lex.pml.o -DTHIS_IS_SCANNER \
+	${CC} -c lex.pml.c -o lex.pml.o -DTHIS_IS_SCANNER \
 		${DEFS} ${INCS} ${OPTS}
 
 pml.c pml.h: pml.yl ../lemon/lemon
