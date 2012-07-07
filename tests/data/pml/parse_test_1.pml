@@ -1,3 +1,5 @@
+# General program test
+#
 const X = 53;
 const Y = 4 * X;
 

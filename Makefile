@@ -1,8 +1,8 @@
 
 all:
 	(cd src ; make)
-	(cd tests ; make)
+	(cd tests/src ; make)
 
 clean:
 	(cd src ; make clean)
-	(cd tests ; make clean);
+	(cd tests/src ; make clean);

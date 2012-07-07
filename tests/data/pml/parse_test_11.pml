@@ -1,3 +1,4 @@
+# Scalar variable index test
 #
 # This should fail:  can't index a scalar global.
 #

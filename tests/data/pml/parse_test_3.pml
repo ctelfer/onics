@@ -1,3 +1,5 @@
+# Constant and inline optimization test
+#
 const A = 10;
 const B = 5;
 const C = A + B;

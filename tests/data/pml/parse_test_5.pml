@@ -1,4 +1,5 @@
-
+# Control flow modification tests
+#
 BEGIN {
 	i = 0;
 	while (i < 5) {

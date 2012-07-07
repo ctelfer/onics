@@ -1,3 +1,5 @@
+# Function parsing and return outside function
+#
 int test(a, b) { 
 	return a + b;
 }
