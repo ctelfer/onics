@@ -1,0 +1,8 @@
+LBRACE         '{'
+ID             'fix_all_len'
+LPAREN         '('
+NUM            '0'
+RPAREN         ')'
+SEMICOLON      ';'
+RBRACE         '}'
+End of file

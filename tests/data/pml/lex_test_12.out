@@ -1,0 +1,11 @@
+BEGIN          'BEGIN'
+LBRACE         '{'
+PRINT          'print'
+STRING         '"hello "'
+COMMA          ','
+STRING         '"world!\n"'
+SEMICOLON      ';'
+ID             'x'
+ASSIGN         '='
+RBRACE         '}'
+End of file

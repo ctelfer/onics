@@ -91,7 +91,7 @@ ${BINDIR}/pml:   pml_main.c protoparse.o stdproto.o util.o pktbuf.o netvm.o \
 lex.pml.c: pml.l pml.h
 	flex pml.l
 
-lex.pml.o: lex.pml.c
+lex.pml.o: lex.pml.c pml_tok_strs.o
 	${CC} -c lex.pml.c -o lex.pml.o -DTHIS_IS_SCANNER \
 		${DEFS} ${INCS} ${OPTS}
 
@@ -99,12 +99,18 @@ pml.c pml.h: pml.yl ../lemon/lemon
 	../lemon/lemon pml.yl
 	touch pml.h
 
+pml_tok_strs.c: pml.h
+	echo "const char *pml_tok_strs[] = {" > pml_tok_strs.c
+	echo "	\"EOF\"," >> pml_tok_strs.c
+	sed -e 's/#.*_/	"/' -e 's/ .*$$/",/' pml.h >> pml_tok_strs.c
+	echo "};" >> pml_tok_strs.c
+
 ../lemon/lemon: ../lemon/lemon.c
 	(cd ../lemon ; make)
 
 clean:
 	rm -f ${TARGETS}
 	rm -f *.o
-	rm -f lex.pml.c pml.c pml.h pml.out
+	rm -f lex.pml.c pml.c pml.h pml.out pml_tok_strs.c
 	rm -f ../lemon/lemon
 
