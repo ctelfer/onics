@@ -174,7 +174,7 @@ int main(int argc, char *argv[])
 
 	unregister_std_proto();
 
-	printf("all done\n");
+	printf("testns: completed\n");
 
 	return 0;
 }
