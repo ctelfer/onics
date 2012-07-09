@@ -1,6 +1,7 @@
 #!/bin/sh
 
 ERR=0
+CHANGED=0
 
 OBIN=../bin
 TOUT=tmp
@@ -29,6 +30,7 @@ codegen() {
 		if ! cmp data/pml/$base.nvas $TOUT/$base.nvas
 		then
 			echo Instruction selection for $base.pml changed
+			CHANGED=1
 		fi
 	else
 		ERR=1
@@ -40,5 +42,10 @@ for f in `echo data/pml/pml_test*.pml | sort`
 do 
 	codegen $f
 done
+
+if [ $CHANGED -eq 0 ] ; then
+	echo
+	echo "No changes in code generation detected"
+fi
 
 exit $ERR
