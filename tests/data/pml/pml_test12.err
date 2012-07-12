@@ -1,0 +1,46 @@
+Starting program parse
+done parsing:  optimizing the program
+Program has a valid START entry point
+Single stepping netvm program
+Executing instruction 0
+Stack: (SP = 2, BP = 0)
+	   1: 0 (0x0)
+	   0: 0 (0x0)
+Executing instruction 1
+Stack: (SP = 3, BP = 0)
+	   2: 8 (0x8)
+	   1: 0 (0x0)
+	   0: 0 (0x0)
+Executing instruction 2
+Stack: (SP = 2, BP = 0)
+	   1: 0 (0x0)
+	   0: 8 (0x8)
+Executing instruction 3
+Stack: (SP = 3, BP = 0)
+	   2: 8 (0x8)
+	   1: 0 (0x0)
+	   0: 8 (0x8)
+Executing instruction 4
+Stack: (SP = 3, BP = 0)
+	   2: 60 (0x3c)
+	   1: 0 (0x0)
+	   0: 8 (0x8)
+Executing instruction 5
+Stack: (SP = 3, BP = 0)
+	   2: 3 (0x3)
+	   1: 0 (0x0)
+	   0: 8 (0x8)
+Executing instruction 6
+Stack: (SP = 2, BP = 0)
+	   1: 3 (0x3)
+	   0: 8 (0x8)
+Executing instruction 7
+Stack: (SP = 2, BP = 0)
+	   1: 3 (0x3)
+	   0: 8 (0x8)
+VM returned value 3 (0x3)
+Stack: (SP = 2, BP = 0)
+	   1: 3 (0x3)
+	   0: 8 (0x8)
+No PACKET entry point: no packet read/write
+No END entry point

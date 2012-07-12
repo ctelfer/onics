@@ -1,0 +1,109 @@
+Starting program parse
+done parsing:  optimizing the program
+Program has a valid START entry point
+Single stepping netvm program
+Executing instruction 0
+Stack: (SP = 3, BP = 0)
+	   2: 0 (0x0)
+	   1: 0 (0x0)
+	   0: 0 (0x0)
+Executing instruction 1
+Stack: (SP = 4, BP = 0)
+	   3: 5 (0x5)
+	   2: 0 (0x0)
+	   1: 0 (0x0)
+	   0: 0 (0x0)
+Executing instruction 2
+Stack: (SP = 3, BP = 0)
+	   2: 0 (0x0)
+	   1: 0 (0x0)
+	   0: 5 (0x5)
+Executing instruction 3
+Stack: (SP = 4, BP = 0)
+	   3: 11 (0xb)
+	   2: 0 (0x0)
+	   1: 0 (0x0)
+	   0: 5 (0x5)
+Executing instruction 4
+Stack: (SP = 3, BP = 0)
+	   2: 0 (0x0)
+	   1: 11 (0xb)
+	   0: 5 (0x5)
+Executing instruction 5
+Stack: (SP = 4, BP = 0)
+	   3: 11 (0xb)
+	   2: 0 (0x0)
+	   1: 11 (0xb)
+	   0: 5 (0x5)
+Executing instruction 6
+Stack: (SP = 5, BP = 0)
+	   4: 11 (0xb)
+	   3: 11 (0xb)
+	   2: 0 (0x0)
+	   1: 11 (0xb)
+	   0: 5 (0x5)
+Executing instruction 7
+Stack: (SP = 4, BP = 0)
+	   3: 121 (0x79)
+	   2: 0 (0x0)
+	   1: 11 (0xb)
+	   0: 5 (0x5)
+Executing instruction 8
+Stack: (SP = 4, BP = 0)
+	   3: 5 (0x5)
+	   2: 0 (0x0)
+	   1: 11 (0xb)
+	   0: 5 (0x5)
+Executing instruction 9
+Stack: (SP = 4, BP = 0)
+	   3: 61 (0x3d)
+	   2: 0 (0x0)
+	   1: 11 (0xb)
+	   0: 5 (0x5)
+Executing instruction 10
+Stack: (SP = 4, BP = 0)
+	   3: 2 (0x2)
+	   2: 0 (0x0)
+	   1: 11 (0xb)
+	   0: 5 (0x5)
+Executing instruction 11
+Stack: (SP = 3, BP = 0)
+	   2: 2 (0x2)
+	   1: 11 (0xb)
+	   0: 5 (0x5)
+Executing instruction 12
+Stack: (SP = 4, BP = 0)
+	   3: 5 (0x5)
+	   2: 2 (0x2)
+	   1: 11 (0xb)
+	   0: 5 (0x5)
+Executing instruction 13
+Stack: (SP = 5, BP = 0)
+	   4: 2 (0x2)
+	   3: 5 (0x5)
+	   2: 2 (0x2)
+	   1: 11 (0xb)
+	   0: 5 (0x5)
+Executing instruction 14
+Stack: (SP = 4, BP = 0)
+	   3: 5 (0x5)
+	   2: 2 (0x2)
+	   1: 11 (0xb)
+	   0: 5 (0x5)
+Executing instruction 15
+Stack: (SP = 3, BP = 0)
+	   2: 2 (0x2)
+	   1: 11 (0xb)
+	   0: 5 (0x5)
+Executing instruction 16
+Stack: (SP = 3, BP = 0)
+	   2: 2 (0x2)
+	   1: 11 (0xb)
+	   0: 5 (0x5)
+VM returned value 2 (0x2)
+Stack: (SP = 3, BP = 0)
+	   2: 2 (0x2)
+	   1: 11 (0xb)
+	   0: 5 (0x5)
+No PACKET entry point: no packet read/write
+No END entry point

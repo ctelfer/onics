@@ -7,6 +7,7 @@ tests:
 	./pml_lex_test.sh
 	./pml_parse_test.sh
 	./pml_cg_watch.sh
+	./pml_exec_test.sh
 
 clean:
 	cd src ; make clean

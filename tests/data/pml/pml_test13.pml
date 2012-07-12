@@ -1,4 +1,3 @@
-#
 # Basic function declaration and call.
 #
 # addition, call, local variables, parameters, equals, print

@@ -1,4 +1,4 @@
-# multi expression print statements
+# Multi-expression print statements
 #
 var s = 0x123456789ABCDEF0;
 var s2[20] = \x00112233aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa;

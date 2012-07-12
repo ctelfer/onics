@@ -1,5 +1,4 @@
-#
-# packet field assignments
+# Packet field assignments
 #
 # fix lengths, (because ip[3,2] clobbers it) fix checksums, local vars,
 # packet fields, truncation of scalars,

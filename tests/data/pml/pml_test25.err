@@ -1,0 +1,15 @@
+before
+timestamp = 1261318264 seconds and 488768000 nanoseconds
+pre-snap length = -1
+input port = 0
+output port = -1
+flow id = 0xffffffffffffffff
+traffic class = 0xffffffffffffffff
+
+after
+timestamp = 1 seconds and 0 nanoseconds
+pre-snap length = 4096
+input port = 50
+output port = 51
+flow id = 0xdeadbeef
+traffic class = 0x1010

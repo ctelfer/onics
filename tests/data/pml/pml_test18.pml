@@ -1,4 +1,3 @@
-#
 # Test packet and header creation intrinsics.
 #
 BEGIN {

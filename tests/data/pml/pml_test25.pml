@@ -1,4 +1,5 @@
-
+# Metadata manipulation
+#
 {
   print "before\n";
   ts = meta_get_tstamp(0);

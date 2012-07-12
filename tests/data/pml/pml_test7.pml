@@ -1,4 +1,3 @@
-#
 # Packet field manipulation, proper truncation of scalar assignments.
 #
 ?- tcp -? { 

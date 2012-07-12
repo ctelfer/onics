@@ -1,3 +1,5 @@
+# Regular expressions
+#
 { print "Packet\n"; }
 
 ?- tcp and tcp.payload =~ `l.*ld` -? { 

@@ -1,5 +1,5 @@
+# Byte string and masked string matching
 #
-# Test byte string and masked string matching
 # Need to test with mismatched lengths as well.
 #
 var value[16] = \x112233445566778899AABBCCDDEEFF00;

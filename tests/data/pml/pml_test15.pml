@@ -1,5 +1,4 @@
-# 
-# numeric intrinsics
+# Numeric intrinsics
 #
 BEGIN {
 	x = 5;

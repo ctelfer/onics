@@ -1,4 +1,3 @@
-#
-# basic packet field pattern
+# Basic packet field pattern
 #
 ?- ip -? { drop; } 

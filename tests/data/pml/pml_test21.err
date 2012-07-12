@@ -1,0 +1,6 @@
+good length match fail for byte string
+good byte match for byte string
+good byte match fail for byte string offset
+good length match fail for mask string
+good match for mask string
+good match fail for mask string at wrong offset

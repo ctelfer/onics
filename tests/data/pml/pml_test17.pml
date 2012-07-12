@@ -1,5 +1,4 @@
-#
-# expressions as statements
+# Expressions as statements
 #
 int dummy(a, b, c) {
 	return 2 * b + c << a;

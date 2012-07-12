@@ -1,3 +1,5 @@
+# Memory indirection
+#
 var foo = 0xdeadbeef12345678;
 var bar = 0x1213141516171819;
 

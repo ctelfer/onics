@@ -1,5 +1,4 @@
-#
-# global scalar variables
+# Global scalar variables
 #
 # drop, sendpkt, header match, global variables, constant initialization.
 #
