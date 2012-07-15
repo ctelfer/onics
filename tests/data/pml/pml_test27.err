@@ -1,0 +1,16 @@
+(i,j,k) = (1,1,1)
+keeping k
+(i,j,k) = (2,2,1)
+keeping k
+(i,j) = (3,2)
+(i,j,k) = (3,3,2)
+keeping k
+(i,j) = (4,2)
+(i,j,k) = (4,4,3)
+keeping k
+(i,j) = (5,2)
+(i,j,k) = (5,5,4)
+keeping k
+(i,j) = (6,2)
+(i,j,k) = (6,6,5)
+keeping k
