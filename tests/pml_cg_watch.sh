@@ -27,10 +27,16 @@ codegen() {
 	rm $TOUT/$base.nprg 
 
 	if [ $FAIL -eq 0 ] ; then
-		if ! cmp data/pml/$base.nvas $TOUT/$base.nvas
+		if ! [ -f data/pml/$base.nvas ]
 		then
+			echo $1 does not have a disassembly for comparison
+
+		elif ! cmp data/pml/$base.nvas $TOUT/$base.nvas
+		then
+
 			echo Instruction selection for $base.pml changed
 			CHANGED=1
+
 		fi
 	else
 		ERR=1

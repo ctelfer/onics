@@ -1,10 +1,12 @@
+# Break/Continue test 2
+#
 BEGIN {
 	i = 1;
 	k = 1;
 	while (i < 7) {
-		j = 1;
+		j = i + 1;
 		while (j % i != 0) {
-			if (j == 1) {
+			if (j == i + 1) {
 				j = j + 1;
 				continue;
 			} 

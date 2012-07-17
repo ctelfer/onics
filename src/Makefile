@@ -2,12 +2,12 @@
 CC=gcc
 CATLIB_ROOT=../../catlib
 INCS=-I${CATLIB_ROOT}/include
-OPTS=-O3
-LIBS=-L${CATLIB_ROOT}/lib -lcat
-DEFS=
-#OPTS=-g
-#LIBS=-L${CATLIB_ROOT}/lib -lcat_dbg
+#OPTS=-O3
+#LIBS=-L${CATLIB_ROOT}/lib -lcat
 #DEFS=
+OPTS=-g
+LIBS=-L${CATLIB_ROOT}/lib -lcat_dbg
+DEFS=
 BINDIR=../bin
 LIBOBJS= xpkt.o ns.o netvm.o netvm_prog.o pktbuf.o stdproto.o \
 	 protoparse.o util.o lex.pml.o pmltree.o netvm_std_coproc.o \

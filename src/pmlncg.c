@@ -705,7 +705,7 @@ static int pcg_save_continue(struct pmlncg *cg)
 
 static uint pcg_get_ncontinues(struct pmlncg *cg)
 {
-	return cg->breaks.len / sizeof(uint);
+	return cg->continues.len / sizeof(uint);
 }
 
 
@@ -717,7 +717,7 @@ static void pcg_resolve_continues(struct pmlncg *cg, uint cskip, uint addr)
 	iaddrs += cskip;
 	naddrs -= cskip;
 	pcg_resolve_branches(&cg->ibuf, iaddrs, naddrs, addr);
-	cg->continues.len -= cskip * sizeof(uint);
+	cg->continues.len -= naddrs * sizeof(uint);
 }
 
 
