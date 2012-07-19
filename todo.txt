@@ -9,7 +9,6 @@ PML
  + Add "standard include path/files"
  + More test cases (control flow especially)
  * command line arguments to programs
- * Optimize binary operations with at least one constant operand.
  * random() intrinsic
  * Add exit() intrinsic.
  > Hash table support

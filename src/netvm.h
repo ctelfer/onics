@@ -498,6 +498,10 @@ enum {
 };
 
 
+#define NETVM_OP_CANSWAP(_oc) \
+	(((_oc) >= NETVM_OC_ADD) && ((_oc) <= NETVM_OC_UMAXI))
+
+
 #define NETVM_IADDR(w)  ((uint32_t)(w))
 #define NETVM_BRF(w)    ((uint32_t)(w))
 #define NETVM_BRB(w)    (-(uint32_t)(w))

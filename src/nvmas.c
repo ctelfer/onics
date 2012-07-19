@@ -550,6 +550,8 @@ int str2inst(const char *s, struct htab *ct, uint inum, struct netvm_inst *ni)
 	if (argswap && ((argmask & ASWAP) == 0))
 		err("opcode '%s' can not be swapped\n");
 
+	abort_unless(argswap == 0 || NETVM_OP_CANSWAP(op->opcode));
+
 	ni->x = argswap;
 	ni->y = ni->z = ni->w = 0;
 	ni->op = op->opcode;
@@ -650,6 +652,7 @@ int inst2str(const struct netvm_inst *ni, char *s, size_t len, uint inum)
 	if (((argmask & ARGW) == 0) && ni->w) ++nnz;
 
 	if (((argmask & ASWAP) != 0) && ni->x && (nnz == 1)) {
+		abort_unless(NETVM_OP_CANSWAP(op->opcode));
 		str_copy(swname, op->iname, sizeof(swname));
 		str_cat(swname, "%", sizeof(swname));
 		iname = swname;

@@ -36,6 +36,8 @@
 	 (((uint64_t)(_s) & NETVM_SEG_SEGMASK) << NETVM_UA_SEG_OFF))
 #define PKTADDR(_a, _p) MEMADDR(_a, ((_p) | NETVM_SEG_ISPKT))
 
+#define SCALAROP(_op) (((_op) >= PMLOP_EQ) && ((_op) <= PMLOP_NEG))
+
 /* some forward declarations of commonly needed functions */
 static int val64(struct pmlncg *cg, union pml_node *n, uint64_t *v);
 static int cg_expr(struct pmlncg *cg, union pml_node *n, int etype);
@@ -1111,6 +1113,104 @@ static int cg_op(struct pmlncg *cg, struct pml_op *op, struct cgestk *es)
 }
 
 
+/* 
+ * generate code for a scalar binary operation where one of the
+ * operands is a constant.  If the constant is sufficiently small
+ * (i.e. fits in 'w') we can emit less code this way.
+ */
+static int cg_scalar_binop(struct pmlncg *cg, struct pml_op *op)
+{
+	int doswap = 0;
+	int argright = 0;
+	int rv;
+	uint64_t v;
+
+	if (!PML_EXPR_IS_LITERAL(op->arg1) && !PML_EXPR_IS_LITERAL(op->arg2))
+		return 0;
+
+	if (PML_EXPR_IS_LITERAL(op->arg2)) {
+		if (val64(cg, (union pml_node *)op->arg2, &v) < 0)
+			return -1;
+		if (v <= 0xFFFFFFFF) {
+			argright = 1;
+			doswap = 0;
+		}
+	}
+
+	if (!argright && PML_EXPR_IS_LITERAL(op->arg1)) {
+		if (val64(cg, (union pml_node *)op->arg1, &v) < 0)
+			return -1;
+		if (v <= 0xFFFFFFFF)
+			doswap = 1;
+		else
+			return 0;
+	}
+
+	/* if we get here we have one of the values: emit code for the other */
+	rv = cg_expr(cg, (union pml_node *)(argright ? op->arg1 : op->arg2),
+		     PML_ETYPE_SCALAR);
+	if (rv < 0)
+		return -1;
+	
+	
+	switch(op->op) {
+	case PMLOP_EQ:
+		EMIT_XW(cg, EQI, doswap, v);
+		break;
+	case PMLOP_NEQ:
+		EMIT_XW(cg, NEQI, doswap, v);
+		break;
+	case PMLOP_LT:
+		EMIT_XW(cg, LTI, doswap, v);
+		break;
+	case PMLOP_GT:
+		EMIT_XW(cg, GTI, doswap, v);
+		break;
+	case PMLOP_LEQ:
+		EMIT_XW(cg, LEI, doswap, v);
+		break;
+	case PMLOP_GEQ:
+		EMIT_XW(cg, GEI, doswap, v);
+		break;
+	case PMLOP_BOR:
+		EMIT_XW(cg, ORI, doswap, v);
+		break;
+	case PMLOP_BXOR:
+		EMIT_XW(cg, XORI, doswap, v);
+		break;
+	case PMLOP_BAND:
+		EMIT_XW(cg, ANDI, doswap, v);
+		break;
+	case PMLOP_PLUS:
+		EMIT_XW(cg, ADDI, doswap, v);
+		break;
+	case PMLOP_MINUS:
+		EMIT_XW(cg, SUBI, doswap, v);
+		break;
+	case PMLOP_TIMES:
+		EMIT_XW(cg, MULI, doswap, v);
+		break;
+	case PMLOP_DIV:
+		EMIT_XW(cg, DIVI, doswap, v);
+		break;
+	case PMLOP_MOD:
+		EMIT_XW(cg, MODI, doswap, v);
+		break;
+	case PMLOP_SHL:
+		EMIT_XW(cg, SHLI, doswap, v);
+		break;
+	case PMLOP_SHR:
+		EMIT_XW(cg, SHRI, doswap, v);
+		break;
+	default:
+		abort_unless(0);
+	}
+
+	/* return 1 to indicate we need do no more on this node */
+	return 1;
+}
+
+
 STATIC_BUG_ON(UINTMAX_LE_2_to_32, UINT_MAX > 0xFFFFFFFF);
 static int cg_call(struct pmlncg *cg, struct pml_call *c, int etype)
 {
@@ -1995,6 +2095,7 @@ static int w_expr_pre(union pml_node *n, void *auxp, void *xstk)
 	struct cgeaux *ea = auxp;
 	struct cgestk *es = xstk;
 	struct pml_op *op;
+	int rv;
 
 	/* save the expected type */
 	es->etype = ea->etype;
@@ -2019,8 +2120,12 @@ static int w_expr_pre(union pml_node *n, void *auxp, void *xstk)
 			break;
 
 		default:
-			/* coerce non-mask expressions to scalars */
 			ea->etype = PML_ETYPE_SCALAR;
+			if (SCALAROP(op->op)) {
+				rv = cg_scalar_binop(ea->cg, op);
+				if (rv)
+					return rv;
+			}
 			break;
 		}
 		break;
