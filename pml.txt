@@ -42,23 +42,24 @@ meaning no value.  It supports global and local variables.  Global
 variables can have a type of byte string or scalar.  Local variables
 (and function parameters which are a type of local variable) can only be
 scalar values.  Masked byte strings and regular expressions are only
-available as literal constants currently.  PML also supports a constant
-type.  This is a symbolic name for a constant value.  A program can not
-modify its value and it may not have any associated memory space.  These
-values are used like #defines in the C language.  A program can define
-these constant symbols to PML expressions as long as the expression
-itself is constant and the compiler can determine its final value at
-compile time.  Thus a program can define a constant in terms of
-operations on other constants.
+available as literal constants currently.  
+
+PML also supports named constant expressions.  A program can not
+modify a constant value and said value may not have any associated 
+memory space in the final program.  These values are used like #defines 
+in the C language.  A program can define these constant symbols to PML 
+expressions as long as the expression itself is constant and the compiler 
+can determine its final value at compile time.  Thus a program can define 
+a constant in terms of operations on other constants.
 
 PML supports two types of functions both of which take a fixed number of
 scalar parameters.  A regular function can return a scalar value or a void value
-(meaning no return type).  A regular function executes a list of
-statements and can be recursive (TODO: support this in parsing).  An inline
-function contains only a single scalar expression and can not be
-recursive.  One use of inline functions is as safe macros.  The
-compiler can even use constant propagation to determine their result at
-compile time provided the parameters to the function are themselves
+(meaning no return type).  A regular function executes a list of statements 
+and can be recursive or mutually recursive with another regular function.  
+An inline function contains only a single scalar expression and can not be
+recursive.  One use of an inline function is as a safe macro.  The
+compiler can even use constant propagation to determine its result at
+compile time provided every parameter to the inline function is
 constant.  Inline functions can invoke other inline functions but again,
 can not recurse directly or indirectly.  (An inline function that
 invokes a regular function that invokes the inline function does not recurse,
@@ -66,7 +67,10 @@ the regular function does.)
 
 
 
-Locators:
+Locators are the 'r-' and 'l-'values of the language.  They represent a way
+to extract a value from some location.  This may be a simple variable
+reference or may be a matter of extracting bits from a named packet field.
+The forms of locators are:
 
   name		-- could be: variable, constant, packet field,
 		   protocol name, protocol constant
@@ -94,50 +98,33 @@ Locators:
 	  declared and local vars are not.
 
   Types:
-   - scalar, byte string, mask string
+   - scalar, byte string, mask string, regular expressions, void
 
   Value types:
    local variable    -> scalar
    parameter	     -> scalar
    global variable   -> scalar if size unspecified, byte string otherwise
 		        can always be accessed as a byte string?
-   constant          -> any
-   protocol constant -> any
+   constant          -> scalar, byte string, mask string
+   protocol constant -> scalar, byte string, mask string
    protocol name     -> scalar when no offset/length:  boolean indicating
 			presence of the header
 	 	        byte string when offset length (protocol header)
-   packet field	     -> if bitfields then scalar
-			otherwise byte string
+   packet field	     -> if bitfields then scalar otherwise byte string
    operator result   -> scalar
    inline return     -> scalar
-   function return   -> scalar
+   function return   -> scalar | void
 
 
   
   
-
-
-Codegen issues:
- - inline operations may be more efficient if expanded at each instance
-   * but more annoying to codegen
- - We need a stack of function, rule and  loop pointers control flow
-   statements like nextpkt, break, return, etc...
-
-Self reference issues:
-  - e.g. var g[10] = g[1,2];
-  - prevented since g[1,2] is not a constant expression.
-
-Constant bytestrings:
-  - consider optimization for byte strings < 8 bytes.
-
-
 
 Byte strings:
-  - constant variables can refer to byte strings or mask values
-  - expressions can refer to byte strings or mask values
-  - constant expressions can have constant offsets/lengths into constants.
+  - Named constants can refer to byte strings or mask values
+  - Expressions can refer to byte strings or mask values
+  - Constant expressions can have constant offsets/lengths into constants.
     * optimization replaces these with a new literal byte string/mask value.
-  - global variables can have a byte string or mask value initializer
+  - Global variables can have a byte string or mask value initializer
   - We need read-only space for constant byte strings/mask values that
     the rules and functions refer to.
   - We need global variables initialized by constant byte strings/mask values
@@ -189,7 +176,7 @@ Locators (rhs):
   - Global variables (must not have pkt, idx)
 
 
-Maybe do the following.  Each type has a representation on the stack.
+Each type has a representation on the stack.
   - scalars = 64-bit value 
   - byte strings = 64 bit len then 64-bit UA
   - mask strings = 64 bit len, 64 bit mask addr (UA), 64-bit val addr (UA)

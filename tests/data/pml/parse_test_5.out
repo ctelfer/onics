@@ -251,7 +251,7 @@ Begin Rule
       Loop Test -- 
          Binary Operation: 'less than' [[]; width=8]
          Left Operand -- 
-            Locator: packet field(i) [[]; width=8]
+            Locator: variable(i) [[]; width=8]
             Variable -- 
                Variable: i [local; width=8, addr=0]
          Right Operand -- 
@@ -263,7 +263,7 @@ Begin Rule
          Test -- 
             Binary Operation: 'equals' [[]; width=8]
             Left Operand -- 
-               Locator: packet field(i) [[]; width=8]
+               Locator: variable(i) [[]; width=8]
                Variable -- 
                   Variable: i [local; width=8, addr=0]
             Right Operand -- 
@@ -278,7 +278,7 @@ Begin Rule
          Test -- 
             Binary Operation: 'equals' [[]; width=8]
             Left Operand -- 
-               Locator: packet field(i) [[]; width=8]
+               Locator: variable(i) [[]; width=8]
                Variable -- 
                   Variable: i [local; width=8, addr=0]
             Right Operand -- 
@@ -304,7 +304,7 @@ Packet Rules
       -----
    Rule: (packet)
    Pattern -- 
-      Locator: proto const(ip) [[]; width=8]
+      Locator: packet field(ip) [[]; width=8]
       Reserved packet field (exists)
    Action Variables -- 
       Variable: i [local; width=8, addr=0]
@@ -318,7 +318,7 @@ Packet Rules
       -----
       Assignment to x
       Value -- 
-         Locator: proto const(tcp) [[]; width=8]
+         Locator: packet field(tcp) [[]; width=8]
          Reserved packet field (exists)
          Packet -- 
             Scalar [[c]; width=8] -- width 8: 0 (0,0x0)
@@ -339,7 +339,7 @@ Packet Rules
       -----
    Rule: (packet)
    Pattern -- 
-      Locator: proto const(ip) [[]; width=8]
+      Locator: packet field(ip) [[]; width=8]
       Reserved packet field (exists)
    Action Variables -- 
       Variable: i [local; width=8, addr=0]
@@ -353,7 +353,7 @@ Packet Rules
       -----
       Assignment to x
       Value -- 
-         Locator: proto const(tcp) [[]; width=8]
+         Locator: packet field(tcp) [[]; width=8]
          Reserved packet field (exists)
          Packet -- 
             Scalar [[c]; width=8] -- width 8: 0 (0,0x0)
@@ -378,7 +378,7 @@ Packet Rules
       -----
    Rule: (packet)
    Pattern -- 
-      Locator: proto const(ip) [[]; width=8]
+      Locator: packet field(ip) [[]; width=8]
       Reserved packet field (exists)
    Action Variables -- 
       Variable: i [local; width=8, addr=0]
@@ -392,12 +392,12 @@ Packet Rules
       -----
       Assignment to x
       Value -- 
-         Locator: proto const(tcp) [[]; width=8]
+         Locator: packet field(tcp) [[]; width=8]
          Reserved packet field (exists)
          Packet -- 
             Scalar [[c]; width=8] -- width 8: 0 (0,0x0)
          Header Index -- 
-            Locator: packet field(i) [[]; width=8]
+            Locator: variable(i) [[]; width=8]
             Variable -- 
                Variable: i [local; width=8, addr=0]
       -----
@@ -421,7 +421,7 @@ Packet Rules
       -----
    Rule: (packet)
    Pattern -- 
-      Locator: proto const(ip) [[]; width=8]
+      Locator: packet field(ip) [[]; width=8]
       Reserved packet field (exists)
    Action Variables -- 
       Variable: i [local; width=8, addr=0]
@@ -436,12 +436,12 @@ Packet Rules
       Test -- 
          Binary Operation: 'logical AND' [[]; width=8]
          Left Operand -- 
-            Locator: proto const(tcp) [[]; width=8]
+            Locator: packet field(tcp) [[]; width=8]
             Reserved packet field (exists)
             Packet -- 
                Scalar [[c]; width=8] -- width 8: 0 (0,0x0)
             Header Index -- 
-               Locator: packet field(i) [[]; width=8]
+               Locator: variable(i) [[]; width=8]
                Variable -- 
                   Variable: i [local; width=8, addr=0]
          Right Operand -- 

@@ -229,7 +229,7 @@ Functions
       Test -- 
          Binary Operation: 'less than' [[]; width=8]
          Left Operand -- 
-            Locator: packet field(x) [[]; width=8]
+            Locator: variable(x) [[]; width=8]
             Variable -- 
                Variable: x [param; width=8, addr=0]
          Right Operand -- 
@@ -250,7 +250,7 @@ Functions
                -----
                Binary Operation: 'subtract' [[]; width=8]
                Left Operand -- 
-                  Locator: packet field(x) [[]; width=8]
+                  Locator: variable(x) [[]; width=8]
                   Variable -- 
                      Variable: x [param; width=8, addr=0]
                Right Operand -- 
@@ -263,7 +263,7 @@ Functions
                -----
                Binary Operation: 'subtract' [[]; width=8]
                Left Operand -- 
-                  Locator: packet field(x) [[]; width=8]
+                  Locator: variable(x) [[]; width=8]
                   Variable -- 
                      Variable: x [param; width=8, addr=0]
                Right Operand -- 
@@ -280,7 +280,7 @@ Functions
       Test -- 
          Binary Operation: 'less than' [[]; width=8]
          Left Operand -- 
-            Locator: packet field(x) [[]; width=8]
+            Locator: variable(x) [[]; width=8]
             Variable -- 
                Variable: x [param; width=8, addr=0]
          Right Operand -- 
@@ -299,7 +299,7 @@ Functions
             Arguments -- 
                List:
                -----
-               Locator: packet field(x) [[]; width=8]
+               Locator: variable(x) [[]; width=8]
                Variable -- 
                   Variable: x [param; width=8, addr=0]
                -----
@@ -308,7 +308,7 @@ Functions
             Arguments -- 
                List:
                -----
-               Locator: packet field(x) [[]; width=8]
+               Locator: variable(x) [[]; width=8]
                Variable -- 
                   Variable: x [param; width=8, addr=0]
                -----
@@ -326,7 +326,7 @@ Functions
             -----
             Binary Operation: 'subtract' [[]; width=8]
             Left Operand -- 
-               Locator: packet field(x) [[]; width=8]
+               Locator: variable(x) [[]; width=8]
                Variable -- 
                   Variable: x [param; width=8, addr=0]
             Right Operand -- 
@@ -346,7 +346,7 @@ Functions
             -----
             Binary Operation: 'subtract' [[]; width=8]
             Left Operand -- 
-               Locator: packet field(x) [[]; width=8]
+               Locator: variable(x) [[]; width=8]
                Variable -- 
                   Variable: x [param; width=8, addr=0]
             Right Operand -- 

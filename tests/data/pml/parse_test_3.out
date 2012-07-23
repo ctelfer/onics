@@ -270,11 +270,11 @@ Functions
    Body -- 
       Binary Operation: 'multiply' [[p]; width=8]
       Left Operand -- 
-         Locator: packet field(x) [[p]; width=8]
+         Locator: variable(x) [[p]; width=8]
          Variable -- 
             Variable: x [param; width=8, addr=0]
       Right Operand -- 
-         Locator: packet field(x) [[p]; width=8]
+         Locator: variable(x) [[p]; width=8]
          Variable -- 
             Variable: x [param; width=8, addr=0]
    Function[inline, pconst]: wierd() -- 2 args, 0 vars, return type=scalar
@@ -284,13 +284,13 @@ Functions
    Body -- 
       Binary Operation: 'add' [[p]; width=8]
       Left Operand -- 
-         Locator: packet field(i) [[p]; width=8]
+         Locator: variable(i) [[p]; width=8]
          Variable -- 
             Variable: i [param; width=8, addr=0]
       Right Operand -- 
          Unary Operation: 'negative' [[p]; width=8]
          Operand -- 
-            Locator: packet field(j) [[p]; width=8]
+            Locator: variable(j) [[p]; width=8]
             Variable -- 
                Variable: j [param; width=8, addr=1]
 -----------

@@ -1900,8 +1900,7 @@ static int cg_pfbytefield(struct pmlncg *cg, struct pml_locator *loc, int etype)
 	}
 
 
-	if (etype == PML_ETYPE_SCALAR && fixedlen &&
-	    cgpd.field <= NETVM_PPD_FLD_MASK) {
+	if (etype == PML_ETYPE_SCALAR && fixedlen) {
 		if (len > 8)
 			len = 8;
 		cgpd_init2(&cgpd, NETVM_OC_LDPD, len, loc);
@@ -1912,12 +1911,10 @@ static int cg_pfbytefield(struct pmlncg *cg, struct pml_locator *loc, int etype)
 			return -1;
 		if (cg_loclen(cg, loc) < 0)
 			return -1;
+		if (etype == PML_ETYPE_SCALAR)
+			EMIT_NULL(cg, LD);
+		return 0;
 	}
-
-	if (etype == PML_ETYPE_SCALAR)
-		EMIT_NULL(cg, LD);
-
-	return 0;
 }
 
 

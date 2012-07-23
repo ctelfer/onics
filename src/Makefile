@@ -85,7 +85,7 @@ ${BINDIR}/pml:   pml_main.c protoparse.o stdproto.o util.o pktbuf.o netvm.o \
 		${DEFS} ${OPTS} ${INCS} ${LIBS}
 
 
-.c.o: $<
+.c.o:
 	${CC} -c $< -o $@ ${DEFS} ${INCS} ${OPTS}
 
 lex.pml.c: pml.l pml.h

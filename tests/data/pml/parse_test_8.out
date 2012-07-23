@@ -234,18 +234,18 @@ Packet Rules
          Left Operand -- 
             Binary Operation: 'equals' [[]; width=8]
             Left Operand -- 
-               Locator: proto const(tcp.plen) [[]; width=8]
+               Locator: packet field(tcp.plen) [[]; width=8]
                Reserved packet field (plen)
             Right Operand -- 
-               Locator: proto const(ip.hlen) [[]; width=8]
+               Locator: packet field(ip.hlen) [[]; width=8]
                Reserved packet field (hlen)
          Right Operand -- 
             Binary Operation: 'subtract' [[]; width=8]
             Left Operand -- 
-               Locator: proto const(udp.plen) [[]; width=8]
+               Locator: packet field(udp.plen) [[]; width=8]
                Reserved packet field (plen)
             Right Operand -- 
-               Locator: proto const(tcp.tlen) [[]; width=8]
+               Locator: packet field(tcp.tlen) [[]; width=8]
                Reserved packet field (tlen)
       Right Operand -- 
          Binary Operation: 'modulus' [[]; width=8]
@@ -254,36 +254,36 @@ Packet Rules
             Left Operand -- 
                Binary Operation: 'divide' [[]; width=8]
                Left Operand -- 
-                  Locator: proto const(ip6.error) [[]; width=8]
+                  Locator: packet field(ip6.error) [[]; width=8]
                   Reserved packet field (error)
                Right Operand -- 
-                  Locator: proto const(ip.prid) [[]; width=8]
+                  Locator: packet field(ip.prid) [[]; width=8]
                   Reserved packet field (prid)
             Right Operand -- 
                Binary Operation: 'shift right' [[]; width=8]
                Left Operand -- 
-                  Locator: proto const(icmp.index) [[]; width=8]
+                  Locator: packet field(icmp.index) [[]; width=8]
                   Reserved packet field (index)
                Right Operand -- 
-                  Locator: proto const(icmp.header) [[v]; width=0]
+                  Locator: packet field(icmp.header) [[v]; width=0]
                   Reserved packet field (header)
          Right Operand -- 
             Binary Operation: 'binary AND' [[]; width=8]
             Left Operand -- 
                Binary Operation: 'binary XOR' [[]; width=8]
                Left Operand -- 
-                  Locator: proto const(icmp6.payload) [[v]; width=0]
+                  Locator: packet field(icmp6.payload) [[v]; width=0]
                   Reserved packet field (payload)
                Right Operand -- 
-                  Locator: proto const(tcp.trailer) [[v]; width=0]
+                  Locator: packet field(tcp.trailer) [[v]; width=0]
                   Reserved packet field (trailer)
             Right Operand -- 
                Binary Operation: 'binary OR' [[]; width=8]
                Left Operand -- 
-                  Locator: proto const(ip.df) [[]; width=8]
+                  Locator: packet field(ip.df) [[]; width=8]
                   Packet field
                Right Operand -- 
-                  Locator: proto const(tcp.syn) [[]; width=8]
+                  Locator: packet field(tcp.syn) [[]; width=8]
                   Packet field
    Action Variables -- 
    Action -- 

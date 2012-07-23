@@ -242,7 +242,7 @@ Packet Rules
 -----------
    Rule: (packet)
    Pattern -- 
-      Locator: proto const(tcp) [[]; width=8]
+      Locator: packet field(tcp) [[]; width=8]
       Reserved packet field (exists)
    Action Variables -- 
    Action -- 
@@ -256,14 +256,14 @@ Packet Rules
       -----
       Print Statement: type: signed decimal, width:0, flags:[]
       Expression -- 
-         Locator: proto const(tcp.rst) [[]; width=8]
+         Locator: packet field(tcp.rst) [[]; width=8]
          Packet field
       -----
       Assignment to Numpkts
       Value -- 
          Binary Operation: 'add' [[]; width=8]
          Left Operand -- 
-            Locator: packet field(Numpkts) [[]; width=8]
+            Locator: variable(Numpkts) [[]; width=8]
             Variable -- 
                Variable: Numpkts [global; width=8, addr=0]
                   Initialization value -- 
@@ -290,7 +290,7 @@ End Rule
       -----
       Print Statement: type: signed decimal, width:0, flags:[]
       Expression -- 
-         Locator: packet field(Numpkts) [[]; width=8]
+         Locator: variable(Numpkts) [[]; width=8]
          Variable -- 
             Variable: Numpkts [global; width=8, addr=0]
                Initialization value -- 

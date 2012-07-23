@@ -1284,8 +1284,8 @@ static const char *vts(struct pml_variable *v)
 
 
 static const char *rtype_strs[] = {
-	"unknown", "variable", "packet field", "proto const",
-	"unknown namespace elem"
+	"unknown", "unknown namespace element", "variable",
+	"packet field", "proto const",
 };
 static const char *rts(struct pml_locator *l)
 {
@@ -1427,10 +1427,10 @@ void pmlt_print(struct pml_ast *ast, union pml_node *np, uint depth)
 	case PMLTT_SCALAR: {
 		struct pml_literal *p = &np->literal;
 		indent(depth);
-		printf("Scalar %s -- width %d: %ld (%lu,0x%lx)\n",
+		printf("Scalar %s -- width %d: %lld (%llu,0x%llx)\n",
 		       efs(p, estr), (unsigned)p->width, 
-		       (long)p->u.scalar, (ulong)p->u.scalar,
-		       (long)p->u.scalar);
+		       (long long)p->u.scalar, (ullong)p->u.scalar,
+		       (ullong)p->u.scalar);
 	} break;
 
 	case PMLTT_BYTESTR: {

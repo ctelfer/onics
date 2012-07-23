@@ -115,7 +115,7 @@ int main(int argc, char *argv[])
 	E(ns_add_elem(&tcpports, (struct ns_elem *)&sshport));
 	E(!(e = ns_lookup(NULL, "tcp")));
 	if (e->type != NST_NAMESPACE)
-		error("\"tcp\" namespace isn't a namespace type: %d", e->type);
+		err("\"tcp\" namespace isn't a namespace type: %d", e->type);
 	E(ns_add_elem((struct ns_namespace *)e, (struct ns_elem *)&tcpports));
 
 

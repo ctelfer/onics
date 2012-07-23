@@ -684,7 +684,7 @@ struct pml_lex_val {
 	union {
 		byte_t v6addr[16];
 		byte_t ethaddr[6];
-		unsigned long num;
+		uint64_t num;
 		byte_t v4addr[4];
 		struct raw raw;
 	} u;

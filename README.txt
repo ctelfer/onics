@@ -25,8 +25,11 @@ To build:
      3) Change to the onics directory and type
        make
 
-  The tool binaries as well as some test programs (named test*) are now
-  in onics/bin.
+  This will:
+   * build the tools
+   * build test programs (under tests/bin)
+   * run regression tests
+   * the tools themselves go in bin/
 
 Examples:
 
@@ -79,7 +82,6 @@ Examples:
 
 
   # Print an error for every TCP packet that has evil in it.
-  # Note the '\' is for the shell: it is not part of PML
   pcapin -i IFACE1 | 
     pml -e '
       var n = 0;
@@ -203,13 +205,14 @@ shell scripts using these tools for common tasks.
     pktrel - a program to release packets according to a traffic
         specification for delay, loss, jitter, throughput, etc.. (unfinished)
 
-    pktdiff - a program to compare packet streams or traces and emit
+    pdiff - a program to compare packet streams or traces and emit
         differences between them. (not started)
+
+    ppick - a program to select a subset of packets from a stream.  This is
+	a PML script.
 
 
 
 MORE SAMPLES
 
-   TODO
-
-   See testdata/pml/cg_test*.pml for more PML code examples.
+   See tests/data/pml/*.pml for more PML code examples.

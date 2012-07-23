@@ -248,7 +248,7 @@ Packet Rules
    Pattern -- 
       Binary Operation: 'match' [[]; width=8]
       Left Operand -- 
-         Locator: proto const(ip.saddr) [[]; width=4]
+         Locator: packet field(ip.saddr) [[]; width=4]
          Packet field
       Right Operand -- 
          Masked Pattern [[c]; width=0] 
@@ -271,7 +271,7 @@ Packet Rules
       -----
       Print Statement: type: signed decimal, width:0, flags:[]
       Expression -- 
-         Locator: packet field(x) [[]; width=8]
+         Locator: variable(x) [[]; width=8]
          Variable -- 
             Variable: x [local; width=8, addr=0]
       -----
@@ -294,7 +294,7 @@ Packet Rules
          Left Operand -- 
             Scalar [[c,p]; width=8] -- width 8: 8 (8,0x8)
          Right Operand -- 
-            Locator: proto const(tcp) [[v]; width=0]
+            Locator: packet field(tcp) [[v]; width=0]
             Reserved packet field (parse)
             Offset -- 
                Scalar [[c]; width=8] -- width 8: 5 (5,0x5)
@@ -303,7 +303,7 @@ Packet Rules
       -----
    Rule: (packet)
    Pattern -- 
-      Locator: proto const(ip) [[]; width=8]
+      Locator: packet field(ip) [[]; width=8]
       Reserved packet field (exists)
    Action Variables -- 
       Variable: a [local; width=8, addr=0]
@@ -328,11 +328,11 @@ Packet Rules
       Loop Test -- 
          Binary Operation: 'less than' [[]; width=8]
          Left Operand -- 
-            Locator: packet field(i) [[]; width=8]
+            Locator: variable(i) [[]; width=8]
             Variable -- 
                Variable: i [local; width=8, addr=1]
          Right Operand -- 
-            Locator: proto const(ip.hlen) [[]; width=8]
+            Locator: packet field(ip.hlen) [[]; width=8]
             Reserved packet field (hlen)
       Loop Body -- 
          List:
@@ -341,14 +341,14 @@ Packet Rules
          Value -- 
             Binary Operation: 'add' [[]; width=8]
             Left Operand -- 
-               Locator: packet field(csum) [[]; width=8]
+               Locator: variable(csum) [[]; width=8]
                Variable -- 
                   Variable: csum [local; width=8, addr=2]
             Right Operand -- 
-               Locator: proto const(tcp) [[v]; width=0]
+               Locator: packet field(tcp) [[v]; width=0]
                Reserved packet field (parse)
                Offset -- 
-                  Locator: packet field(i) [[]; width=8]
+                  Locator: variable(i) [[]; width=8]
                   Variable -- 
                      Variable: i [local; width=8, addr=1]
                Length -- 
@@ -358,7 +358,7 @@ Packet Rules
          Value -- 
             Binary Operation: 'add' [[]; width=8]
             Left Operand -- 
-               Locator: packet field(i) [[]; width=8]
+               Locator: variable(i) [[]; width=8]
                Variable -- 
                   Variable: i [local; width=8, addr=1]
             Right Operand -- 
@@ -369,7 +369,7 @@ Packet Rules
       Loop Test -- 
          Binary Operation: 'greater than' [[]; width=8]
          Left Operand -- 
-            Locator: packet field(csum) [[]; width=8]
+            Locator: variable(csum) [[]; width=8]
             Variable -- 
                Variable: csum [local; width=8, addr=2]
          Right Operand -- 
@@ -385,7 +385,7 @@ Packet Rules
                Left Operand -- 
                   Binary Operation: 'binary AND' [[]; width=8]
                   Left Operand -- 
-                     Locator: packet field(csum) [[]; width=8]
+                     Locator: variable(csum) [[]; width=8]
                      Variable -- 
                         Variable: csum [local; width=8, addr=2]
                   Right Operand -- 
@@ -393,7 +393,7 @@ Packet Rules
                Right Operand -- 
                   Binary Operation: 'shift right' [[]; width=8]
                   Left Operand -- 
-                     Locator: packet field(csum) [[]; width=8]
+                     Locator: variable(csum) [[]; width=8]
                      Variable -- 
                         Variable: csum [local; width=8, addr=2]
                   Right Operand -- 
@@ -410,11 +410,11 @@ Packet Rules
             Left Operand -- 
                Binary Operation: 'add' [[]; width=8]
                Left Operand -- 
-                  Locator: packet field(csum) [[]; width=8]
+                  Locator: variable(csum) [[]; width=8]
                   Variable -- 
                      Variable: csum [local; width=8, addr=2]
                Right Operand -- 
-                  Locator: proto const(ip) [[v]; width=0]
+                  Locator: packet field(ip) [[v]; width=0]
                   Reserved packet field (parse)
                   Offset -- 
                      Scalar [[c]; width=8] -- width 8: 10 (10,0xa)
@@ -455,7 +455,7 @@ Packet Rules
       Value -- 
          Binary Operation: 'match' [[]; width=8]
          Left Operand -- 
-            Locator: proto const(ip.saddr) [[]; width=4]
+            Locator: packet field(ip.saddr) [[]; width=4]
             Packet field
          Right Operand -- 
             Byte string [[c,p]; width=0] -- 
@@ -466,7 +466,7 @@ Packet Rules
       Value -- 
          Binary Operation: 'match' [[]; width=8]
          Left Operand -- 
-            Locator: proto const(ip.saddr) [[]; width=4]
+            Locator: packet field(ip.saddr) [[]; width=4]
             Packet field
          Right Operand -- 
             Masked Pattern [[c,p]; width=0] 

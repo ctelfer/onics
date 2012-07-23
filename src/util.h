@@ -64,6 +64,10 @@ void setbit(byte_t * p, ulong n, int v);
 void hexdump(FILE *out, ulong addr, byte_t *p, ulong len);
 
 
+#undef swap16
+#undef swap32
+#undef swap64
+
 #define swap16(v) ( (((uint16_t)(v) << 8) & 0xFF00) | \
 		    (((uint16_t)(v) >> 8) & 0xFF) )
 

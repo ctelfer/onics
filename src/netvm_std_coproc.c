@@ -22,6 +22,7 @@
  */
 #include <stdlib.h>
 #include <string.h>
+#include <limits.h>
 #include <cat/mem.h>
 #include <cat/emit_format.h>
 #include "netvm.h"
