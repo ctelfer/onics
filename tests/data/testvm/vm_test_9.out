@@ -1,8 +1,59 @@
-10:11:38.266721 IP 192.168.0.7.22 > 192.168.0.4.38859: Flags [P.], seq 770160473:770160513, ack 1962529759, win 362, options [nop,nop,TS val 56203525 ecr 55432305], length 40
-	0x0000:  0022 faa7 6990 0030 65c1 b3a8 0800 4500  ."..i..0e.....E.
-	0x0010:  005c 2fdc 4000 4006 8964 c0a8 0007 c0a8  .\/.@.@..d......
-	0x0020:  0004 0016 97cb 2de7 b759 74f9 d3df 8018  ......-..Yt.....
-	0x0030:  016a d68e 0000 0101 080a 0359 9905 034d  .j.........Y...M
-	0x0040:  d471 4865 6c6c 6f20 576f 726c 640a 5353  .qHello.World.SS
-	0x0050:  485f 342e 3770 3120 4465 6269 616e 2d38  H_4.7p1.Debian-8
-	0x0060:  7562 756e 7475 312e 320a                 ubuntu1.2.
+#####
+# Packet 1 -- 106 bytes
+#####
+#####
+# ETH: Ethernet II -- Offset 192, Length 106
+#####
+# ETH: Destination Address: 00:22:fa:a7:69:90
+# ETH: Source Address:      00:30:65:c1:b3:a8
+# ETH: Ethernet Type:       0800
+    000000:  00 22 fa a7 69 90 00 30 65 c1 b3 a8 08 00        |."..i..0e.....|
+#####
+# IP: Internet Protocol Version 4 -- Offset 206, Length 92
+#####
+# IP: Version:              4
+# IP: Header Length:        5 (20 bytes)
+# IP: Diffserv:             00
+# IP: ECN:                  0
+# IP: Total Length:         92 bytes
+# IP: Identifier:           2fdc
+# IP: Reserved Frag Bit:    0..
+# IP: Don't Fragment Bit:   .1.
+# IP: More Fragments Bit:   ..0
+# IP: Fragment Offset:      0 quadwords
+# IP: Time to Live:         64
+# IP: IP Protocol:          6
+# IP: Header Checksum:      8964
+# IP: Source Address:       192.168.0.7
+# IP: Destination Address:  192.168.0.4
+    00000e:  45 00 00 5c 2f dc 40 00 40 06 89 64 c0 a8 00 07  |E..\/.@.@..d....|
+    00001e:  c0 a8 00 04                                      |....|
+#####
+# TCP: Transmission Control Protocol -- Offset 226, Length 72
+#    Errors [0x8]: checksum
+#####
+# TCP: Source Port:          22
+# TCP: Destination Port:     38859
+# TCP: Sequence Number:      770160473
+# TCP: Acknowlege Number:    1962529759
+# TCP: Data Offset:          8 (32 bytes)
+# TCP: Reserved Bits:        0
+# TCP: Congest Win Reduced:  0.......
+# TCP: ECN Enabled:          .0......
+# TCP: Urgent:               ..0.....
+# TCP: Acknowledgement:      ...1....
+# TCP: Push:                 ....1...
+# TCP: Reset:                .....0..
+# TCP: Synchronize:          ......0.
+# TCP: Finalize:             .......0
+# TCP: Window:               362
+# TCP: Checksum:             d68e
+# TCP: Urgent Pointer:       0
+    000022:  00 16 97 cb 2d e7 b7 59 74 f9 d3 df 80 18 01 6a  |....-..Yt......j|
+    000032:  d6 8e 00 00 01 01 08 0a 03 59 99 05 03 4d d4 71  |.........Y...M.q|
+# TCP:  Data -- 40 bytes [66, 106]
+    000042:  48 65 6c 6c 6f 20 57 6f 72 6c 64 0a 53 53 48 5f  |Hello World.SSH_|
+    000052:  34 2e 37 70 31 20 44 65 62 69 61 6e 2d 38 75 62  |4.7p1 Debian-8ub|
+    000062:  75 6e 74 75 31 2e 32 0a                          |untu1.2.|
+
+

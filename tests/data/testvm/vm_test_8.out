@@ -1,30 +1,106 @@
-10:11:04.488768 IP 192.168.0.7.631 > 192.168.0.255.631: UDP, length 178
-	0x0000:  ffff ffff ffff 0030 65c1 b3a8 0800 4500  .......0e.....E.
-	0x0010:  00ce 0000 4000 4011 b7c8 c0a8 0007 c0a8  ....@.@.........
-	0x0020:  00ff 0277 0277 00ba dc9c 3231 3030 3620  ...w.w....21006.
-	0x0030:  3320 6970 703a 2f2f 3139 322e 3136 382e  3.ipp://192.168.
-	0x0040:  302e 373a 3633 312f 7072 696e 7465 7273  0.7:631/printers
-	0x0050:  2f50 5031 3335 3057 2022 4b69 7463 6865  /PP1350W."Kitche
-	0x0060:  6e22 2022 4b6f 6e69 6361 204d 696e 6f6c  n"."Konica.Minol
-	0x0070:  7461 2050 7269 6e74 6572 2220 224d 696e  ta.Printer"."Min
-	0x0080:  6f6c 7461 2050 6167 6550 726f 2031 3335  olta.PagePro.135
-	0x0090:  3057 2046 6f6f 6d61 7469 632f 6d69 6e31  0W.Foomatic/min1
-	0x00a0:  3278 7877 2028 7265 636f 6d6d 656e 6465  2xxw.(recommende
-	0x00b0:  6429 2220 6a6f 622d 7368 6565 7473 3d6e  d)".job-sheets=n
-	0x00c0:  6f6e 652c 6e6f 6e65 206c 6561 7365 2d64  one,none.lease-d
-	0x00d0:  7572 6174 696f 6e3d 3330 300a            uration=300.
-10:11:04.488768 IP 192.168.0.7.631 > 192.168.0.255.631: UDP, length 178
-	0x0000:  ffff ffff ffff 0030 65c1 b3a8 0800 4500  .......0e.....E.
-	0x0010:  00ce 0000 4000 4011 b7c8 c0a8 0007 c0a8  ....@.@.........
-	0x0020:  00ff 0277 0277 00ba dc9c 3231 3030 3620  ...w.w....21006.
-	0x0030:  3320 6970 703a 2f2f 3139 322e 3136 382e  3.ipp://192.168.
-	0x0040:  302e 373a 3633 312f 7072 696e 7465 7273  0.7:631/printers
-	0x0050:  2f50 5031 3335 3057 2022 4b69 7463 6865  /PP1350W."Kitche
-	0x0060:  6e22 2022 4b6f 6e69 6361 204d 696e 6f6c  n"."Konica.Minol
-	0x0070:  7461 2050 7269 6e74 6572 2220 224d 696e  ta.Printer"."Min
-	0x0080:  6f6c 7461 2050 6167 6550 726f 2031 3335  olta.PagePro.135
-	0x0090:  3057 2046 6f6f 6d61 7469 632f 6d69 6e31  0W.Foomatic/min1
-	0x00a0:  3278 7877 2028 7265 636f 6d6d 656e 6465  2xxw.(recommende
-	0x00b0:  6429 2220 6a6f 622d 7368 6565 7473 3d6e  d)".job-sheets=n
-	0x00c0:  6f6e 652c 6e6f 6e65 206c 6561 7365 2d64  one,none.lease-d
-	0x00d0:  7572 6174 696f 6e3d 3330 300a            uration=300.
+#####
+# Packet 1 -- 220 bytes
+#####
+#####
+# ETH: Ethernet II -- Offset 192, Length 220
+#####
+# ETH: Destination Address: ff:ff:ff:ff:ff:ff
+# ETH: Source Address:      00:30:65:c1:b3:a8
+# ETH: Ethernet Type:       0800
+    000000:  ff ff ff ff ff ff 00 30 65 c1 b3 a8 08 00        |.......0e.....|
+#####
+# IP: Internet Protocol Version 4 -- Offset 206, Length 206
+#####
+# IP: Version:              4
+# IP: Header Length:        5 (20 bytes)
+# IP: Diffserv:             00
+# IP: ECN:                  0
+# IP: Total Length:         206 bytes
+# IP: Identifier:           0
+# IP: Reserved Frag Bit:    0..
+# IP: Don't Fragment Bit:   .1.
+# IP: More Fragments Bit:   ..0
+# IP: Fragment Offset:      0 quadwords
+# IP: Time to Live:         64
+# IP: IP Protocol:          17
+# IP: Header Checksum:      b7c8
+# IP: Source Address:       192.168.0.7
+# IP: Destination Address:  192.168.0.255
+    00000e:  45 00 00 ce 00 00 40 00 40 11 b7 c8 c0 a8 00 07  |E.....@.@.......|
+    00001e:  c0 a8 00 ff                                      |....|
+#####
+# UDP: User Datagram Protocol -- Offset 226, Length 186
+#####
+# UDP: Source Port:          631
+# UDP: Destination Port:     631
+# UDP: Length:               186
+# UDP: Checksum:             dc9c
+    000022:  02 77 02 77 00 ba dc 9c                          |.w.w....|
+# UDP:  Data -- 178 bytes [42, 220]
+    00002a:  32 31 30 30 36 20 33 20 69 70 70 3a 2f 2f 31 39  |21006 3 ipp://19|
+    00003a:  32 2e 31 36 38 2e 30 2e 37 3a 36 33 31 2f 70 72  |2.168.0.7:631/pr|
+    00004a:  69 6e 74 65 72 73 2f 50 50 31 33 35 30 57 20 22  |inters/PP1350W "|
+    00005a:  4b 69 74 63 68 65 6e 22 20 22 4b 6f 6e 69 63 61  |Kitchen" "Konica|
+    00006a:  20 4d 69 6e 6f 6c 74 61 20 50 72 69 6e 74 65 72  | Minolta Printer|
+    00007a:  22 20 22 4d 69 6e 6f 6c 74 61 20 50 61 67 65 50  |" "Minolta PageP|
+    00008a:  72 6f 20 31 33 35 30 57 20 46 6f 6f 6d 61 74 69  |ro 1350W Foomati|
+    00009a:  63 2f 6d 69 6e 31 32 78 78 77 20 28 72 65 63 6f  |c/min12xxw (reco|
+    0000aa:  6d 6d 65 6e 64 65 64 29 22 20 6a 6f 62 2d 73 68  |mmended)" job-sh|
+    0000ba:  65 65 74 73 3d 6e 6f 6e 65 2c 6e 6f 6e 65 20 6c  |eets=none,none l|
+    0000ca:  65 61 73 65 2d 64 75 72 61 74 69 6f 6e 3d 33 30  |ease-duration=30|
+    0000da:  30 0a                                            |0.|
+
+
+#####
+# Packet 2 -- 220 bytes
+#####
+#####
+# ETH: Ethernet II -- Offset 192, Length 220
+#####
+# ETH: Destination Address: ff:ff:ff:ff:ff:ff
+# ETH: Source Address:      00:30:65:c1:b3:a8
+# ETH: Ethernet Type:       0800
+    000000:  ff ff ff ff ff ff 00 30 65 c1 b3 a8 08 00        |.......0e.....|
+#####
+# IP: Internet Protocol Version 4 -- Offset 206, Length 206
+#####
+# IP: Version:              4
+# IP: Header Length:        5 (20 bytes)
+# IP: Diffserv:             00
+# IP: ECN:                  0
+# IP: Total Length:         206 bytes
+# IP: Identifier:           0
+# IP: Reserved Frag Bit:    0..
+# IP: Don't Fragment Bit:   .1.
+# IP: More Fragments Bit:   ..0
+# IP: Fragment Offset:      0 quadwords
+# IP: Time to Live:         64
+# IP: IP Protocol:          17
+# IP: Header Checksum:      b7c8
+# IP: Source Address:       192.168.0.7
+# IP: Destination Address:  192.168.0.255
+    00000e:  45 00 00 ce 00 00 40 00 40 11 b7 c8 c0 a8 00 07  |E.....@.@.......|
+    00001e:  c0 a8 00 ff                                      |....|
+#####
+# UDP: User Datagram Protocol -- Offset 226, Length 186
+#####
+# UDP: Source Port:          631
+# UDP: Destination Port:     631
+# UDP: Length:               186
+# UDP: Checksum:             dc9c
+    000022:  02 77 02 77 00 ba dc 9c                          |.w.w....|
+# UDP:  Data -- 178 bytes [42, 220]
+    00002a:  32 31 30 30 36 20 33 20 69 70 70 3a 2f 2f 31 39  |21006 3 ipp://19|
+    00003a:  32 2e 31 36 38 2e 30 2e 37 3a 36 33 31 2f 70 72  |2.168.0.7:631/pr|
+    00004a:  69 6e 74 65 72 73 2f 50 50 31 33 35 30 57 20 22  |inters/PP1350W "|
+    00005a:  4b 69 74 63 68 65 6e 22 20 22 4b 6f 6e 69 63 61  |Kitchen" "Konica|
+    00006a:  20 4d 69 6e 6f 6c 74 61 20 50 72 69 6e 74 65 72  | Minolta Printer|
+    00007a:  22 20 22 4d 69 6e 6f 6c 74 61 20 50 61 67 65 50  |" "Minolta PageP|
+    00008a:  72 6f 20 31 33 35 30 57 20 46 6f 6f 6d 61 74 69  |ro 1350W Foomati|
+    00009a:  63 2f 6d 69 6e 31 32 78 78 77 20 28 72 65 63 6f  |c/min12xxw (reco|
+    0000aa:  6d 6d 65 6e 64 65 64 29 22 20 6a 6f 62 2d 73 68  |mmended)" job-sh|
+    0000ba:  65 65 74 73 3d 6e 6f 6e 65 2c 6e 6f 6e 65 20 6c  |eets=none,none l|
+    0000ca:  65 61 73 65 2d 64 75 72 61 74 69 6f 6e 3d 33 30  |ease-duration=30|
+    0000da:  30 0a                                            |0.|
+
+
