@@ -50,7 +50,7 @@ echo
 
 echo ---------------------
 echo VM Test 3: Fix all checksums
-bin/testvm -p 3 < data/modified2> $TOUT/vm_test_3.err1 | 
+bin/testvm -p 3 < data/modified.xpkt 2> $TOUT/vm_test_3.err1 | 
 	$OBIN/x2hpkt > $TOUT/vm_test_3.out 2> $TOUT/vm_test_3.err2
 check_output 3
 echo ---------------------

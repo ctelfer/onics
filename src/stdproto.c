@@ -2123,7 +2123,7 @@ static struct ns_pktfld icmp_ns_ptr =
 		"Pointer:              %lu", &ns_fmt_num);
 static struct ns_pktfld icmp_ns_gateway =
 	NS_BYTEFIELD_I("gw", &icmp_ns, PRID_ICMP, 4, 4,
-		"Gateway:              %lu", &ns_fmt_ipv4a);
+		"Gateway:              %s", &ns_fmt_ipv4a);
 static struct ns_pktfld icmp_ns_unused =
 	NS_BYTEFIELD_I("unused", &icmp_ns, PRID_ICMP, 4, 4,
 		"Unused data:          %lx", &ns_fmt_num);
