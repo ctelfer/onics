@@ -10,9 +10,9 @@ check_output() {
 	for file in $VMOUT/vm_test_$1.*
 	do
 		BASE=`echo $file | sed -e 's|^.*/||g'`
-		if ! cmp $TOUT/$BASE $file
+		if ! cmp $file $TOUT/$BASE
 		then
-			echo $TOUT/$BASE and $file differ
+			echo $file and $TOUT/$BASE differ
 			echo FAILED
 			FAIL=1
 			ERR=1

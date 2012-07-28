@@ -170,7 +170,7 @@ void setbit(byte_t *p, ulong n, int v)
 }
 
 
-#define CHOF(x)	(isprint(x) ? (x) : '.')
+#define CHOF(x)	((isprint(x) && ((x) <= 127)) ? (x) : '.')
 void hexdump(FILE *out, ulong addr, byte_t *p, ulong len)
 {
 	int i;

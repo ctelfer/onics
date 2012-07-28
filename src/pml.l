@@ -261,8 +261,6 @@ static void c_translate(struct raw *r, const char *s, size_t len)
 		}
 		++r->len;
 	}
-	*d = '\0';
-	++r->len;
 }
 
 
@@ -270,21 +268,25 @@ static int copy_string(yyscan_t scanner, const char *text, int tok, int quoted)
 {
 	size_t len;
 	struct pml_lex_val v;
+	struct raw *r;
 
 	v.type = PMLLV_STRING;
 	len = strlen(text) + 1;
 	if ( quoted ) {
 		abort_unless(len >= 3);
-		len -= 3;
+		len -= 2;
 		text += 1;
 	}
-	if ( (v.u.raw.data = malloc(len)) == NULL )
+	r = &v.u.raw;
+	if ( (r->data = malloc(len)) == NULL )
 		return -1;
 	if ( quoted ) {
-		c_translate(&v.u.raw, text, len);
+		c_translate(r, text, len-1);
+		abort_unless(r->len < len);
+		r->data[r->len++] = '\0';
 	} else {
-		memcpy(v.u.raw.data, text, len);
-		v.u.raw.len = len;
+		memcpy(r->data, text, len);
+		r->len = len;
 	}
 	pmlset_extra(v, scanner);
 

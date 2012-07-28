@@ -967,14 +967,14 @@ void pmln_free(void *nodep)
 
 	case PMLTT_VAR: {
 		struct pml_variable *p = &node->variable;
-		ht_rem(&p->hn);
+		symtab_rem((struct pml_sym *)p);
 		free(p->name);
 		pmln_free(p->init);
 	} break;
 
 	case PMLTT_FUNCTION: {
 		struct pml_function *p = &node->function;
-		ht_rem(&p->hn);
+		symtab_rem((struct pml_sym *)p);
 		free(p->name);
 		p->name = NULL;
 		symtab_destroy(&p->vars);

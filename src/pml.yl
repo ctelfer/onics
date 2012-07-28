@@ -362,7 +362,7 @@ decl ::= rule(R). {
 type(T) ::= INT. { T = PML_ETYPE_SCALAR; }
 type(T) ::= VOID. { T = PML_ETYPE_VOID; }
 
-funcproto (F) ::= type(T) ID(N) LPAREN idlist(P) RPAREN SEMICOLON. {
+funcproto(F) ::= type(T) ID(N) LPAREN idlist(P) RPAREN SEMICOLON. {
 	F = pmln_alloc(ast, PMLTT_FUNCTION);
 	if (F != NULL) {
 		F->name = (char *)N.u.raw.data;
@@ -1032,6 +1032,7 @@ call(C) ::= ID(N) LPAREN RPAREN. {
 	struct pml_function *f;
 	struct pml_list *args;
 	char *name = (char *)N.u.raw.data;
+	C = NULL;
 	f = pml_ast_lookup_func(ast, name);
 	if (f != NULL) {
 		args = pmln_alloc(ast, PMLTT_LIST);
