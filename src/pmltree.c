@@ -3630,25 +3630,9 @@ int pml_ast_optimize(struct pml_ast *ast)
 }
 
 
-void pml_lexv_init(struct pml_lex_val *v)
-{
-	memset(v, 0, sizeof(*v));
-}
-
-
-void pml_lexv_fini(int toknum, struct pml_lex_val *v)
-{
-	if (v->type == PMLLV_STRING) {
-		free(v->u.raw.data);
-		v->u.raw.data = 0;
-	}
-	memset(v, 0, sizeof(*v));
-}
-
-
 extern void *PMLAlloc(void *(*mallocProc)(size_t));
 extern void PMLFree(void *p, void (*freeProc)(void*));
-extern void PML(void *parser, int tok, struct pml_lex_val xtok,
+extern void PML(void *parser, int tok, struct pmll_val xtok,
 		struct pml_ast *ast);
 
 
@@ -3659,7 +3643,7 @@ pml_parser_t pml_alloc()
 
 
 int pml_parse(pml_parser_t p, struct pml_ast *ast, int tok,
-	      struct pml_lex_val xtok)
+	      struct pmll_val xtok)
 {
 	PML(p, tok, xtok, ast);
 	if (ast->error)

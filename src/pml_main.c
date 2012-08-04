@@ -36,6 +36,7 @@
 #include "netvm.h"
 #include "netvm_std_coproc.h"
 #include "netvm_prog.h"
+#include "pmllex.h"
 #include "pmltree.h"
 #include "pmlncg.h"
 
@@ -78,8 +79,7 @@ const char *ofname = NULL;
 struct pmlinput isrc[MAXINPUT];
 int nisrc = 0;
 int iidx = 0;
-FILE *infile = NULL;
-pml_buffer_t inbuf = NULL;
+int insnum = 0;
 
 
 void usage()
@@ -93,32 +93,28 @@ void usage()
 }
 
 
-int pmlwrap(pml_scanner_t scanner)
+void pmleoi(struct pmllex *scanner)
 {
 	struct pmlinput *pi;
-
-	if (infile != NULL) {
-		fclose(infile);
-		infile = NULL;
-	} else if (inbuf != NULL) {
-		pml_delete_buffer(inbuf, scanner);
-		inbuf = NULL;
-	}
+	static char insname[64];
+	FILE *infile;
 
 	if (iidx == nisrc)
-		return 1;
+		return;
 
 	pi = &isrc[iidx++];
 	if (pi->type == I_FILE) {
 		infile = fopen(pi->str, "r");
 		if (!infile)
 			errsys("Error opening file '%s'\n", pi->str);
-		pmlset_in(infile, scanner);
+		if (pmll_add_infile(scanner, infile, 0, pi->str) < 0)
+			errsys("Error adding input file '%s'\n", pi->str);
 	} else {
-		inbuf = pml_scan_string(pi->str, scanner);
+		++insnum;
+		snprintf(insname, sizeof(insname), "-expr%d-", insnum);
+		if (pmll_add_instr(scanner, pi->str, 0, insname) < 0)
+			errsys("Error adding expression '%d'\n", insnum);
 	}
-
-	return 0;
 }
 
 
@@ -166,17 +162,15 @@ void parse_options(int argc, char *argv[])
 void parse_pml_program(struct netvm_program *prog)
 {
 	int tok;
-	pml_scanner_t scanner;
+	struct pmllex *scanner;
 	pml_parser_t parser;
 	struct pml_ast ast;
-	struct pml_lex_val none, extra;
+	struct pmll_val extra;
 	char estr[PMLNCG_MAXERR];
 	
-	pml_lexv_init(&none);
-	if (pmllex_init(&scanner))
+	if ((scanner = pmll_alloc()) == NULL)
 		errsys("pmllex_init: ");
-	pmlwrap(scanner);
-	pmlset_extra(none, scanner);
+	pmll_set_eoicb(scanner, &pmleoi);
 
 	if (!(parser = pml_alloc()))
 		errsys("pml_alloc: ");
@@ -189,22 +183,22 @@ void parse_pml_program(struct netvm_program *prog)
 		fprintf(stderr, "Starting program parse\n");
 
 	do {
-		tok = pmllex(scanner);
+		tok = pmll_nexttok(scanner, &extra);
 		if (tok < 0)
-			err("Encountered invalid token on line %d\n",
-			    pmlget_lineno(scanner));
-		extra = pmlget_extra(scanner);
+			err("Syntax error on line %d of %s: '%s'\n",
+			    pmll_get_lineno(scanner), 
+			    pmll_get_iname(scanner),
+			    pmll_get_err(scanner));
 		if (pml_parse(parser, &ast, tok, extra)) {
 			err("parse error on line %d: %s\n",
-			    pmlget_lineno(scanner), ast.errbuf);
+			    pmll_get_lineno(scanner), ast.errbuf);
 		}
-		pmlset_extra(none, scanner);
 	} while (tok > 0);
 
 	if (!ast.done)
 		err("Program file is not a complete PML program\n");
 
-	pmllex_destroy(scanner);
+	pmll_free(scanner);
 	pml_free(parser);
 
 	/* TODO: modify pml_ast_print() to take a file to print to files */

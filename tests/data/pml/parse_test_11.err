@@ -1,2 +1,2 @@
-parse error on line 8: 'x' is a scalar global and can not be accessed as a byte string
+parse error on file - line 8: 'x' is a scalar global and can not be accessed as a byte string
 

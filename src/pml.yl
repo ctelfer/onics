@@ -187,6 +187,7 @@ var Count;
 #include <assert.h>  /* XXX needed by lemon */
 #include <cat/cat.h>
 #include <cat/list.h>
+#include "pmllex.h"
 #include "pmltree.h" 
 #include "ns.h"
 }
@@ -322,9 +323,9 @@ var Count;
 %type numval { struct pml_literal * }
 %destructor numval { pmln_free($$); }
 
-%token_type { struct pml_lex_val }
+%token_type { struct pmll_val }
 %token_destructor { 
-	pml_lexv_fini(yymajor, &$$);
+	pmllv_clear(&$$);
 }
 
 /* ----- Grammar ----- */

@@ -13,8 +13,8 @@
 #include <cat/stdclio.h>
 #include <cat/list.h>
 
-#include "pmltree.h"
 #include "pml.h"
+#include "pmllex.h"
 
 
 #define SIDCHARS "_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
@@ -66,10 +66,15 @@ struct pmllex {
 	struct inputs		inputs;
 	uint			curidx;
 
-	struct pml_lex_val	tokx;
+	struct pmll_val		tokx;
 
 	ulong 			lineno;
 	char			errbuf[PMLLEX_MAXESTR];
+	ulong			svlineno;
+	const char *		svname;
+	
+	void *			ctx;
+	pmll_eoi_f		eoicb;
 };
 
 #define INLIST(_lex) (&(_lex)->inputs.ln)
@@ -104,6 +109,24 @@ struct kwtok {
 };
 
 
+/* Value API */
+STATIC_BUG_ON(PMLLV_SCALAR_not_zero, PMLLV_SCALAR != 0);
+void pmllv_init(struct pmll_val *v)
+{
+	memset(v, 0, sizeof(*v));
+}
+
+
+void pmllv_clear(struct pmll_val *v)
+{
+	if (v->type == PMLLV_STRING) {
+		free(v->u.raw.data);
+		v->u.raw.data = 0;
+	}
+	memset(v, 0, sizeof(*v));
+}
+
+
 /* assumes that the next character is a ':' */
 static int read_eth_or_ipv6(struct pmllex *lex, int cc);
 static void pmll_err(struct pmllex *lex, int incf, const char *fmt, ...);
@@ -130,7 +153,7 @@ static ulong lexslen(struct pmllex *lex)
 }
 
 
-struct pmllex *pmll_new(void)
+struct pmllex *pmll_alloc(void)
 {
 	struct pmllex *lex;
 	struct hnode *kwn;
@@ -162,20 +185,21 @@ struct pmllex *pmll_new(void)
 
 	l_init(&lex->inputs.ln);
 	lex->inputs.type = NTYPE;
-	lex->inputs.name = "END";
+	lex->inputs.name = "*END OF INPUT*";
 	lex->inputs.inp = &null_inport;
 
 	lex->unget = NEXTCNONE;
 	lex->curidx = 0;
 	lex->lineno = 1;
+	pmllv_init(&lex->tokx);
 	memset(&lex->errbuf, 0, sizeof(lex->errbuf));
+	lex->ctx = NULL;
 
 	return lex;
 }
 
 
-int pmll_add_input_string(struct pmllex *lex, const char *s, int front,
-			  const char *sn)
+int pmll_add_instr(struct pmllex *lex, const char *s, int front, const char *sn)
 {
 	struct inputs *pi;
 
@@ -198,7 +222,7 @@ int pmll_add_input_string(struct pmllex *lex, const char *s, int front,
 }
 
 
-int pmll_add_input_file(struct pmllex *lex, FILE *f, int front, const char *fn)
+int pmll_add_infile(struct pmllex *lex, FILE *f, int front, const char *fn)
 {
 	struct inputs *pi;
 
@@ -223,27 +247,14 @@ int pmll_add_input_file(struct pmllex *lex, FILE *f, int front, const char *fn)
 
 void pmll_free(struct pmllex *lex)
 {
-	struct list *n;
-	struct inputs *pi;
-	int i;
-
 	abort_unless(lex);
 
 	while (!l_isempty(INLIST(lex)))
 		popinput(lex);
-
 	dyb_clear(&lex->text);
 	dyb_clear(&lex->strbuf);
-
-	for (i = 0; i < array_length(lex->kwnodes); ++i)
-		memset(&lex->kwnodes[i], 0, sizeof(struct hnode));
-	for (i = 0; i < array_length(lex->kwbk); ++i)
-		lex->kwbk[i] = NULL;
-	memset(&lex->kwtab, 0, sizeof(lex->kwtab));
-
-	lex->unget = NEXTCNONE;
-	lex->lineno = 1;
-	memset(&lex->errbuf, 0, sizeof(lex->errbuf));
+	pmllv_clear(&lex->tokx);
+	memset(lex, 0, sizeof(&lex));
 
 	free(lex);
 }
@@ -256,16 +267,12 @@ static void pmll_err(struct pmllex *lex, int incf, const char *fmt, ...)
 	va_list ap;
 
 	va_start(ap, fmt);
-
 	pi = CURINPUT(lex);
-
-	if (incf && pi->name != NULL) {
+	if (incf && pi->name != NULL)
 		len = str_fmt(lex->errbuf, sizeof(lex->errbuf),
 			      "file %s line %lu: ", pi->name, lex->lineno);
-	}
 	if (len >= 0 && len < sizeof(lex->errbuf))
 		str_vfmt(lex->errbuf + len, sizeof(lex->errbuf) - len, fmt, ap);
-
 	va_end(ap);
 }
 
@@ -273,41 +280,42 @@ static void pmll_err(struct pmllex *lex, int incf, const char *fmt, ...)
 static void popinput(struct pmllex *lex)
 {
 	struct inputs *pi = CURINPUT(lex);
+
+	lex->svlineno = lex->lineno;
+	lex->svname = pi->name;
 	l_rem(&pi->ln);
 	inp_close(pi->inp);
 	free(pi);
-	lex->lineno = 0;
+	lex->lineno = 1;
 }
 
 
 static int addc(struct dynbuf *dyb, int ch)
 {
-	if (dyb->len < dyb->size) { 
-		((uchar *)dyb->data)[dyb->len++] = ch;
-	} else {
+	if (dyb->len >= dyb->size) { 
 		if (dyb_resv(dyb, dyb->size + 32) < 0)
 			return -1;
 		abort_unless(dyb->off == 0);
-		((char *)dyb->data)[dyb->len++] = ch;
 	}
+	((char *)dyb->data)[dyb->len++] = ch;
 	return 0;
 }
 
 
 #define TEXT_APPEND(_lex, _ch) \
-	do { 								    \
-		if (addc(&(_lex)->text, _ch) < 0) {			    \
-			pmll_err(lex, 1, "adding character: out of memory");\
-			return -1; 					    \
-		}							    \
+	do { 								\
+		if (addc(&(_lex)->text, _ch) < 0) {			\
+			pmll_err(lex, 1, "adding text: out of memory");	\
+			return -1; 					\
+		}							\
 	} while (0)
 
 #define SBUF_APPEND(_lex, _ch) \
-	do { 								    \
-		if (addc(&(_lex)->strbuf, _ch) < 0) {			    \
-			pmll_err(lex, 1, "adding character: out of memory");\
-			return -1; 					    \
-		}							    \
+	do { 								\
+		if (addc(&(_lex)->strbuf, _ch) < 0) {			\
+			pmll_err(lex, 1, "adding text: out of memory");	\
+			return -1; 					\
+		}							\
 	} while (0)
 
 #define TERMINATE(_lex) TEXT_APPEND(_lex, '\0')
@@ -336,12 +344,21 @@ static int nextc(struct pmllex *lex)
 		}
 
 		/* TODO: handle input error */
-		if (pi == &lex->inputs)
-			return NEXTCEOF;
-
-		popinput(lex);
+		if (pi == &lex->inputs) {
+			if (lex->eoicb != NULL)
+				(*lex->eoicb)(lex);
+			pi = CURINPUT(lex);
+			if (pi == &lex->inputs) {
+				resetbuf(lex);
+				return NEXTCEOF;
+			}
+		} else {
+			popinput(lex);
+		}
 
 		/* treat a new file like a whitespace w.r.t separation */
+		if (addc(&lex->text, ' ') < 0)
+			return NEXTCERR;
 		pushback(lex, ' ');
 	} while (c < 0);
 
@@ -360,7 +377,7 @@ static void pushback(struct pmllex *lex, int ch)
 
 /* NOTE: newlines can happen inside of strings or whitespace and */
 /* nowhere else. */
-static int skip_ws_and_comments(struct pmllex *lex)
+static int skip_ws(struct pmllex *lex)
 {
 	struct inputs *pi;
 	int nws = 512;
@@ -420,10 +437,10 @@ static int scanhex(struct pmllex *lex)
 	int ch;
 
 	ch = nextc(lex);
-	if (ch < 0)
-		return ch;
-	while (isxdigit(ch))
+	while ((ch >= 0) && isxdigit(ch)) {
 		++n;
+		ch = nextc(lex);
+	}
 	pushback(lex, ch);
 
 	return n;
@@ -526,9 +543,8 @@ static int read_id(struct pmllex *lex, int ch)
 }
 
 
-static int finalize_string(struct pmllex *lex, int tok, int countnull)
+static int setsval(struct pmllex *lex, int countnull)
 {
-	char *ns;
 	struct dynbuf *sb = &lex->strbuf;
 
 	if (addc(sb, '\0') < 0)
@@ -538,7 +554,7 @@ static int finalize_string(struct pmllex *lex, int tok, int countnull)
 	if (!countnull)
 		lex->tokx.u.raw.len -= 1;
 	
-	return tok;
+	return 0;
 }
 
 
@@ -553,6 +569,7 @@ static int read_str(struct pmllex *lex, int quote)
 	struct inport *in;
 	int ch;
 	int d1, d2, d3;
+	int tok;
 
 	/* use inp_getc() because strings can't cross input boundaries */
 	in = CURINPUT(lex)->inp;
@@ -611,8 +628,10 @@ static int read_str(struct pmllex *lex, int quote)
 
 	TEXT_APPEND(lex, ch);
 	TERMINATE(lex);
+	if (setsval(lex, 1) < 0)
+		return -1;
 
-	return finalize_string(lex, PMLTOK_STRING, 1);
+	return (quote == '"') ? PMLTOK_STRING : PMLTOK_REGEX;
 }
 
 
@@ -650,7 +669,6 @@ static int read_op(struct pmllex *lex, int ch)
 		if (ch2 == '=') { tok = PMLTOK_EQ; break; }
 		if (ch2 == '~') { tok = PMLTOK_MATCH; break; }
 		pushback(lex, ch2);
-		ch2 = -1;
 		tok = PMLTOK_ASSIGN;
 		break;
 
@@ -665,7 +683,6 @@ static int read_op(struct pmllex *lex, int ch)
 		if (ch2 == '=') { tok = PMLTOK_LEQ; break; } 
 		if (ch2 == '<') { tok = PMLTOK_SHL; break; } 
 		pushback(lex, ch2);
-		ch2 = -1;
 		tok = PMLTOK_LT;
 		break;
 
@@ -674,7 +691,6 @@ static int read_op(struct pmllex *lex, int ch)
 		if (ch2 == '=') { tok = PMLTOK_GEQ; break; } 
 		if (ch2 == '>') { tok = PMLTOK_SHR; break; } 
 		pushback(lex, ch2);
-		ch2 = -1;
 		tok = PMLTOK_GT;
 		break;
 
@@ -682,7 +698,6 @@ static int read_op(struct pmllex *lex, int ch)
 		ch2 = nextc(lex);
 		if (ch2 == '?') { tok = PMLTOK_PPEND; break; }
 		pushback(lex, ch2);
-		ch2 = -1;
 		tok = PMLTOK_MINUS;
 		break;
 
@@ -690,7 +705,6 @@ static int read_op(struct pmllex *lex, int ch)
 		ch2 = nextc(lex);
 		if (ch2 == '@') { tok = PMLTOK_ATAT; break; }
 		pushback(lex, ch2);
-		ch2 = -1;
 		tok = PMLTOK_AT;
 		break;
 
@@ -740,11 +754,10 @@ static int read_hexstr(struct pmllex *lex)
 				ch = nextc(lex);
 			} while (ch == ' ' || ch == '\t' || ch == '\r');
 		} else {
-			if ((nx & 1) == 0) {
+			if ((nx & 1) == 0)
 				v = chnval(ch) << 4;
-			} else {
+			else
 				SBUF_APPEND(lex, v | chnval(ch));
-			}
 			++nx;
 		}
 		ch = nextc(lex);
@@ -752,13 +765,10 @@ static int read_hexstr(struct pmllex *lex)
 
 	pushback(lex, ch);
 	TERMINATE(lex);
-
-	if (nx == 0) {
-		pmll_err(lex, 1, "empty hex string");
+	if (setsval(lex, 0) < 0)
 		return -1;
-	}
 
-	return finalize_string(lex, PMLTOK_BYTESTR, 0);
+	return PMLTOK_BYTESTR;
 }
 
 
@@ -838,48 +848,61 @@ static int read_num(struct pmllex *lex, int ich)
 }
 
 
-int pmll_nexttok(struct pmllex *lex)
+int pmll_nexttok(struct pmllex *lex, struct pmll_val *v)
 {
 	int ch;
+	int rv;
 	
+	pmllv_init(&lex->tokx);
 	resetbuf(lex);
-	lex->tokx.type = PMLLV_SCALAR;
-	ch = skip_ws_and_comments(lex);
+
+	ch = skip_ws(lex);
 	if (ch == NEXTCEOF)
 		return 0;
 	else if (ch == NEXTCERR)
 		return -1;
 
-	if (cset_contains(lex->s_sid, ch))
-		return read_id(lex, ch);
-	else if (cset_contains(lex->s_op, ch))
-		return read_op(lex, ch);
-	else if (ch == QUOTE || ch == REXQUOTE)
-		return read_str(lex, ch);
-	else if (ch == '\\')
-		return read_hexstr(lex);
-	else if (isdigit(ch))
-		return read_num(lex, ch);
+	if (cset_contains(lex->s_sid, ch)) {
+		rv = read_id(lex, ch);
+	} else if (cset_contains(lex->s_op, ch)) {
+		rv = read_op(lex, ch);
+	} else if (ch == QUOTE || ch == REXQUOTE) {
+		rv = read_str(lex, ch);
+	} else if (ch == '\\') {
+		rv = read_hexstr(lex);
+	} else if (isdigit(ch)) {
+		rv = read_num(lex, ch);
+	} else {
+		pmll_err(lex, 1, "Unknown token character: '%c'", ch);
+		return -1;
+	}
+
+	if (rv >= 0 && v != NULL) {
+		*v = lex->tokx;
+		pmllv_init(&lex->tokx);
+	}
 	
-	return -1;
-}
-
-
-void pmll_get_val(struct pmllex *lex, struct pml_lex_val *val)
-{
-	*val = lex->tokx;
+	return rv;
 }
 
 
 ulong pmll_get_lineno(struct pmllex *lex)
 {
-	return lex->lineno;
+	struct inputs *pi = CURINPUT(lex);
+	if (pi == &lex->inputs)
+		return lex->svlineno;
+	else
+		return lex->lineno;
 }
 
 
-const char *pmll_get_input_name(struct pmllex *lex)
+const char *pmll_get_iname(struct pmllex *lex)
 {
-	return CURINPUT(lex)->name;
+	struct inputs *pi = CURINPUT(lex);
+	if (pi == &lex->inputs)
+		return lex->svname;
+	else
+		return pi->name;
 }
 
 
@@ -888,7 +911,26 @@ const char *pmll_get_text(struct pmllex *lex)
 	return lex->text.data;
 }
 
+
 const char *pmll_get_err(struct pmllex *lex)
 {
 	return lex->errbuf;
+}
+
+
+void pmll_set_ctx(struct pmllex *lex, void *ctx)
+{
+	lex->ctx = ctx;
+}
+
+
+void *pmll_get_ctx(struct pmllex *lex)
+{
+	return lex->ctx;
+}
+
+
+void pmll_set_eoicb(struct pmllex *lex, pmll_eoi_f eoicb)
+{
+	lex->eoicb = eoicb;
 }

@@ -27,7 +27,7 @@
 #include <cat/buffer.h>
 #include <stdio.h>
 #include <stdint.h>
-#include "pml.h"
+#include "pmllex.h"
 
 
 /* -- Data structures for the PML Abstract Syntax Tree -- */
@@ -673,49 +673,13 @@ int  pml_eval(struct pml_ast *ast, struct pml_stack_frame *fr,
 	      union pml_node *node, struct pml_retval *v);
 
 
-
-/* -- Lexical analyzer definitions -- */
-
-#define PMLLV_SCALAR	0
-#define PMLLV_STRING	1
-
-struct pml_lex_val {
-	int type;
-	union {
-		byte_t v6addr[16];
-		byte_t ethaddr[6];
-		uint64_t num;
-		byte_t v4addr[4];
-		struct raw raw;
-	} u;
-};
-
-void pml_lexv_init(struct pml_lex_val *v);
-void pml_lexv_fini(int toknum, struct pml_lex_val *v);
-
-#ifndef THIS_IS_SCANNER
-typedef void *pml_scanner_t;
-typedef void *pml_buffer_t;
-int pmllex_init(pml_scanner_t *);
-void pmlset_in(FILE *input, pml_scanner_t);
-pml_buffer_t pml_scan_string(const char *, pml_scanner_t);
-void pml_delete_buffer(pml_buffer_t, pml_scanner_t);
-int pmllex(pml_scanner_t);
-struct pml_lex_val pmlget_extra(pml_scanner_t);
-void pmlset_extra(struct pml_lex_val v, pml_scanner_t);
-const char *pmlget_text(pml_scanner_t);
-int pmlget_lineno(pml_scanner_t);
-void pmllex_destroy(pml_scanner_t);
-#endif /* THIS_IS_SCANNER */
-
-
 /* -- Parser interface -- */
 
 typedef void *pml_parser_t;
 
 pml_parser_t pml_alloc();
 int pml_parse(pml_parser_t p, struct pml_ast *ast, int tok,
-	      struct pml_lex_val xtok);
+	      struct pmll_val xtok);
 void pml_free(pml_parser_t p);
 
 

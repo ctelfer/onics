@@ -20,49 +20,79 @@
  *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 #include <stdio.h>
-
-
-typedef void *pml_scanner_t;
-typedef void *pml_buffer_t;
-int pmllex_init(pml_scanner_t *);
-void pmlset_in(FILE *input, pml_scanner_t);
-pml_buffer_t pml_scan_string(const char *, pml_scanner_t);
-void pml_delete_buffer(pml_buffer_t, pml_scanner_t);
-int pmllex(pml_scanner_t);
-struct pml_lex_val pmlget_extra(pml_scanner_t);
-void pmlset_extra(struct pml_lex_val v, pml_scanner_t);
-const char *pmlget_text(pml_scanner_t);
-int pmlget_lineno(pml_scanner_t);
-void pmllex_destroy(pml_scanner_t);
+#include "pml.h"
+#include "pmllex.h"
 
 extern const char *pml_tok_strs[];
 
 
-int pmlwrap(void)
+const char *strof(struct pmll_val *v, int tok, char *buf, size_t bsize)
 {
-	return 1;
+	byte_t *bp;
+	uint16_t *wp;
+
+
+	if (tok == PMLTOK_IPV4ADDR) {
+		bp = v->u.v4addr;
+		snprintf(buf, bsize, "%u.%u.%u.%u", bp[0], bp[1], bp[2], bp[3]);
+		return buf;
+	} else if (tok == PMLTOK_IPV6ADDR) { 
+		bp = v->u.v6addr;
+		snprintf(buf, bsize, "%04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x",
+		         (bp[0] << 8) | bp[1], 
+		         (bp[2] << 8) | bp[3], 
+		         (bp[4] << 8) | bp[5], 
+		         (bp[6] << 8) | bp[7], 
+		         (bp[8] << 8) | bp[9], 
+		         (bp[10] << 8) | bp[11], 
+		         (bp[12] << 8) | bp[13], 
+		         (bp[14] << 8) | bp[15]);
+		return buf;
+	} else if (tok == PMLTOK_ETHADDR) { 
+		bp = v->u.ethaddr;
+		snprintf(buf, bsize, "%02x:%02x:%02x:%02x:%02x:%02x",
+			 bp[0], bp[1], bp[2], bp[3], bp[4], bp[5]);
+		return buf;
+	} else if (tok == PMLTOK_NUM) { 
+		snprintf(buf, bsize, "%llu", (ullong)v->u.num);
+		return buf;
+	} else {
+		return NULL;
+	}
 }
 
 
-int testpmllex()                                                                    
+int main(int argc, char *argv[])                                                                    
 {       
         int x;
-        pml_scanner_t scanner;
-        if ( pmllex_init(&scanner) )
-                errsys("pmllex_init:");                                             
-        pmlset_in(stdin, scanner);
-        while ( (x = pmllex(scanner)) > 0 )
-                printf("%-15s'%s'\n", pml_tok_strs[x], pmlget_text(scanner));       
+	char buf[256];
+	const char *s;
+	struct pmllex *lex;
+	struct pmll_val v;
+
+	lex = pmll_alloc();
+        if (lex == NULL)
+                errsys("pmll_new():");                                             
+
+	if (pmll_add_infile(lex, stdin, 0, "stdin") < 0)
+		errsys("pmll_add_input_file():");
+
+        while ( (x = pmll_nexttok(lex, &v)) > 0 ) {
+                printf("%-15s'%s'", pml_tok_strs[x], pmll_get_text(lex));
+		s = strof(&v, x, buf, sizeof(buf));
+		if (s != NULL)
+			printf(" -- '%s'\n", s);
+		else
+			printf("\n");
+		pmllv_clear(&v);
+	}
         if ( x < 0 ) {
-                printf("unknown char on line: %d\n", pmlget_lineno(scanner));       
+                printf("unknown token on line: %lu\n", pmll_get_lineno(lex));       
+		printf("\t%s\n", pmll_get_err(lex));
         } else {
                 printf("End of file\n");                                            
         }
-        pmllex_destroy(scanner);                                                    
-        return 0;                                                                   
-}
+        pmll_free(lex);                                                    
 
-int main(int argc, char *argv[])
-{
-	return testpmllex();
+        return 0;                                                                   
 }

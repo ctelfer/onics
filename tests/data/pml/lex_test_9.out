@@ -1,7 +1,7 @@
 LBRACE         '{'
 ID             'fix_all_len'
 LPAREN         '('
-NUM            '0'
+NUM            '0' -- '0'
 RPAREN         ')'
 SEMICOLON      ';'
 RBRACE         '}'

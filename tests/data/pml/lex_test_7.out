@@ -23,7 +23,7 @@ ID             'b'
 RPAREN         ')'
 SEMICOLON      ';'
 RETURN         'return'
-NUM            '5'
+NUM            '5' -- '5'
 SEMICOLON      ';'
 RBRACE         '}'
 End of file

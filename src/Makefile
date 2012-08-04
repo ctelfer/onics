@@ -10,8 +10,8 @@ LIBS=-L${CATLIB_ROOT}/lib -lcat_dbg
 DEFS=
 BINDIR=../bin
 LIBOBJS= xpkt.o ns.o netvm.o netvm_prog.o pktbuf.o stdproto.o \
-	 protoparse.o util.o lex.pml.o pmltree.o netvm_std_coproc.o \
-	 pml.o pmlncg.o pmllex.o
+	 protoparse.o util.o pmltree.o netvm_std_coproc.o \
+	 pmllex.o pml.o pmlncg.o pml_tok_strs.o
 
 TARGETS=${BINDIR}/pcapin \
 	${BINDIR}/pcapout \
@@ -76,24 +76,20 @@ ${BINDIR}/nvmpf: protoparse.o stdproto.o util.o pktbuf.o netvm.o xpkt.o \
 
 ${BINDIR}/pml:   pml_main.c protoparse.o stdproto.o util.o pktbuf.o netvm.o \
 		 xpkt.o netvm_std_coproc.o netvm_prog.o ns.o \
-		 pmlncg.o lex.pml.o pml.o pmltree.o \
+		 pmllex.o pml.o pmltree.o pmlncg.o \
 	         netvm.h protoparse.h pktbuf.h xpkt.h netvm_prog.h \
 		 pmlncg.h netvm_prog.h pmltree.h
 	${CC} -o ${BINDIR}/pml pml_main.c protoparse.o stdproto.o util.o \
 	         pktbuf.o netvm.o xpkt.o netvm_std_coproc.o netvm_prog.o ns.o \
-		 pmlncg.o lex.pml.o pml.o pmltree.o \
+		 pmllex.o pml.o pmltree.o pmlncg.o \
 		${DEFS} ${OPTS} ${INCS} ${LIBS}
 
 
 .c.o:
 	${CC} -c $< -o $@ ${DEFS} ${INCS} ${OPTS}
 
-lex.pml.c: pml.l pml.h
-	flex pml.l
-
-lex.pml.o: lex.pml.c pml_tok_strs.o
-	${CC} -c lex.pml.c -o lex.pml.o -DTHIS_IS_SCANNER \
-		${DEFS} ${INCS} ${OPTS}
+pmllex.o: pmllex.c pml.h
+	${CC} -c pmllex.c -o pmllex.o ${DEFS} ${INCS} ${OPTS}
 
 pml.c pml.h: pml.yl ../lemon/lemon
 	../lemon/lemon pml.yl

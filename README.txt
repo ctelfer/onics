@@ -15,9 +15,10 @@ QUICK START
 
 To build:
      1) First download both Catlib and ONICS and put the distributions in
-     the same top level directory.  You must also have 'flex' and 'libpcap'
-     installed on the machine and currently gcc.  (All these deps will go
-     away at some point.)
+     the same top level directory.  You must also have 'libpcap' installed 
+     on the machine and currently gcc.  Strictly speaking, libpcap is only
+     required for two of the tools and any compiler should be usable.  But
+     for now these are required without further tweaking.
 
      2) Change to the catlib directory and type:
        make
@@ -113,13 +114,14 @@ with several principles in mind.
     function well in low memory/CPU environments.
 
 Some of these ideals are not yet met to the developer's satisfaction
-yet.  For example, the PML language currently depends on flex.  The
-PCAP utilities require libpcap.  The NetVM that underlies PML uses a
-64-bit runtime stack which is a bit much for embedded environments
-(although compilers can cope).  Each of these choices had a rationale
-(or maybe a rationalization) but the hope is nevertheless to continue to
-push the tools towards those ideals.
-
+yet.  For example, the PCAP utilities require libpcap.  The NetVM that 
+underlies PML uses a 64-bit runtime stack which is a bit much for embedded
+environments (although compilers can cope).  Each of these choices had 
+a rationale (or maybe a rationalization) but the hope is nevertheless to 
+continue to push the tools towards those ideals.  I intend to write my
+own thin libpcap parser, for example and packet capture/transmission
+code.  I also am considering making the scalar width of NetVM 32-bits
+instead of 64.  But these are for down the road.
 
 
 COMPONENTS

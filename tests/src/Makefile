@@ -18,7 +18,6 @@ TARGETS= \
 	$(BINDIR)/testvm \
 	$(BINDIR)/testns \
 	$(BINDIR)/testpmllex \
-	$(BINDIR)/testpmllex2 \
 	$(BINDIR)/testpmlparse
 
 all: $(TARGETS)
@@ -48,28 +47,18 @@ $(BINDIR)/testns: testns.c $(TOOLSRC)/ns.o $(TOOLSRC)/util.o \
 		 $(TOOLSRC)/stdproto.o $(TOOLSRC)/protoparse.o \
 		 $(DEFS) $(OPTS) $(INCS) $(LIBS)
 
-$(BINDIR)/testpmllex: testpmllex.c $(TOOLSRC)/pml_tok_strs.o \
-		      $(TOOLSRC)/lex.pml.o
-	$(CC) -o ../bin/testpmllex testpmllex.c $(TOOLSRC)/lex.pml.o \
-		$(TOOLSRC)/pml_tok_strs.o \
-		$(DEFS) $(OPTS) $(INCS) $(LIBS)
-
-$(BINDIR)/testpmlparse: testpmlparse.c $(TOOLSRC)/lex.pml.o $(TOOLSRC)/pml.o \
+$(BINDIR)/testpmlparse: testpmlparse.c $(TOOLSRC)/pmllex.o $(TOOLSRC)/pml.o \
 			$(TOOLSRC)/pmltree.o $(TOOLSRC)/util.o $(TOOLSRC)/ns.o \
 			$(TOOLSRC)/stdproto.o $(TOOLSRC)/protoparse.o
-	$(CC) -o ../bin/testpmlparse testpmlparse.c $(TOOLSRC)/lex.pml.o \
+	$(CC) -o ../bin/testpmlparse testpmlparse.c $(TOOLSRC)/pmllex.o \
 		$(TOOLSRC)/pml.o $(TOOLSRC)/pmltree.o $(TOOLSRC)/util.o \
 		$(TOOLSRC)/ns.o $(TOOLSRC)/stdproto.o $(TOOLSRC)/protoparse.o \
 		$(DEFS) $(OPTS) $(INCS) $(LIBS)
 
-$(BINDIR)/testpmllex2: testpmllex2.c $(TOOLSRC)/pml_tok_strs.o \
-		       $(TOOLSRC)/pmllex.o
-	$(CC) -o ../bin/testpmllex2 testpmllex2.c $(TOOLSRC)/pmllex.o \
+$(BINDIR)/testpmllex: testpmllex.c $(TOOLSRC)/pml_tok_strs.o $(TOOLSRC)/pmllex.o
+	$(CC) -o ../bin/testpmllex testpmllex.c $(TOOLSRC)/pmllex.o \
 		$(TOOLSRC)/pml_tok_strs.o \
 		$(DEFS) $(OPTS) $(INCS) $(LIBS)
-
-$(TOOLSRC)/lex.pml.o: $(TOOLSRC)/pml.l
-	cd $(TOOLSRC) ; make lex.pml.o
 
 $(LIBOBJS):
 	cd $(TOOLSRC) ; make

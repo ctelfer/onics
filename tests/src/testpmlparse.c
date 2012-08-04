@@ -22,6 +22,7 @@
  */
 #include "prid.h"
 #include "pmltree.h"
+#include "pmllex.h"
 #include "stdproto.h"
 #include <stdlib.h>
 #include <string.h>
@@ -33,18 +34,13 @@
 
 extern void PMLTrace(FILE *trace, char *pfx);
 
-int pmlwrap(pml_scanner_t s)
-{
-	return 1;
-}
-
 int main(int argc, char *argv[])
 {
 	int tok;
-	pml_scanner_t scanner;
+	struct pmllex *scanner;
 	pml_parser_t parser;
 	struct pml_ast tree;
-	struct pml_lex_val none, extra;
+	struct pmll_val extra;
 	int printmask = VERBOSE|LEX|TREE1|TREE2;
 
 	if (argc > 1) {
@@ -68,11 +64,10 @@ int main(int argc, char *argv[])
 
 	register_std_proto();
 
-	pml_lexv_init(&none);
-	if (pmllex_init(&scanner))
+	if ((scanner = pmll_alloc()) == NULL)
 		errsys("pmllex_init:");
-	pmlset_in(stdin, scanner);
-	pmlset_extra(none, scanner);
+	if (pmll_add_infile(scanner, stdin, 0, "-") < 0)
+		errsys("pmll_add_input_file:");
 
 	if (!(parser = pml_alloc()))
 		errsys("pml_alloc:");
@@ -89,19 +84,17 @@ int main(int argc, char *argv[])
 		PMLTrace(stdout, "  ---  ");
 
 	do {
-		tok = pmllex(scanner);
+		tok = pmll_nexttok(scanner, &extra);
 		if (tok < 0)
-			err("Encountered invalid token on line %d\n",
-			    pmlget_lineno(scanner));
-		extra = pmlget_extra(scanner);
+			err("Syntax error: %s\n", pmll_get_err(scanner));
 		if (printmask & LEX)
 			printf("Token -- %d -> '%s'\n", tok,
-			       pmlget_text(scanner));
+			       pmll_get_text(scanner));
 		if (pml_parse(parser, &tree, tok, extra)) {
-			err("parse error on line %d: %s\n",
-			    pmlget_lineno(scanner), tree.errbuf);
+			err("parse error on file %s line %d: %s\n",
+			    pmll_get_iname(scanner),
+			    pmll_get_lineno(scanner), tree.errbuf);
 		}
-		pmlset_extra(none, scanner);
 	} while (tok > 0);
 
 	if (!tree.done)
@@ -113,7 +106,7 @@ int main(int argc, char *argv[])
 		printf("########\n");
 	}
 
-	pmllex_destroy(scanner);
+	pmll_free(scanner);
 	pml_free(parser);
 
 	if (printmask & TREE1) {
