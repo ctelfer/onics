@@ -5,12 +5,12 @@
   ts = meta_get_tstamp(0);
   sec = ts / 1000000000;
   nsec = ts % 1000000000;
-  print "timestamp = ", %u:sec, " seconds and ", %u:nsec, " nanoseconds\n";
-  print "pre-snap length = ", %d:meta_get_presnap(0), "\n";
-  print "input port = ", %d:meta_get_inport(0), "\n";
-  print "output port = ", %d:meta_get_outport(0), "\n";
-  print "flow id = 0x", %x:meta_get_flowid(0), "\n";
-  print "traffic class = 0x", %x:meta_get_class(0), "\n";
+  print "timestamp = ", %u%sec, " seconds and ", %u%nsec, " nanoseconds\n";
+  print "pre-snap length = ", %d%meta_get_presnap(0), "\n";
+  print "input port = ", %d%meta_get_inport(0), "\n";
+  print "output port = ", %d%meta_get_outport(0), "\n";
+  print "flow id = 0x", %x%meta_get_flowid(0), "\n";
+  print "traffic class = 0x", %x%meta_get_class(0), "\n";
   print "\n";
 }
 
@@ -30,10 +30,10 @@
   ts = meta_get_tstamp(0);
   sec = ts / 1000000000;
   nsec = ts % 1000000000;
-  print "timestamp = ", %u:sec, " seconds and ", %u:nsec, " nanoseconds\n";
-  print "pre-snap length = ", %d:meta_get_presnap(0), "\n";
-  print "input port = ", %d:meta_get_inport(0), "\n";
-  print "output port = ", %d:meta_get_outport(0), "\n";
-  print "flow id = 0x", %x:meta_get_flowid(0), "\n";
-  print "traffic class = 0x", %x:meta_get_class(0), "\n";
+  print "timestamp = ", %u%sec, " seconds and ", %u%nsec, " nanoseconds\n";
+  print "pre-snap length = ", %d%meta_get_presnap(0), "\n";
+  print "input port = ", %d%meta_get_inport(0), "\n";
+  print "output port = ", %d%meta_get_outport(0), "\n";
+  print "flow id = 0x", %x%meta_get_flowid(0), "\n";
+  print "traffic class = 0x", %x%meta_get_class(0), "\n";
 }

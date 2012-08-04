@@ -649,7 +649,7 @@ prlist(P) ::= prfmt(F) expr(E). {
 	P = pml_print_alloc(ast, E, &F);
 }
 
-prfmt(F) ::= MOD ID(T) COLON. {
+prfmt(F) ::= MOD ID(T) MOD. {
 	F.width = 0;
 	F.flags = 0;
 	F.fmt = pml_print_strtofmt(T.u.raw.data);
@@ -658,7 +658,7 @@ prfmt(F) ::= MOD ID(T) COLON. {
 			    T.u.raw.data);
 	free(T.u.raw.data);
 }
-prfmt(F) ::= MOD NUM(W) ID(T) COLON. {
+prfmt(F) ::= MOD NUM(W) ID(T) MOD. {
 	F.width = W.u.num;
 	F.flags = 0;
 	F.fmt = pml_print_strtofmt(T.u.raw.data);
@@ -667,7 +667,7 @@ prfmt(F) ::= MOD NUM(W) ID(T) COLON. {
 			    T.u.raw.data);
 	free(T.u.raw.data);
 }
-prfmt(F) ::= MOD MINUS NUM(W) ID(T) COLON. {
+prfmt(F) ::= MOD MINUS NUM(W) ID(T) MOD. {
 	F.width = W.u.num;
 	F.flags = PML_PFLAG_LJUST;
 	F.fmt = pml_print_strtofmt(T.u.raw.data);
@@ -1073,7 +1073,7 @@ value(V) ::= BYTESTR(I). {
 	free(I.u.raw.data);
 	V = (union pml_expr_u *)v;
 }
-value(V) ::= IPADDR(I). {
+value(V) ::= IPV4ADDR(I). {
 	struct pml_literal *v = pmln_alloc(ast, PMLTT_BYTESTR);
 	if (v != NULL)
 		pml_bytestr_copy(ast, &v->u.bytestr, PML_SEG_ROMEM,

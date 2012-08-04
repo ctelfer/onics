@@ -282,11 +282,9 @@ End Rule
       Print Statement: type: string, width:0, flags:[]
       Expression -- 
          Byte string [[c]; width=0] -- 
-         29 bytes in read-only segment at address 15
+         9 bytes in read-only segment at address 15
          546f74616c206f66
-         2025642054435020
-         7061636b65747320
-         7365656e0a
+         20
       -----
       Print Statement: type: signed decimal, width:0, flags:[]
       Expression -- 
@@ -295,6 +293,14 @@ End Rule
             Variable: Numpkts [global; width=8, addr=0]
                Initialization value -- 
                Scalar [[c]; width=8] -- width 8: 5 (5,0x5)
+      -----
+      Print Statement: type: string, width:0, flags:[]
+      Expression -- 
+         Byte string [[c]; width=0] -- 
+         18 bytes in read-only segment at address 25
+         2054435020706163
+         6b65747320736565
+         6e0a
       -----
 -----------
 
