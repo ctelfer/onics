@@ -80,3 +80,5 @@ pml_test 24 NONE
 pml_test 25 data/onepkt.xpkt
 pml_test 26 NONE
 pml_test 27 NONE
+
+exit $ERR
