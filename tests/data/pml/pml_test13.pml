@@ -2,7 +2,7 @@
 #
 # addition, call, local variables, parameters, equals, print
 # 
-int test(a, b) { 
+int test(int a, int b) { 
 	return a + b;
 }
 

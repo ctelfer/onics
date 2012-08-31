@@ -1,4 +1,4 @@
-VAR            'var'
+INT            'int'
 ID             'global'
 ASSIGN         '='
 NUM            '0' -- '0'

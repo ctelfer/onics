@@ -1,9 +1,9 @@
 # Multi-expression print statements
 #
-var s = 0x123456789ABCDEF0;
-var s2[20] = \x00112233aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa;
+int s = 0x123456789ABCDEF0;
+blob s2[20] = \x00112233aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa;
 
-inline sext(v, b) { v | -(v & (1 << b)) }
+inline sext(int v, int b) { v | -(v & (1 << b)) }
 
 BEGIN { 
 	x = 5;

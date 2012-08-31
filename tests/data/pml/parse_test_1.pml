@@ -3,9 +3,9 @@
 const X = 53;
 const Y = 4 * X;
 
-var Global;
-var another_global[40] = "hello world";
-var broadcast_var[4] = ip.addr.broadcast;
+int Global;
+blob another_global[40] = "hello world";
+blob broadcast_var[4] = ip.addr.broadcast;
 
 ?- ip.saddr =~ 127.0.0.0/24 -? {
 	print "hi", x; 

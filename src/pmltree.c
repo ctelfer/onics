@@ -29,12 +29,96 @@
 #include <string.h>
 #include <stdarg.h>
 
+
+/* macros to simplify list management */
 #define l_to_node(p) (union pml_node *)container(p, struct pml_node_base, ln)
+
+#define sym_for_each(_n, _st) l_for_each((_n), &(_st)->list)
+#define sym_for_each_safe(_n, _x, _st) l_for_each_safe((_n), (_x), &(_st)->list)
+
+#define for_each_le(_n, _pl) l_for_each((_n), &(_pl)->list)
+#define for_each_le_safe(_n, _x, _pl) \
+	l_for_each_safe((_n), (_x), &(_pl)->list)
+
+#define for_each_arg(_n, _c) for_each_le(_n, (_c)->args)
+#define for_each_arg_safe(_n, _x, _c) \
+	for_each_le_safe(_n, _x, (_c)->args)
+
+#define for_each_rvar(_n, _r) sym_for_each((_n), &(_r)->vars)
+#define for_each_rvar_safe(_n, _x, _r) \
+	sym_for_each_safe((_n), (_x), &(_r)->vars)
+
+#define for_each_fvar(_n, _f) sym_for_each((_n), &(_f)->vars)
+#define for_each_fvar_safe(_n, _x, _f) \
+	sym_for_each_safe((_n), (_x), &(_f)->vars)
+
+#define for_each_gvar(_n, _ast) sym_for_each(_n, &(_ast)->vars)
+#define for_each_gvar_safe(_n, _x, _ast) \
+	sym_for_each_safe(_n, _x, &(_ast)->vars)
+
+#define for_each_func(_n, _ast) sym_for_each(_n, &(_ast)->funcs)
+#define for_each_func_safe(_n, _x, _ast) \
+	sym_for_each_safe(_n, _x, &(_ast)->funcs)
+
+#define for_each_prule(_n, _ast) l_for_each(_n, &(_ast)->p_rules)
+#define for_each_prule_safe(_n, _x, _ast) \
+	l_for_each_safe(_n, _x, &(_ast)->p_rules)
+
 #define SYMTABSIZE    256
+
 
 
 static uint64_t val64(struct pml_ast *ast, struct pml_retval *v);
 static const char *nts(int type);
+static struct pml_variable *pml_var_alloc_nc(struct pml_ast *ast, char *name, 
+				             int vtype, int etype, int size,
+				             union pml_expr_u *init);
+
+
+/* return -1 if conversion from stype to dtype is invalid and 0 otherwise */
+static int typecheck(int stype, int dtype)
+{
+	int valid;
+
+	switch (stype) {
+	case PML_ETYPE_VOID:
+		valid = dtype == PML_ETYPE_VOID;
+		break;
+
+	case PML_ETYPE_SCALAR:
+		valid = dtype == PML_ETYPE_VOID ||
+		        dtype == PML_ETYPE_SCALAR;
+		break;
+
+	case PML_ETYPE_BYTESTR:
+		valid = dtype == PML_ETYPE_VOID ||
+		        dtype == PML_ETYPE_SCALAR || 
+		        dtype == PML_ETYPE_BYTESTR || 
+		        dtype == PML_ETYPE_BLOBREF; 
+		break;
+
+	case PML_ETYPE_MASKVAL:
+		valid = dtype == PML_ETYPE_VOID ||
+		        dtype == PML_ETYPE_SCALAR || 
+		        dtype == PML_ETYPE_BYTESTR ||
+		        dtype == PML_ETYPE_BLOBREF ||
+		        dtype == PML_ETYPE_MASKVAL; 
+		break;
+
+	case PML_ETYPE_BLOBREF:
+		valid = dtype == PML_ETYPE_VOID ||
+		        dtype == PML_ETYPE_SCALAR ||
+		        dtype == PML_ETYPE_BYTESTR || 
+		        dtype == PML_ETYPE_BLOBREF;
+		break;
+
+	default:
+		abort_unless(0);
+		valid = 0;
+	}
+
+	return valid ? 0 : -1;
+}
 
 
 static int is_expr(void *nodep)
@@ -120,9 +204,8 @@ static void symtab_destroy(struct pml_symtab *t)
 	abort_unless(t);
 	if (t->tab.bkts == NULL)
 		return;
-	l_for_each_safe(n, x, &t->list) {
+	sym_for_each_safe(n, x, t)
 		pmln_free(l_to_node(n));
-	}
 	free(t->tab.bkts);
 	t->tab.bkts = NULL;
 	abort_unless(l_isempty(&t->list));
@@ -142,7 +225,7 @@ static void symtab_adj_var_addrs(struct pml_symtab *t)
 	struct pml_variable *v;
 
 	abort_unless(t);
-	l_for_each(n, &t->list) {
+	sym_for_each(n, t) {
 		v = (struct pml_variable *)l_to_node(n);
 		if ((v->vtype == PML_VTYPE_LOCAL) || 
 		    ((v->vtype == PML_VTYPE_GLOBAL) && (v->init == NULL)))
@@ -187,7 +270,6 @@ int pml_ast_init(struct pml_ast *ast)
 	int i;
 	ast->error = 0;
 	ast->done = 0;
-	ast->line = 0;
 	if (symtab_init(&ast->vars) < 0)
 		return -1;
 	if (symtab_init(&ast->funcs) < 0) {
@@ -202,6 +284,8 @@ int pml_ast_init(struct pml_ast *ast)
 	for (i = PML_SEG_MIN; i <= PML_SEG_MAX; ++i)
 		dyb_init(&ast->mi_bufs[i], NULL);
 	dyb_init(&ast->regexes, NULL);
+	ast->livefunc = NULL;
+	ast->ltab = NULL;
 	str_copy(ast->errbuf, "", sizeof(ast->errbuf));
 	return 0;
 }
@@ -329,7 +413,6 @@ void pml_ast_clear(struct pml_ast *ast)
 
 	ast->error = 0;
 	ast->done = 0;
-	ast->line = 0;
 
 	symtab_destroy(&ast->vars);
 	symtab_destroy(&ast->funcs);
@@ -337,9 +420,8 @@ void pml_ast_clear(struct pml_ast *ast)
 	pmln_free(ast->b_rule);
 	ast->b_rule = NULL;
 
-	l_for_each_safe(n, x, &ast->p_rules) {
+	for_each_prule_safe(n, x, ast)
 		pmln_free(l_to_node(n));
-	}
 	abort_unless(l_isempty(&ast->p_rules));
 
 	pmln_free(ast->e_rule);
@@ -348,6 +430,9 @@ void pml_ast_clear(struct pml_ast *ast)
 	for (i = PML_SEG_MIN; i <= PML_SEG_MAX; ++i)
 		dyb_clear(&ast->mi_bufs[i]);
 	dyb_clear(&ast->regexes);
+
+	ast->livefunc = NULL;
+	ast->ltab = NULL;
 
 	str_copy(ast->errbuf, "", sizeof(ast->errbuf));
 }
@@ -378,11 +463,38 @@ struct pml_function *pml_ast_lookup_func(struct pml_ast *ast, char *name)
 }
 
 
-static int funceq(struct pml_function *f1, struct pml_function *f2)
+int pml_check_func_proto(struct pml_ast *ast, struct pml_function *f1,
+			 struct pml_function *f2)
 {
-	return (f1->rtype == f2->rtype) &&
-	       (f1->arity == f2->arity) &&
-	       (f1->flags == f2->flags);
+	struct list *n1, *n2;
+	struct pml_variable *v1, *v2;
+	int i;
+
+	if (f1->rtype != f2->rtype || f1->arity != f2->arity ||
+	    f1->flags != f2->flags) {
+		pml_ast_err(ast,
+			    "Function %s does not match prototype\n",
+			    f1->name);
+	}
+
+	n1 = l_head(&f1->vars.list);
+	n2 = l_head(&f2->vars.list);
+	for (i = 0; i < f1->arity; ++i) {
+		v1 = (struct pml_variable *)l_to_node(n1);
+		v2 = (struct pml_variable *)l_to_node(n2);
+		if (v1->etype != v2->etype || 
+		    v1->width != v2->width || 
+		    strcmp(v1->name, v2->name) != 0) {
+			pml_ast_err(ast, "Parameter %d in function '%s' does"
+					 " not match prototype declaration",
+				    f1->name, i+1);
+			return -1;
+		}
+		n1 = n1->next;
+		n2 = n2->next;
+	}
+
+	return 0;
 }
 
 
@@ -404,22 +516,9 @@ int pml_ast_add_func_proto(struct pml_ast *ast, struct pml_function *func)
 		return -1;
 	}
 
-	ofunc = (struct pml_function *)symtab_lookup(&ast->funcs, func->name);
-	if (ofunc != NULL) {
-		if (!funceq(ofunc, func)) {
-			pml_ast_err(ast, "Protoype for %s does not match %s\n",
-				    func->name, 
-				    ((ofunc->body == NULL && 
-				      ofunc->ieval == NULL) ? 
-				     "declaration" : "earlier prototype"));
-			return -1;
-		}
-		pmln_free(func);
-	} else {
-		abort_unless(l_isempty(&func->vars.list));
-		abort_unless(func->body == NULL);
-		symtab_add(&ast->funcs, (struct pml_sym *)func);
-	}
+	abort_unless(symtab_lookup(&ast->funcs, func->name) == NULL);
+	abort_unless(func->body == NULL);
+	symtab_add(&ast->funcs, (struct pml_sym *)func);
 
 	return 0;
 }
@@ -427,51 +526,10 @@ int pml_ast_add_func_proto(struct pml_ast *ast, struct pml_function *func)
 
 int pml_ast_add_func(struct pml_ast *ast, struct pml_function *func)
 {
-	struct pml_function *ofunc;
 	struct list *n, *x;
 	struct pml_variable *v;
 
-	ofunc = (struct pml_function *)symtab_lookup(&ast->funcs, func->name);
-	if (ofunc != NULL) {
-		abort_unless(!PML_FUNC_IS_INLINE(func));
-
-		/* check for duplicate function */
-		if (ofunc->body != NULL || PML_FUNC_IS_INTRINSIC(ofunc)) {
-			pml_ast_err(ast, "Duplicate function: %s\n",
-				    func->name);
-			return -1;
-		}
-
-		/* check for signature mismatch */
-		if (!funceq(ofunc, func)) {
-			pml_ast_err(ast,
-				    "Function %s does not match prototype\n",
-				    func->name);
-			return -1;
-		}
-
-		/* at this point we have a function whose prototype we */
-		/* have seen before and which matches the prototype. */
-		/* move the body and args to the original and free the */
-		/* new one. */
-		l_for_each_safe(n, x, &func->vars.list) {
-			v = container(n, struct pml_variable, ln);
-			symtab_rem((struct pml_sym *)v);
-			if (pml_func_add_param(ofunc, v) < 0) {
-				pml_ast_err(ast,
-					    "Duplicate parameter name: %s\n",
-					    v->name);
-				return -1;
-			}
-		}
-
-		ofunc->body = func->body;
-		func->body = NULL;
-		pmln_free(func);
-		func = ofunc;
-	} else {
-		symtab_add(&ast->funcs, (struct pml_sym *)func);
-	}
+	symtab_add(&ast->funcs, (struct pml_sym *)func);
 
 	if (pml_resolve_refs(ast, (union pml_node *)func) < 0)
 		return -1;
@@ -505,9 +563,8 @@ int pml_ast_add_intrinsic(struct pml_ast *ast, struct pml_intrinsic *intr)
 		goto enomem;
 	for (i = 0; i < intr->arity; ++i) {
 		abort_unless(intr->pnames[i]);
-		if ((ncpy = strdup(intr->pnames[i])) == NULL)
-			goto enomem;
-		v = pml_var_alloc(ast, ncpy, 0, PML_VTYPE_PARAM, NULL);
+		v = pml_var_alloc_nc(ast, intr->pnames[i], PML_VTYPE_PARAM, 
+				     PML_ETYPE_SCALAR, 0, NULL);
 		if (v == NULL)
 			goto enomem;
 		if (pml_func_add_param(f, v) < 0) {
@@ -634,6 +691,20 @@ int pml_func_add_param(struct pml_function *f, struct pml_variable *v)
 }
 
 
+int pml_add_lvar(struct pml_symtab *t, struct pml_function *f,
+		 struct pml_variable *v)
+{
+	abort_unless(v && v->vtype == PML_VTYPE_LOCAL);
+	if (symtab_add(t, (struct pml_sym *)v) < 0)
+		return -1;
+	v->addr = t->addr_rw2;
+	t->addr_rw2 += (v->width + 7) / 8;
+	v->func = f;
+
+	return 0;
+}
+
+
 int pml_ast_add_regex(struct pml_ast *ast, struct pml_literal *lit)
 {
 	if (dyb_cat_a(&ast->regexes, &lit, sizeof(lit)) < 0) {
@@ -658,7 +729,7 @@ static void check_undefined_funcs(struct pml_ast *ast)
 	struct list *n;
 	struct pml_function *func;
 
-	l_for_each(n, &ast->funcs.list) {
+	for_each_func(n, ast) {
 		func = (struct pml_function *)l_to_node(n);
 		if ((func->callers > 0) && PML_FUNC_IS_REGULAR(func) &&
 		    (func->body == NULL)) {
@@ -1026,8 +1097,9 @@ union pml_expr_u *pml_unop_alloc(struct pml_ast *ast, int op,
 }
 
 
-struct pml_variable *pml_var_alloc(struct pml_ast *ast, char *name, int width,
-				   int vtype, union pml_expr_u *init)
+struct pml_variable *pml_var_alloc(struct pml_ast *ast, char *name, 
+				   int vtype, int etype, int size,
+				   union pml_expr_u *init)
 {
 	struct pml_variable *v = pmln_alloc(ast, PMLTT_VAR);
 
@@ -1038,15 +1110,34 @@ struct pml_variable *pml_var_alloc(struct pml_ast *ast, char *name, int width,
 	}
 
 	v->name = name;
-	if (width == 0) {
+	v->etype = etype;
+	v->vtype = vtype;
+	if (etype == PML_ETYPE_SCALAR) {
 		v->width = 8;
-		v->etype = PML_ETYPE_SCALAR;
+	} else if (etype == PML_ETYPE_BLOBREF) {
+		v->width = 16;
 	} else {
-		v->width = width;
+		v->width = size;
 		v->etype = PML_ETYPE_BYTESTR;
 	}
-	v->vtype = vtype;
 	v->init = init;
+
+	return v;
+}
+
+
+static struct pml_variable *pml_var_alloc_nc(struct pml_ast *ast, char *name, 
+				             int vtype, int etype, int size,
+				             union pml_expr_u *init)
+{
+	struct pml_variable *v;
+	char *nc = strdup(name);
+
+	if (nc == NULL)
+		return NULL;
+	v = pml_var_alloc(ast, nc, vtype, etype, size, init);
+	if (v == NULL)
+		free(nc);
 
 	return v;
 }
@@ -1253,13 +1344,14 @@ static const char *efs(void *p, char s[80])
 
 
 static const char *etype_strs[] = {
-	"unknown", "scalar", "byte string", "masked string", "void"
+	"unknown", "void", "scalar", "byte string", "masked string", 
+	"blob reference"
 };
 static const char *ets(void *p) {
 	struct pml_expr_base *e = p;
 	abort_unless(p);
 	abort_unless(e->etype >= PML_ETYPE_UNKNOWN && 
-		     e->etype <= PML_ETYPE_VOID);
+		     e->etype <= PML_ETYPE_LAST);
 	return etype_strs[e->etype];
 }
 
@@ -1267,7 +1359,7 @@ static const char *rtstr(void *p) {
 	struct pml_function *f = p;
 	abort_unless(p);
 	abort_unless(f->rtype >= PML_ETYPE_UNKNOWN && 
-		     f->rtype <= PML_ETYPE_VOID);
+		     f->rtype <= PML_ETYPE_LAST);
 	return etype_strs[f->rtype];
 }
 
@@ -1417,7 +1509,7 @@ void pmlt_print(struct pml_ast *ast, union pml_node *np, uint depth)
 		printf("List:\n");
 		indent(depth);
 		printf("-----\n");
-		l_for_each(e, &p->list) {
+		for_each_le(e, p) {
 			pmlt_print(ast, l_to_node(e), depth);
 			indent(depth);
 			printf("-----\n");
@@ -1627,9 +1719,8 @@ void pmlt_print(struct pml_ast *ast, union pml_node *np, uint depth)
 
 		indent(depth);
 		printf("Parameters & Variables -- \n");
-		l_for_each(n, &p->vars.list) {
+		for_each_fvar(n, p)
 			pmlt_print(ast, l_to_node(n), depth+1);
-		}
 
 		indent(depth);
 		printf("Body -- \n");
@@ -1655,9 +1746,8 @@ void pmlt_print(struct pml_ast *ast, union pml_node *np, uint depth)
 
 		indent(depth);
 		printf("Action Variables -- \n");
-		l_for_each(n, &p->vars.list) {
+		for_each_rvar(n, p)
 			pmlt_print(ast, l_to_node(n), depth+1);
-		}
 
 		indent(depth);
 		printf("Action -- \n");
@@ -1679,12 +1769,12 @@ void pml_ast_print(struct pml_ast *ast)
 	printf("-----------\n");
 	printf("Variables\n");
 	printf("-----------\n");
-	l_for_each(n, &ast->vars.list)
+	for_each_gvar(n, ast)
 		pmlt_print(ast, l_to_node(n), 1);
 	printf("-----------\n");
 	printf("Functions\n");
 	printf("-----------\n");
-	l_for_each(n, &ast->funcs.list)
+	for_each_func(n, ast)
 		pmlt_print(ast, l_to_node(n), 1);
 	printf("-----------\n");
 	printf("Begin Rule\n");
@@ -1693,7 +1783,7 @@ void pml_ast_print(struct pml_ast *ast)
 	printf("-----------\n");
 	printf("Packet Rules\n");
 	printf("-----------\n");
-	l_for_each(n, &ast->p_rules)
+	for_each_prule(n, ast)
 		pmlt_print(ast, l_to_node(n), 1);
 	printf("-----------\n");
 	printf("End Rule\n");
@@ -1726,7 +1816,7 @@ int pmln_walk(union pml_node *np, void *ctx, pml_walk_f pre, pml_walk_f in,
 	case PMLTT_LIST: {
 		struct pml_list *p = &np->list;
 		struct list *e;
-		l_for_each_safe(e, x, &p->list) {
+		for_each_le_safe(e, x, p) {
 			rv = pmln_walk(l_to_node(e), ctx, pre, in, post);
 			if (rv < 0)
 				return rv;
@@ -1951,7 +2041,7 @@ int pmln_walk(union pml_node *np, void *ctx, pml_walk_f pre, pml_walk_f in,
 		struct pml_function *p = &np->function;
 		struct list *n;
 
-		l_for_each_safe(n, x, &p->vars.list) {
+		for_each_fvar_safe(n, x, p) {
 			rv = pmln_walk(l_to_node(n), ctx, pre, in, post);
 			if (rv < 0)
 				return rv;
@@ -2024,12 +2114,12 @@ int pml_ast_walk(struct pml_ast *ast, void *ctx, pml_walk_f pre,
 	if (ast == NULL)
 		return -1;
 
-	l_for_each(n, &ast->vars.list) {
+	for_each_gvar(n, ast) {
 		rv = pmln_walk(l_to_node(n), ctx, pre, in, post);
 		if (rv < 0)
 			goto out;
 	}
-	l_for_each(n, &ast->funcs.list) {
+	for_each_func(n, ast) {
 		rv = pmln_walk(l_to_node(n), ctx, pre, in, post);
 		if (rv < 0)
 			goto out;
@@ -2037,7 +2127,7 @@ int pml_ast_walk(struct pml_ast *ast, void *ctx, pml_walk_f pre,
 	rv = pmln_walk((union pml_node *)ast->b_rule, ctx, pre, in, post);
 	if (rv < 0)
 		goto out;
-	l_for_each(n, &ast->p_rules) {
+	for_each_prule(n, ast) {
 		rv = pmln_walk(l_to_node(n), ctx, pre, in, post);
 		if (rv < 0)
 			goto out;
@@ -2399,59 +2489,15 @@ static int resolve_locsym(struct pml_resolve_ctx *ctx, struct pml_locator *l)
 	}
 
 	t = ctx->symtabs[ctx->vtidx];
-	v = pml_var_alloc(ctx->ast, l->name, 0, PML_VTYPE_LOCAL, NULL);
+	v = pml_var_alloc_nc(ctx->ast, l->name, PML_VTYPE_LOCAL, 
+			     PML_ETYPE_SCALAR, 0, NULL);
 	if (v == NULL)
 		return -1;
-	v->addr = t->addr_rw2;
-	t->addr_rw2 += 1;
-	abort_unless(symtab_add(t, (struct pml_sym *)v) >= 0);
-	v->func = ctx->livefunc;
 	v->etype = PML_ETYPE_SCALAR;
+	abort_unless(pml_add_lvar(t, ctx->livefunc, v) >= 0);
+
 	l->reftype = PML_REF_VAR;
 	l->u.varref = v;
-
-	return 0;
-}
-
-
-static int binop_typecheck(struct pml_ast *ast, struct pml_op *op)
-{
-	struct pml_expr_base *a1, *a2;
-
-	a1 = (struct pml_expr_base *)op->arg1;
-	a2 = (struct pml_expr_base *)op->arg2;
-
-	switch(op->op) {
-	case PMLOP_MATCH:
-	case PMLOP_NOTMATCH:
-		if (a1->etype != PML_ETYPE_BYTESTR) {
-			pml_ast_err(ast,
-				    "%s: Left argument of a match operation "
-				    "must be a byte string: %s instead\n",
-				    opstr(op), ets(a1));
-			return -1;
-		}
-		if (a1->etype != PML_ETYPE_BYTESTR &&
-		    a2->etype != PML_ETYPE_MASKVAL) {
-			pml_ast_err(ast, 
-				    "%s: Right argument of a match operation "
-				    "must be a byte string or masked "
-				    "string: %s instead\n", 
-				    opstr(op), ets(a2));
-			return -1;
-		}
-		break;
-	case PMLOP_REXMATCH:
-	case PMLOP_NOTREXMATCH:
-		if (a1->etype != PML_ETYPE_BYTESTR ||
-		    a2->etype != PML_ETYPE_BYTESTR) {
-			pml_ast_err(ast, "Both arguments of a regex operation "
-					 "must be byte strings. Types are "
-					 "'%s' and '%s'\n", ets(a1), ets(a2));
-			return -1;
-		}
-		break;
-	}
 
 	return 0;
 }
@@ -2516,6 +2562,224 @@ static int resolve_node_pre(union pml_node *node, void *ctxp, void *xstk)
 }
 
 
+static int typecheck_binop(struct pml_ast *ast, struct pml_op *op)
+{
+	struct pml_expr_base *a1, *a2;
+
+	a1 = (struct pml_expr_base *)op->arg1;
+	a2 = (struct pml_expr_base *)op->arg2;
+
+	switch(op->op) {
+	case PMLOP_MATCH:
+	case PMLOP_NOTMATCH:
+		if (typecheck(a1->etype, PML_ETYPE_BYTESTR) < 0) {
+			pml_ast_err(ast,
+				    "%s: Left argument of a match operation "
+				    "must be a byte string: %s instead\n",
+				    opstr(op), ets(a1));
+			return -1;
+		}
+		if (a2->etype != PML_ETYPE_BYTESTR &&
+		    a2->etype != PML_ETYPE_BLOBREF &&
+		    a2->etype != PML_ETYPE_MASKVAL) {
+			pml_ast_err(ast, 
+				    "%s: Right argument of a match operation "
+				    "must be a byte string blob pointer or "
+				    "masked string: %s instead\n", 
+				    opstr(op), ets(a2));
+			return -1;
+		}
+		break;
+
+	case PMLOP_REXMATCH:
+	case PMLOP_NOTREXMATCH:
+		if (typecheck(a1->etype, PML_ETYPE_BYTESTR) < 0 ||
+		    a2->etype != PML_ETYPE_BYTESTR) {
+			pml_ast_err(ast, "Both arguments of a regex operation "
+					 "must be byte strings. Types are "
+					 "'%s' and '%s'\n", ets(a1), ets(a2));
+			return -1;
+		}
+		break;
+
+	default:
+		if (typecheck(a1->etype, PML_ETYPE_SCALAR) < 0) {
+			pml_ast_err(ast, "Left argument of scalar operator"
+					 " can not be converted to scalar");
+			return -1;
+		}
+		if (typecheck(a2->etype, PML_ETYPE_SCALAR) < 0) {
+			pml_ast_err(ast, "Right argument of scalar operator"
+					 " can not be converted to scalar");
+			return -1;
+		}
+	}
+
+	return 0;
+}
+
+
+static int typecheck_call(struct pml_ast *ast, struct pml_call *c)
+{
+	int i;
+	struct list *pn, *an;
+	struct pml_variable *p;
+	union pml_expr_u *a;
+	struct pml_function *f = c->func;
+
+	pn = l_head(&f->vars.list);
+	an = l_head(&c->args->list);
+	for (i = 0; i < f->arity; ++i) {
+		p = (struct pml_variable *)l_to_node(pn);
+		a = (union pml_expr_u *)l_to_node(an);
+		if (typecheck(a->expr.etype, p->etype) < 0)
+			return -1;
+		pn = pn->next;
+		an = an->next;
+	}
+
+	return 0;
+}
+
+
+static int typecheck_locator(struct pml_ast *ast, struct pml_locator *loc)
+{
+	union pml_expr_u *e;
+	if (loc->pkt != NULL) {
+		e = loc->pkt;
+		if (typecheck(e->expr.etype, PML_ETYPE_SCALAR) < 0) {
+			pml_ast_err(ast, "invalid locator packet type");
+			return -1;
+		}
+	}
+	if (loc->idx != NULL) {
+		e = loc->idx;
+		if (typecheck(e->expr.etype, PML_ETYPE_SCALAR) < 0) {
+			pml_ast_err(ast, "invalid locator index type");
+			return -1;
+		}
+	}
+	if (loc->off != NULL) {
+		e = loc->off;
+		if (typecheck(e->expr.etype, PML_ETYPE_SCALAR) < 0) {
+			pml_ast_err(ast, "invalid locator offset type");
+			return -1;
+		}
+	}
+	if (loc->len != NULL) {
+		e = loc->len;
+		if (typecheck(e->expr.etype, PML_ETYPE_SCALAR) < 0) {
+			pml_ast_err(ast, "invalid locator length type");
+			return -1;
+		}
+	}
+	return 0;
+}
+
+
+static int typecheck_node(struct pml_ast *ast, union pml_node *node,
+			  struct pml_function *livefunc)
+{
+	union pml_expr_u *e, *e2;
+	switch (node->base.type) {
+
+	case PMLTT_LIST:
+	case PMLTT_SCALAR:
+	case PMLTT_BYTESTR:
+	case PMLTT_MASKVAL:
+	case PMLTT_LOCADDR:
+	case PMLTT_VAR:
+	case PMLTT_FUNCTION:
+	case PMLTT_RULE:
+		/* no check */
+		break;
+
+	case PMLTT_BINOP: {
+		struct pml_op *op = &node->op;
+		if (typecheck_binop(ast, op) < 0)
+			return -1;
+	} break;
+
+	case PMLTT_UNOP: {
+		struct pml_op *op = &node->op;
+		e = op->arg1;
+		if (typecheck(e->expr.etype, PML_ETYPE_SCALAR) < 0) {
+			pml_ast_err(ast, "invalid unary operand");
+			return -1;
+		}
+	} break;
+
+	case PMLTT_CALL:
+		if (typecheck_call(ast, &node->call) < 0)
+			return -1;
+		break;
+
+	case PMLTT_LOCATOR: {
+		if (typecheck_locator(ast, &node->locator) < 0)
+			return -1;
+	} break;
+
+	case PMLTT_IF: {
+		struct pml_if *ifstmt = &node->ifstmt;
+		e = ifstmt->test;
+		if (typecheck(e->expr.etype, PML_ETYPE_SCALAR) < 0) {
+			pml_ast_err(ast, "invalid 'if' test");
+			return -1;
+		}
+	} break;
+
+	case PMLTT_WHILE: {
+		struct pml_while *whilestmt = &node->whilestmt;
+		e = whilestmt->test;
+		if (typecheck(e->expr.etype, PML_ETYPE_SCALAR) < 0) {
+			pml_ast_err(ast, "invalid 'while' condition");
+			return -1;
+		}
+	} break;
+
+	case PMLTT_ASSIGN: {
+		struct pml_assign *a = &node->assign;
+		e = a->expr;
+		/* scalar -> bytestr is allowed for assignments only */
+		if ((a->loc->etype == PML_ETYPE_BYTESTR || 
+		     a->loc->etype == PML_ETYPE_BLOBREF) && 
+		    (e->expr.etype == PML_ETYPE_SCALAR))
+			break;
+		if (typecheck(e->expr.etype, a->loc->etype) < 0) {
+			pml_ast_err(ast, "incomatible assignment type");
+			return -1;
+		}
+	} break;
+
+	case PMLTT_CFMOD: {
+		struct pml_cfmod *c = &node->cfmod;
+		if (c->cftype == PML_CFM_RETURN) {
+			e = c->expr;
+			if (typecheck(e->expr.etype, livefunc->rtype) < 0) {
+				pml_ast_err(ast, "'return' value does not match"
+					         " function return type");
+				return -1;
+			}
+		}
+	} break;
+
+	case PMLTT_PRINT: {
+		struct pml_print *p = &node->print;
+	       	e = p->expr;
+		if (typecheck(e->expr.etype, PML_FMT_TO_ETYPE(p->fmt)) < 0) {
+			pml_ast_err(ast, "print expr doesn't match format");
+			return -1;
+		}
+	} break;
+
+	default:
+		abort_unless(0);
+	}
+
+	return 0;
+}
+
+
 static int resolve_node_post(union pml_node *node, void *ctxp, void *xstk)
 {
 	struct pml_resolve_ctx *ctx = ctxp;
@@ -2524,10 +2788,6 @@ static int resolve_node_post(union pml_node *node, void *ctxp, void *xstk)
 
 	case PMLTT_BINOP: {
 		struct pml_op *op = (struct pml_op *)node;
-		/* type checking _is_ required for certain binary operations */
-		/* specifically, the MATCH and REXMATCH Operations */
-		if (binop_typecheck(ctx->ast, op) < 0)
-			return -1;
 		if (PML_EXPR_IS_CONST(op->arg1) && 
 		    PML_EXPR_IS_CONST(op->arg2)) {
 			op->eflags |= PML_EFLAG_CONST | PML_EFLAG_PCONST;
@@ -2542,9 +2802,6 @@ static int resolve_node_post(union pml_node *node, void *ctxp, void *xstk)
 
 	case PMLTT_UNOP: {
 		struct pml_op *op = (struct pml_op *)node;
-		/* type checking not currently required for unary operations */
-		/* because both byte strings and scalars are allowed for */
-		/* all operations. */
 		if (PML_EXPR_IS_CONST(op->arg1)) {
 			op->eflags |= PML_EFLAG_CONST | PML_EFLAG_PCONST;
 		} else if (PML_EXPR_IS_PCONST(op->arg1)) {
@@ -2561,7 +2818,7 @@ static int resolve_node_post(union pml_node *node, void *ctxp, void *xstk)
 		f = c->func;
 		if (PML_FUNC_IS_PCONST(f)) {
 			c->eflags |= PML_EFLAG_CONST;
-			l_for_each(n, &c->args->list) {
+			for_each_arg(n, c) {
 				if (!PML_EXPR_IS_PCONST(l_to_node(n))) {
 					c->eflags &= ~(PML_EFLAG_PCONST|
 						       PML_EFLAG_CONST);
@@ -2630,8 +2887,8 @@ static int resolve_node_post(union pml_node *node, void *ctxp, void *xstk)
 		if (l->reftype == PML_REF_VAR)
 			l->eflags |= PML_EFLAG_CONST|PML_EFLAG_PCONST;
 		/* redundant? */
-		l->etype = PML_ETYPE_SCALAR;
-		l->width = 8;
+		l->etype = PML_ETYPE_BLOBREF;
+		l->width = 16;
 	} break;
 
 	case PMLTT_WHILE: {
@@ -2676,6 +2933,9 @@ static int resolve_node_post(union pml_node *node, void *ctxp, void *xstk)
 	} break;
 
 	}
+
+	if (typecheck_node(ctx->ast, node, ctx->livefunc) < 0)
+		return -1;
 
 	return 0;
 }
@@ -3151,7 +3411,7 @@ static int e_call(struct pml_ast *ast, struct pml_stack_frame *fr,
 
 	/* evaluation the parameters and put them in the stack frame */
 	pp = (uint64_t *)nfr->stack;
-	l_for_each(n, &c->args->list) {
+	for_each_arg(n, c) {
 		rv = pml_eval(ast, fr, l_to_node(n), &lr);
 		if (rv < 0)
 			goto out;
@@ -3409,7 +3669,7 @@ void pml_ast_mem_init(struct pml_ast *ast)
 
 	memset(dyb->data, 0, dyb->len);
 
-	l_for_each(n, &ast->vars.list) {
+	for_each_gvar(n, ast) {
 		v = (struct pml_variable *)l_to_node(n);
 		if (v->vtype != PML_VTYPE_GLOBAL || v->init == NULL ||
 		    v->width == 0)
@@ -3554,7 +3814,7 @@ static int pml_cexpr_walker(union pml_node *node, void *astp, void *xstk)
 
 	case PMLTT_CALL: {
 		struct pml_call *c = &node->call;
-		l_for_each_safe(n, x, &c->args->list) {
+		for_each_arg_safe(n, x, c) {
 			if (pml_opt_l_cexpr((union pml_expr_u *)l_to_node(n), 
 					   astp) < 0)
 				return -1;

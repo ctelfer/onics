@@ -21,7 +21,7 @@
 #define IDCHARS \
 	"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_"
 #define WSCHARS " \t\r\n"
-#define OPCHARS "=!<>~+-*/%&|^.@?{}[](),;:"
+#define OPCHARS "=!<>~+-*/%&|^.@?{}[](),;$"
 #define QUOTE		'"'
 #define REXQUOTE	'`'
 
@@ -88,7 +88,6 @@ struct kwtok {
 	{ "BEGIN",	PMLTOK_BEGIN },
 	{ "END",	PMLTOK_END },
 	{ "int",	PMLTOK_INT },
-	{ "void",	PMLTOK_VOID },
 	{ "inline",	PMLTOK_INLINE },
 	{ "const",	PMLTOK_CONST },
 	{ "not",	PMLTOK_NOT },
@@ -103,7 +102,8 @@ struct kwtok {
 	{ "nextrule",	PMLTOK_NEXTRULE },
 	{ "sendpkt",	PMLTOK_SENDPKT },
 	{ "drop",	PMLTOK_DROP },
-	{ "var",	PMLTOK_VAR },
+	{ "blob",	PMLTOK_BLOB },
+	{ "bref",	PMLTOK_BREF },
 	{ "print",	PMLTOK_PRINT },
 	{ NULL,		0 }
 };
@@ -658,6 +658,8 @@ static int read_op(struct pmllex *lex, int ch)
 	case ']': tok = PMLTOK_RBRACKET; break;
 	case ',': tok = PMLTOK_COMMA; break;
 	case ';': tok = PMLTOK_SEMICOLON; break;
+	case '$': tok = PMLTOK_DOLLAR; break;
+	case '@': tok = PMLTOK_AT; break;
 
 	case '?':
 		ch2 = nextc(lex);
@@ -699,13 +701,6 @@ static int read_op(struct pmllex *lex, int ch)
 		if (ch2 == '?') { tok = PMLTOK_PPEND; break; }
 		pushback(lex, ch2);
 		tok = PMLTOK_MINUS;
-		break;
-
-	case '@':
-		ch2 = nextc(lex);
-		if (ch2 == '@') { tok = PMLTOK_ATAT; break; }
-		pushback(lex, ch2);
-		tok = PMLTOK_AT;
 		break;
 
 	case ':':

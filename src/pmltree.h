@@ -65,7 +65,6 @@ struct pml_symtab {
 struct pml_ast {
 	int			error;
 	int			done;
-	ulong			line;
 	struct pml_symtab	vars;
 	struct pml_symtab	funcs;
 	struct pml_rule *	b_rule;
@@ -73,6 +72,8 @@ struct pml_ast {
 	struct pml_rule *	e_rule;
 	struct dynbuf		mi_bufs[2];
 	struct dynbuf		regexes;
+	struct pml_symtab *	ltab;
+	struct pml_function *	livefunc;
 	char			errbuf[256];
 };
 
@@ -171,10 +172,12 @@ union pml_expr_u;
 
 enum {
 	PML_ETYPE_UNKNOWN,
+	PML_ETYPE_VOID,
 	PML_ETYPE_SCALAR,
 	PML_ETYPE_BYTESTR,
 	PML_ETYPE_MASKVAL,
-	PML_ETYPE_VOID,
+	PML_ETYPE_BLOBREF,
+	PML_ETYPE_LAST = PML_ETYPE_BLOBREF,
 };
 
 enum {
@@ -610,8 +613,8 @@ union pml_expr_u *pml_binop_alloc(struct pml_ast *ast, int op,
 		                  union pml_expr_u *right);
 union pml_expr_u *pml_unop_alloc(struct pml_ast *ast, int op,
 				 union pml_expr_u *ex);
-struct pml_variable *pml_var_alloc(struct pml_ast *ast, char *name, int width,
-				   int vtype, union pml_expr_u *init);
+struct pml_variable *pml_var_alloc(struct pml_ast *ast, char *name, int vtype, 
+				   int etype, int size, union pml_expr_u *init);
 struct pml_call *pml_call_alloc(struct pml_ast *ast, struct pml_function *func,
 				struct pml_list *args);
 struct pml_print *pml_print_alloc(struct pml_ast *ast, union pml_expr_u *expr,
@@ -621,6 +624,9 @@ int pml_print_strtofmt(const char *s);
 
 /* -- helper functions for symbol values PML (vars, functions, etc) -- */
 int pml_func_add_param(struct pml_function *func, struct pml_variable *var);
+int pml_func_add_var(struct pml_function *func, struct pml_variable *var);
+int pml_check_func_proto(struct pml_ast *ast, struct pml_function *f1, 
+			 struct pml_function *f2);
 int pml_ast_add_func_proto(struct pml_ast *ast, struct pml_function *func);
 int pml_ast_add_func(struct pml_ast *ast, struct pml_function *func);
 int pml_ast_add_intrinsic(struct pml_ast *ast, struct pml_intrinsic *intr);

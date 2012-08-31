@@ -82,9 +82,7 @@ var Count;
 
 /* 
 
-  Variables -- local all variables are 32 bit numbers (for now); will add more
-               types later.  (8, 16, 32, 64-bit signed and unsigned, plus 
-               bytestrings)
+  Variables -- all local variables are 64 bit signed numbers (for now)
   Local variables are referred to by name
   
 
@@ -100,28 +98,19 @@ var Count;
 		    * byte strings of 8 or less bytes can be operated on as
 		      numeric values.
 
-	    There are 3 special field access characteristics
-	      - Required -- cannot be unset  (e.g. start offset)
-	      - Derived position -- cannot be unset and offset does not move 
-	          with an 'insert' or 'cut' unless the offset(s) it depends
-		  upon also move.
-	      - Derived value -- cannot be set or unset, field is not present
-	          in the data explicitly, but derived from offsets or other
-		  fields in the data.
-
   Notation:
    a			-- Variable name (global or local) or proto name
-   @@<protoname>	-- Protocol ID 
+   @<protoname>		-- Protocol ID 
    a.b.c.d		-- Field for packet 0 or protocol constant
    a.b.c.d[o,l]		-- Bytes from packet 0, field a.b.c.d, offset o length l
-   @a{p}.b.c.d[o,l]	-- Bytes from packet p, field a.b.c.d, offset o length l
-   @a{p,i}.b.c.d[o,l]	-- Bytes from packet p, field a.b.c.d, offset o length l
+   $(p).b.c.d[o,l]	-- Bytes from packet p, field a.b.c.d, offset o length l
+   $(p,i).b.c.d[o,l]	-- Bytes from packet p, field a.b.c.d, offset o length l
    &<field>		-- Byte offset for a field <byte string or integer>
 
 
   Intrinsic Functions:
    - Drop
-   - Fix dlt
+   - Fix datalink type
    - Insert space
    - Cut space
    - Duplicate
@@ -162,7 +151,8 @@ var Count;
 
 
   Declarations:
-  function name ( arg1, arg2 ... ) {
+  <type> can be 'int', 'blob', 
+  function name ( <type> arg1, <type> arg2 ... ) {
     <local variable declarations here>
 
     <action list>
@@ -170,10 +160,10 @@ var Count;
     return(v1, v2, ...);
   }
 
-  var name;
-  var name = <scalar value>;
-  var name[width]; # global only
-  var name[width] = <value>; # global only
+  <type> name;
+  int name = <scalar value>;
+  blob name[width]; # global only
+  blob name[width] = <value>; # global only
 */
 
 
@@ -190,6 +180,13 @@ var Count;
 #include "pmllex.h"
 #include "pmltree.h" 
 #include "ns.h"
+
+struct ident {
+	int type;
+	char *name;
+	ulong width;
+};
+
 }
 %extra_argument { struct pml_ast *ast }
 
@@ -212,11 +209,17 @@ var Count;
 %type decl { union pml_node * }
 %destructor decl { pmln_free($$); }
 
+%type funchdr{ struct pml_function * }
+%destructor funchdr { pmln_free($$); }
+
 %type funcproto { struct pml_function * }
 %destructor funcproto { pmln_free($$); }
 
 %type funcdecl { struct pml_function * }
 %destructor funcdecl { pmln_free($$); }
+
+%type blkbody { struct pml_list * }
+%destructor blkbody { pmln_free($$); }
 
 %type inlinedecl { struct pml_function * }
 %destructor inlinedecl { pmln_free($$); }
@@ -226,6 +229,9 @@ var Count;
 
 %type rule { struct pml_rule * }
 %destructor rule { pmln_free($$); }
+
+%type rstart { struct pml_rule * }
+%destructor rstart { pmln_free($$); }
 
 %type pktpat { union pml_expr_u * }
 %destructor pktpat { pmln_free($$); }
@@ -257,9 +263,6 @@ var Count;
 %type locname { struct pml_locator * }
 %destructor locname { pmln_free($$); }
 
-%type locstr { struct pml_locator * }
-%destructor locstr { pmln_free($$); }
-
 %type pktname { struct pml_locator * }
 %destructor pktname { pmln_free($$); }
 
@@ -272,6 +275,9 @@ var Count;
 %type type { int }
 
 %type cfmkw { int }
+
+%type iddecl { struct ident }
+%destructor iddecl { free($$.name); }
 
 %type orexpr { union pml_expr_u * } 
 %destructor orexpr { pmln_free($$); }
@@ -340,7 +346,7 @@ decllist ::= decllist decl. /* nothing to do: resolved below. */
 decllist ::= . /* nothing to do */
 
 decl ::= funcproto(F). {
-	if (pml_ast_add_func_proto(ast, F) < 0)
+	if (F != NULL && pml_ast_add_func_proto(ast, F) < 0)
 		pmln_free(F);
 }
 decl ::= funcdecl(F). {
@@ -361,52 +367,107 @@ decl ::= rule(R). {
 }
 
 type(T) ::= INT. { T = PML_ETYPE_SCALAR; }
-type(T) ::= VOID. { T = PML_ETYPE_VOID; }
+type(T) ::= BLOB. { T = PML_ETYPE_BYTESTR; }
+type(T) ::= BREF. { T = PML_ETYPE_BLOBREF; }
 
-funcproto(F) ::= type(T) ID(N) LPAREN idlist(P) RPAREN SEMICOLON. {
-	F = pmln_alloc(ast, PMLTT_FUNCTION);
-	if (F != NULL) {
-		F->name = (char *)N.u.raw.data;
-		F->rtype = T;
-		F->arity = l_length(&P->list);
-	}
-	pmln_free(P);
+iddecl(I) ::= type(T) ID(N). {
+	I.name = (char *)N.u.raw.data;
+	I.type = T;
+	I.width = 0;
 }
 
-funcdecl(F) ::= type(T) ID(N) LPAREN idlist(P) RPAREN LBRACE 
-                stmts(S) RBRACE. {
+funchdr(F) ::= iddecl(I) LPAREN idlist(P) RPAREN. {
 	struct list *t, *x; 
 	struct pml_variable *p;
 
 	F = pmln_alloc(ast, PMLTT_FUNCTION);
 	if (F == NULL) {
-		free(N.u.raw.data);
-		goto out_func_decl;
+		free(I.name);
+		goto out_func_hdr;
 	}
 
-	F->name = (char *)N.u.raw.data;
-	F->rtype = T;
-
+	F->name = I.name;
+	F->rtype = I.type;
 	l_for_each_safe(t, x, &P->list) {
 		F->arity += 1;
 		p = container(t, struct pml_variable, ln);
 		l_rem(&p->ln);
 		if (pml_func_add_param(F, p) < 0) {
-			pml_ast_err(ast,
-				    "Duplicate variable name: %s\n",
-				    p->name);
-			free(N.u.raw.data);
+			free(I.name);
 			pmln_free(p);
 			pmln_free(F);
-			goto out_func_decl;
+			F = NULL;
+			goto out_func_hdr;
 		}
 	}
+	ast->livefunc = F;
+	ast->ltab = &F->vars;
 
-	F->body = (union pml_node *)S;
-
-out_func_decl:
+out_func_hdr:
 	pmln_free(P);
 }
+
+
+
+funcproto(FO) ::= funchdr(FI) SEMICOLON. {
+	struct list *t, *x; 
+	struct pml_variable *p;
+
+	FO = pml_ast_lookup_func(ast, FI->name);
+	if (FO != NULL) {
+		FO = NULL;
+		pml_check_func_proto(ast, FO, FI);
+		pmln_free(FI);
+	} else {
+		FO = FI;
+	}
+	ast->livefunc = NULL;
+	ast->ltab = NULL;
+}
+
+
+ldecl ::= iddecl(I) SEMICOLON. {
+	struct pml_variable *v;
+	v = pml_var_alloc(ast, I.name, PML_VTYPE_LOCAL, I.type, I.width, NULL);
+	if (v != NULL) {
+		if (pml_add_lvar(ast->ltab, ast->livefunc, v) < 0) {
+			pml_ast_err(ast, "error adding local var '%s'", I.name);
+			pmln_free(v);
+		}
+	}
+}
+
+ldecls ::= .
+ldecls ::= ldecls ldecl.
+ldecls ::= ldecls GLOBAL iddecl SEMICOLON.
+
+blkbody(B) ::= ldecls stmts(S). { B = S; }
+
+
+funcdecl(FO) ::= funchdr(FI) LBRACE blkbody(S) RBRACE. {
+	FO = pml_ast_lookup_func(ast, FI->name);
+	if (FO != NULL) {
+		if (FO->body != NULL || PML_FUNC_IS_INTRINSIC(FO)) {
+			pml_ast_err(ast, "duplicate function declaration '%s'",
+				    FO->name);
+			pmln_free(FI);
+			goto out_func_decl;
+		}
+		if (pml_check_func_proto(ast, FO, FI) < 0) {
+			pmln_free(FI);
+			goto out_func_decl;
+		}
+		pmln_free(FI);
+	} else {
+		FO = FI;
+	}
+	FO->body = (union pml_node *)S;
+
+out_func_decl:
+	ast->livefunc = NULL;
+	ast->ltab = NULL;
+}
+
 
 inlinedecl(I) ::= INLINE ID(N) LPAREN idlist(P) RPAREN LBRACE expr(E) RBRACE. {
 	struct list *t, *x;
@@ -426,9 +487,6 @@ inlinedecl(I) ::= INLINE ID(N) LPAREN idlist(P) RPAREN LBRACE expr(E) RBRACE. {
 		p = container(t, struct pml_variable, ln);
 		l_rem(&p->ln);
 		if (pml_func_add_param(I, p) < 0) {
-			pml_ast_err(ast,
-				    "Duplicate variable name: %s\n",
-				    p->name);
 			free(N.u.raw.data);
 			pmln_free(p);
 			pmln_free(I);
@@ -445,12 +503,14 @@ out_inline_decl:
 
 idlist(IL) ::= . { IL = pmln_alloc(ast, PMLTT_LIST); }
 idlist(IL) ::= someids(IL2). { IL = IL2; }
-someids(IL) ::= ID(V). {
-	struct pml_variable *v = pml_var_alloc(ast, (char *)V.u.raw.data, 0, 
-					       PML_VTYPE_PARAM, NULL);
+someids(IL) ::= iddecl(I). {
+	struct pml_variable *v = pml_var_alloc(ast, I.name, PML_VTYPE_PARAM, 
+					       I.type, 0, NULL);
 	IL = NULL;
-	if (v == NULL)
+	if (v == NULL) {
+		free(I.name);
 		goto out_someids;
+	}
 
 	IL = pmln_alloc(ast, PMLTT_LIST);
 	if (IL == NULL) {
@@ -463,9 +523,9 @@ someids(IL) ::= ID(V). {
 out_someids:
 	v = NULL;
 }
-someids(IL) ::= someids(IL2) COMMA ID(V). {
-	struct pml_variable *v = pml_var_alloc(ast, (char *)V.u.raw.data, 0,
-					       PML_VTYPE_PARAM, NULL);
+someids(IL) ::= someids(IL2) COMMA iddecl(I). {
+	struct pml_variable *v = pml_var_alloc(ast, I.name, PML_VTYPE_PARAM,
+					       I.type, 0, NULL);
 	if (v != NULL)
 		l_enq(&IL2->list, &v->ln);
 	IL = IL2;
@@ -473,65 +533,90 @@ someids(IL) ::= someids(IL2) COMMA ID(V). {
 
 
 gvar(G) ::= CONST ID(I) ASSIGN expr(E) SEMICOLON. {
-	G = pml_var_alloc(ast, (char *)I.u.raw.data, 0, PML_VTYPE_CONST, E); 
+	G = pml_var_alloc(ast, (char *)I.u.raw.data, PML_VTYPE_CONST, 
+			  PML_ETYPE_SCALAR, 0, E);
 }
-gvar(G) ::= VAR ID(I) SEMICOLON. {
-	G = pml_var_alloc(ast, (char *)I.u.raw.data, 0, PML_VTYPE_GLOBAL,
-			  NULL); 
-}
-gvar(G) ::= VAR ID(I) LBRACKET NUM(N) RBRACKET SEMICOLON. {
-	G = pml_var_alloc(ast, (char *)I.u.raw.data, N.u.num, PML_VTYPE_GLOBAL,
-			  NULL);
-}
-gvar(G) ::= VAR ID(I) ASSIGN expr(E) SEMICOLON. {
-	if (!PML_EXPR_IS_CONST(E)) {
-		pml_ast_err(ast, "Var '%s' initializer is not constant.\n",
-			    (char *)I.u.raw.data);
+gvar(G) ::= iddecl(I) SEMICOLON. {
+	G = NULL;
+	if (I.type == PML_ETYPE_BYTESTR) {
+		free(I.name);
+		pml_ast_err(ast, "Blob declaration with no length");
 	} else {
-		G = pml_var_alloc(ast, (char *)I.u.raw.data, 0,
-				  PML_VTYPE_GLOBAL, E); 
+		G = pml_var_alloc(ast, I.name, PML_VTYPE_GLOBAL,
+				  I.type, 0, NULL); 
 	}
 }
-gvar(G) ::= VAR ID(I) LBRACKET NUM(N) RBRACKET ASSIGN value(VAL) SEMICOLON.{
-	G = pml_var_alloc(ast, (char *)I.u.raw.data, N.u.num,
-			  PML_VTYPE_GLOBAL, VAL);
+gvar(G) ::= iddecl(I) LBRACKET NUM(N) RBRACKET SEMICOLON. {
+	G = NULL;
+	if (I.type != PML_ETYPE_BYTESTR) {
+		pml_ast_err(ast, "non-blob declaration with length");
+		free(I.name);
+	} else {
+		G = pml_var_alloc(ast, I.name, PML_VTYPE_GLOBAL,
+				  I.type, N.u.num, NULL); 
+	}
+}
+gvar(G) ::= iddecl(I) ASSIGN expr(E) SEMICOLON. {
+	G = NULL;
+	if (I.type == PML_ETYPE_BYTESTR) {
+		free(I.name);
+		pml_ast_err(ast, "Blob declaration with no length");
+	} else if (!PML_EXPR_IS_CONST(E)) {
+		free(I.name);
+		pml_ast_err(ast, "Var '%s' initializer is not constant.\n",
+			    I.name);
+	} else {
+		G = pml_var_alloc(ast, I.name, PML_VTYPE_GLOBAL, I.type, 0, E); 
+	}
+}
+gvar(G) ::= iddecl(I) LBRACKET NUM(N) RBRACKET ASSIGN value(VAL) SEMICOLON. {
+	G = NULL;
+	if (I.type != PML_ETYPE_BYTESTR) {
+		pml_ast_err(ast, "non-blob declaration with length");
+		free(I.name);
+	} else {
+		G = pml_var_alloc(ast, I.name, PML_VTYPE_GLOBAL, I.type, 
+				  N.u.num, VAL);
+	}
 }
 
 /* Rules */
-rule(R) ::= pktpat(P) stmtlist(SL). {
+rstart(R) ::= pktpat(P). {
 	R = pmln_alloc(ast, PMLTT_RULE);
 	if (R != NULL) {
 		R->pattern = P;
-		R->stmts = SL;
 		R->trigger = PML_RULE_PACKET;
+		ast->ltab = &R->vars;
 	}
 }
-
-rule(R) ::= BEGIN stmtlist(SL). {
+rstart(R) ::= BEGIN. {
 	R = pmln_alloc(ast, PMLTT_RULE);
 	if (R != NULL) {
-		R->pattern = NULL;
-		R->stmts = SL;
 		R->trigger = PML_RULE_BEGIN;
+		ast->ltab = &R->vars;
 	}
 }
-
-rule(R) ::= END stmtlist(SL). {
+rstart(R) ::= END. {
 	R = pmln_alloc(ast, PMLTT_RULE);
 	if (R != NULL) {
-		R->pattern = NULL;
-		R->stmts = SL;
 		R->trigger = PML_RULE_END;
+		ast->ltab = &R->vars;
+	}
+}
+rstart(R) ::= . {
+	R = pmln_alloc(ast, PMLTT_RULE);
+	if (R != NULL) {
+		R->trigger = PML_RULE_PACKET;
+		ast->ltab = &R->vars;
 	}
 }
 
-rule(R) ::= stmtlist(SL). {
-	R = pmln_alloc(ast, PMLTT_RULE);
-	if (R != NULL) {
-		R->pattern = NULL;
-		R->stmts = SL;
-		R->trigger = PML_RULE_PACKET;
-	}
+
+
+rule(RO) ::= rstart(RI) LBRACE blkbody(S) RBRACE. {
+	RI->stmts = S;
+	RO = RI;
+	ast->ltab = NULL;
 }
 
 
@@ -1062,7 +1147,7 @@ exprlist(EL) ::= expr(E). {
 value(V) ::= locator(L). { 
 	V = (union pml_expr_u *)L;
 }
-value(V) ::= AMP locname(L). { 
+value(V) ::= AMP locator(L). { 
 	L->type = PMLTT_LOCADDR;
 	V = (union pml_expr_u *)L;
 }
@@ -1108,7 +1193,7 @@ value(V) ::= STRING(I). {
 	free(I.u.raw.data);
 	V = (union pml_expr_u *)v;
 }
-value(V) ::= ATAT locname(L). {
+value(V) ::= AT locname(L). {
 	struct ns_elem *ne = ns_lookup(NULL, L->name);
 	struct pml_literal *v = NULL;
 	if (ne == NULL) {
@@ -1135,29 +1220,22 @@ value(V) ::= ATAT locname(L). {
 	V = (union pml_expr_u *)v;
 }
 
+
 locator(V) ::= locname(N). { V = N; }
-locator(V) ::= locname(N) LBRACKET expr(O) COMMA expr(L) RBRACKET. {
-	N->off = O;
-	N->len = L;
+
+
+locator(V) ::= locname(N) LBRACKET expr(E) RBRACKET. {
+	N->off = E;
 	V = N;
 }
 
-locator(V) ::= locname(N) LBRACKET expr(O) RBRACKET. {
-	N->off = O;
+locator(V) ::= locname(N) LBRACKET expr(E1) COMMA expr(E2) RBRACKET. {
+	N->off = E1;
+	N->len = E2;
 	V = N;
 }
 
-locname(L) ::= pktname(P). { L = P; }
-locname(L1) ::= locstr(L0). { L1 = L0; }
-locname(L1) ::= pktname(P) DOT locstr(L0). {
-	if (pml_locator_extend_name(P, L0->name, strlen(L0->name)) < 0)
-		pml_ast_err(ast, "Out of memory for string.\n");
-	pmln_free(L0);
-	L1 = P;
-	L1->reftype = PML_REF_UNKNOWN_NS_ELEM;
-}
-
-locstr(L1) ::= locstr(L0) DOT ID(TOK). {
+locname(L1) ::= locname(L0) DOT ID(TOK). {
 	if (pml_locator_extend_name(L0, (char *)TOK.u.raw.data, 
 				    TOK.u.raw.len) < 0)
 		pml_ast_err(ast, "Out of memory for string.\n");
@@ -1165,7 +1243,8 @@ locstr(L1) ::= locstr(L0) DOT ID(TOK). {
 	L1 = L0;
 	L1->reftype = PML_REF_UNKNOWN_NS_ELEM;
 }
-locstr(L) ::= ID(TOK). { 
+
+locname(L) ::= ID(TOK). { 
 	L = pmln_alloc(ast, PMLTT_LOCATOR);
 	if (L != NULL) {
 		L->name = (char *)TOK.u.raw.data;
@@ -1174,29 +1253,26 @@ locstr(L) ::= ID(TOK). {
 	}
 }
 
-pktname(L) ::= AT ID(TOK) LBRACE expr(PK) COMMA expr(IDX) RBRACE. {
+locname(L) ::= DOLLAR LPAREN expr(P) RPAREN ID(TOK). {
 	L = pmln_alloc(ast, PMLTT_LOCATOR);
 	if (L != NULL) {
 		L->name = (char *)TOK.u.raw.data;
-		L->pkt = PK;
-		L->idx = IDX;
 		L->reftype = PML_REF_UNKNOWN_NS_ELEM;
+		L->pkt = P;
 	} else {
-		pmln_free(PK);
-		pmln_free(IDX);
 		free(TOK.u.raw.data);
 	}
 }
-pktname(L) ::= AT ID(TOK) LBRACE expr(PK) RBRACE. {
-	L = pmln_alloc(ast, PMLTT_LOCATOR);
 
+locname(L) ::= DOLLAR LPAREN expr(P) COMMA expr(I) RPAREN ID(TOK). {
+	L = pmln_alloc(ast, PMLTT_LOCATOR);
 	if (L != NULL) {
 		L->name = (char *)TOK.u.raw.data;
-		L->pkt = PK;
 		L->reftype = PML_REF_UNKNOWN_NS_ELEM;
+		L->pkt = P;
+		L->idx = I;
 	} else {
 		free(TOK.u.raw.data);
-		pmln_free(PK);
 	}
 }
 

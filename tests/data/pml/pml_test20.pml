@@ -1,7 +1,7 @@
 # Memory indirection
 #
-var foo = 0xdeadbeef12345678;
-var bar = 0x1213141516171819;
+int foo = 0xdeadbeef12345678;
+int bar = 0x1213141516171819;
 
 BEGIN {
 	if (mem[&foo, 8] == foo) {

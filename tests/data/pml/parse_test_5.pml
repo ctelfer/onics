@@ -24,7 +24,7 @@ int true() {
 
 ?- ip -? { 
 	i = 1;
-	x = @tcp{0};
+	x = $(0)tcp;
 	if ( true() ) {
 		drop;
 	}
@@ -33,7 +33,7 @@ int true() {
 
 ?- ip -? { 
 	i = 1;
-	x = @tcp{0};
+	x = $(0)tcp;
 	if ( 1 and true() ) {
 		drop;
 	}
@@ -42,7 +42,7 @@ int true() {
 
 ?- ip -? { 
 	i = 1;
-	x = @tcp{0,i};
+	x = $(0,i)tcp;
 	if ( 1 and true() ) {
 		drop;
 	}
@@ -51,7 +51,7 @@ int true() {
 
 ?- ip -? { 
 	i = 1;
-	if ( @tcp{0,i} and true() ) {
+	if ( $(0,i)tcp and true() ) {
 		drop;
 	}
 	sendpkt;

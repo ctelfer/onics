@@ -941,6 +941,7 @@ static int typecast(struct pmlncg *cg, int otype, int ntype)
 			EMIT_NULL(cg, LD);
 			return 0;
 		} else {
+			/* intrinsics only */
 			abort_unless(otype == PML_ETYPE_VOID);
 			EMIT_W(cg, PUSH, 0);
 		}
@@ -962,7 +963,8 @@ static int typecast(struct pmlncg *cg, int otype, int ntype)
 	case PML_ETYPE_VOID:
 		if (otype == PML_ETYPE_SCALAR) {
 			EMIT_W(cg, POP, 1);
-		} else if (otype == PML_ETYPE_BYTESTR) {
+		} else if (otype == PML_ETYPE_BYTESTR ||
+			   otype == PML_ETYPE_BLOBREF) {
 			EMIT_W(cg, POP, 2);
 		} else {
 			abort_unless(otype == PML_ETYPE_MASKVAL);
@@ -2133,6 +2135,7 @@ static int w_expr_pre(union pml_node *n, void *auxp, void *xstk)
 
 	case PMLTT_CALL:
 		abort_unless(es->etype == PML_ETYPE_SCALAR ||
+			     es->etype == PML_ETYPE_BLOBREF||
 			     es->etype == PML_ETYPE_VOID ||
 			     es->etype == PML_ETYPE_UNKNOWN);
 		/* prune walk for calls:  cg_call will walk subfields */
@@ -2295,11 +2298,13 @@ static int cg_if(struct pmlncg *cg, struct pml_if *ifstmt)
 
 static uint8_t retlen(struct pml_function *f)
 {
-	if (f->rtype == PML_ETYPE_SCALAR) {
-		return 1;
-	} else if (f->rtype == PML_ETYPE_VOID) {
-		return 0;
-	} else {
+	switch (f->rtype) {
+	case PML_ETYPE_VOID: return 0;
+	case PML_ETYPE_SCALAR: return 1;
+	case PML_ETYPE_BYTESTR: return 2; /* future */
+	case PML_ETYPE_MASKVAL: return 3; /* future */
+	case PML_ETYPE_BLOBREF: return 2;
+	default:
 		abort_unless(0);
 		return 255;
 	}

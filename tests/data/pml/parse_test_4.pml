@@ -1,6 +1,6 @@
 # Various references in all three types of rules
 
-var Numpkts = 5;
+int Numpkts = 5;
 
 BEGIN {
 	print "Hello World";

@@ -9,12 +9,12 @@ const F = A / B;
 const G = A % B;
 
 
-inline square(x) { x * x }
+inline square(int x) { x * x }
 
 const H = square(B);
 const I = square(square(B));
 
-inline wierd(i, j) { i + -j }
+inline wierd(int i, int j) { i + -j }
 
 const J = wierd(E, A);
 const K = wierd(square(A), wierd(E, A));

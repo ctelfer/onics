@@ -1,4 +1,4 @@
-VAR            'var'
+INT            'int'
 ID             'Numpkts'
 ASSIGN         '='
 NUM            '5' -- '5'

@@ -1,6 +1,6 @@
 # Expressions as statements
 #
-int dummy(a, b, c) {
+int dummy(int a, int b, int c) {
 	return 2 * b + c << a;
 }
 
