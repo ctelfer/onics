@@ -64,6 +64,7 @@ struct netvm_inst {
  * NETVM_SEG_ISPKT bit set.
  */
 
+#define NETVM_UA_ISPKT_OFF	63
 #define NETVM_UA_SEG_OFF	56
 #define NETVM_UA_SEG_HI_OFF	24
 #define NETVM_UA_OFF_MASK	((((uint64_t)1 << NETVM_UA_SEG_OFF))-1)

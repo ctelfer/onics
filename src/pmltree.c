@@ -93,23 +93,19 @@ static int typecheck(int stype, int dtype)
 	case PML_ETYPE_BYTESTR:
 		valid = dtype == PML_ETYPE_VOID ||
 		        dtype == PML_ETYPE_SCALAR || 
-		        dtype == PML_ETYPE_BYTESTR || 
-		        dtype == PML_ETYPE_BLOBREF; 
+		        dtype == PML_ETYPE_BYTESTR;
 		break;
 
 	case PML_ETYPE_MASKVAL:
 		valid = dtype == PML_ETYPE_VOID ||
 		        dtype == PML_ETYPE_SCALAR || 
 		        dtype == PML_ETYPE_BYTESTR ||
-		        dtype == PML_ETYPE_BLOBREF ||
 		        dtype == PML_ETYPE_MASKVAL; 
 		break;
 
-	case PML_ETYPE_BLOBREF:
+	case PML_ETYPE_STRREF:
 		valid = dtype == PML_ETYPE_VOID ||
-		        dtype == PML_ETYPE_SCALAR ||
-		        dtype == PML_ETYPE_BYTESTR || 
-		        dtype == PML_ETYPE_BLOBREF;
+		        dtype == PML_ETYPE_STRREF;
 		break;
 
 	default:
@@ -136,6 +132,7 @@ static void *pml_bytestr_ptr(struct pml_ast *ast, struct pml_bytestr *bs)
 	struct dynbuf *dyb;
 	abort_unless(ast && bs);
        	abort_unless(bs->segnum >= PML_SEG_MIN && bs->segnum <= PML_SEG_MAX);
+	abort_unless(bs->ispkt == 0);
 
 	dyb = &ast->mi_bufs[bs->segnum];
 	abort_unless(bs->addr < dyb->len && dyb->len - bs->addr >= bs->len);
@@ -217,8 +214,7 @@ static void symtab_destroy(struct pml_symtab *t)
 /* initializers and the second is for variables without them.  The */
 /* program initializeds the latter to 0.  For functions, the first */
 /* block is for parameters and the second is for local variables.  */
-/* This function adjusts the addresses variables in the second block */
-/* by the size of the first block.  */
+/* But these no adjustment */
 static void symtab_adj_var_addrs(struct pml_symtab *t)
 {
 	struct list *n;
@@ -227,8 +223,9 @@ static void symtab_adj_var_addrs(struct pml_symtab *t)
 	abort_unless(t);
 	sym_for_each(n, t) {
 		v = (struct pml_variable *)l_to_node(n);
-		if ((v->vtype == PML_VTYPE_LOCAL) || 
-		    ((v->vtype == PML_VTYPE_GLOBAL) && (v->init == NULL)))
+		abort_unless(v->vtype == PML_VTYPE_GLOBAL || 
+			     v->vtype == PML_VTYPE_CONST);
+		if ((v->vtype == PML_VTYPE_GLOBAL) && (v->init == NULL))
 			v->addr += t->addr_rw1;
 	}
 	t->addr_rw2 += t->addr_rw1;
@@ -349,47 +346,96 @@ static int _e_max(struct pml_ast *ast, struct pml_stack_frame *fr,
 }
 
 
+#define _INTP(s) { #s, PML_ETYPE_SCALAR }
+#define _SREFP(s) { #s, PML_ETYPE_STRREF }
+
 static struct pml_intrinsic stdintr[] = {
-	{ "pkt_new", PML_ETYPE_VOID, 2, 0, NULL, { "pnum", "len" } },
-	{ "pkt_swap", PML_ETYPE_VOID, 2, 0, NULL, { "pndst", "pnsrc" } },
-	{ "pkt_copy", PML_ETYPE_VOID, 2, 0, NULL, { "pndst", "pnsrc" } },
-	{ "pkt_del", PML_ETYPE_VOID, 1, 0, NULL, { "pnum" } },
-	{ "pkt_ins_u", PML_ETYPE_VOID, 3, 0, NULL, { "pnum", "off", "len" } },
-	{ "pkt_ins_d", PML_ETYPE_VOID, 3, 0, NULL, { "pnum", "off", "len" } },
-	{ "pkt_cut_u", PML_ETYPE_VOID, 3, 0, NULL, { "pnum", "off", "len" } },
-	{ "pkt_cut_d", PML_ETYPE_VOID, 3, 0, NULL, { "pnum", "off", "len" } },
-	{ "pkt_parse", PML_ETYPE_VOID, 1, 0, NULL, { "pnum" } },
-	{ "parse_push_back", PML_ETYPE_VOID, 2, 0, NULL, { "pnum", "prid" } },
-	{ "parse_pop_back", PML_ETYPE_VOID, 1, 0, NULL, { "pnum" } },
-	{ "parse_push_front", PML_ETYPE_VOID, 2, 0, NULL, { "pnum", "prid" } },
-	{ "parse_pop_front", PML_ETYPE_VOID, 1, 0, NULL, { "pnum" } },
-	{ "parse_update", PML_ETYPE_VOID, 1, 0, NULL, { "pdesc" } },
-	{ "fix_dltype", PML_ETYPE_VOID, 1, 0, NULL, { "pnum" } },
-	{ "fix_len", PML_ETYPE_VOID, 1, 0, NULL, { "pdesc" } },
-	{ "fix_all_len", PML_ETYPE_VOID, 1, 0, NULL, { "pnum" } },
-	{ "fix_csum", PML_ETYPE_VOID, 1, 0, NULL, { "pdesc" } },
-	{ "fix_all_csum", PML_ETYPE_VOID, 1, 0, NULL, { "pnum" } },
-	{ "meta_get_tstamp", PML_ETYPE_SCALAR, 1, 0, NULL, { "pnum" } },
-	{ "meta_set_tstamp", PML_ETYPE_VOID, 2, 0, NULL, { "pnum", "val" } },
-	{ "meta_get_presnap", PML_ETYPE_SCALAR, 1, 0, NULL, { "pnum" } },
-	{ "meta_set_presnap", PML_ETYPE_VOID, 2, 0, NULL, { "pnum", "val" } },
-	{ "meta_get_inport", PML_ETYPE_SCALAR, 1, 0, NULL, { "pnum" } },
-	{ "meta_set_inport", PML_ETYPE_VOID, 2, 0, NULL, { "pnum", "val" } },
-	{ "meta_get_outport", PML_ETYPE_SCALAR, 1, 0, NULL, { "pnum" } },
-	{ "meta_set_outport", PML_ETYPE_VOID, 2, 0, NULL, { "pnum", "val" } },
-	{ "meta_get_flowid", PML_ETYPE_SCALAR, 1, 0, NULL, { "pnum" } },
-	{ "meta_set_flowid", PML_ETYPE_VOID, 2, 0, NULL, { "pnum", "val" } },
-	{ "meta_get_class", PML_ETYPE_SCALAR, 1, 0, NULL, { "pnum" } },
-	{ "meta_set_class", PML_ETYPE_VOID, 2, 0, NULL, { "pnum", "val" } },
-	{ "pop", PML_ETYPE_SCALAR, 1, PML_FF_PCONST|PML_FF_INLINE,
-		_e_pop, { "num" } },
-	{ "log2", PML_ETYPE_SCALAR, 1, PML_FF_PCONST|PML_FF_INLINE,
-		_e_log2, { "num" } },
-	{ "min", PML_ETYPE_SCALAR, 2, PML_FF_PCONST|PML_FF_INLINE,
-		_e_min, { "num1", "num2" } },
-	{ "max", PML_ETYPE_SCALAR, 2, PML_FF_PCONST|PML_FF_INLINE,
-		_e_max, { "num1", "num2" } },
+	/* TODO: create eval versions of these and make them PCONST */
+	{ "sref_len", PML_ETYPE_SCALAR, 1, 0, NULL,
+		{ _SREFP(ref) } },
+	{ "sref_addr", PML_ETYPE_SCALAR, 1, 0, NULL,
+		{ _SREFP(ref) } },
+	{ "sref_ispkt", PML_ETYPE_SCALAR, 1, 0, NULL,
+		{ _SREFP(ref) } },
+	{ "sref_seg", PML_ETYPE_SCALAR, 1, 0, NULL,
+		{ _SREFP(ref) } },
+	{ "sref_isnull", PML_ETYPE_SCALAR, 1, 0, NULL,
+		{ _SREFP(ref) } },
+
+	{ "pkt_new", PML_ETYPE_VOID, 2, 0, NULL,
+		{ _INTP(pnum), _INTP(len) } },
+	{ "pkt_swap", PML_ETYPE_VOID, 2, 0, NULL,
+		{ _INTP(pndst), _INTP(pnsrc) } },
+	{ "pkt_copy", PML_ETYPE_VOID, 2, 0, NULL,
+		{ _INTP(pndst), _INTP(pnsrc) } },
+	{ "pkt_del", PML_ETYPE_VOID, 1, 0, NULL,
+		{ _INTP(pnum) } },
+	{ "pkt_ins_u", PML_ETYPE_VOID, 3, 0, NULL,
+		{ _INTP(pnum), _INTP(off), _INTP(len) } },
+	{ "pkt_ins_d", PML_ETYPE_VOID, 3, 0, NULL,
+		{ _INTP(pnum), _INTP(off), _INTP(len) } },
+	{ "pkt_cut_u", PML_ETYPE_VOID, 3, 0, NULL,
+		{ _INTP(pnum), _INTP(off), _INTP(len) } },
+	{ "pkt_cut_d", PML_ETYPE_VOID, 3, 0, NULL,
+		{ _INTP(pnum), _INTP(off), _INTP(len) } },
+	{ "pkt_parse", PML_ETYPE_VOID, 1, 0, NULL,
+		{ _INTP(pnum) } },
+	{ "parse_push_back", PML_ETYPE_VOID, 2, 0, NULL,
+		{ _INTP(pnum), _INTP(prid) } },
+	{ "parse_pop_back", PML_ETYPE_VOID, 1, 0, NULL,
+		{ _INTP(pnum) } },
+	{ "parse_push_front", PML_ETYPE_VOID, 2, 0, NULL,
+		{ _INTP(pnum), _INTP(prid) } },
+	{ "parse_pop_front", PML_ETYPE_VOID, 1, 0, NULL,
+		{ _INTP(pnum) } },
+	{ "parse_update", PML_ETYPE_VOID, 1, 0, NULL,
+		{ _INTP(pdesc) } },
+	{ "fix_dltype", PML_ETYPE_VOID, 1, 0, NULL,
+		{ _INTP(pnum) } },
+	{ "fix_len", PML_ETYPE_VOID, 1, 0, NULL,
+		{ _INTP(pdesc) } },
+	{ "fix_all_len", PML_ETYPE_VOID, 1, 0, NULL,
+		{ _INTP(pnum) } },
+	{ "fix_csum", PML_ETYPE_VOID, 1, 0, NULL,
+		{ _INTP(pdesc) } },
+	{ "fix_all_csum", PML_ETYPE_VOID, 1, 0, NULL,
+		{ _INTP(pnum) } },
+	{ "meta_get_tstamp", PML_ETYPE_SCALAR, 1, 0, NULL,
+		{ _INTP(pnum) } },
+	{ "meta_set_tstamp", PML_ETYPE_VOID, 2, 0, NULL,
+		{ _INTP(pnum), _INTP(val) } },
+	{ "meta_get_presnap", PML_ETYPE_SCALAR, 1, 0, NULL,
+		{ _INTP(pnum) } },
+	{ "meta_set_presnap", PML_ETYPE_VOID, 2, 0, NULL,
+		{ _INTP(pnum), _INTP(val) } },
+	{ "meta_get_inport", PML_ETYPE_SCALAR, 1, 0, NULL,
+		{ _INTP(pnum) } },
+	{ "meta_set_inport", PML_ETYPE_VOID, 2, 0, NULL,
+		{ _INTP(pnum), _INTP(val) } },
+	{ "meta_get_outport", PML_ETYPE_SCALAR, 1, 0, NULL,
+		{ _INTP(pnum) } },
+	{ "meta_set_outport", PML_ETYPE_VOID, 2, 0, NULL,
+		{ _INTP(pnum), _INTP(val) } },
+	{ "meta_get_flowid", PML_ETYPE_SCALAR, 1, 0, NULL,
+		{ _INTP(pnum) } },
+	{ "meta_set_flowid", PML_ETYPE_VOID, 2, 0, NULL,
+		{ _INTP(pnum), _INTP(val) } },
+	{ "meta_get_class", PML_ETYPE_SCALAR, 1, 0, NULL,
+		{ _INTP(pnum) } },
+	{ "meta_set_class", PML_ETYPE_VOID, 2, 0, NULL,
+		{ _INTP(pnum), _INTP(val) } },
+	{ "pop", PML_ETYPE_SCALAR, 1, PML_FF_PCONST|PML_FF_INLINE, _e_pop,
+		{ _INTP(num) } },
+	{ "log2", PML_ETYPE_SCALAR, 1, PML_FF_PCONST|PML_FF_INLINE, _e_log2,
+		{ _INTP(num) } },
+	{ "min", PML_ETYPE_SCALAR, 2, PML_FF_PCONST|PML_FF_INLINE, _e_min,
+		{ _INTP(num1), _INTP(num2) } },
+	{ "max", PML_ETYPE_SCALAR, 2, PML_FF_PCONST|PML_FF_INLINE, _e_max,
+		{ _INTP(num1), _INTP(num2) } },
 };
+
+#undef _INTP
+#undef _SREFP
 
 
 int pml_ast_add_std_intrinsics(struct pml_ast *ast)
@@ -562,9 +608,9 @@ int pml_ast_add_intrinsic(struct pml_ast *ast, struct pml_intrinsic *intr)
 	if ((f->name = strdup(intr->name)) == NULL)
 		goto enomem;
 	for (i = 0; i < intr->arity; ++i) {
-		abort_unless(intr->pnames[i]);
-		v = pml_var_alloc_nc(ast, intr->pnames[i], PML_VTYPE_PARAM, 
-				     PML_ETYPE_SCALAR, 0, NULL);
+		abort_unless(intr->params[i].name);
+		v = pml_var_alloc_nc(ast, intr->params[i].name, PML_VTYPE_PARAM,
+				     intr->params[i].etype, 0, NULL);
 		if (v == NULL)
 			goto enomem;
 		if (pml_func_add_param(f, v) < 0) {
@@ -684,7 +730,7 @@ int pml_func_add_param(struct pml_function *f, struct pml_variable *v)
 	if (symtab_add(&f->vars, (struct pml_sym *)v) < 0)
 		return -1;
 	v->addr = f->vars.addr_rw1;
-	f->vars.addr_rw1 += 1;
+	f->vars.addr_rw1 += v->width / sizeof(uint64_t);
 	v->func = f;
 
 	return 0;
@@ -808,14 +854,17 @@ static union pml_node *_pmln_alloc(int type)
 			p->width = 8;
 		} else if (type == PMLTT_BYTESTR) {
 			p->etype = PML_ETYPE_BYTESTR;
+			p->u.bytestr.ispkt = 0;
 			p->u.bytestr.addr = 0;
 			p->u.bytestr.len = 0;
 			p->u.bytestr.segnum = PML_SEG_NONE;
 		} else if (type == PMLTT_MASKVAL) {
 			p->etype = PML_ETYPE_MASKVAL;
+			p->u.maskval.val.ispkt = 0;
 			p->u.maskval.val.addr = 0;
 			p->u.maskval.val.len = 0;
 			p->u.maskval.val.segnum = PML_SEG_NONE;
+			p->u.maskval.mask.ispkt = 0;
 			p->u.maskval.mask.addr = 0;
 			p->u.maskval.mask.len = 0;
 			p->u.maskval.mask.segnum = PML_SEG_NONE;
@@ -851,8 +900,8 @@ static union pml_node *_pmln_alloc(int type)
 			p->etype = PML_ETYPE_UNKNOWN;
 			p->width = 0;
 		} else {
-			p->etype = PML_ETYPE_SCALAR;
-			p->width = 8;
+			p->etype = PML_ETYPE_STRREF;
+			p->width = 16;
 		}
 		p->reftype = PML_REF_UNKNOWN;
 		p->rpfld = PML_RPF_NONE;
@@ -1114,7 +1163,7 @@ struct pml_variable *pml_var_alloc(struct pml_ast *ast, char *name,
 	v->vtype = vtype;
 	if (etype == PML_ETYPE_SCALAR) {
 		v->width = 8;
-	} else if (etype == PML_ETYPE_BLOBREF) {
+	} else if (etype == PML_ETYPE_STRREF) {
 		v->width = 16;
 	} else {
 		v->width = size;
@@ -1230,6 +1279,7 @@ int pml_bytestr_copy(struct pml_ast *ast, struct pml_bytestr *bs, int seg,
 		return -1;
 	}
 
+	bs->ispkt = 0;
 	bs->segnum = seg;
 	bs->addr = dyb_last(&ast->mi_bufs[seg]);
 	bs->len = len;
@@ -1345,7 +1395,7 @@ static const char *efs(void *p, char s[80])
 
 static const char *etype_strs[] = {
 	"unknown", "void", "scalar", "byte string", "masked string", 
-	"blob reference"
+	"string reference"
 };
 static const char *ets(void *p) {
 	struct pml_expr_base *e = p;
@@ -1354,6 +1404,7 @@ static const char *ets(void *p) {
 		     e->etype <= PML_ETYPE_LAST);
 	return etype_strs[e->etype];
 }
+
 
 static const char *rtstr(void *p) {
 	struct pml_function *f = p;
@@ -2580,7 +2631,7 @@ static int typecheck_binop(struct pml_ast *ast, struct pml_op *op)
 			return -1;
 		}
 		if (a2->etype != PML_ETYPE_BYTESTR &&
-		    a2->etype != PML_ETYPE_BLOBREF &&
+		    a2->etype != PML_ETYPE_STRREF &&
 		    a2->etype != PML_ETYPE_MASKVAL) {
 			pml_ast_err(ast, 
 				    "%s: Right argument of a match operation "
@@ -2740,13 +2791,24 @@ static int typecheck_node(struct pml_ast *ast, union pml_node *node,
 	case PMLTT_ASSIGN: {
 		struct pml_assign *a = &node->assign;
 		e = a->expr;
-		/* scalar -> bytestr is allowed for assignments only */
-		if ((a->loc->etype == PML_ETYPE_BYTESTR || 
-		     a->loc->etype == PML_ETYPE_BLOBREF) && 
-		    (e->expr.etype == PML_ETYPE_SCALAR))
+		abort_unless(a->loc->type == PMLTT_LOCATOR);
+		/* scalar -> bytestr is allowed for assignments */
+		/* note that strref variables have a location expr type of */
+		/* bytestr.  Only LOCADDR and function returns can have */
+		/* an expression type of STRREF.  */
+		if (a->loc->etype == PML_ETYPE_BYTESTR &&
+		    e->expr.etype == PML_ETYPE_SCALAR)
 			break;
+		/* A string reference can assign to a string reference even */
+		/* though a string reference's locator's type is BYTESTR */
+		if (e->expr.etype == PML_ETYPE_STRREF && 
+		    a->loc->reftype == PML_REF_VAR && 
+		    a->loc->u.varref->etype == PML_ETYPE_STRREF)
+			break;
+		/* all others are for regular type conversion rules */
 		if (typecheck(e->expr.etype, a->loc->etype) < 0) {
-			pml_ast_err(ast, "incomatible assignment type");
+			pml_ast_err(ast, "incompatible assignment type: %s->%s",
+				    ets(e), ets(a->loc));
 			return -1;
 		}
 	} break;
@@ -2837,7 +2899,14 @@ static int resolve_node_post(union pml_node *node, void *ctxp, void *xstk)
 			l->eflags = l->u.litref->eflags;
 		} else if (l->reftype == PML_REF_VAR) {
 			struct pml_variable *v = l->u.varref;
+
+			/* string references as rvalues return type string */
+			/* otherwise, the type of the expression is the type */
+			/* of the variable type. */
 			l->etype = v->etype;
+			if (l->etype == PML_ETYPE_STRREF)
+				l->etype = PML_ETYPE_BYTESTR;
+
 			if (v->vtype == PML_VTYPE_CONST) {
 				l->eflags |= (PML_EFLAG_CONST|PML_EFLAG_PCONST);
 			} else if (v->vtype == PML_VTYPE_PARAM) {
@@ -2870,24 +2939,40 @@ static int resolve_node_post(union pml_node *node, void *ctxp, void *xstk)
 		if (resolve_locsym(ctx, l) < 0)
 			return -1;
 		if (((l->reftype == PML_REF_VAR) && 	/* symbolic constant */
-		     (l->u.varref->vtype == PML_VTYPE_CONST)) ||
+		     ((l->u.varref->vtype != PML_VTYPE_GLOBAL) ||
+		      (l->u.varref->etype != PML_ETYPE_BYTESTR))) ||
+
 		    ((l->reftype == PML_REF_PKTFLD) &&	/* resv non-bytefield */
 		     (l->rpfld != PML_RPF_NONE) &&
 		     !PML_RPF_IS_BYTESTR(l->rpfld)) ||
+
 		    ((l->reftype == PML_REF_PKTFLD) &&	/* packet bitfield */
 		     (l->rpfld == PML_RPF_NONE) &&
 		     NSF_IS_INBITS(l->u.nsref->flags)) ||
-		    ((l->reftype == PML_REF_LITERAL) &&	/* protocol scalar */
-		     (l->u.litref->type == PMLTT_SCALAR))) {
+
+		    ((l->reftype == PML_REF_LITERAL) &&	/* protocol non str */
+		     (l->u.litref->type == PMLTT_BYTESTR))) {
 			pml_ast_err(ctx->ast, 
 				    "'%s' is not an addressable field.\n",
 				    l->name);
 			return -1;
 		}
-		if (l->reftype == PML_REF_VAR)
-			l->eflags |= PML_EFLAG_CONST|PML_EFLAG_PCONST;
+
+		if (l->reftype == PML_REF_VAR) {
+			struct pml_expr_base *expr;
+			int eflags = PML_EFLAG_CONST|PML_EFLAG_PCONST;
+
+			abort_unless(l->pkt == NULL && l->idx == NULL);
+			expr = &l->off->expr;
+			if (expr != NULL)
+				eflags &= expr->etype;
+			expr = &l->len->expr;
+			if (expr != NULL)
+				eflags &= expr->etype;
+			l->eflags |= eflags;
+		}
 		/* redundant? */
-		l->etype = PML_ETYPE_BLOBREF;
+		l->etype = PML_ETYPE_STRREF;
 		l->width = 16;
 	} break;
 
@@ -3489,10 +3574,12 @@ static int e_const(struct pml_ast *ast, struct pml_stack_frame *fr,
 			return -1;
 		}
 		r->etype = v->etype;
+		r->bytes.ispkt = lr.bytes.ispkt;
 		r->bytes.segnum = lr.bytes.segnum;
 		r->bytes.addr = lr.bytes.addr + off;
 		r->bytes.len = len;
 		if (v->etype == PML_ETYPE_MASKVAL) { 
+			r->mask.ispkt = lr.mask.ispkt;
 			r->mask.segnum = lr.mask.segnum;
 			r->mask.addr = lr.mask.addr + off;
 			r->mask.len = len;
@@ -3546,6 +3633,7 @@ static int e_locator(struct pml_ast *ast, struct pml_stack_frame *fr,
 			} else {
 				abort_unless(l->etype == PML_ETYPE_BYTESTR);
 				r->etype = PML_ETYPE_BYTESTR;
+				r->bytes.ispkt = 0;
 				r->bytes.segnum = PML_SEG_RWMEM;
 				r->bytes.addr = v->addr + off;
 				r->bytes.len = len;
@@ -3597,13 +3685,19 @@ static int e_locaddr(struct pml_ast *ast, struct pml_stack_frame *fr,
 		     union pml_node *node, struct pml_retval *r)
 {
 	struct pml_locator *l = (struct pml_locator *)node;
+	struct pml_literal *lit;
 
+	r->etype = PML_ETYPE_STRREF;
 	if (l->reftype == PML_REF_VAR) {
-		abort_unless(l->u.varref->vtype == PML_VTYPE_GLOBAL ||
-		             l->u.varref->vtype == PML_VTYPE_PARAM ||
-		             l->u.varref->vtype == PML_VTYPE_LOCAL);
-		r->etype = PML_ETYPE_SCALAR;
-		r->val = l->u.varref->addr;
+		abort_unless(l->u.varref->vtype == PML_VTYPE_GLOBAL);
+		r->bytes.ispkt = 0;
+		r->bytes.addr = l->u.varref->addr;
+		r->bytes.len = l->u.varref->width;
+		r->bytes.segnum = PML_SEG_RWMEM;
+	} else if (l->reftype == PML_REF_LITERAL) {
+		lit = l->u.litref;
+		abort_unless(lit->type == PMLTT_BYTESTR);
+		r->bytes = lit->u.bytestr;
 	} else if (l->reftype == PML_REF_PKTFLD) {
 		pml_ast_err(ast, 
 			    "eval: Packet field addresses unimplemented\n");

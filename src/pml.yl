@@ -367,8 +367,8 @@ decl ::= rule(R). {
 }
 
 type(T) ::= INT. { T = PML_ETYPE_SCALAR; }
-type(T) ::= BLOB. { T = PML_ETYPE_BYTESTR; }
-type(T) ::= BREF. { T = PML_ETYPE_BLOBREF; }
+type(T) ::= STR. { T = PML_ETYPE_BYTESTR; }
+type(T) ::= SREF. { T = PML_ETYPE_STRREF; }
 
 iddecl(I) ::= type(T) ID(N). {
 	I.name = (char *)N.u.raw.data;

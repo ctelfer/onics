@@ -4,8 +4,8 @@ const X = 53;
 const Y = 4 * X;
 
 int Global;
-blob another_global[40] = "hello world";
-blob broadcast_var[4] = ip.addr.broadcast;
+str another_global[40] = "hello world";
+str broadcast_var[4] = ip.addr.broadcast;
 
 ?- ip.saddr =~ 127.0.0.0/24 -? {
 	print "hi", x; 

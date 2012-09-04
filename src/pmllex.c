@@ -102,8 +102,8 @@ struct kwtok {
 	{ "nextrule",	PMLTOK_NEXTRULE },
 	{ "sendpkt",	PMLTOK_SENDPKT },
 	{ "drop",	PMLTOK_DROP },
-	{ "blob",	PMLTOK_BLOB },
-	{ "bref",	PMLTOK_BREF },
+	{ "str",	PMLTOK_STR },
+	{ "sref",	PMLTOK_SREF },
 	{ "print",	PMLTOK_PRINT },
 	{ NULL,		0 }
 };

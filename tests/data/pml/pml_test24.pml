@@ -1,7 +1,7 @@
 # Multi-expression print statements
 #
 int s = 0x123456789ABCDEF0;
-blob s2[20] = \x00112233aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa;
+str s2[20] = \x00112233aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa;
 
 inline sext(int v, int b) { v | -(v & (1 << b)) }
 

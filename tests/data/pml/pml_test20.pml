@@ -1,24 +1,28 @@
 # Memory indirection
 #
-int foo = 0xdeadbeef12345678;
-int bar = 0x1213141516171819;
+str foo[8] = \xdeadbeef12345678;
+str bar[8] = \x1213141516171819;
+sref fp;
+sref bp;
 
 BEGIN {
-	if (mem[&foo, 8] == foo) {
+	fp = &foo;
+	if (fp == foo) {
 		print "foo agrees\n";
 	} else {
 		print "error: foo does not agree\n";
 	}
 
-	if (mem[&bar, 8] == bar) {
+	bp = &bar;
+	if (bp[0, 8] == bar) {
 		print "bar agrees\n";
 	} else {
 		print "error: bar does not agree\n";
 	}
 
-	if (mem[&foo+5,3] == 0x345678) {
-		print "good: foo[5,3] == 0x345678\n";
+	if (fp[5,3] == 0x345678) {
+		print "good: fp[5,3] == 0x345678\n";
 	} else {
-		print "error: foo[3,3] != 0x345678\n";
+		print "error: fp[3,3] != 0x345678\n";
 	}
 }

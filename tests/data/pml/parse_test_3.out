@@ -68,6 +68,31 @@ Variables
 -----------
 Functions
 -----------
+   Function[intrinsic]: sref_len() -- 1 args, 0 vars, return type=scalar
+   Parameters & Variables -- 
+      Variable: ref [param; width=16, addr=0]
+   Body -- 
+      (null)
+   Function[intrinsic]: sref_addr() -- 1 args, 0 vars, return type=scalar
+   Parameters & Variables -- 
+      Variable: ref [param; width=16, addr=0]
+   Body -- 
+      (null)
+   Function[intrinsic]: sref_ispkt() -- 1 args, 0 vars, return type=scalar
+   Parameters & Variables -- 
+      Variable: ref [param; width=16, addr=0]
+   Body -- 
+      (null)
+   Function[intrinsic]: sref_seg() -- 1 args, 0 vars, return type=scalar
+   Parameters & Variables -- 
+      Variable: ref [param; width=16, addr=0]
+   Body -- 
+      (null)
+   Function[intrinsic]: sref_isnull() -- 1 args, 0 vars, return type=scalar
+   Parameters & Variables -- 
+      Variable: ref [param; width=16, addr=0]
+   Body -- 
+      (null)
    Function[intrinsic]: pkt_new() -- 2 args, 0 vars, return type=void
    Parameters & Variables -- 
       Variable: pnum [param; width=8, addr=0]

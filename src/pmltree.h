@@ -176,8 +176,8 @@ enum {
 	PML_ETYPE_SCALAR,
 	PML_ETYPE_BYTESTR,
 	PML_ETYPE_MASKVAL,
-	PML_ETYPE_BLOBREF,
-	PML_ETYPE_LAST = PML_ETYPE_BLOBREF,
+	PML_ETYPE_STRREF,
+	PML_ETYPE_LAST = PML_ETYPE_STRREF,
 };
 
 enum {
@@ -215,6 +215,7 @@ struct pml_expr_base {
 
 
 struct pml_bytestr {
+	int			ispkt;
 	int			segnum;
 	ulong			addr;
 	ulong			len;
@@ -579,13 +580,17 @@ struct pml_retval {
 
 /* structure definition for an intrinsic function to add */
 #define PML_MAXIARGS		4
+struct pml_param {
+	char *			name;
+	int			etype;
+};
 struct pml_intrinsic {
 	char *			name;
 	int			rtype;
 	int			arity;
 	int			flags;
 	pml_eval_f		eval;
-	char *			pnames[PML_MAXIARGS];
+	struct pml_param	params[PML_MAXIARGS];
 };
 
 

@@ -2,7 +2,7 @@
 #
 # Need to test with mismatched lengths as well.
 #
-blob value[16] = \x112233445566778899AABBCCDDEEFF00;
+str value[16] = \x112233445566778899AABBCCDDEEFF00;
 
 BEGIN {
 	if (value =~ \x1122334455667788) {

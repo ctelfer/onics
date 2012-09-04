@@ -266,6 +266,31 @@ static uint nexti(struct pml_ibuf *b)
 }
 
 
+static int _i_str(struct pmlncg *cg, struct pml_call *c, struct cg_intr *intr)
+{
+	struct pml_ibuf *b = &cg->ibuf;
+	struct pml_list *pl = c->args;
+	struct pml_function *f = c->func;
+	union pml_node *e;
+	int i;
+
+	abort_unless(f->arity == 1);
+	e = l_to_node(l_head(&pl->list));
+	if (cg_expr(cg, e, PML_ETYPE_STRREF) < 0)
+		return -1;
+
+	for (i = 0; i < intr->numop; ++i) {
+		if (pib_add(b, &intr->ops[i]) < 0) {
+			cgerr(cg, "out of instructions adding scalar intrinsic"
+				  " '%s'", f->name);
+			return -1;
+		}
+	}
+
+	return 0;
+}
+
+
 static int _i_scarg(struct pmlncg *cg, struct pml_call *c, struct cg_intr *intr)
 {
 	struct pml_ibuf *b = &cg->ibuf;
@@ -531,6 +556,23 @@ struct cg_meta_ctx _i_flow_ctx = { 8, XPKT_TAG_FLOW, 4, 0, 0x05020000 };
 struct cg_meta_ctx _i_class_ctx = { 8, XPKT_TAG_CLASS, 4, 0, 0x06020000 };
 
 struct cg_intr intrinsics[] = { 
+	{ "sref_len", NULL, _i_str, NULL, 2, 
+		{ NETVM_OP(SWAP,0,0,0,1),
+		  NETVM_OP(POP,0,0,0,1) } },
+	{ "sref_addr", NULL, _i_str, NULL, 3, 
+		{ NETVM_OP(POP,0,0,0,1),
+		  NETVM_OP(SHLI,0,0,0,8), 
+		  NETVM_OP(SHRI,0,0,0,8) } },
+	{ "sref_ispkt", NULL, _i_str, NULL, 2, 
+		{ NETVM_OP(POP,0,0,0,1), 
+		  NETVM_OP(SHRI,0,0,0,NETVM_UA_ISPKT_OFF) } },
+	{ "sref_seg", NULL, _i_str, NULL, 3, 
+		{ NETVM_OP(POP,0,0,0,1), 
+		  NETVM_OP(SHRI,0,0,0,NETVM_UA_SEG_OFF),
+		  NETVM_OP(ANDI,0,0,0,NETVM_SEG_SEGMASK) } },
+	{ "sref_isnull", NULL, _i_str, NULL, 2, 
+		{ NETVM_OP(SWAP,0,0,0,1),
+		  NETVM_OP(POP,0,0,0,1) } },
 	{ "pkt_new", NULL, _i_scarg, NULL, 1, { NETVM_OP(PKNEW,0,0,0,0) } },
 	{ "pkt_swap", NULL, _i_scarg, NULL, 1, { NETVM_OP(PKSWAP,0,0,0,0) } },
 	{ "pkt_copy", NULL, _i_scarg, NULL, 1, { NETVM_OP(PKCOPY,0,0,0,0) } },
@@ -964,7 +1006,7 @@ static int typecast(struct pmlncg *cg, int otype, int ntype)
 		if (otype == PML_ETYPE_SCALAR) {
 			EMIT_W(cg, POP, 1);
 		} else if (otype == PML_ETYPE_BYTESTR ||
-			   otype == PML_ETYPE_BLOBREF) {
+			   otype == PML_ETYPE_STRREF) {
 			EMIT_W(cg, POP, 2);
 		} else {
 			abort_unless(otype == PML_ETYPE_MASKVAL);
@@ -972,6 +1014,8 @@ static int typecast(struct pmlncg *cg, int otype, int ntype)
 		}
 		break;
 
+	/* NOTE nothing can be cast to STRREF */
+	case PML_ETYPE_STRREF:
 	default:
 		abort_unless(0);
 	}
@@ -1920,49 +1964,147 @@ static int cg_pfbytefield(struct pmlncg *cg, struct pml_locator *loc, int etype)
 }
 
 
+static int cg_load_strref(struct pmlncg *cg, struct pml_variable *v, int getlen)
+{
+	if (v->vtype == PML_VTYPE_LOCAL) {
+		EMIT_XW(cg, LDBPI, 0, lvaraddr(v) + (getlen ? 1 : 0));
+	} else if (v->vtype == PML_VTYPE_PARAM) {
+		EMIT_XW(cg, LDBPI, 1, lvaraddr(v) + (getlen ? 0 : 1));
+	} else {
+		abort_unless(v->vtype == PML_VTYPE_GLOBAL);
+		EMIT_XYW(cg, LDI, sizeof(uint64_t), PML_SEG_RWMEM, 
+			 v->addr + (getlen ? sizeof(uint64_t) : 0));
+	}
+	return 0;
+}
+
+
+#define LDSREF_X(cg, v, x) 				\
+	do { 		 				\
+		if (cg_load_strref((cg), (v), (x)) < 0) \
+			return -1;			\
+	} while(0)
+
+#define LDSREF_ADDR(cg, x) LDSREF_X(cg, x, 0)
+#define LDSREF_LEN(cg, x) LDSREF_X(cg, x, 1)
+
+/* generate the address/length on the stack for the string reference */
+/* taking into account the offset and length fields ensuring no overflow */
+static int cg_strref(struct pmlncg *cg, struct pml_locator *loc)
+{
+	struct pml_variable *v = loc->u.varref;
+	struct locval llen;
+
+	abort_unless(v->etype == PML_ETYPE_STRREF);
+
+	LDSREF_ADDR(cg, v); 
+	if (loc->off != NULL) {
+		/* XXX assumes var length can't overflow address */
+		/* Our code should ensure that this is true by */
+		/* ensuring that no string ref length is larger than */
+		/* the field that it refers to. */
+
+		/* calculate adjusted address */
+		if (cg_expr(cg, (union pml_node *)loc->off, 
+			    PML_ETYPE_SCALAR) < 0)
+			return -1;
+		LDSREF_LEN(cg, v);
+		EMIT_NULL(cg, UMIN);
+		EMIT_NULL(cg, ADD);
+
+		/* get length to end of string */
+		LDSREF_ADDR(cg, v); 
+		LDSREF_LEN(cg, v); 
+		EMIT_NULL(cg, ADD);
+		EMIT_W(cg, DUP, 1);
+		EMIT_NULL(cg, SUB);
+	} else { /* no offset */
+		LDSREF_LEN(cg, v);
+	}
+
+	/* if there is a length expression, generate the length */
+	/* and take the minimum of that and the ref's length */
+	if (loc->len != NULL) {
+		if (cg_locval(cg, loc->len, &llen) < 0)
+			return -1;
+		if (llen.onstack) {
+			EMIT_NULL(cg, MIN);
+		} else {
+			EMIT_IBINOP(cg, MIN, llen.val);
+		}
+	}
+
+	return 0;
+}
+
+
+static int cg_local_varref(struct pmlncg *cg, struct pml_locator *loc,
+			   int etype)
+{
+	struct pml_variable *v = loc->u.varref;
+	int belowbp;
+	ulong addr;
+
+	addr = lvaraddr(v);
+	if (v->func != NULL && PML_FUNC_IS_INTRINSIC(v->func)) {
+		cgerr(cg, "can't generate varref code for an "
+			  "intrinsic function (%s)", v->func->name);
+		return -1;
+	} 
+		
+	if (v->etype == PML_ETYPE_SCALAR) {
+		belowbp = (v->vtype == PML_VTYPE_PARAM);
+		EMIT_XW(cg, LDBPI, belowbp, addr);
+	} else if (v->etype == PML_ETYPE_STRREF) {
+		if (cg_strref(cg, loc) < 0)
+			return -1;
+	} else {
+		UNIMPL(cg, ref_local_non_scalar_non_strref_var);
+	}
+	if (typecast(cg, loc->etype, etype) < 0)
+		return -1;
+	return 0;
+}
+
+
+static int cg_global_varref(struct pmlncg *cg, struct pml_locator *loc,
+			    int etype)
+{
+	struct pml_variable *v = loc->u.varref;
+
+	if (v->etype == PML_ETYPE_SCALAR) {
+		abort_unless(loc->off == NULL && loc->len == NULL);
+		EMIT_XYW(cg, LDI, v->width, PML_SEG_RWMEM, v->addr);
+	} else if (v->etype == PML_ETYPE_STRREF) {
+		if (cg_strref(cg, loc) < 0)
+			return -1;
+	} else if (v->etype == PML_ETYPE_BYTESTR) {
+		if (cg_memref(cg, loc) < 0)
+			return -1;
+	} else {
+		UNIMPL(cg, ref_global_non_scalar_strref_bytestr_var);
+	}
+
+	if (typecast(cg, loc->etype, etype) < 0)
+		return -1;
+	return 0;
+}
+
+
 static int cg_varref(struct pmlncg *cg, struct pml_locator *loc, int etype)
 {
-	struct pml_variable *var = loc->u.varref;
-	ulong addr;
-	struct pml_function *func;
-	int belowbp;
+	struct pml_variable *v = loc->u.varref;
 
 	abort_unless(loc->pkt == NULL && loc->idx == NULL);
 
-	if ((var->vtype == PML_VTYPE_PARAM) ||
-	    (var->vtype == PML_VTYPE_LOCAL)) {
-
-		abort_unless(etype == PML_ETYPE_SCALAR);
-		addr = lvaraddr(var);
-		func = var->func;
-		belowbp = (var->vtype == PML_VTYPE_PARAM);
-
-		if (func != NULL && PML_FUNC_IS_INTRINSIC(func)) {
-			cgerr(cg, "can't generate varref code for an "
-				  "intrinsic function (%s)",
-			      func->name);
-			return -1;
-		} 
-		
-		EMIT_XW(cg, LDBPI, belowbp, addr);
-
-	} else if (var->vtype == PML_VTYPE_GLOBAL) {
-
-		if (var->etype == PML_ETYPE_SCALAR) {
-			abort_unless(loc->off == NULL && loc->len == NULL);
-			EMIT_XYW(cg, LDI, var->width, PML_SEG_RWMEM, var->addr);
-		} else {
-			if (cg_memref(cg, loc) < 0)
-				return -1;
-			if (typecast(cg, loc->etype, etype) < 0)
-				return -1;
-		}
-
+	if (v->vtype == PML_VTYPE_PARAM || v->vtype == PML_VTYPE_LOCAL) {
+		return cg_local_varref(cg, loc, etype);
+	} else if (v->vtype == PML_VTYPE_GLOBAL) {
+		return cg_global_varref(cg, loc, etype);
 	} else {
-		cgerr(cg, "Unsupported variable type: %d", var->vtype);
+		cgerr(cg, "Unsupported variable type: %d", v->vtype);
 		return -1;
 	}
-
 	return 0;
 }
 
@@ -2022,7 +2164,7 @@ static int cg_locator(struct pmlncg *cg, struct pml_locator *loc, int etype)
 }
 
 
-static int cg_locaddr(struct pmlncg *cg, struct pml_locator *loc)
+static int cg_locaddr(struct pmlncg *cg, struct pml_locator *loc, int etype)
 {
 	uint64_t addr;
 	struct pml_literal *lit;
@@ -2032,33 +2174,36 @@ static int cg_locaddr(struct pmlncg *cg, struct pml_locator *loc)
 	switch (loc->reftype) {
 	case PML_REF_VAR:
 		var = loc->u.varref;
-		if ((var->vtype == PML_VTYPE_PARAM) ||
-		    (var->vtype == PML_VTYPE_LOCAL)) {
-			addr = lvaraddr(var);
+		abort_unless(var->vtype == PML_VTYPE_GLOBAL);
+		if (var->etype == PML_ETYPE_BYTESTR) {
+			if (cg_memref(cg, loc) < 0)
+				return -1;
 		} else {
-			abort_unless(var->vtype == PML_VTYPE_GLOBAL);
-			addr = var->addr;
+			abort_unless(var->etype == PML_ETYPE_STRREF);
+			EMIT_XYW(cg, LDI, sizeof(uint64_t), PML_SEG_RWMEM,
+				 var->addr);
+			EMIT_XYW(cg, LDI, sizeof(uint64_t), PML_SEG_RWMEM,
+				 var->addr + sizeof(uint64_t));
 		}
-		PUSH64(cg, addr);
 		break;
 
 	case PML_REF_PKTFLD:
-		cgpd_init2(&cgpd, NETVM_OC_LDPF, 0, loc);
-		if (cg_pdop(cg, &cgpd) < 0)
-			return -1;
-		break;
+		return cg_pfref(cg, loc, etype);
 
 	case PML_REF_LITERAL:
 		lit = loc->u.litref;
-		abort_unless((lit->type == PMLTT_BYTESTR) ||
-			     (lit->type == PMLTT_MASKVAL));
+		abort_unless(lit->type == PMLTT_BYTESTR);
 		addr = MEMADDR(lit->u.bytestr.addr, lit->u.bytestr.segnum);
 		PUSH64(cg, addr);
+		PUSH64(cg, lit->u.bytestr.len);
 		break;
 
 	default:
 		abort_unless(0);
 	}
+
+	if (typecast(cg, loc->etype, etype) < 0)
+		return -1;
 
 	return 0;
 }
@@ -2103,8 +2248,6 @@ static int w_expr_pre(union pml_node *n, void *auxp, void *xstk)
 	switch (n->base.type) {
 	case PMLTT_BINOP:
 		op = &n->op;
-		/* TODO: optimize for constant on RHS or on LHS of */
-		/* commutative operation. */
 		switch (op->op) {
 		case PMLOP_MATCH:
 		case PMLOP_NOTMATCH:
@@ -2135,7 +2278,7 @@ static int w_expr_pre(union pml_node *n, void *auxp, void *xstk)
 
 	case PMLTT_CALL:
 		abort_unless(es->etype == PML_ETYPE_SCALAR ||
-			     es->etype == PML_ETYPE_BLOBREF||
+			     es->etype == PML_ETYPE_STRREF||
 			     es->etype == PML_ETYPE_VOID ||
 			     es->etype == PML_ETYPE_UNKNOWN);
 		/* prune walk for calls:  cg_call will walk subfields */
@@ -2151,9 +2294,9 @@ static int w_expr_pre(union pml_node *n, void *auxp, void *xstk)
 		return 1;
 
 	case PMLTT_LOCADDR:
-		if (cg_locaddr(ea->cg, &n->locator) < 0)
-			return -1;
 		/* prune walk for locators:  no need to walk subfields */
+		if (cg_locaddr(ea->cg, &n->locator, es->etype) < 0)
+			return -1;
 		return 1;
 
 	default:
@@ -2303,7 +2446,7 @@ static uint8_t retlen(struct pml_function *f)
 	case PML_ETYPE_SCALAR: return 1;
 	case PML_ETYPE_BYTESTR: return 2; /* future */
 	case PML_ETYPE_MASKVAL: return 3; /* future */
-	case PML_ETYPE_BLOBREF: return 2;
+	case PML_ETYPE_STRREF: return 2;
 	default:
 		abort_unless(0);
 		return 255;
@@ -2313,15 +2456,15 @@ static uint8_t retlen(struct pml_function *f)
 
 static int cg_cfmod(struct pmlncg *cg, struct pml_cfmod *cfm)
 {
-	union pml_node *n;
+	struct pml_function *f;
 
 	switch (cfm->cftype) {
 	case PML_CFM_RETURN:
-		abort_unless(cg->curfunc != NULL);
-		n = (union pml_node *)cfm->expr;
-		if (cg_expr(cg, n, PML_ETYPE_SCALAR) < 0)
+		f = cg->curfunc;
+		abort_unless(f != NULL);
+		if (cg_expr(cg, (union pml_node *)cfm->expr, f->rtype) < 0)
 			return -1;
-		EMIT_XW(cg, RET, retlen(cg->curfunc), cg->curfunc->arity);
+		EMIT_XW(cg, RET, retlen(f), f->arity);
 		break;
 	case PML_CFM_BREAK:
 		EMIT_W(cg, BRI, 0);
@@ -2400,58 +2543,123 @@ int cg_while(struct pmlncg *cg, struct pml_while *loop)
 }
 
 
-int cg_assign_scalar_var(struct pmlncg *cg, struct pml_assign *a)
+int cg_assign_strref_nonref(struct pmlncg *cg, struct pml_assign *a)
 {
-	struct pml_variable *var = a->loc->u.varref;
-
-	if (cg_expr(cg, (union pml_node *)a->expr, PML_ETYPE_SCALAR) < 0)
-		return -1;
-
-	if (var->vtype == PML_VTYPE_LOCAL) {
-		EMIT_XW(cg, STBPI, 0, lvaraddr(var));
+	union pml_expr_u *e = a->expr;
+	if (e->expr.etype == PML_ETYPE_SCALAR) {
+		/* scalar to pointer area */
+		if (cg_expr(cg, (union pml_node *)e, PML_ETYPE_SCALAR) < 0)
+			return -1;
+		if (cg_strref(cg, a->loc) < 0)
+			return -1;
+		EMIT_W(cg, UMINI, 8);
+		EMIT_NULL(cg, ST);
 	} else {
-		abort_unless(var->vtype == PML_VTYPE_PARAM);
-		EMIT_XW(cg, STBPI, 1, lvaraddr(var));
+		if (cg_expr(cg, (union pml_node *)e, PML_ETYPE_BYTESTR) < 0)
+			return -1;
+		if (cg_strref(cg, a->loc) < 0)
+			return -1;
+		EMIT_XY(cg, SWAP, 1, 2);
+		EMIT_NULL(cg, UMIN);
+		EMIT_NULL(cg, MOVE);
+	}
+	return 0;
+}
+
+
+int cg_assign_stack_var(struct pmlncg *cg, struct pml_assign *a)
+{
+	struct pml_variable *v = a->loc->u.varref;
+	ulong vaddr = lvaraddr(v);
+	union pml_expr_u *e =  a->expr;
+
+	if (v->etype == PML_ETYPE_SCALAR) {
+		if (cg_expr(cg, (union pml_node *)e, PML_ETYPE_SCALAR) < 0)
+			return -1;
+		if (v->vtype == PML_VTYPE_LOCAL) {
+			EMIT_XW(cg, STBPI, 0, vaddr);
+		} else {
+			abort_unless(v->vtype == PML_VTYPE_PARAM);
+			EMIT_XW(cg, STBPI, 1, vaddr);
+		}
+	} else if (v->etype == PML_ETYPE_STRREF) {
+		if (e->expr.etype == PML_ETYPE_STRREF) {
+			/* string ref -> string ref */
+			if (cg_expr(cg, (union pml_node *)e,
+				    PML_ETYPE_STRREF) < 0)
+				return -1;
+			if (v->vtype == PML_VTYPE_LOCAL) {
+				EMIT_XW(cg, STBPI, 0, vaddr+1); /* length */
+				EMIT_XW(cg, STBPI, 0, vaddr); /* address */
+			} else {
+				abort_unless(v->vtype == PML_VTYPE_PARAM);
+				/* string references are in reverse order */
+				/* from STBPI standpoint */
+				EMIT_XW(cg, STBPI, 1, vaddr); /* length */
+				EMIT_XW(cg, STBPI, 1, vaddr+1); /* address */
+			}
+		} else {
+			if (cg_assign_strref_nonref(cg, a) < 0)
+				return -1;
+		}
+	} else {
+		UNIMPL(cg, assign_local_non_scalar_non_ref_var);
 	}
 
 	return 0;
 }
 
 
-int cg_assign_bytestr_var(struct pmlncg *cg, struct pml_assign *a)
+int cg_assign_global_var(struct pmlncg *cg, struct pml_assign *a)
 {
 	struct pml_locator *loc = a->loc;
-	struct pml_variable *var = loc->u.varref;
-	int etype = a->expr->expr.etype;
+	struct pml_variable *v = loc->u.varref;
+	union pml_expr_u *e = a->expr;
 	uint64_t vlen;
 
-	if (cg_expr(cg, (union pml_node *)a->expr, etype) < 0)
-		return -1;
+	if (v->etype == PML_ETYPE_SCALAR ||
+	    (v->etype == PML_ETYPE_BYTESTR && 
+	     e->expr.etype == PML_ETYPE_SCALAR)) {
+		if (cg_expr(cg, (union pml_node *)e, PML_ETYPE_SCALAR) < 0)
+			return -1;
 
-	if (etype == PML_ETYPE_SCALAR) {
 		if (loc->off == NULL && loc->len == NULL &&
-		    var->addr <= 0xFFFFFFFFul) {
-			vlen = var->width;
+		    v->addr <= 0xFFFFFFFFul) {
+			vlen = v->width;
 			if (vlen > 8)
 				vlen = 8;
-			EMIT_XYW(cg, STI, vlen, PML_SEG_RWMEM, var->addr);
-			return 0;
-		} 
-		PUSH64(cg, 8);
-	} else if (etype == PML_ETYPE_MASKVAL) {
-		if (typecast(cg, PML_ETYPE_BYTESTR, etype) < 0)
+			EMIT_XYW(cg, STI, vlen, PML_SEG_RWMEM, v->addr);
+		} else {
+			if (cg_memref(cg, loc) < 0)
+				return -1;
+			EMIT_NULL(cg, ST);
+		}
+	} else if (v->etype == PML_ETYPE_BYTESTR) {
+		/* byte string to byte string copy */
+		if (cg_expr(cg, (union pml_node *)e, PML_ETYPE_BYTESTR) < 0)
 			return -1;
-	}
-
-	if (cg_memref(cg, loc) < 0)
-		return -1;
-
-	if (etype == PML_ETYPE_SCALAR) {
-		EMIT_NULL(cg, ST);
-	} else {
+		if (cg_memref(cg, loc) < 0)
+			return -1;
 		EMIT_XW(cg, SWAP, 1, 2);
 		EMIT_NULL(cg, UMIN);
 		EMIT_NULL(cg, MOVE);
+	} else if (v->etype == PML_ETYPE_STRREF) {
+		if (e->expr.etype == PML_ETYPE_STRREF) {
+			/* overwrite string ref */
+			if (cg_expr(cg, (union pml_node *)e,
+				    PML_ETYPE_STRREF) < 0)
+				return -1;
+			EMIT_XYW(cg, STI, sizeof(uint64_t), PML_SEG_RWMEM,
+				 v->addr + sizeof(uint64_t));
+			EMIT_XYW(cg, STI, sizeof(uint64_t), PML_SEG_RWMEM,
+				 v->addr);
+		} else {
+			/* string copy */
+			if (cg_assign_strref_nonref(cg, a) < 0)
+				return -1;
+		}
+	} else {
+		UNIMPL(cg, non_scalar_strref_bytestr_global_var_assign);
 	}
 
 	return 0;
@@ -2558,6 +2766,12 @@ int cg_assign_pktfld(struct pmlncg *cg, struct pml_assign *a)
 	struct cg_pdesc cgpd;
 	uint64_t flen;
 
+	/* string references in an rvalue position become strings */
+	/* when the LHS is not a string reference.  Packet fields */
+	/* hever have string reference variable type.  */
+	if (etype == PML_ETYPE_STRREF)
+		etype = PML_ETYPE_BYTESTR;
+
 	if (cg_expr(cg, (union pml_node *)a->expr, etype) < 0)
 		return -1;
 
@@ -2600,17 +2814,18 @@ int cg_assign_pktfld(struct pmlncg *cg, struct pml_assign *a)
 int cg_assign(struct pmlncg *cg, struct pml_assign *a)
 {
 	struct pml_locator *loc = a->loc;
-	struct pml_variable *var;
+	struct pml_variable *v;
 
 	if (loc->reftype == PML_REF_VAR) {
-		var = loc->u.varref;
-		if (var->vtype == PML_VTYPE_LOCAL ||
-		    var->vtype == PML_VTYPE_PARAM) {
-			return cg_assign_scalar_var(cg, a);
+		v= loc->u.varref;
+		if (v->vtype == PML_VTYPE_LOCAL ||
+		    v->vtype == PML_VTYPE_PARAM) {
+			return cg_assign_stack_var(cg, a);
 		} else {
-			return cg_assign_bytestr_var(cg, a);
+			return cg_assign_global_var(cg, a);
 		}
 	} else {
+		abort_unless(loc->reftype == PML_REF_PKTFLD);
 		return cg_assign_pktfld(cg, a);
 	}
 
@@ -2641,19 +2856,19 @@ int cg_print(struct pmlncg *cg, struct pml_print *pr)
 	case PML_FMT_IPA:
 		EMIT_W(cg, EQI, 4);
 		EMIT_W(cg, BRI, 3);
-		EMIT_W(cg, PUSH, 0); /* TODO: allow software generated runtime errors */
+		EMIT_W(cg, PUSH, 0); /* TODO: sw generated runtime errors */
 		EMIT_NULL(cg, HALT);
 		break;
 	case PML_FMT_IP6A:
 		EMIT_W(cg, EQI, 16);
 		EMIT_W(cg, BRI, 3);
-		EMIT_W(cg, PUSH, 0); /* TODO: allow software generated runtime errors */
+		EMIT_W(cg, PUSH, 0); /* TODO: sw generated runtime errors */
 		EMIT_NULL(cg, HALT);
 		break;
 	case PML_FMT_ETHA:
 		EMIT_W(cg, EQI, 6);
 		EMIT_W(cg, BRI, 3);
-		EMIT_W(cg, PUSH, 0); /* TODO: allow software generated runtime errors */
+		EMIT_W(cg, PUSH, 0); /* TODO: sw generated runtime errors */
 		EMIT_NULL(cg, HALT);
 		break;
 
