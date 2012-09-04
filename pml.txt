@@ -98,22 +98,55 @@ The forms of locators are:
 	  declared and local vars are not.
 
   Types:
-   - scalar, byte string, mask string, regular expressions, void
+    - void			- void (functions only)
+    - signed integer		- int
+    - byte string		- str
+    - masked byte string	- mstr (NOT DECLARABLE)
+    - regular expression	- regex (NOT DECLARABLE)
+    - string pointer		- sref
+   
+  Expressions that can return sref:
+    - a location address 
+    - a function returning a sref
+   
+
+  Currently:
+   - local variables have types int, sref
+   - parameters can have types int, sref 
+   - global variables have types int, str, sref
+   - const's have type int only
+   - functions can return int, sref, mstr, str, void
+   - inlines can return int, sref, str(?)
+   - intrinsics can return void, int, sref, str, mstr, regex
+  
+  
+  Type casting:
+   - in expressions automatic type conversion can go from:
+     * maskval (value only)-> bytestr (max 8 bytes BE)-> scalar (discard)-> void
+     * sref (discard)-> void
+  
+   - in assignment:
+     * can convert as with expressions
+     * can assign scalars to byte strings (overwrite up to 8 bytes)
+     * can assign scalars to srefs (overrite up to 8 bytes)
+     * can assign byte strings to string refs (string copy)
+     * NOTE:
+       + sref-to-sref implies rhs uses the '&' operator to get a location address
+   
 
   Value types:
-   local variable    -> scalar
-   parameter	     -> scalar
-   global variable   -> scalar if size unspecified, byte string otherwise
-		        can always be accessed as a byte string?
-   constant          -> scalar, byte string, mask string
-   protocol constant -> scalar, byte string, mask string
-   protocol name     -> scalar when no offset/length:  boolean indicating
-			presence of the header
-	 	        byte string when offset length (protocol header)
-   packet field	     -> if bitfields then scalar otherwise byte string
-   operator result   -> scalar
-   inline return     -> scalar
-   function return   -> scalar | void
+    - local variable    -> scalar, sref
+    - parameter	     -> scalar, sref
+    - global variable   -> scalar, string, sref
+    - constant          -> scalar
+    - protocol constant -> scalar, string, masked string
+    - protocol name     -> scalar when no offset/length:  boolean indicating
+    			   presence of the header
+			   byte string when offset length (protocol header)
+    - packet field	-> if bitfields then scalar otherwise byte string
+    - operator result   -> sref for '&', scalar for all others
+    - inline return     -> scalar
+    - function return   -> scalar, sref | void
 
 
   
@@ -124,21 +157,9 @@ Byte strings:
   - Expressions can refer to byte strings or mask values
   - Constant expressions can have constant offsets/lengths into constants.
     * optimization replaces these with a new literal byte string/mask value.
-  - Global variables can have a byte string or mask value initializer
+  - Global variables can have a byte string initializer
   - We need read-only space for constant byte strings/mask values that
     the rules and functions refer to.
-  - We need global variables initialized by constant byte strings/mask values
-    to to have a memory initializer, but not a read-only segment area.
-    * can we?
-      + group all initialized read-write variables into one initializer
-      + group all uninitialized read-write variables into one zero-initializer
-      + group all read-only byte strings into one initializer
-    * yes this is feasible.  Unlike nvmas, we define the segments so we can
-      make them non-overlapping, etc.
-    * how do we extract the read-only byte strings that we need?
-      + walk the rules and functions after constant propagation.
-    * can we add them during parsing to make less passes over the data?
-
 
 Code Generation Core:
   - Core is statement list walker:
@@ -180,18 +201,14 @@ Each type has a representation on the stack.
   - scalars = 64-bit value 
   - byte strings = 64 bit len then 64-bit UA
   - mask strings = 64 bit len, 64 bit mask addr (UA), 64-bit val addr (UA)
+  - string reference = 64-bit len then 64-bit UA
   - in scalar context:
     * for byte strings:  use ldu to convert to scalar
     * for mask strings:  
       ** swap the mask and length, drop the mask, use ldu to get scalar
-        - or -
-      ** dup length, swap top w/ val, swap top w/ len,
-         ldu to get val, swap top with len, ldu to get mask,
-	 AND to get value
-
 
 Functions:
-  - function call should
+  - function caller should
     * evaluate arguments (reverse order)
     * push the function address
     * invoke 'call'
@@ -227,6 +244,12 @@ Rules:
 
 
 Intrinsics:
+  -- sref_len(sref) - return the length of a string reference
+  -- sref_addr(sref) - return the address of a string reference
+  -- sref_ispkt(sref) - return whether the string reference refers to a packet
+  -- sref_seg(sref) - return the segment index/packet # that the ref refers to
+  -- sref_isnull(sref) - return whether the reference is an empty reference
+
   -- void pkt_new(pnum, dltype, len)
   -- void pkt_swap(pn1, pn2)
   -- void pkt_copy(pndst, pnsrc)
@@ -328,5 +351,23 @@ Regular expressions in NetVM
 	[offn, offn-1, offn-2 .. off1, pos]
 	* Error if pattern not loaded
 	* Error if nmatch is too large for the pattern
+
+
+ 
+
+int pkt_splice(sref p, sref b)
+{
+	if (!str_ispkt(p))
+		return -1;
+	diff = sref_len(p) - sref_len(b);
+	if (diff > 0)
+		pkt_cut_d(p[sref_len(p) - diff, diff]);
+	} else if (diff < 0) {
+		pkt_ins_u(p, sref_len(p), -diff);
+	}
+	p = b; # string copy
+	fix_csum(sref_seg(p));
+	return 0;
+}
 
 
