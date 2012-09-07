@@ -1261,10 +1261,11 @@ STATIC_BUG_ON(UINTMAX_LE_2_to_32, UINT_MAX > 0xFFFFFFFF);
 static int cg_call(struct pmlncg *cg, struct pml_call *c, int etype)
 {
 	struct pml_ibuf *b = &cg->ibuf;
-	struct list *n;
+	struct list *n, *pn = NULL;
 	struct pml_function *f;
+	struct pml_variable *p;
 	struct cg_func_ctx *fc;
-	int rv;
+	int i, rv;
 
 	abort_unless(c->args && c->func);
 	f = c->func;
@@ -1276,9 +1277,17 @@ static int cg_call(struct pmlncg *cg, struct pml_call *c, int etype)
 		/* if cg_intrinsic > 0 call as regular function */
 	}
 
+	/* find the last parameter */
+	if (f->arity > 0)
+		for (i = 0, pn = l_head(&f->vars.list); i < f->arity-1; ++i)
+			pn = l_next(pn);
+	/* push arguments in reverse order */
 	l_for_each_rev(n, &c->args->list) {
-		if (cg_expr(cg, l_to_node(n), PML_ETYPE_SCALAR) < 0)
+		/* type cast to the type of the parameter */
+		p = (struct pml_variable *)l_to_node(pn);
+		if (cg_expr(cg, l_to_node(n), p->etype) < 0)
 			return -1;
+		pn = l_prev(pn);
 	}
 
 	if (PML_FUNC_IS_INLINE(f)) {
@@ -2174,16 +2183,13 @@ static int cg_locaddr(struct pmlncg *cg, struct pml_locator *loc, int etype)
 	switch (loc->reftype) {
 	case PML_REF_VAR:
 		var = loc->u.varref;
-		abort_unless(var->vtype == PML_VTYPE_GLOBAL);
-		if (var->etype == PML_ETYPE_BYTESTR) {
-			if (cg_memref(cg, loc) < 0)
+		if (var->etype == PML_ETYPE_STRREF) {
+			if (cg_strref(cg, loc) < 0)
 				return -1;
 		} else {
-			abort_unless(var->etype == PML_ETYPE_STRREF);
-			EMIT_XYW(cg, LDI, sizeof(uint64_t), PML_SEG_RWMEM,
-				 var->addr);
-			EMIT_XYW(cg, LDI, sizeof(uint64_t), PML_SEG_RWMEM,
-				 var->addr + sizeof(uint64_t));
+			abort_unless(var->vtype == PML_VTYPE_GLOBAL);
+			if (cg_memref(cg, loc) < 0)
+				return -1;
 		}
 		break;
 

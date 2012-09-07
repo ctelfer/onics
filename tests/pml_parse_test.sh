@@ -17,6 +17,15 @@ parse_test()
 	${TBIN}/testpmlparse 9 < data/pml/parse_test_$1.pml \
 		> tmp/parse_test_$1.out 2> $TOUT/parse_test_$1.err
 
+	if [ ! -f data/pml/parse_test_$1.out -o \
+	     ! -f data/pml/parse_test_$1.err ]
+        then
+		echo SKIPPED
+		echo -----------------
+		echo
+		return
+	fi
+
 	if cmp data/pml/parse_test_$1.out $TOUT/parse_test_$1.out &&
 	   cmp data/pml/parse_test_$1.err $TOUT/parse_test_$1.err
 	then
@@ -31,7 +40,7 @@ parse_test()
 }
 
 
-for i in 1 2 3 4 5 6 7 8 9 10 11 12 13
+for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15
 do
 	parse_test $i
 done

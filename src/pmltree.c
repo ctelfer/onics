@@ -2683,8 +2683,12 @@ static int typecheck_call(struct pml_ast *ast, struct pml_call *c)
 	for (i = 0; i < f->arity; ++i) {
 		p = (struct pml_variable *)l_to_node(pn);
 		a = (union pml_expr_u *)l_to_node(an);
-		if (typecheck(a->expr.etype, p->etype) < 0)
+		if (typecheck(a->expr.etype, p->etype) < 0) {
+			pml_ast_err(ast, "Argument '%s' to function '%s' is type"
+				         " '%s' instead of '%s'",
+				    p->name, f->name, ets(a), ets(p));
 			return -1;
+		}
 		pn = pn->next;
 		an = an->next;
 	}
@@ -2938,9 +2942,11 @@ static int resolve_node_post(union pml_node *node, void *ctxp, void *xstk)
 		struct pml_locator *l = (struct pml_locator *)node;
 		if (resolve_locsym(ctx, l) < 0)
 			return -1;
-		if (((l->reftype == PML_REF_VAR) && 	/* symbolic constant */
-		     ((l->u.varref->vtype != PML_VTYPE_GLOBAL) ||
-		      (l->u.varref->etype != PML_ETYPE_BYTESTR))) ||
+
+		if ( /* only globals and strref vars */
+		     ((l->reftype == PML_REF_VAR) && 
+		     ((l->u.varref->vtype != PML_VTYPE_GLOBAL) &&
+		      (l->u.varref->etype != PML_ETYPE_STRREF))) ||
 
 		    ((l->reftype == PML_REF_PKTFLD) &&	/* resv non-bytefield */
 		     (l->rpfld != PML_RPF_NONE) &&
@@ -2951,7 +2957,8 @@ static int resolve_node_post(union pml_node *node, void *ctxp, void *xstk)
 		     NSF_IS_INBITS(l->u.nsref->flags)) ||
 
 		    ((l->reftype == PML_REF_LITERAL) &&	/* protocol non str */
-		     (l->u.litref->type == PMLTT_BYTESTR))) {
+		     (l->u.litref->type == PMLTT_BYTESTR))
+		   ) {
 			pml_ast_err(ctx->ast, 
 				    "'%s' is not an addressable field.\n",
 				    l->name);
@@ -3689,11 +3696,15 @@ static int e_locaddr(struct pml_ast *ast, struct pml_stack_frame *fr,
 
 	r->etype = PML_ETYPE_STRREF;
 	if (l->reftype == PML_REF_VAR) {
-		abort_unless(l->u.varref->vtype == PML_VTYPE_GLOBAL);
-		r->bytes.ispkt = 0;
-		r->bytes.addr = l->u.varref->addr;
-		r->bytes.len = l->u.varref->width;
-		r->bytes.segnum = PML_SEG_RWMEM;
+		if (l->u.varref->vtype == PML_VTYPE_GLOBAL) {
+			r->bytes.ispkt = 0;
+			r->bytes.addr = l->u.varref->addr;
+			r->bytes.len = l->u.varref->width;
+			r->bytes.segnum = PML_SEG_RWMEM;
+		} else {
+			/* can't evaluate this, but not an error */
+			return -1;
+		}
 	} else if (l->reftype == PML_REF_LITERAL) {
 		lit = l->u.litref;
 		abort_unless(lit->type == PMLTT_BYTESTR);
