@@ -350,19 +350,19 @@ decl ::= funcproto(F). {
 		pmln_free(F);
 }
 decl ::= funcdecl(F). {
-	if (pml_ast_add_func(ast, F) < 0)
+	if (F != NULL && pml_ast_add_func(ast, F) < 0)
 		pmln_free(F);
 }
 decl ::= inlinedecl(F). {
-	if (pml_ast_add_func(ast, F) < 0)
+	if (F != NULL && pml_ast_add_func(ast, F) < 0)
 		pmln_free(F);
 }
 decl ::= gvar(V). {
-	if (pml_ast_add_var(ast, V) < 0)
+	if (V != NULL && pml_ast_add_var(ast, V) < 0)
 		pmln_free(V);
 }
 decl ::= rule(R). {
-	if (pml_ast_add_rule(ast, R) < 0)
+	if (R != NULL && pml_ast_add_rule(ast, R) < 0)
 		pmln_free(R);
 }
 

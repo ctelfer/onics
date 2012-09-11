@@ -1,0 +1,70 @@
+First testing by direct reference
+Length of string = 16
+Address of string = 8
+'Is Packet' of string = 0
+Segment of string = 1
+'Is null' of string = 0
+
+
+Next testing by global reference
+Length of string = 16
+Address of string = 8
+'Is Packet' of string = 0
+Segment of string = 1
+'Is null' of string = 0
+
+
+Next testing by local reference
+Length of string = 16
+Address of string = 8
+'Is Packet' of string = 0
+Segment of string = 1
+'Is null' of string = 0
+
+
+Next testing by local parameter from direct ref
+Length of string = 16
+Address of string = 8
+'Is Packet' of string = 0
+Segment of string = 1
+'Is null' of string = 0
+
+
+Next testing by local parameter from global variable ref
+Length of string = 16
+Address of string = 8
+'Is Packet' of string = 0
+Segment of string = 1
+'Is null' of string = 0
+
+
+Next testing by local parameter from local variable ref
+Length of string = 16
+Address of string = 8
+'Is Packet' of string = 0
+Segment of string = 1
+'Is null' of string = 0
+
+
+Next testing by local parameter from parameter variable ref
+Length of string = 16
+Address of string = 8
+'Is Packet' of string = 0
+Segment of string = 1
+'Is null' of string = 0
+
+
+Next testing null global reference
+Length of string = 0
+Address of string = 0
+'Is Packet' of string = 0
+Segment of string = 0
+'Is null' of string = 1
+
+
+Next testing null local reference
+Length of string = 0
+Address of string = 0
+'Is Packet' of string = 0
+Segment of string = 0
+'Is null' of string = 1

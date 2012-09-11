@@ -29,11 +29,11 @@ pml_test() {
 		echo FAILED
 		ERR=1
 		FAIL=1
-	fi
-
-	if [ -f data/pml/pml_test$1.out ] || 
-	   [ -f data/pml/pml_test$1.err ]
+	elif [ ! -f data/pml/pml_test$1.out ] &&
+	     [ ! -f data/pml/pml_test$1.err ]
 	then
+		echo SKIPPED
+	else
 		if ! cmp $TOUT/pml_test$1.out data/pml/pml_test$1.out || 
 		   ! cmp $TOUT/pml_test$1.err data/pml/pml_test$1.err
 		then
@@ -41,12 +41,13 @@ pml_test() {
 			ERR=1
 			FAIL=1
 		fi
+
+		if [ $FAIL -eq 0 ]
+		then
+			echo PASSED
+		fi
 	fi
 
-	if [ $FAIL -eq 0 ]
-	then
-		echo PASSED
-	fi
 
 	echo "------------------"
 	echo
@@ -80,5 +81,8 @@ pml_test 24 NONE
 pml_test 25 data/onepkt.xpkt
 pml_test 26 NONE
 pml_test 27 NONE
+pml_test 28 NONE
+pml_test 29 NONE
+pml_test 30 NONE
 
 exit $ERR
