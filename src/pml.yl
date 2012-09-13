@@ -367,8 +367,7 @@ decl ::= rule(R). {
 }
 
 type(T) ::= INT. { T = PML_ETYPE_SCALAR; }
-type(T) ::= STR. { T = PML_ETYPE_BYTESTR; }
-type(T) ::= SREF. { T = PML_ETYPE_STRREF; }
+type(T) ::= STR. { T = PML_ETYPE_STRREF; }
 
 iddecl(I) ::= type(T) ID(N). {
 	I.name = (char *)N.u.raw.data;
@@ -537,30 +536,25 @@ gvar(G) ::= CONST ID(I) ASSIGN expr(E) SEMICOLON. {
 			  PML_ETYPE_SCALAR, 0, E);
 }
 gvar(G) ::= iddecl(I) SEMICOLON. {
-	G = NULL;
-	if (I.type == PML_ETYPE_BYTESTR) {
-		free(I.name);
-		pml_ast_err(ast, "Blob declaration with no length");
-	} else {
-		G = pml_var_alloc(ast, I.name, PML_VTYPE_GLOBAL,
-				  I.type, 0, NULL); 
-	}
+	G = pml_var_alloc(ast, I.name, PML_VTYPE_GLOBAL,
+			  I.type, 0, NULL); 
 }
 gvar(G) ::= iddecl(I) LBRACKET NUM(N) RBRACKET SEMICOLON. {
 	G = NULL;
-	if (I.type != PML_ETYPE_BYTESTR) {
-		pml_ast_err(ast, "non-blob declaration with length");
+	if (I.type != PML_ETYPE_STRREF) {
+		pml_ast_err(ast, "non-string declaration with length");
 		free(I.name);
 	} else {
 		G = pml_var_alloc(ast, I.name, PML_VTYPE_GLOBAL,
-				  I.type, N.u.num, NULL); 
+				  PML_ETYPE_BYTESTR, N.u.num, NULL); 
 	}
 }
 gvar(G) ::= iddecl(I) ASSIGN expr(E) SEMICOLON. {
 	G = NULL;
-	if (I.type == PML_ETYPE_BYTESTR) {
+	if (I.type == PML_ETYPE_STRREF) {
 		free(I.name);
-		pml_ast_err(ast, "Blob declaration with no length");
+		pml_ast_err(ast,
+			    "String reference with initializer not supported.");
 	} else if (!PML_EXPR_IS_CONST(E)) {
 		free(I.name);
 		pml_ast_err(ast, "Var '%s' initializer is not constant.\n",
@@ -571,12 +565,12 @@ gvar(G) ::= iddecl(I) ASSIGN expr(E) SEMICOLON. {
 }
 gvar(G) ::= iddecl(I) LBRACKET NUM(N) RBRACKET ASSIGN value(VAL) SEMICOLON. {
 	G = NULL;
-	if (I.type != PML_ETYPE_BYTESTR) {
+	if (I.type != PML_ETYPE_STRREF) {
 		pml_ast_err(ast, "non-blob declaration with length");
 		free(I.name);
 	} else {
-		G = pml_var_alloc(ast, I.name, PML_VTYPE_GLOBAL, I.type, 
-				  N.u.num, VAL);
+		G = pml_var_alloc(ast, I.name, PML_VTYPE_GLOBAL, 
+				  PML_ETYPE_BYTESTR, N.u.num, VAL);
 	}
 }
 
@@ -642,6 +636,19 @@ stmts(SSO) ::= stmts(SSI) PRINT prlist(P) SEMICOLON. {
 stmt(S) ::= locator(L) ASSIGN expr(E) SEMICOLON. {
 	struct pml_assign *a = pmln_alloc(ast, PMLTT_ASSIGN);
 	if (a != NULL) {
+		a->loc = L;
+		a->expr = E;
+	} else {
+		pmln_free(L);
+		pmln_free(E);
+	}
+	S = (union pml_node *)a;
+}
+
+stmt(S) ::= AMP locator(L) ASSIGN expr(E) SEMICOLON. {
+	struct pml_assign *a = pmln_alloc(ast, PMLTT_ASSIGN);
+	if (a != NULL) {
+		L->type = PMLTT_LOCADDR;
 		a->loc = L;
 		a->expr = E;
 	} else {

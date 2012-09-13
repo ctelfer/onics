@@ -351,15 +351,15 @@ static int _e_max(struct pml_ast *ast, struct pml_stack_frame *fr,
 
 static struct pml_intrinsic stdintr[] = {
 	/* TODO: create eval versions of these and make them PCONST */
-	{ "sref_len", PML_ETYPE_SCALAR, 1, 0, NULL,
+	{ "str_len", PML_ETYPE_SCALAR, 1, 0, NULL,
 		{ _SREFP(ref) } },
-	{ "sref_addr", PML_ETYPE_SCALAR, 1, 0, NULL,
+	{ "str_addr", PML_ETYPE_SCALAR, 1, 0, NULL,
 		{ _SREFP(ref) } },
-	{ "sref_ispkt", PML_ETYPE_SCALAR, 1, 0, NULL,
+	{ "str_ispkt", PML_ETYPE_SCALAR, 1, 0, NULL,
 		{ _SREFP(ref) } },
-	{ "sref_seg", PML_ETYPE_SCALAR, 1, 0, NULL,
+	{ "str_seg", PML_ETYPE_SCALAR, 1, 0, NULL,
 		{ _SREFP(ref) } },
-	{ "sref_isnull", PML_ETYPE_SCALAR, 1, 0, NULL,
+	{ "str_isnull", PML_ETYPE_SCALAR, 1, 0, NULL,
 		{ _SREFP(ref) } },
 
 	{ "pkt_new", PML_ETYPE_VOID, 2, 0, NULL,
@@ -2631,7 +2631,6 @@ static int typecheck_binop(struct pml_ast *ast, struct pml_op *op)
 			return -1;
 		}
 		if (a2->etype != PML_ETYPE_BYTESTR &&
-		    a2->etype != PML_ETYPE_STRREF &&
 		    a2->etype != PML_ETYPE_MASKVAL) {
 			pml_ast_err(ast, 
 				    "%s: Right argument of a match operation "
@@ -2795,7 +2794,6 @@ static int typecheck_node(struct pml_ast *ast, union pml_node *node,
 	case PMLTT_ASSIGN: {
 		struct pml_assign *a = &node->assign;
 		e = a->expr;
-		abort_unless(a->loc->type == PMLTT_LOCATOR);
 		/* scalar -> bytestr is allowed for assignments */
 		/* note that strref variables have a location expr type of */
 		/* bytestr.  Only LOCADDR and function returns can have */
@@ -2806,9 +2804,10 @@ static int typecheck_node(struct pml_ast *ast, union pml_node *node,
 		/* A string reference can assign to a string reference even */
 		/* though a string reference's locator's type is BYTESTR */
 		if (e->expr.etype == PML_ETYPE_STRREF && 
-		    a->loc->reftype == PML_REF_VAR && 
-		    a->loc->u.varref->etype == PML_ETYPE_STRREF)
+		    a->loc->type == PMLTT_LOCADDR) {
+			abort_unless(a->loc->etype == PML_ETYPE_STRREF);
 			break;
+		}
 		/* all others are for regular type conversion rules */
 		if (typecheck(e->expr.etype, a->loc->etype) < 0) {
 			pml_ast_err(ast, "incompatible assignment type: %s->%s",

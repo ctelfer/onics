@@ -103,7 +103,6 @@ struct kwtok {
 	{ "sendpkt",	PMLTOK_SENDPKT },
 	{ "drop",	PMLTOK_DROP },
 	{ "str",	PMLTOK_STR },
-	{ "sref",	PMLTOK_SREF },
 	{ "print",	PMLTOK_PRINT },
 	{ NULL,		0 }
 };

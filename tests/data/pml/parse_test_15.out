@@ -19,7 +19,13 @@ Printing PML Abstract Syntax Tree
 -----------
 Variables
 -----------
-   Variable: mem [global; width=0, addr=0]
+   Variable: mem [global; width=16, addr=0]
+   Variable: astring [global; width=16, addr=0]
+      Initialization value -- 
+      Byte string [[c]; width=0] -- 
+      16 bytes in read-only segment at address 0
+      666f6f2062617220
+      62617a206f6f6b20
 -----------
 Functions
 -----------
@@ -244,25 +250,237 @@ Functions
       Variable: num2 [param; width=8, addr=1]
    Body -- 
       (null)
+   Function: foo() -- 2 args, 0 vars, return type=scalar
+   Parameters & Variables -- 
+      Variable: x [param; width=16, addr=0]
+      Variable: off [param; width=8, addr=2]
+   Body -- 
+      List:
+      -----
+      Control Flow Modification: 'return'
+         Locator: variable(x) [[]; width=16]
+         Variable -- 
+            Variable: x [param; width=16, addr=0]
+         Offset -- 
+            Locator: variable(off) [[]; width=8]
+            Variable -- 
+               Variable: off [param; width=8, addr=2]
+      -----
+   Function: bar() -- 2 args, 0 vars, return type=string reference
+   Parameters & Variables -- 
+      Variable: r [param; width=16, addr=0]
+      Variable: off [param; width=8, addr=2]
+   Body -- 
+      List:
+      -----
+      Control Flow Modification: 'return'
+         Location Address: variable(r) [[p]; width=16]
+         Variable -- 
+            Variable: r [param; width=16, addr=0]
+         Offset -- 
+            Binary Operation: 'add' [[]; width=8]
+            Left Operand -- 
+               Locator: variable(off) [[]; width=8]
+               Variable -- 
+                  Variable: off [param; width=8, addr=2]
+            Right Operand -- 
+               Scalar [[c]; width=8] -- width 8: 4 (4,0x4)
+         Length -- 
+            Binary Operation: 'subtract' [[]; width=8]
+            Left Operand -- 
+               Function call to: str_len [[]; width=8]
+               Arguments -- 
+                  List:
+                  -----
+                  Location Address: variable(r) [[c,p]; width=16]
+                  Variable -- 
+                     Variable: r [param; width=16, addr=0]
+                  -----
+            Right Operand -- 
+               Binary Operation: 'subtract' [[]; width=8]
+               Left Operand -- 
+                  Locator: variable(off) [[]; width=8]
+                  Variable -- 
+                     Variable: off [param; width=8, addr=2]
+               Right Operand -- 
+                  Scalar [[c]; width=8] -- width 8: 8 (8,0x8)
+      -----
+   Function: baz() -- 2 args, 0 vars, return type=string reference
+   Parameters & Variables -- 
+      Variable: r [param; width=16, addr=0]
+      Variable: off [param; width=8, addr=2]
+   Body -- 
+      List:
+      -----
+      Control Flow Modification: 'return'
+         Function call to: bar [[]; width=0]
+         Arguments -- 
+            List:
+            -----
+            Location Address: variable(r) [[p]; width=16]
+            Variable -- 
+               Variable: r [param; width=16, addr=0]
+            Offset -- 
+               Binary Operation: 'add' [[]; width=8]
+               Left Operand -- 
+                  Locator: variable(off) [[]; width=8]
+                  Variable -- 
+                     Variable: off [param; width=8, addr=2]
+               Right Operand -- 
+                  Scalar [[c]; width=8] -- width 8: 2 (2,0x2)
+            -----
+            Scalar [[c]; width=8] -- width 8: 2 (2,0x2)
+            -----
+      -----
 -----------
 Begin Rule
 -----------
-   (null)
+   Rule: (begin)
+      Action Variables -- 
+      Variable: r [local; width=16, addr=0]
+      Variable: r2 [local; width=16, addr=2]
+   Action -- 
+      List:
+      -----
+      Assignment to r
+      Value -- 
+         Location Address: variable(astring) [[c,p]; width=16]
+         Variable -- 
+            Variable: astring [global; width=16, addr=0]
+               Initialization value -- 
+               Byte string [[c]; width=0] -- 
+               16 bytes in read-only segment at address 0
+               666f6f2062617220
+               62617a206f6f6b20
+      -----
+      Assignment to r2
+      Value -- 
+         Function call to: bar [[]; width=0]
+         Arguments -- 
+            List:
+            -----
+            Location Address: variable(r) [[c,p]; width=16]
+            Variable -- 
+               Variable: r [local; width=16, addr=0]
+            -----
+            Scalar [[c]; width=8] -- width 8: 0 (0,0x0)
+            -----
+      -----
+      Assignment to r
+      Value -- 
+         Function call to: bar [[]; width=0]
+         Arguments -- 
+            List:
+            -----
+            Location Address: variable(r) [[c,p]; width=16]
+            Variable -- 
+               Variable: r [local; width=16, addr=0]
+            -----
+            Scalar [[c]; width=8] -- width 8: 4 (4,0x4)
+            -----
+      -----
+      Assignment to r2
+      Value -- 
+         Function call to: bar [[]; width=0]
+         Arguments -- 
+            List:
+            -----
+            Location Address: variable(astring) [[c,p]; width=16]
+            Variable -- 
+               Variable: astring [global; width=16, addr=0]
+                  Initialization value -- 
+                  Byte string [[c]; width=0] -- 
+                  16 bytes in read-only segment at address 0
+                  666f6f2062617220
+                  62617a206f6f6b20
+            -----
+            Scalar [[c]; width=8] -- width 8: 0 (0,0x0)
+            -----
+      -----
+      Assignment to r
+      Value -- 
+         Function call to: bar [[]; width=0]
+         Arguments -- 
+            List:
+            -----
+            Location Address: variable(astring) [[c,p]; width=16]
+            Variable -- 
+               Variable: astring [global; width=16, addr=0]
+                  Initialization value -- 
+                  Byte string [[c]; width=0] -- 
+                  16 bytes in read-only segment at address 0
+                  666f6f2062617220
+                  62617a206f6f6b20
+            -----
+            Scalar [[c]; width=8] -- width 8: 4 (4,0x4)
+            -----
+      -----
 -----------
 Packet Rules
 -----------
    Rule: (packet)
    Empty pattern
    Action Variables -- 
+      Variable: r [local; width=16, addr=0]
+      Variable: r2 [local; width=16, addr=2]
+      Variable: y [local; width=8, addr=4]
+      Variable: z [local; width=8, addr=5]
    Action -- 
       List:
       -----
-      Function call to: fix_all_len [[]; width=0]
-      Arguments -- 
-         List:
-         -----
-         Scalar [[c]; width=8] -- width 8: 0 (0,0x0)
-         -----
+      Assignment to r
+      Value -- 
+         Location Address: variable(astring) [[c,p]; width=16]
+         Variable -- 
+            Variable: astring [global; width=16, addr=0]
+               Initialization value -- 
+               Byte string [[c]; width=0] -- 
+               16 bytes in read-only segment at address 0
+               666f6f2062617220
+               62617a206f6f6b20
+      -----
+      Assignment to r
+      Value -- 
+         Byte string [[c]; width=0] -- 
+         4 bytes in read-only segment at address 17
+         6b696420
+      -----
+      Assignment to r
+      Value -- 
+         Byte string [[c]; width=0] -- 
+         4 bytes in read-only segment at address 22
+         40404040
+      -----
+      Assignment to y
+      Value -- 
+         Function call to: foo [[]; width=8]
+         Arguments -- 
+            List:
+            -----
+            Location Address: variable(r) [[c,p]; width=16]
+            Variable -- 
+               Variable: r [local; width=16, addr=0]
+            -----
+            Scalar [[c]; width=8] -- width 8: 12 (12,0xc)
+            -----
+      -----
+      Assignment to z
+      Value -- 
+         Function call to: foo [[]; width=8]
+         Arguments -- 
+            List:
+            -----
+            Location Address: variable(astring) [[c,p]; width=16]
+            Variable -- 
+               Variable: astring [global; width=16, addr=0]
+                  Initialization value -- 
+                  Byte string [[c]; width=0] -- 
+                  16 bytes in read-only segment at address 0
+                  666f6f2062617220
+                  62617a206f6f6b20
+            -----
+            Scalar [[c]; width=8] -- width 8: 0 (0,0x0)
+            -----
       -----
 -----------
 End Rule

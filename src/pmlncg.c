@@ -556,21 +556,21 @@ struct cg_meta_ctx _i_flow_ctx = { 8, XPKT_TAG_FLOW, 4, 0, 0x05020000 };
 struct cg_meta_ctx _i_class_ctx = { 8, XPKT_TAG_CLASS, 4, 0, 0x06020000 };
 
 struct cg_intr intrinsics[] = { 
-	{ "sref_len", NULL, _i_str, NULL, 2, 
+	{ "str_len", NULL, _i_str, NULL, 2, 
 		{ NETVM_OP(SWAP,0,0,0,1),
 		  NETVM_OP(POP,0,0,0,1) } },
-	{ "sref_addr", NULL, _i_str, NULL, 3, 
+	{ "str_addr", NULL, _i_str, NULL, 3, 
 		{ NETVM_OP(POP,0,0,0,1),
 		  NETVM_OP(SHLI,0,0,0,8), 
 		  NETVM_OP(SHRI,0,0,0,8) } },
-	{ "sref_ispkt", NULL, _i_str, NULL, 2, 
+	{ "str_ispkt", NULL, _i_str, NULL, 2, 
 		{ NETVM_OP(POP,0,0,0,1), 
 		  NETVM_OP(SHRI,0,0,0,NETVM_UA_ISPKT_OFF) } },
-	{ "sref_seg", NULL, _i_str, NULL, 3, 
+	{ "str_seg", NULL, _i_str, NULL, 3, 
 		{ NETVM_OP(POP,0,0,0,1), 
 		  NETVM_OP(SHRI,0,0,0,NETVM_UA_SEG_OFF),
 		  NETVM_OP(ANDI,0,0,0,NETVM_SEG_SEGMASK) } },
-	{ "sref_isnull", NULL, _i_str, NULL, 3, 
+	{ "str_isnull", NULL, _i_str, NULL, 3, 
 		{ NETVM_OP(SWAP,0,0,0,1),
 		  NETVM_OP(POP,0,0,0,1),
 	          NETVM_OP(EQI,0,0,0,0)	} },
@@ -2581,6 +2581,7 @@ int cg_assign_stack_var(struct pmlncg *cg, struct pml_assign *a)
 	union pml_expr_u *e =  a->expr;
 
 	if (v->etype == PML_ETYPE_SCALAR) {
+		abort_unless(a->loc->type == PMLTT_LOCATOR);
 		if (cg_expr(cg, (union pml_node *)e, PML_ETYPE_SCALAR) < 0)
 			return -1;
 		if (v->vtype == PML_VTYPE_LOCAL) {
@@ -2590,7 +2591,7 @@ int cg_assign_stack_var(struct pmlncg *cg, struct pml_assign *a)
 			EMIT_XW(cg, STBPI, 1, vaddr);
 		}
 	} else if (v->etype == PML_ETYPE_STRREF) {
-		if (e->expr.etype == PML_ETYPE_STRREF) {
+		if (a->loc->type == PMLTT_LOCADDR) {
 			/* string ref -> string ref */
 			if (cg_expr(cg, (union pml_node *)e,
 				    PML_ETYPE_STRREF) < 0)
@@ -2627,6 +2628,7 @@ int cg_assign_global_var(struct pmlncg *cg, struct pml_assign *a)
 	if (v->etype == PML_ETYPE_SCALAR ||
 	    (v->etype == PML_ETYPE_BYTESTR && 
 	     e->expr.etype == PML_ETYPE_SCALAR)) {
+		abort_unless(loc->type == PMLTT_LOCATOR);
 		if (cg_expr(cg, (union pml_node *)e, PML_ETYPE_SCALAR) < 0)
 			return -1;
 
@@ -2642,6 +2644,7 @@ int cg_assign_global_var(struct pmlncg *cg, struct pml_assign *a)
 			EMIT_NULL(cg, ST);
 		}
 	} else if (v->etype == PML_ETYPE_BYTESTR) {
+		abort_unless(loc->type == PMLTT_LOCATOR);
 		/* byte string to byte string copy */
 		if (cg_expr(cg, (union pml_node *)e, PML_ETYPE_BYTESTR) < 0)
 			return -1;
@@ -2651,7 +2654,8 @@ int cg_assign_global_var(struct pmlncg *cg, struct pml_assign *a)
 		EMIT_NULL(cg, UMIN);
 		EMIT_NULL(cg, MOVE);
 	} else if (v->etype == PML_ETYPE_STRREF) {
-		if (e->expr.etype == PML_ETYPE_STRREF) {
+		if (loc->type == PMLTT_LOCADDR) {
+			abort_unless(e->expr.etype == PML_ETYPE_STRREF);
 			/* overwrite string ref */
 			if (cg_expr(cg, (union pml_node *)e,
 				    PML_ETYPE_STRREF) < 0)
@@ -2824,7 +2828,7 @@ int cg_assign(struct pmlncg *cg, struct pml_assign *a)
 	struct pml_variable *v;
 
 	if (loc->reftype == PML_REF_VAR) {
-		v= loc->u.varref;
+		v = loc->u.varref;
 		if (v->vtype == PML_VTYPE_LOCAL ||
 		    v->vtype == PML_VTYPE_PARAM) {
 			return cg_assign_stack_var(cg, a);

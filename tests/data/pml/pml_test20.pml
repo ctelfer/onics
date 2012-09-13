@@ -2,18 +2,18 @@
 #
 str foo[8] = \xdeadbeef12345678;
 str bar[8] = \x1213141516171819;
-sref fp;
-sref bp;
+str fp;
+str bp;
 
 BEGIN {
-	fp = &foo;
+	&fp = &foo;
 	if (fp == foo) {
 		print "foo agrees\n";
 	} else {
 		print "error: foo does not agree\n";
 	}
 
-	bp = &bar;
+	&bp = &bar;
 	if (bp[0, 8] == bar) {
 		print "bar agrees\n";
 	} else {

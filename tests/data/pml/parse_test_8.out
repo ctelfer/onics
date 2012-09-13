@@ -23,27 +23,27 @@ Variables
 -----------
 Functions
 -----------
-   Function[intrinsic]: sref_len() -- 1 args, 0 vars, return type=scalar
+   Function[intrinsic]: str_len() -- 1 args, 0 vars, return type=scalar
    Parameters & Variables -- 
       Variable: ref [param; width=16, addr=0]
    Body -- 
       (null)
-   Function[intrinsic]: sref_addr() -- 1 args, 0 vars, return type=scalar
+   Function[intrinsic]: str_addr() -- 1 args, 0 vars, return type=scalar
    Parameters & Variables -- 
       Variable: ref [param; width=16, addr=0]
    Body -- 
       (null)
-   Function[intrinsic]: sref_ispkt() -- 1 args, 0 vars, return type=scalar
+   Function[intrinsic]: str_ispkt() -- 1 args, 0 vars, return type=scalar
    Parameters & Variables -- 
       Variable: ref [param; width=16, addr=0]
    Body -- 
       (null)
-   Function[intrinsic]: sref_seg() -- 1 args, 0 vars, return type=scalar
+   Function[intrinsic]: str_seg() -- 1 args, 0 vars, return type=scalar
    Parameters & Variables -- 
       Variable: ref [param; width=16, addr=0]
    Body -- 
       (null)
-   Function[intrinsic]: sref_isnull() -- 1 args, 0 vars, return type=scalar
+   Function[intrinsic]: str_isnull() -- 1 args, 0 vars, return type=scalar
    Parameters & Variables -- 
       Variable: ref [param; width=16, addr=0]
    Body -- 
