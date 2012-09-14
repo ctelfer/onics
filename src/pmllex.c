@@ -358,7 +358,7 @@ static int nextc(struct pmllex *lex)
 		/* treat a new file like a whitespace w.r.t separation */
 		if (addc(&lex->text, ' ') < 0)
 			return NEXTCERR;
-		pushback(lex, ' ');
+		return ' ';
 	} while (c < 0);
 
 	/* UNREACHED */
@@ -731,7 +731,7 @@ static int read_hexstr(struct pmllex *lex)
 	ulong nx = 0;
 	
 	if (ch != 'x') {
-		pmll_err(lex, 1, "invalid token");
+		pmll_err(lex, 1, "invalid token following \\");
 		return -1;
 	}
 
