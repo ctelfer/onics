@@ -34,6 +34,8 @@
 pcap_t *g_pcap;
 FILE *g_infile = NULL;
 uint g_ifnum = 0;
+struct pktbuf *g_pkb;
+struct xpkt_tag_ts *g_ts;
 
 struct clopt g_options[] = {
 	CLOPT_INIT(CLOPT_STRING, 'i', "--iface", "interface to sniff from"),
@@ -125,15 +127,38 @@ static void init_tags(struct pktbuf *p)
 }
 
 
+void get_packet(uchar *unused, const struct pcap_pkthdr *ph, const uchar *buf)
+{
+	struct xpkt_tag_snapinfo si;
+	int rv;
+
+	g_ts->sec = ph->ts.tv_sec;
+	g_ts->nsec = ph->ts.tv_usec * 1000;
+
+	pkb_set_len(g_pkb, ph->caplen);
+
+	if (ph->len != ph->caplen) {
+		xpkt_tag_si_init(&si, ph->len);
+		rv = pkb_add_tag(g_pkb, (struct xpkt_tag_hdr *)&si);
+		abort_unless(rv == 0);
+	}
+
+	memcpy(g_pkb->buf, buf, ph->caplen);
+	rv = pkb_pack(g_pkb);
+	abort_unless(rv == 0);
+	if (pkb_fd_write(g_pkb, 1) < 0)
+		errsys("pkb_fd_write: ");
+	pkb_unpack(g_pkb);
+
+	if (ph->len != ph->caplen)
+		pkb_del_tag(g_pkb, XPKT_TAG_SNAPINFO, 0);
+}
+
+
 int main(int argc, char *argv[])
 {
 	int dlt;
 	uint16_t dltype;
-	struct pcap_pkthdr pcapph;
-	const byte_t *packet;
-	struct pktbuf *p;
-	struct xpkt_tag_ts *ts;
-	struct xpkt_tag_snapinfo si;
 	int rv;
 
 	parse_args(argc, argv);
@@ -147,36 +172,17 @@ int main(int argc, char *argv[])
 
 	pkb_init(1);
 
-	if (!(p = pkb_create(PKTMAX)))
+	if (!(g_pkb = pkb_create(PKTMAX)))
 		errsys("ptk_create: ");
-	pkb_set_dltype(p, dltype);
-	init_tags(p);
-	ts = (struct xpkt_tag_ts *)pkb_find_tag(p, XPKT_TAG_TIMESTAMP, 0);
-	abort_unless(ts);
+	pkb_set_dltype(g_pkb, dltype);
+	init_tags(g_pkb);
+	g_ts = (struct xpkt_tag_ts *)pkb_find_tag(g_pkb, XPKT_TAG_TIMESTAMP, 0);
+	abort_unless(g_ts);
 
-	while ((packet = (byte_t *) pcap_next(g_pcap, &pcapph)) != NULL) {
-		ts->sec = pcapph.ts.tv_sec;
-		ts->nsec = pcapph.ts.tv_usec * 1000;
+	if (pcap_loop(g_pcap, -1, &get_packet, NULL) < 0)
+		errsys("pcap_loop: %s", pcap_geterr(g_pcap));
 
-		pkb_set_len(p, pcapph.caplen);
-
-		if (pcapph.len != pcapph.caplen) {
-			xpkt_tag_si_init(&si, pcapph.len);
-			rv = pkb_add_tag(p, (struct xpkt_tag_hdr *)&si);
-			abort_unless(rv == 0);
-		}
-
-		memcpy(p->buf, packet, pcapph.caplen);
-		rv = pkb_pack(p);
-		abort_unless(rv == 0);
-		if (pkb_fd_write(p, 1) < 0)
-			errsys("pkb_fd_write: ");
-		pkb_unpack(p);
-
-		if (pcapph.len != pcapph.caplen)
-			pkb_del_tag(p, XPKT_TAG_SNAPINFO, 0);
-	}
-	pkb_free(p);
+	pkb_free(g_pkb);
 	pcap_close(g_pcap);
 
 	return 0;

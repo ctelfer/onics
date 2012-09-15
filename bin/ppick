@@ -27,9 +27,9 @@ fi
 echo "LO = '$LO', HI = '$HI'" >&2 
 
 pml -e "
-	var P = 0;
-	var dropit = 0;
-	var allow = 0;
+	int P = 0;
+	int dropit = 0;
+	int allow = 0;
 
 	{ P = P + 1; dropit = 1; }
 
