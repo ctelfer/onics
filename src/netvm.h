@@ -299,7 +299,7 @@ enum {
 	NETVM_OC_ORHI,		/* [v] binary OR 'w' << 32 with top of stack */
 	NETVM_OC_ZPUSH,		/* pushes 'w' 0s onto the stack */
 	NETVM_OC_DUP,		/* dups 'w' from the top of the stack */
-	NETVM_OC_SWAP,		/* swap stack pos 0 and 'w' from SP down */
+	NETVM_OC_SWAP,		/* swap stack pos 'x' and 'w' from SP down */
 	NETVM_OC_LDBP,		/* [i] load value 'i' above(below if 'x') BP */
 	NETVM_OC_LDBPI,		/* as BPLD but position is taken from 'w' */
 	NETVM_OC_STBP,		/* [v, i] pop top of stack and store the value */
@@ -449,6 +449,8 @@ enum {
 
 	/* packet specific operations */
 	NETVM_OC_PKNEW,		/* [pkn,len] create packet of length 'len' */
+				/* + 256 bytes of pad.  if 'x' then len = 0 */
+				/* else, len = 'len' */
 	NETVM_OC_PKSWAP,	/* [pkn1,pkn2] swap packets pkn1 and pkn2  */
 	NETVM_OC_PKCOPY,	/* [pkn2,pkn1] copy packet from pkn1 to pkn2 */
 	NETVM_OC_PKDEL,		/* [pkn] delete packet */

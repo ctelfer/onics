@@ -48,7 +48,21 @@ Functions
       Variable: ref [param; width=16, addr=0]
    Body -- 
       (null)
+   Function[intrinsic]: str_mkref() -- 4 args, 0 vars, return type=string reference
+   Parameters & Variables -- 
+      Variable: ispkt [param; width=8, addr=0]
+      Variable: seg [param; width=8, addr=1]
+      Variable: addr [param; width=8, addr=2]
+      Variable: len [param; width=8, addr=3]
+   Body -- 
+      (null)
    Function[intrinsic]: pkt_new() -- 2 args, 0 vars, return type=void
+   Parameters & Variables -- 
+      Variable: pnum [param; width=8, addr=0]
+      Variable: len [param; width=8, addr=1]
+   Body -- 
+      (null)
+   Function[intrinsic]: pkt_new_z() -- 2 args, 0 vars, return type=void
    Parameters & Variables -- 
       Variable: pnum [param; width=8, addr=0]
       Variable: len [param; width=8, addr=1]
@@ -85,18 +99,14 @@ Functions
       Variable: len [param; width=8, addr=2]
    Body -- 
       (null)
-   Function[intrinsic]: pkt_cut_u() -- 3 args, 0 vars, return type=void
+   Function[intrinsic]: pkt_cut_u() -- 1 args, 0 vars, return type=void
    Parameters & Variables -- 
-      Variable: pnum [param; width=8, addr=0]
-      Variable: off [param; width=8, addr=1]
-      Variable: len [param; width=8, addr=2]
+      Variable: str [param; width=16, addr=0]
    Body -- 
       (null)
-   Function[intrinsic]: pkt_cut_d() -- 3 args, 0 vars, return type=void
+   Function[intrinsic]: pkt_cut_d() -- 1 args, 0 vars, return type=void
    Parameters & Variables -- 
-      Variable: pnum [param; width=8, addr=0]
-      Variable: off [param; width=8, addr=1]
-      Variable: len [param; width=8, addr=2]
+      Variable: str [param; width=16, addr=0]
    Body -- 
       (null)
    Function[intrinsic]: pkt_parse() -- 1 args, 0 vars, return type=void

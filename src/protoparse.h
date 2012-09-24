@@ -284,13 +284,16 @@ int prp_fix_len(struct prparse *prp, byte_t *buf);
 
 /* insert data into the the packet and adjust parses.  The starting byte */
 /* S = prp_soff(prp) + off.  That is, the 'off'th byte after the start of */
-/* the parse.  if moveup is nonzero, then the function packet bytes [S,end] */
+/* the parse.  if moveup is nonzero, then the function shifts bytes [S,end] */
 /* 'len' bytes forward in the packet and fills them with dummy values.  If */
-/* 'moveup' is zero, then bytes [0,S-1] are shifted down 'len' bytes and */
+/* 'moveup' is zero, then it shifts bytes [0,S-1] down 'len' bytes and */
 /* the new space is filled with dummy values.  When 'moveup' is nonzero, */
 /* all offsets >= S are increased by 'len'.  When 'moveup' is zero, all */
-/* offsets < S are decreased by 'len'.  This function does not move invalid */
-/* offsets. */
+/* offsets < S are decreased by 'len'.  This function does not change offsets */
+/* set to PRP_OFF_INVALID.  It is illegal to specify a starting offset */
+/* before the payload offset or after the trailer offset of the outermost */
+/* parse.  (i.e. the outer PRID_NONE start and end).  This function will */
+/* move those offsets, however depending on the value of 'moveup'. */
 int prp_insert(struct prparse *prp, byte_t *buf, ulong off, ulong len, 
 	       int moveup);
 
@@ -300,8 +303,11 @@ int prp_insert(struct prparse *prp, byte_t *buf, ulong off, ulong len,
 /* len bytes forward and increments all parse offsets less than S */
 /* by 'len'.  If 'moveup' is zero then prp_cut() shifts bytes [S+len,end] */
 /* down to byte position S, and decrements all offsets >= S+len by 'len'. */
-/* prp_cut() does not move invalid offsets.  offsets falling within the */
-/* cut range are set to S. */
+/* prp_cut() does not move PRP_OFF_INVALID offsets.  offsets falling within */
+/* range of removed bytes are set to S. It is illegal to cut bytes that are */
+/* outside of the region [poff,toff] of the outermost parse. (i.e. the */
+/* outer PRID_NONE start and end).  This function will move those offsets */
+/* however, depending on the value of 'moveup' */
 int prp_cut(struct prparse *prp, byte_t *buf, ulong off, ulong len, int moveup);
 
 /* expand or contract header/trailer within the encapsulating space */

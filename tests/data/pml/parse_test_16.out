@@ -254,139 +254,16 @@ Functions
       Variable: num2 [param; width=8, addr=1]
    Body -- 
       (null)
-   Function: fib() -- 1 args, 0 vars, return type=scalar
+   Function: afunc() -- 0 args, 0 vars, return type=void
    Parameters & Variables -- 
-      Variable: x [param; width=8, addr=0]
    Body -- 
       List:
       -----
-      If Statement
-      Test -- 
-         Binary Operation: 'less than' [[]; width=8]
-         Left Operand -- 
-            Locator: variable(x) [[]; width=8]
-            Variable -- 
-               Variable: x [param; width=8, addr=0]
-         Right Operand -- 
-            Scalar [[c]; width=8] -- width 8: 2 (2,0x2)
-      True body -- 
-         List:
-         -----
-         Control Flow Modification: 'return'
-            Scalar [[c]; width=8] -- width 8: 0 (0,0x0)
-         -----
-      -----
-      Control Flow Modification: 'return'
-         Binary Operation: 'add' [[]; width=8]
-         Left Operand -- 
-            Function call to: fib [[]; width=8]
-            Arguments -- 
-               List:
-               -----
-               Binary Operation: 'subtract' [[]; width=8]
-               Left Operand -- 
-                  Locator: variable(x) [[]; width=8]
-                  Variable -- 
-                     Variable: x [param; width=8, addr=0]
-               Right Operand -- 
-                  Scalar [[c]; width=8] -- width 8: 1 (1,0x1)
-               -----
-         Right Operand -- 
-            Function call to: fib [[]; width=8]
-            Arguments -- 
-               List:
-               -----
-               Binary Operation: 'subtract' [[]; width=8]
-               Left Operand -- 
-                  Locator: variable(x) [[]; width=8]
-                  Variable -- 
-                     Variable: x [param; width=8, addr=0]
-               Right Operand -- 
-                  Scalar [[c]; width=8] -- width 8: 2 (2,0x2)
-               -----
-      -----
-   Function: fib2a() -- 1 args, 0 vars, return type=scalar
-   Parameters & Variables -- 
-      Variable: x [param; width=8, addr=0]
-   Body -- 
-      List:
-      -----
-      If Statement
-      Test -- 
-         Binary Operation: 'less than' [[]; width=8]
-         Left Operand -- 
-            Locator: variable(x) [[]; width=8]
-            Variable -- 
-               Variable: x [param; width=8, addr=0]
-         Right Operand -- 
-            Scalar [[c]; width=8] -- width 8: 2 (2,0x2)
-      True body -- 
-         List:
-         -----
-         Control Flow Modification: 'return'
-            Scalar [[c]; width=8] -- width 8: 0 (0,0x0)
-         -----
-      -----
-      Control Flow Modification: 'return'
-         Binary Operation: 'add' [[]; width=8]
-         Left Operand -- 
-            Function call to: fib2b [[]; width=8]
-            Arguments -- 
-               List:
-               -----
-               Locator: variable(x) [[]; width=8]
-               Variable -- 
-                  Variable: x [param; width=8, addr=0]
-               -----
-         Right Operand -- 
-            Function call to: fib2c [[]; width=8]
-            Arguments -- 
-               List:
-               -----
-               Locator: variable(x) [[]; width=8]
-               Variable -- 
-                  Variable: x [param; width=8, addr=0]
-               -----
-      -----
-   Function: fib2b() -- 1 args, 0 vars, return type=scalar
-   Parameters & Variables -- 
-      Variable: x [param; width=8, addr=0]
-   Body -- 
-      List:
-      -----
-      Control Flow Modification: 'return'
-         Function call to: fib2a [[]; width=8]
-         Arguments -- 
-            List:
-            -----
-            Binary Operation: 'subtract' [[]; width=8]
-            Left Operand -- 
-               Locator: variable(x) [[]; width=8]
-               Variable -- 
-                  Variable: x [param; width=8, addr=0]
-            Right Operand -- 
-               Scalar [[c]; width=8] -- width 8: 1 (1,0x1)
-            -----
-      -----
-   Function: fib2c() -- 1 args, 0 vars, return type=scalar
-   Parameters & Variables -- 
-      Variable: x [param; width=8, addr=0]
-   Body -- 
-      List:
-      -----
-      Control Flow Modification: 'return'
-         Function call to: fib2b [[]; width=8]
-         Arguments -- 
-            List:
-            -----
-            Binary Operation: 'subtract' [[]; width=8]
-            Left Operand -- 
-               Locator: variable(x) [[]; width=8]
-               Variable -- 
-                  Variable: x [param; width=8, addr=0]
-            Right Operand -- 
-               Scalar [[c]; width=8] -- width 8: 1 (1,0x1)
-            -----
+      Print Statement: type: string, width:0, flags:[]
+      Expression -- 
+         Byte string [[c]; width=0] -- 
+         3 bytes in read-only segment at address 0
+         68690a
       -----
 -----------
 Begin Rule
@@ -396,50 +273,9 @@ Begin Rule
    Action -- 
       List:
       -----
-      If Statement
-      Test -- 
-         Binary Operation: 'equals' [[]; width=8]
-         Left Operand -- 
-            Function call to: fib [[]; width=8]
-            Arguments -- 
-               List:
-               -----
-               Scalar [[c]; width=8] -- width 8: 7 (7,0x7)
-               -----
-         Right Operand -- 
-            Scalar [[c]; width=8] -- width 8: 21 (21,0x15)
-      True body -- 
+      Function call to: afunc [[]; width=0]
+      Arguments -- 
          List:
-         -----
-         Print Statement: type: string, width:0, flags:[]
-         Expression -- 
-            Byte string [[c]; width=0] -- 
-            16 bytes in read-only segment at address 0
-            676f742066696228
-            3729203d3d203231
-         -----
-      -----
-      If Statement
-      Test -- 
-         Binary Operation: 'equals' [[]; width=8]
-         Left Operand -- 
-            Function call to: fib2a [[]; width=8]
-            Arguments -- 
-               List:
-               -----
-               Scalar [[c]; width=8] -- width 8: 7 (7,0x7)
-               -----
-         Right Operand -- 
-            Scalar [[c]; width=8] -- width 8: 21 (21,0x15)
-      True body -- 
-         List:
-         -----
-         Print Statement: type: string, width:0, flags:[]
-         Expression -- 
-            Byte string [[c]; width=0] -- 
-            16 bytes in read-only segment at address 17
-            676f742066696228
-            3729203d3d203231
          -----
       -----
 -----------

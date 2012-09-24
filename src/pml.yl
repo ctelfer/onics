@@ -187,6 +187,8 @@ struct ident {
 	ulong width;
 };
 
+int pml_y_bpt() { return 1; }
+
 }
 %extra_argument { struct pml_ast *ast }
 
@@ -279,6 +281,9 @@ struct ident {
 %type iddecl { struct ident }
 %destructor iddecl { free($$.name); }
 
+%type fiddecl { struct ident }
+%destructor fiddecl { free($$.name); }
+
 %type orexpr { union pml_expr_u * } 
 %destructor orexpr { pmln_free($$); }
 
@@ -319,6 +324,9 @@ struct ident {
 
 %type valexpr { union pml_expr_u * } 
 %destructor valexpr { pmln_free($$); }
+
+%type strval { union pml_expr_u * } 
+%destructor strval { pmln_free($$); }
 
 %type value { union pml_expr_u * } 
 %destructor value { pmln_free($$); }
@@ -375,7 +383,19 @@ iddecl(I) ::= type(T) ID(N). {
 	I.width = 0;
 }
 
-funchdr(F) ::= iddecl(I) LPAREN idlist(P) RPAREN. {
+fiddecl(I) ::= type(T) ID(N). {
+	I.name = (char *)N.u.raw.data;
+	I.type = T;
+	I.width = 0;
+}
+
+fiddecl(I) ::= VOID ID(N). {
+	I.name = (char *)N.u.raw.data;
+	I.type = PML_ETYPE_VOID;
+	I.width = 0;
+}
+
+funchdr(F) ::= fiddecl(I) LPAREN idlist(P) RPAREN. {
 	struct list *t, *x; 
 	struct pml_variable *p;
 
@@ -1158,7 +1178,22 @@ value(V) ::= AMP locator(L). {
 	L->type = PMLTT_LOCADDR;
 	V = (union pml_expr_u *)L;
 }
-value(V) ::= BYTESTR(I). {
+value(V) ::= AMP strval(S). { 
+	struct pml_locator *loc = pmln_alloc(ast, PMLTT_LOCADDR);
+
+	if (loc != NULL) {
+		loc->eflags = PML_EFLAG_CONST|PML_EFLAG_PCONST;
+		loc->etype = PML_ETYPE_STRREF;
+		loc->width = 16;
+		loc->reftype = PML_REF_LITERAL;
+		loc->u.litref = (struct pml_literal *)S;
+	} else {
+		pmln_free(S);
+	}
+
+	V = (union pml_expr_u *)loc;
+}
+strval(V) ::= BYTESTR(I). {
 	struct pml_literal *v = pmln_alloc(ast, PMLTT_BYTESTR);
 	if (v != NULL)
 		pml_bytestr_copy(ast, &v->u.bytestr, PML_SEG_ROMEM,
@@ -1166,6 +1201,19 @@ value(V) ::= BYTESTR(I). {
 	free(I.u.raw.data);
 	V = (union pml_expr_u *)v;
 }
+strval(V) ::= STRING(I). {
+	struct pml_literal *v = pmln_alloc(ast, PMLTT_BYTESTR);
+	if (v != NULL) {
+		pml_bytestr_copy(ast, &v->u.bytestr, PML_SEG_ROMEM,
+				 I.u.raw.data, I.u.raw.len);
+		/* copied the null terminator for sanity */
+		/* but don't count in length */
+		v->u.bytestr.len -= 1;
+	}
+	free(I.u.raw.data);
+	V = (union pml_expr_u *)v;
+}
+value(VO) ::= strval(VI). { VO = VI; }
 value(V) ::= IPV4ADDR(I). {
 	struct pml_literal *v = pmln_alloc(ast, PMLTT_BYTESTR);
 	if (v != NULL)
@@ -1188,18 +1236,6 @@ value(V) ::= ETHADDR(I). {
 	V = (union pml_expr_u *)v;
 }
 value(V) ::= numval(N). { V = (union pml_expr_u *)N; }
-value(V) ::= STRING(I). {
-	struct pml_literal *v = pmln_alloc(ast, PMLTT_BYTESTR);
-	if (v != NULL) {
-		pml_bytestr_copy(ast, &v->u.bytestr, PML_SEG_ROMEM,
-				 I.u.raw.data, I.u.raw.len);
-		/* copied the null terminator for sanity */
-		/* but don't count in length */
-		v->u.bytestr.len -= 1;
-	}
-	free(I.u.raw.data);
-	V = (union pml_expr_u *)v;
-}
 value(V) ::= AT locname(L). {
 	struct ns_elem *ne = ns_lookup(NULL, L->name);
 	struct pml_literal *v = NULL;

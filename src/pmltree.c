@@ -361,8 +361,13 @@ static struct pml_intrinsic stdintr[] = {
 		{ _SREFP(ref) } },
 	{ "str_isnull", PML_ETYPE_SCALAR, 1, 0, NULL,
 		{ _SREFP(ref) } },
+	{ "str_mkref", PML_ETYPE_STRREF, 4, 0, NULL,
+		{ _INTP(ispkt), _INTP(seg),
+	          _INTP(addr), _INTP(len) } },
 
 	{ "pkt_new", PML_ETYPE_VOID, 2, 0, NULL,
+		{ _INTP(pnum), _INTP(len) } },
+	{ "pkt_new_z", PML_ETYPE_VOID, 2, 0, NULL,
 		{ _INTP(pnum), _INTP(len) } },
 	{ "pkt_swap", PML_ETYPE_VOID, 2, 0, NULL,
 		{ _INTP(pndst), _INTP(pnsrc) } },
@@ -374,10 +379,8 @@ static struct pml_intrinsic stdintr[] = {
 		{ _INTP(pnum), _INTP(off), _INTP(len) } },
 	{ "pkt_ins_d", PML_ETYPE_VOID, 3, 0, NULL,
 		{ _INTP(pnum), _INTP(off), _INTP(len) } },
-	{ "pkt_cut_u", PML_ETYPE_VOID, 3, 0, NULL,
-		{ _INTP(pnum), _INTP(off), _INTP(len) } },
-	{ "pkt_cut_d", PML_ETYPE_VOID, 3, 0, NULL,
-		{ _INTP(pnum), _INTP(off), _INTP(len) } },
+	{ "pkt_cut_u", PML_ETYPE_VOID, 1, 0, NULL, { _SREFP(str) } },
+	{ "pkt_cut_d", PML_ETYPE_VOID, 1, 0, NULL, { _SREFP(str) } },
 	{ "pkt_parse", PML_ETYPE_VOID, 1, 0, NULL,
 		{ _INTP(pnum) } },
 	{ "parse_push_back", PML_ETYPE_VOID, 2, 0, NULL,
@@ -2329,8 +2332,13 @@ int pml_locator_resolve_nsref(struct pml_ast *ast, struct pml_locator *l)
 	}
 
 	e = ns_lookup(NULL, name);
-	if (rpf != PML_RPF_NONE)
+	if (rpf != PML_RPF_NONE) {
 		free(name);
+		if (e == NULL) {
+			pml_ast_err(ast, "'%s' is an unknown namespace\n", l->name);
+			return -1;
+		}
+	}
 	if (e == NULL)
 		return 0;
 	if (rpf != PML_RPF_NONE && e->type != NST_NAMESPACE) {
@@ -2939,8 +2947,10 @@ static int resolve_node_post(union pml_node *node, void *ctxp, void *xstk)
 
 	case PMLTT_LOCADDR: {
 		struct pml_locator *l = (struct pml_locator *)node;
-		if (resolve_locsym(ctx, l) < 0)
-			return -1;
+
+		if (l->reftype != PML_REF_LITERAL)
+			if (resolve_locsym(ctx, l) < 0)
+				return -1;
 
 		if ( /* only globals and strref vars */
 		     ((l->reftype == PML_REF_VAR) && 
@@ -2956,7 +2966,7 @@ static int resolve_node_post(union pml_node *node, void *ctxp, void *xstk)
 		     NSF_IS_INBITS(l->u.nsref->flags)) ||
 
 		    ((l->reftype == PML_REF_LITERAL) &&	/* protocol non str */
-		     (l->u.litref->type == PMLTT_BYTESTR))
+		     (l->u.litref->type != PMLTT_BYTESTR))
 		   ) {
 			pml_ast_err(ctx->ast, 
 				    "'%s' is not an addressable field.\n",

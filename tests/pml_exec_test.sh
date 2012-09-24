@@ -84,5 +84,7 @@ pml_test 27 NONE
 pml_test 28 NONE
 pml_test 29 NONE
 pml_test 30 NONE
+pml_test 31 NONE
+pml_test 32 NONE
 
 exit $ERR

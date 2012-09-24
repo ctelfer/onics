@@ -291,6 +291,43 @@ static int _i_str(struct pmlncg *cg, struct pml_call *c, struct cg_intr *intr)
 }
 
 
+static int _i_str_mkref(struct pmlncg *cg, struct pml_call *c,
+			struct cg_intr *intr)
+{
+	struct pml_ibuf *b = &cg->ibuf;
+	struct pml_list *pl = c->args;
+	union pml_node *e;
+
+	/* ispkt */
+	e = l_to_node(l_head(&pl->list));
+	if (cg_expr(cg, e, PML_ETYPE_SCALAR) < 0)
+		return -1;
+	EMIT_W(cg, SHLI, NETVM_UA_ISPKT_OFF);
+
+	/* seg */
+	e = l_to_node(l_next(&e->base.ln));
+	if (cg_expr(cg, e, PML_ETYPE_SCALAR) < 0)
+		return -1;
+	EMIT_W(cg, SHLI, NETVM_UA_SEG_OFF);
+	EMIT_NULL(cg, OR);
+
+	/* addr */
+	e = l_to_node(l_next(&e->base.ln));
+	if (cg_expr(cg, e, PML_ETYPE_SCALAR) < 0)
+		return -1;
+	EMIT_W(cg, SHLI, 8);
+	EMIT_W(cg, SHRI, 8);
+	EMIT_NULL(cg, OR);
+
+	/* len */
+	e = l_to_node(l_next(&e->base.ln));
+	if (cg_expr(cg, e, PML_ETYPE_SCALAR) < 0)
+		return -1;
+
+	return 0;
+}
+
+
 static int _i_scarg(struct pmlncg *cg, struct pml_call *c, struct cg_intr *intr)
 {
 	struct pml_ibuf *b = &cg->ibuf;
@@ -369,8 +406,8 @@ static int _i_pdarg(struct pmlncg *cg, struct pml_call *c, struct cg_intr *intr)
 }
 
 
-static int _i_inscut(struct pmlncg *cg, struct pml_call *c,
-		     struct cg_intr *intr)
+static int _i_ins(struct pmlncg *cg, struct pml_call *c,
+		  struct cg_intr *intr)
 {
 	struct pml_ibuf *b = &cg->ibuf;
 	struct pml_list *pl = c->args;
@@ -405,7 +442,26 @@ static int _i_inscut(struct pmlncg *cg, struct pml_call *c,
 		return -1;
 
 	if (pib_add(b, &intr->ops[0]) < 0) {
-		cgerr(cg, "out of instructions adding ins/cut intrinsic");
+		cgerr(cg, "out of instructions adding pml_ins_* intrinsic");
+		return -1;
+	}
+
+	return 0;
+}
+
+
+static int _i_cut(struct pmlncg *cg, struct pml_call *c,
+		  struct cg_intr *intr)
+{
+	struct pml_ibuf *b = &cg->ibuf;
+	struct pml_list *pl = c->args;
+	union pml_node *str;
+
+	str = l_to_node(l_head(&pl->list));
+	if (cg_expr(cg, str, PML_ETYPE_STRREF) < 0)
+		return -1;
+	if (pib_add(b, &intr->ops[0]) < 0) {
+		cgerr(cg, "out of instructions adding pml_ins_* intrinsic");
 		return -1;
 	}
 
@@ -574,14 +630,16 @@ struct cg_intr intrinsics[] = {
 		{ NETVM_OP(SWAP,0,0,0,1),
 		  NETVM_OP(POP,0,0,0,1),
 	          NETVM_OP(EQI,0,0,0,0)	} },
-	{ "pkt_new", NULL, _i_scarg, NULL, 1, { NETVM_OP(PKNEW,0,0,0,0) } },
+	{ "str_mkref", NULL, _i_str_mkref, NULL, 0, { {0} } },
+	{ "pkt_new", NULL, _i_scarg, NULL, 1, { NETVM_OP(PKNEW,1,0,0,0) } },
+	{ "pkt_new_z", NULL, _i_scarg, NULL, 1, { NETVM_OP(PKNEW,0,0,0,0) } },
 	{ "pkt_swap", NULL, _i_scarg, NULL, 1, { NETVM_OP(PKSWAP,0,0,0,0) } },
 	{ "pkt_copy", NULL, _i_scarg, NULL, 1, { NETVM_OP(PKCOPY,0,0,0,0) } },
 	{ "pkt_del", NULL, _i_scarg, NULL, 1, { NETVM_OP(PKDEL,0,0,0,0) }  },
-	{ "pkt_ins_u", NULL, _i_inscut, NULL, 1, { NETVM_OP(PKINS,0,0,0,0) } },
-	{ "pkt_ins_d", NULL, _i_inscut, NULL, 1, { NETVM_OP(PKINS,0,0,0,0) } },
-	{ "pkt_cut_u", NULL, _i_inscut, NULL, 1, { NETVM_OP(PKCUT,0,0,0,0) } },
-	{ "pkt_cut_d", NULL, _i_inscut, NULL, 1, { NETVM_OP(PKCUT,0,0,0,0) } },
+	{ "pkt_ins_u", NULL, _i_ins, NULL, 1, { NETVM_OP(PKINS,1,0,0,0) } },
+	{ "pkt_ins_d", NULL, _i_ins, NULL, 1, { NETVM_OP(PKINS,0,0,0,0) } },
+	{ "pkt_cut_u", NULL, _i_cut, NULL, 1, { NETVM_OP(PKCUT,1,0,0,0) } },
+	{ "pkt_cut_d", NULL, _i_cut, NULL, 1, { NETVM_OP(PKCUT,0,0,0,0) } },
 	{ "pkt_parse", NULL, _i_scarg, NULL, 1, { NETVM_OP(PKPRS,0,0,0,0) } },
 	{ "parse_push_back",  NULL, _i_scarg, NULL, 1,
 		{ NETVM_OP(PKPPSH,0,0,0,0) } },
@@ -1974,40 +2032,60 @@ static int cg_pfbytefield(struct pmlncg *cg, struct pml_locator *loc, int etype)
 }
 
 
-static int cg_load_strref(struct pmlncg *cg, struct pml_variable *v, int getlen)
+static int cg_load_strref(struct pmlncg *cg, struct pml_locator *loc,
+			  int getlen)
 {
-	if (v->vtype == PML_VTYPE_LOCAL) {
-		EMIT_XW(cg, LDBPI, 0, lvaraddr(v) + (getlen ? 1 : 0));
-	} else if (v->vtype == PML_VTYPE_PARAM) {
-		EMIT_XW(cg, LDBPI, 1, lvaraddr(v) + (getlen ? 0 : 1));
+	struct pml_variable *v;
+	struct pml_bytestr *bs;
+	uint64_t ua;
+
+	if (loc->reftype == PML_REF_VAR) {
+		v = loc->u.varref;
+		abort_unless(v->etype == PML_ETYPE_STRREF);
+		if (v->vtype == PML_VTYPE_LOCAL) {
+			EMIT_XW(cg, LDBPI, 0, lvaraddr(v) + (getlen ? 1 : 0));
+		} else if (v->vtype == PML_VTYPE_PARAM) {
+			EMIT_XW(cg, LDBPI, 1, lvaraddr(v) + (getlen ? 0 : 1));
+		} else {
+			abort_unless(v->vtype == PML_VTYPE_GLOBAL);
+			EMIT_XYW(cg, LDI, sizeof(uint64_t), PML_SEG_RWMEM, 
+				 v->addr + (getlen ? sizeof(uint64_t) : 0));
+		}
 	} else {
-		abort_unless(v->vtype == PML_VTYPE_GLOBAL);
-		EMIT_XYW(cg, LDI, sizeof(uint64_t), PML_SEG_RWMEM, 
-			 v->addr + (getlen ? sizeof(uint64_t) : 0));
+		abort_unless(loc->reftype == PML_REF_LITERAL);
+		abort_unless(loc->u.litref->etype == PML_ETYPE_BYTESTR);
+
+		bs = &loc->u.litref->u.bytestr;
+		if (getlen) {
+			PUSH64(cg, bs->len);
+		} else {
+			ua = ((uint64_t)bs->ispkt << NETVM_UA_ISPKT_OFF) |
+			     ((uint64_t)bs->segnum << NETVM_UA_SEG_OFF) |
+			     ((uint64_t)bs->addr & NETVM_UA_OFF_MASK);
+			PUSH64(cg, ua);
+		}
 	}
 	return 0;
 }
 
 
-#define LDSREF_X(cg, v, x) 				\
-	do { 		 				\
-		if (cg_load_strref((cg), (v), (x)) < 0) \
-			return -1;			\
+#define LDSREF_X(_cg, _l, _x) 					\
+	do { 		 					\
+		if (cg_load_strref((_cg), (_l), (_x)) < 0)	\
+			return -1;				\
 	} while(0)
 
-#define LDSREF_ADDR(cg, x) LDSREF_X(cg, x, 0)
-#define LDSREF_LEN(cg, x) LDSREF_X(cg, x, 1)
+#define LDSREF_ADDR(_cg, _l) LDSREF_X((_cg), (_l), 0)
+#define LDSREF_LEN(_cg, _l) LDSREF_X((_cg), (_l), 1)
 
 /* generate the address/length on the stack for the string reference */
 /* taking into account the offset and length fields ensuring no overflow */
 static int cg_strref(struct pmlncg *cg, struct pml_locator *loc)
 {
-	struct pml_variable *v = loc->u.varref;
 	struct locval llen;
 
-	abort_unless(v->etype == PML_ETYPE_STRREF);
 
-	LDSREF_ADDR(cg, v); 
+	LDSREF_ADDR(cg, loc); 
 	if (loc->off != NULL) {
 		/* XXX assumes var length can't overflow address */
 		/* Our code should ensure that this is true by */
@@ -2018,18 +2096,18 @@ static int cg_strref(struct pmlncg *cg, struct pml_locator *loc)
 		if (cg_expr(cg, (union pml_node *)loc->off, 
 			    PML_ETYPE_SCALAR) < 0)
 			return -1;
-		LDSREF_LEN(cg, v);
+		LDSREF_LEN(cg, loc);
 		EMIT_NULL(cg, UMIN);
 		EMIT_NULL(cg, ADD);
 
 		/* get length to end of string */
-		LDSREF_ADDR(cg, v); 
-		LDSREF_LEN(cg, v); 
+		LDSREF_ADDR(cg, loc); 
+		LDSREF_LEN(cg, loc); 
 		EMIT_NULL(cg, ADD);
 		EMIT_W(cg, DUP, 1);
 		EMIT_NULL(cg, SUB);
 	} else { /* no offset */
-		LDSREF_LEN(cg, v);
+		LDSREF_LEN(cg, loc);
 	}
 
 	/* if there is a length expression, generate the length */
@@ -2566,7 +2644,7 @@ int cg_assign_strref_nonref(struct pmlncg *cg, struct pml_assign *a)
 			return -1;
 		if (cg_strref(cg, a->loc) < 0)
 			return -1;
-		EMIT_XY(cg, SWAP, 1, 2);
+		EMIT_XW(cg, SWAP, 1, 2);
 		EMIT_NULL(cg, UMIN);
 		EMIT_NULL(cg, MOVE);
 	}

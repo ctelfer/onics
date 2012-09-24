@@ -723,9 +723,7 @@ int prp_insert(struct prparse *prp, byte_t *buf, ulong off, ulong len,
 		prp = prp->region;
 
 	if (moveup) {
-		if (off > prp_toff(prp))
-			return 0;
-		if (len > prp_tlen(prp)) {
+		if ((off > prp_toff(prp)) || (len > prp_tlen(prp))) {
 			errno = EINVAL;
 			return -1;
 		}
@@ -750,9 +748,7 @@ int prp_insert(struct prparse *prp, byte_t *buf, ulong off, ulong len,
 			}
 		}
 	} else {
-		if (off <= prp_poff(prp))
-			return 0;
-		if (len > prp_hlen(prp)) {
+		if ((off < prp_poff(prp)) || (len > prp_hlen(prp))) {
 			errno = EINVAL;
 			return -1;
 		}
@@ -801,8 +797,8 @@ int prp_cut(struct prparse *prp, byte_t *buf, ulong off, ulong len, int moveup)
 	while (prp->region != NULL)
 		prp = prp->region;
 
-	if ((off < prp_soff(prp)) || (off >= prp_eoff(prp)) ||
-	    (len > prp_eoff(prp) - off)) {
+	if ((off < prp_poff(prp)) || (off >= prp_toff(prp)) ||
+	    (len > prp_toff(prp) - off)) {
 		errno = EINVAL;
 		return -1;
 	}

@@ -1060,9 +1060,10 @@ static void ni_pkswap(struct netvm *vm)
 }
 
 
-#define HDRPAD	384
+#define HDRPAD	256
 static void ni_pknew(struct netvm *vm)
 {
+	struct netvm_inst *inst = &vm->inst[vm->pc];
 	uint64_t pktnum;
 	uint64_t len;
 	struct pktbuf *pnew;
@@ -1071,10 +1072,16 @@ static void ni_pknew(struct netvm *vm)
 	S_POP(vm, pktnum);
 	FATAL(vm, NETVM_ERR_PKTNUM, pktnum >= NETVM_MAXPKTS);
 	FATAL(vm, NETVM_ERR_NOMEM, (PKB_MAX_PKTLEN - HDRPAD) < len);
+
 	pnew = pkb_create(len + HDRPAD);
 	FATAL(vm, NETVM_ERR_NOMEM, !pnew);
-	pkb_set_len(pnew, len);
+
+	if (inst->x)
+		pkb_set_len(pnew, len);
+	else
+		pkb_set_len(pnew, 0);
 	pkb_set_off(pnew, HDRPAD);
+
 	pkb_free(vm->packets[pktnum]);
 	vm->packets[pktnum] = pnew;
 }

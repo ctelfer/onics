@@ -88,6 +88,8 @@ struct kwtok {
 	{ "BEGIN",	PMLTOK_BEGIN },
 	{ "END",	PMLTOK_END },
 	{ "int",	PMLTOK_INT },
+	{ "str",	PMLTOK_STR },
+	{ "void",	PMLTOK_VOID },
 	{ "inline",	PMLTOK_INLINE },
 	{ "const",	PMLTOK_CONST },
 	{ "not",	PMLTOK_NOT },
@@ -102,7 +104,6 @@ struct kwtok {
 	{ "nextrule",	PMLTOK_NEXTRULE },
 	{ "sendpkt",	PMLTOK_SENDPKT },
 	{ "drop",	PMLTOK_DROP },
-	{ "str",	PMLTOK_STR },
 	{ "print",	PMLTOK_PRINT },
 	{ NULL,		0 }
 };

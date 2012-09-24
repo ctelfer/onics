@@ -6,8 +6,13 @@ Key:
   - -- Comment
 
 PML
+ + optimize str_* intrinsics for direct var access
+ + pkt_adj_off()
+ + pkt_send()
+ + warn when local variables shadown globals or packets
  + Add "standard include path/files"
  + More test cases (control flow especially)
+ * non-brace while() and if() bodies
  * command line arguments to programs
  * random() intrinsic
  * Add exit() intrinsic.

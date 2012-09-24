@@ -244,22 +244,34 @@ Rules:
 
 
 Intrinsics:
-  -- sref_len(sref) - return the length of a string reference
-  -- sref_addr(sref) - return the address of a string reference
-  -- sref_ispkt(sref) - return whether the string reference refers to a packet
-  -- sref_seg(sref) - return the segment index/packet # that the ref refers to
-  -- sref_isnull(sref) - return whether the reference is an empty reference
+  -- str_len(sref) - return the length of a string reference
+  -- str_addr(sref) - return the address of a string reference
+  -- str_ispkt(sref) - return whether the string reference refers to a packet
+  -- str_seg(sref) - return the segment index/packet # that the ref refers to
+  -- str_isnull(sref) - return whether the reference is an empty reference
 
-  -- void pkt_new(pnum, dltype, len)
-  -- void pkt_swap(pn1, pn2)
-  -- void pkt_copy(pndst, pnsrc)
-  -- void pkt_del(pnum)
+  -- void pkt_new(pnum, len) - create a new packet with 'len' bytes of data
+  -- void pkt_new_z(pnum, len) - create a new packet with 0 bytes but 'len' 
+				 buffer space bytes
+  -- void pkt_swap(pn1, pn2) - swap two packets by index
+  -- void pkt_copy(pndst, pnsrc) - copy pnsrc to pndst
+  -- void pkt_del(pnum) - delete a packet
 
-  -- void pkt_ins_u(pnum, off, len)
-  -- void pkt_ins_d(pnum, off, len)
-  -- void pkt_cut_u(pnum, off, len)
-  -- void pkt_cut_d(pnum, off, len)
-  -- void pkt_parse(pnum)
+  -- void pkt_ins_u(pnum, off, len) - insert 'len' bytes at 'off' in 'pnum'
+				      shifting up
+  -- void pkt_ins_d(pnum, off, len) - insert 'len' bytes at 'off' in 'pnum'
+				      shifting down
+  -- void pkt_cut_u(str) - cut the string from its packet shifting bytes up
+			   from the front
+  -- void pkt_cut_d(str) - cut the string from its packet shifting bytes down
+			   from the end
+  -- void pkt_parse(pnum) - reparse a packet 'pnum'
+
+  /* very low level functions */
+  -- void pkt_get_off(pnum, prid, idx, oid) - get offset 'oid' of the 'idx'th
+				'prid' parse in 'pnum'
+  -- void pkt_adj_off(pnum, prid, idx, oid, amt) - adjust offset 'oid' of the
+				'idx'th 'prid' parse in 'pnum'
 
   -- void parse_push_back(pnum, prid)
   -- void parse_pop_back(pnum)
