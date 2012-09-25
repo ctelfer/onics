@@ -244,11 +244,17 @@ int pml_y_bpt() { return 1; }
 %type stmt { union pml_node * }
 %destructor stmt { pmln_free($$); }
 
+%type prstmt { struct pml_print * }
+%destructor prstmt { pml_prlist_free($$); }
+
 %type stmtlist { struct pml_list * }
 %destructor stmtlist { pmln_free($$); }
 
 %type stmts { struct pml_list * }
 %destructor stmts { pmln_free($$); }
+
+%type stmtorlist { struct pml_list * }
+%destructor stmtorlist { pmln_free($$); }
 
 %type prlist { struct pml_print * }
 %destructor prlist { pml_prlist_free($$); }
@@ -341,6 +347,9 @@ int pml_y_bpt() { return 1; }
 %token_destructor { 
 	pmllv_clear(&$$);
 }
+
+%left IF.
+%left ELSE.
 
 /* ----- Grammar ----- */
 
@@ -644,12 +653,34 @@ stmts(SSO) ::= stmts(SSI) stmt(S). {
 	l_enq(&SSI->list, &S->base.ln);
 	SSO = SSI;
 }
-stmts(SSO) ::= stmts(SSI) PRINT prlist(P) SEMICOLON. {
-	struct list l;
-	l_enq(&P->ln, &l); /* XXX equivalent to making l new list head */
-	l_append(&SSI->list, &l);
+stmts(SSO) ::= stmts(SSI) prstmt(P). {
+	/* a print 'statement' is actually a list of print statement nodes */
+	struct list sl;
+	l_enq(&P->ln, &sl); /* XXX equivalent to making l new list head */
+	l_append(&SSI->list, &sl);
 	SSO = SSI;
 }
+
+stmtorlist(SOL) ::= stmt(S). { 
+	SOL = pmln_alloc(ast, PMLTT_LIST);
+	if (SOL != NULL) {
+		l_enq(&SOL->list, &S->base.ln);
+	} else {
+		pmln_free(S);
+	}
+}
+stmtorlist(SOL) ::= prstmt(P). { 
+	/* a print 'statement' is actually a list of print statement nodes */
+	struct list sl;
+	SOL = pmln_alloc(ast, PMLTT_LIST);
+	if (SOL != NULL) {
+		l_enq(&P->ln, &sl); /* XXX equivalent to making l new list head */
+		l_append(&SOL->list, &sl);
+	} else {
+		pmln_free(P);
+	}
+}
+stmtorlist(SOL) ::= stmtlist(SL). { SOL = SL; }
 
 
 /* Specific types of statements */
@@ -678,31 +709,31 @@ stmt(S) ::= AMP locator(L) ASSIGN expr(E) SEMICOLON. {
 	S = (union pml_node *)a;
 }
 
-stmt(S) ::= WHILE LPAREN expr(E) RPAREN stmtlist(SL). {
+stmt(S) ::= WHILE LPAREN expr(E) RPAREN stmtorlist(SOL). {
 	struct pml_while *w = pmln_alloc(ast, PMLTT_WHILE);
 	if (w != NULL) {
 		w->test = E;
-		w->body = SL;
+		w->body = SOL;
 	} else {
 		pmln_free(E);
-		pmln_free(SL);
+		pmln_free(SOL);
 	}
 	S = (union pml_node *)w;
 }
 
-stmt(S) ::= IF LPAREN expr(E) RPAREN stmtlist(SL). {
+stmt(S) ::= IF LPAREN expr(E) RPAREN stmtorlist(SOL). {
 	struct pml_if *ifs = pmln_alloc(ast, PMLTT_IF);
 	if (ifs != NULL) {
 		ifs->test = E;
-		ifs->tbody = SL;
+		ifs->tbody = SOL;
 	} else {
 		pmln_free(E);
-		pmln_free(SL);
+		pmln_free(SOL);
 	}
 	S = (union pml_node *)ifs;
 }
 
-stmt(S) ::= IF LPAREN expr(E) RPAREN stmtlist(SLT) ELSE stmtlist(SLF). {
+stmt(S) ::= IF LPAREN expr(E) RPAREN stmtorlist(SLT) ELSE stmtorlist(SLF). {
 	struct pml_if *ifs = pmln_alloc(ast, PMLTT_IF);
 	if (ifs != NULL) {
 		ifs->test = E;
@@ -739,6 +770,11 @@ cfmkw(C) ::= CONTINUE. { C = PML_CFM_CONTINUE; }
 cfmkw(C) ::= NEXTRULE. { C = PML_CFM_NEXTRULE; }
 cfmkw(C) ::= SENDPKT. { C = PML_CFM_SENDPKT; }
 cfmkw(C) ::= DROP. { C = PML_CFM_DROP; }
+
+/* this is separate because a print 'statement' with multiple */
+/* arguments gets parsed as a set of individual print statements */
+/* in the AST: one for each expression to print */
+prstmt(P) ::= PRINT prlist(PL) SEMICOLON. { P = PL; }
 
 prlist(N) ::= prlist(O) COMMA expr(E). {
 	struct pml_print *p = pml_print_alloc(ast, E, NULL);

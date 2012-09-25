@@ -12,7 +12,6 @@ PML
  + warn when local variables shadown globals or packets
  + Add "standard include path/files"
  + More test cases (control flow especially)
- * non-brace while() and if() bodies
  * command line arguments to programs
  * random() intrinsic
  * Add exit() intrinsic.
