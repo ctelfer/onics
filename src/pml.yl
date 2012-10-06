@@ -52,8 +52,8 @@ Language summary:
 
 ?- tcp[2,2] == 1628 -?
 
-# second IP header in the first packet
-?- ip[3,1] == 65 -?
+# byte 3 in the second IP header in the first packet
+?- $(0,1)ip[3,1] == 65 -?
 
 # compares as 64-bit integer
 ?- eth.saddr == 5 -? 
@@ -63,16 +63,17 @@ Language summary:
 ?- ipv6.saddr == 5 -? 
 
 # A inline function that calls only other inline functions and is not
-# directly or indirectly recursive.
+# directly or indirectly recursive.  It's body is a single expression.
 inline ishttp() ( tcp && (tcp.sport == 80 || tcp.dport == 80) )
 
 # A function can be recursive, have local variables and it has
-# a series of statements enclosed in parentheses.
-func incr(v) {
+# a series of statements enclosed in braces.
+int incr(v) {
 	x = v + 1;
 	return x;
 }
-var Count;
+
+int Count;
 
 # Patterns can call inline functions.
 ?- ishttp() -? { Count = incr(Count); }
@@ -100,12 +101,15 @@ var Count;
 
   Notation:
    a			-- Variable name (global or local) or proto name
-   @<protoname>		-- Protocol ID 
+   @<protoname>		-- Protocol ID (scalar)
    a.b.c.d		-- Field for packet 0 or protocol constant
    a.b.c.d[o,l]		-- Bytes from packet 0, field a.b.c.d, offset o length l
-   $(p).b.c.d[o,l]	-- Bytes from packet p, field a.b.c.d, offset o length l
-   $(p,i).b.c.d[o,l]	-- Bytes from packet p, field a.b.c.d, offset o length l
-   &<field>		-- Byte offset for a field <byte string or integer>
+   $(p)a.b.c.d[o,l]	-- Bytes from packet p, field a.b.c.d, offset o length l
+   $(p,i)a.b.c.d[o,l]	-- Bytes from packet p, i'th 'a' header, field a.b.c.d, 
+			   offset o length l
+   &a			-- String reference for a field a
+   &$(p,i)a.b.c.d[o,l]	-- String reference for bytes at offset o with length l of
+			   the i'th 'a' header in packet p field a.b.c.d
 
 
   Intrinsic Functions:
@@ -119,9 +123,7 @@ var Count;
    - Update header
    - Fix lengths
    - Fix checksum
-   - Enqueue packet
-   - Dequeue packet
-   - Send packet queue
+   - Send packet
    - (Un)Set layer
    - pop(ulation count)
    - nlz (number of leading zeroes)
@@ -131,39 +133,37 @@ var Count;
    - Any expression (including function calls)
    - if then else
    - while
-   - Set field/variable
-   - Print
-   - Return
+   - assignment (=)
+   - print
+   - return
 
+  Variable declarations:
+    <type> <name> ;
+    <type> <name> = <init> ;
+    str <name>[<len>] ; 
+    str <name>[<len>] = <init> ;   # Global only
 
-  Example:
-	insert(10, &tcp + 20); # insert 10 bytes of data 20-bytes 
-                               # after the TCP section start
-	insert(4, &net + 20, 20);
-	cut(10, &ip + ip.hl * 4);
-	fixcsum();
+    <type> can be:  int, str
+    - int is a 64-bit signed integer
+    - str is a reference to a byte string
+    - Declaration with length is only permitted in global declarations
+      and declares a globally accessible byte string.
 
-  if () { 
-  }
+  Function declarations:
+    <type> <name> ( <args> ) { <body> }
 
-  while () { 
-  }
+    int fib(int x) { 
+	if (x < 2)
+		return 1;
+	else
+		return fib(x-1) + fib(x-2);
+    }
 
-
-  Declarations:
-  <type> can be 'int', 'blob', 
-  function name ( <type> arg1, <type> arg2 ... ) {
-    <local variable declarations here>
-
-    <action list>
-    
-    return(v1, v2, ...);
-  }
-
-  <type> name;
-  int name = <scalar value>;
-  blob name[width]; # global only
-  blob name[width] = <value>; # global only
+  Rule declarations:
+   - ?- <pat> -? { <action> }
+   - { <action> }
+   - BEGIN { <action> }
+   - END { <action> }
 */
 
 
@@ -348,6 +348,7 @@ int pml_y_bpt() { return 1; }
 	pmllv_clear(&$$);
 }
 
+/* Give precedence to ELSE to prevent shift-reduce conflict */
 %left IF.
 %left ELSE.
 

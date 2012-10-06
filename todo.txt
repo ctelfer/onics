@@ -6,7 +6,6 @@ Key:
   - -- Comment
 
 PML
- + optimize str_* intrinsics for direct var access
  + pkt_adj_off()
  + pkt_send()
  + warn when local variables shadown globals or packets

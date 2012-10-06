@@ -259,10 +259,142 @@ static int push64(struct pmlncg *cg, uint64_t v)
 	} while (0)
 
 
+#define LDSREF_X(_cg, _l, _x) 					\
+	do { 		 					\
+		if (cg_load_strref_val((_cg), (_l), (_x)) < 0)	\
+			return -1;				\
+	} while(0)
+
+#define LDSREF_ADDR(_cg, _l) LDSREF_X((_cg), (_l), 0)
+#define LDSREF_LEN(_cg, _l) LDSREF_X((_cg), (_l), 1)
+
+
 static uint nexti(struct pml_ibuf *b)
 {
 	abort_unless(b);
 	return b->ninst;
+}
+
+
+static ulong lvaraddr(struct pml_variable *var)
+{
+	struct pml_function *func = var->func;
+	if (var->vtype == PML_VTYPE_LOCAL) {
+		return var->addr; /* above BP */
+	} else if (PML_FUNC_IS_INLINE(func)) {
+		return var->addr + 1; /* below BP */
+	} else {
+		return var->addr + 2; /* below BP */
+	}
+}
+
+
+static int cg_read_strref_var(struct pmlncg *cg, struct pml_locator *loc,
+			      int getlen)
+{
+	struct pml_variable *v;
+
+	v = loc->u.varref;
+	abort_unless(v->etype == PML_ETYPE_STRREF);
+	if (v->vtype == PML_VTYPE_LOCAL) {
+		EMIT_XW(cg, LDBPI, 0, lvaraddr(v) + (getlen ? 1 : 0));
+	} else if (v->vtype == PML_VTYPE_PARAM) {
+		EMIT_XW(cg, LDBPI, 1, lvaraddr(v) + (getlen ? 0 : 1));
+	} else {
+		abort_unless(v->vtype == PML_VTYPE_GLOBAL);
+		EMIT_XYW(cg, LDI, sizeof(uint64_t), PML_SEG_RWMEM, 
+			 v->addr + (getlen ? sizeof(uint64_t) : 0));
+	}
+
+	return 0;
+}
+
+
+static int cg_load_strref_val(struct pmlncg *cg, struct pml_locator *loc,
+			      int getlen)
+{
+	uint64_t val;
+	struct pml_literal *lit;
+	struct pml_bytestr *bs;
+	struct pml_variable *var;
+
+	if (loc->reftype == PML_REF_LITERAL) {
+		abort_unless(loc->u.litref->etype == PML_ETYPE_BYTESTR);
+		bs = &loc->u.litref->u.bytestr;
+		if (getlen) {
+			PUSH64(cg, bs->len);
+		} else {
+			val = MEMADDR(bs->addr, bs->segnum);
+			PUSH64(cg, val);
+		}
+	} else {
+		abort_unless(loc->reftype == PML_REF_VAR);
+		var = loc->u.varref;
+		if (var->etype == PML_ETYPE_BYTESTR) {
+			abort_unless(var->vtype == PML_VTYPE_GLOBAL);
+			if (getlen)
+				val = var->width;
+			else
+				val = MEMADDR(var->addr, PML_SEG_RWMEM);
+			PUSH64(cg, val);
+		} else {
+			abort_unless(var->etype == PML_ETYPE_STRREF);
+			if (cg_read_strref_var(cg, loc, getlen) < 0)
+				return -1;
+		}
+	}
+
+	return 0;
+}
+
+
+/* 
+ * rv == 1 means that the function was able to generated optimized string 
+ * reference instructions.  rv < 0 means an error occurred.
+ */
+static int _cg_i_str_optimized(struct pmlncg *cg, struct pml_locator *loc,
+			       struct cg_intr *intr)
+{
+	int accept;
+
+	if (loc->off != NULL || loc->len != NULL)
+		return 0;
+
+	accept = (loc->reftype == PML_REF_LITERAL) && 
+	         (loc->u.litref->type == PMLTT_BYTESTR);
+	accept |= (loc->reftype == PML_REF_VAR) &&
+	           ((loc->u.varref->etype == PML_ETYPE_BYTESTR) || 
+	            (loc->u.varref->etype == PML_ETYPE_STRREF));
+	if (!accept)
+		return 0;
+
+	if (strcmp(intr->name, "str_len") == 0) {
+		LDSREF_LEN(cg, loc); 
+	} else if (strcmp(intr->name, "str_addr") == 0) {
+		LDSREF_ADDR(cg, loc); 
+		EMIT_W(cg, SHLI, 8);
+		EMIT_W(cg, SHRI, 8);
+	} else if (strcmp(intr->name, "str_ispkt") == 0) {
+		if ((loc->reftype == PML_REF_LITERAL) || 
+		    ((loc->reftype == PML_REF_VAR) && 
+		     (loc->u.varref->etype != PML_ETYPE_STRREF))) {
+			PUSH64(cg, 0);
+		} else {
+			LDSREF_ADDR(cg, loc); 
+			EMIT_W(cg, SHRI, NETVM_UA_ISPKT_OFF);
+		}
+	} else if (strcmp(intr->name, "str_seg") == 0) {
+		LDSREF_ADDR(cg, loc); 
+		EMIT_W(cg, SHRI, NETVM_UA_SEG_OFF);
+		EMIT_W(cg, ANDI, NETVM_SEG_SEGMASK);
+	} else if (strcmp(intr->name, "str_isnull") == 0) {
+		LDSREF_LEN(cg, loc); 
+		EMIT_W(cg, EQI, 0);
+	} else {
+		return 0;
+	}
+
+	return 1;
 }
 
 
@@ -272,10 +404,18 @@ static int _i_str(struct pmlncg *cg, struct pml_call *c, struct cg_intr *intr)
 	struct pml_list *pl = c->args;
 	struct pml_function *f = c->func;
 	union pml_node *e;
-	int i;
+	int i, rv;
 
 	abort_unless(f->arity == 1);
 	e = l_to_node(l_head(&pl->list));
+
+	if (e->base.type == PMLTT_LOCADDR) {
+		rv = _cg_i_str_optimized(cg, (struct pml_locator *)e, intr);
+		if (rv < 0)
+			return -1;
+		if (rv == 1)
+			return 0;
+	}
 	if (cg_expr(cg, e, PML_ETYPE_STRREF) < 0)
 		return -1;
 
@@ -1412,19 +1552,6 @@ static int cg_locval(struct pmlncg *cg, union pml_expr_u *e, struct locval *val)
 }
 
 
-static ulong lvaraddr(struct pml_variable *var)
-{
-	struct pml_function *func = var->func;
-	if (var->vtype == PML_VTYPE_LOCAL) {
-		return var->addr; /* above BP */
-	} else if (PML_FUNC_IS_INLINE(func)) {
-		return var->addr + 1; /* below BP */
-	} else {
-		return var->addr + 2; /* below BP */
-	}
-}
-
-
 static void cgpd_init(struct cg_pdesc *cgpd, int oc, int oci, uint8_t x,
 		      struct pml_locator *loc)
 {
@@ -2031,52 +2158,6 @@ static int cg_pfbytefield(struct pmlncg *cg, struct pml_locator *loc, int etype)
 	}
 }
 
-
-static int cg_load_strref(struct pmlncg *cg, struct pml_locator *loc,
-			  int getlen)
-{
-	struct pml_variable *v;
-	struct pml_bytestr *bs;
-	uint64_t ua;
-
-	if (loc->reftype == PML_REF_VAR) {
-		v = loc->u.varref;
-		abort_unless(v->etype == PML_ETYPE_STRREF);
-		if (v->vtype == PML_VTYPE_LOCAL) {
-			EMIT_XW(cg, LDBPI, 0, lvaraddr(v) + (getlen ? 1 : 0));
-		} else if (v->vtype == PML_VTYPE_PARAM) {
-			EMIT_XW(cg, LDBPI, 1, lvaraddr(v) + (getlen ? 0 : 1));
-		} else {
-			abort_unless(v->vtype == PML_VTYPE_GLOBAL);
-			EMIT_XYW(cg, LDI, sizeof(uint64_t), PML_SEG_RWMEM, 
-				 v->addr + (getlen ? sizeof(uint64_t) : 0));
-		}
-	} else {
-		abort_unless(loc->reftype == PML_REF_LITERAL);
-		abort_unless(loc->u.litref->etype == PML_ETYPE_BYTESTR);
-
-		bs = &loc->u.litref->u.bytestr;
-		if (getlen) {
-			PUSH64(cg, bs->len);
-		} else {
-			ua = ((uint64_t)bs->ispkt << NETVM_UA_ISPKT_OFF) |
-			     ((uint64_t)bs->segnum << NETVM_UA_SEG_OFF) |
-			     ((uint64_t)bs->addr & NETVM_UA_OFF_MASK);
-			PUSH64(cg, ua);
-		}
-	}
-	return 0;
-}
-
-
-#define LDSREF_X(_cg, _l, _x) 					\
-	do { 		 					\
-		if (cg_load_strref((_cg), (_l), (_x)) < 0)	\
-			return -1;				\
-	} while(0)
-
-#define LDSREF_ADDR(_cg, _l) LDSREF_X((_cg), (_l), 0)
-#define LDSREF_LEN(_cg, _l) LDSREF_X((_cg), (_l), 1)
 
 /* generate the address/length on the stack for the string reference */
 /* taking into account the offset and length fields ensuring no overflow */
