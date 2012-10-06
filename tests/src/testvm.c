@@ -68,7 +68,7 @@ struct netvm_inst vm_prog_tcperr[] = {
 	/*1 */ NETVM_OP(DUP, 0, 0, 0, 0),
 	/*2 */ NETVM_BRIFNOT_F(3),
 	/*3 */ NETVM_PDIOP(LDPFI, 0, 0, PRID_TCP, 0, NETVM_PRP_ERR, 0),
-	/*4 */ NETVM_OP(TOBOOL, 0, 0, 0, 0),
+	/*4 */ NETVM_OP(NEQI, 0, 0, 0, 0),
 };
 
 

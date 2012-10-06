@@ -341,7 +341,6 @@ enum {
 	/* Arithmatic operations */
 	NETVM_OC_NOT,		/* [v] logcal not (1 or 0) */
 	NETVM_OC_INVERT,	/* [v] bit-wise inversion */
-	NETVM_OC_TOBOOL,	/* [v] if v != 0, 1, otherwise 0 */
 	NETVM_OC_POPL,		/* [v] # of bits in v for lower x bytes */
 	NETVM_OC_NLZ,		/* [v] # leading 0s in v for lower x bytes */
 

@@ -632,9 +632,6 @@ static void ni_unop(struct netvm *vm)
 	case NETVM_OC_INVERT:
 		val = ~val;
 		break;
-	case NETVM_OC_TOBOOL:
-		val = val != 0;
-		break;
 	case NETVM_OC_POPL:	/* fall through */
 	case NETVM_OC_NLZ:
 		FATAL(vm, NETVM_ERR_WIDTH, inst->x > 8);
@@ -1403,7 +1400,6 @@ netvm_op g_netvm_ops[NETVM_OC_MAXOP + 1] = {
 	/* unary operations */
 	ni_unop,		/* NOT */
 	ni_unop,		/* INVERT */
-	ni_unop,		/* TOBOOL */
 	ni_unop,		/* POPL */
 	ni_unop,		/* NLZ */
 

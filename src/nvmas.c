@@ -125,7 +125,6 @@ struct nvmop Operations[] = {
 	{ "mskcmp", NETVM_OC_MSKCMP, 0, 0 },
 	{ "not",    NETVM_OC_NOT,    0, 0 },
 	{ "invert", NETVM_OC_INVERT, 0, 0 },
-	{ "tobool", NETVM_OC_TOBOOL, 0, 0 },
 	{ "popl",   NETVM_OC_POPL,   0, 0 },
 	{ "nlz",    NETVM_OC_NLZ,    0, 0 },
 	{ "add",    NETVM_OC_ADD,    0, ASWAP },
