@@ -579,7 +579,7 @@ struct pml_retval {
 
 
 /* structure definition for an intrinsic function to add */
-#define PML_MAXIARGS		4
+#define PML_MAXIARGS		8
 struct pml_param {
 	char *			name;
 	int			etype;

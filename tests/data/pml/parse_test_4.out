@@ -117,6 +117,23 @@ Functions
       Variable: pnum [param; width=8, addr=0]
    Body -- 
       (null)
+   Function[intrinsic]: pkt_get_off() -- 4 args, 0 vars, return type=scalar
+   Parameters & Variables -- 
+      Variable: pnum [param; width=8, addr=0]
+      Variable: prid [param; width=8, addr=1]
+      Variable: idx [param; width=8, addr=2]
+      Variable: oid [param; width=8, addr=3]
+   Body -- 
+      (null)
+   Function[intrinsic]: pkt_adj_off() -- 5 args, 0 vars, return type=void
+   Parameters & Variables -- 
+      Variable: pnum [param; width=8, addr=0]
+      Variable: prid [param; width=8, addr=1]
+      Variable: idx [param; width=8, addr=2]
+      Variable: oid [param; width=8, addr=3]
+      Variable: amt [param; width=8, addr=4]
+   Body -- 
+      (null)
    Function[intrinsic]: parse_push_back() -- 2 args, 0 vars, return type=void
    Parameters & Variables -- 
       Variable: pnum [param; width=8, addr=0]

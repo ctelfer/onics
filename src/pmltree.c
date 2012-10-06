@@ -383,6 +383,11 @@ static struct pml_intrinsic stdintr[] = {
 	{ "pkt_cut_d", PML_ETYPE_VOID, 1, 0, NULL, { _SREFP(str) } },
 	{ "pkt_parse", PML_ETYPE_VOID, 1, 0, NULL,
 		{ _INTP(pnum) } },
+	{ "pkt_get_off", PML_ETYPE_SCALAR, 4, 0, NULL,
+		{ _INTP(pnum), _INTP(prid), _INTP(idx), _INTP(oid) } },
+	{ "pkt_adj_off", PML_ETYPE_VOID, 5, 0, NULL,
+		{ _INTP(pnum), _INTP(prid), _INTP(idx), _INTP(oid),
+		  _INTP(amt) } },
 	{ "parse_push_back", PML_ETYPE_VOID, 2, 0, NULL,
 		{ _INTP(pnum), _INTP(prid) } },
 	{ "parse_pop_back", PML_ETYPE_VOID, 1, 0, NULL,
@@ -2251,7 +2256,7 @@ struct pml_literal *pml_lookup_ns_literal(struct pml_ast *ast,
 		sc = (struct ns_scalar *)e;
 		lit->u.scalar = sc->value & 0xFFFFFFFF;
 		if (NSF_IS_SIGNED(sc->flags))
-			lit->u.scalar = sxt64(lit->u.scalar, 32);
+			lit->u.scalar = signx64(lit->u.scalar, 32);
 	} else {
 		return NULL;
 	}
@@ -2390,7 +2395,7 @@ int pml_locator_resolve_nsref(struct pml_ast *ast, struct pml_locator *l)
 		sc = (struct ns_scalar *)e;
 		lit->u.scalar = sc->value & 0xFFFFFFFF;
 		if (NSF_IS_SIGNED(sc->flags))
-			lit->u.scalar = sxt64(lit->u.scalar, 32);
+			lit->u.scalar = signx64(lit->u.scalar, 32);
 		l->u.litref = lit;
 		l->reftype = PML_REF_LITERAL;
 		break;

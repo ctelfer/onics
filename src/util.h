@@ -52,10 +52,13 @@ uint16_t ones_sum(void *p, ulong len, uint16_t val);
  *   
  */
 ulong getbits(const byte_t * p, ulong off, uint len);
+
+/* set up to 32 bits in a byte array (delimited as above in getbits()) */
 void setbits(byte_t * p, ulong off, uint len, ulong val);
 
 /* return 1 if bit #n is set in p */
 int getbit(const byte_t * p, ulong n);
+
 /* set bit n in p, if v or clr bit n in p if !v */
 void setbit(byte_t * p, ulong n, int v);
 
@@ -86,11 +89,11 @@ void hexdump(FILE *out, ulong addr, byte_t *p, ulong len);
 		    (((uint64_t)(v) >> 8) & 0xFF000000u) )
 
 /* sign extend to 64 bits */
-#define sxt64(v, nbits) \
+#define signx64(v, nbits) \
 	((uint64_t)(v) | ((uint64_t)0 - ((v) & (1 << ((nbits) - 1)))))
 
 
-/* returns the numerical value of the min(8, len) bytes in big-endian formar */
+/* returns the numerical value of the min(8, len) bytes in big-endian format */
 uint64_t be64val(void *p, size_t len);
 
 

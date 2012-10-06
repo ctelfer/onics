@@ -268,10 +268,10 @@ Intrinsics:
   -- void pkt_parse(pnum) - reparse a packet 'pnum'
 
   /* very low level functions */
-  -- void pkt_get_off(pnum, prid, idx, oid) - get offset 'oid' of the 'idx'th
-				'prid' parse in 'pnum'
+  -- int pkt_get_off(pnum, prid, idx, oid) - get offset 'oid' of the 'idx'th
+				'prid' parse in packet 'pnum'
   -- void pkt_adj_off(pnum, prid, idx, oid, amt) - adjust offset 'oid' of the
-				'idx'th 'prid' parse in 'pnum'
+				'idx'th 'prid' parse in packet 'pnum' by 'adj'
 
   -- void parse_push_back(pnum, prid)
   -- void parse_pop_back(pnum)

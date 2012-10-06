@@ -1,0 +1,17 @@
+initial headers in packet
+TCP segment starts at 290
+TCP header offset was 310
+TCP trailer starts at 310
+TCP segment ends at 310
+
+after payload space insertion
+TCP segment starts at 290
+TCP header offset was 326
+TCP trailer starts at 326
+TCP segment ends at 326
+
+after header offset adjustment
+TCP segment starts at 290
+TCP header offset was 310
+TCP trailer starts at 326
+TCP segment ends at 326

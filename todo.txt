@@ -6,9 +6,8 @@ Key:
   - -- Comment
 
 PML
- + pkt_adj_off()
  + pkt_send()
- + warn when local variables shadown globals or packets
+ + warn when local variables shadow globals or packets
  + Add "standard include path/files"
  + More test cases (control flow especially)
  * command line arguments to programs

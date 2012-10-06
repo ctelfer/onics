@@ -675,7 +675,7 @@ int inst2str(const struct netvm_inst *ni, char *s, size_t len, uint inum)
 	if ((argmask & ARGZ) != 0) *ap++ = ni->z;
 	if ((argmask & ARGW) != 0) {
 		if ((argmask & BRREL) != 0) {
-			*ap++ = sxt64(ni->w, 32) + inum;
+			*ap++ = signx64(ni->w, 32) + inum;
 			str_copy(a0p, "@", sizeof(a0p));
 		} else {
 			*ap++ = ni->w;

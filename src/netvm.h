@@ -480,7 +480,7 @@ enum {
 				/*   move new bytes down if x or up if !x */
 	NETVM_OC_PKCUT,		/* [addr,len] cut len bytes @ pd.offset */
 				/*   move new bytes down if x or up if !x */
-	NETVM_OC_PKADJ,		/* [addr,amt] adjust offset 'field' by */
+	NETVM_OC_PKADJ,		/* [pdesc,amt] adjust offset 'field' by */
 	                        /*   amt (signed) bytes in parse */
 
 	NETVM_OC_MAXOP = NETVM_OC_PKADJ

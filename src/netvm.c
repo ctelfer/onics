@@ -59,7 +59,7 @@ void netvm_get_pd(struct netvm *vm, struct netvm_prp_desc *pd, int onstack)
 		pd->idx = (val >> NETVM_PD_IDX_OFF) & NETVM_PD_IDX_MASK;
 		pd->field = (val >> NETVM_PD_FLD_OFF) & NETVM_PD_FLD_MASK;
 		val = (val >> NETVM_PD_OFF_OFF) & NETVM_PD_OFF_MASK;
-		pd->offset = sxt64(val, 32);
+		pd->offset = signx64(val, 32);
 	} else {
 		pd->pktnum = inst->y & ~NETVM_SEG_ISPKT;
 		pd->idx = (inst->z >> NETVM_PPD_IDX_OFF) & NETVM_PPD_IDX_MASK;
@@ -397,7 +397,7 @@ void netvm_p2stk(struct netvm *vm, byte_t *p, int width)
 	}
 
 	if ((width & 0x80) != 0)
-		val = sxt64(val, ((width & 0x7F) * 8));
+		val = signx64(val, ((width & 0x7F) * 8));
 
 	S_PUSH(vm, val);
 }
@@ -818,7 +818,7 @@ static void ni_bri(struct netvm *vm)
 	struct netvm_inst *inst = &vm->inst[vm->pc];
 	uint64_t off = inst->w;
 
-	off = sxt64(off, 32);
+	off = signx64(off, 32);
 
 	/* should be verified before start */
 	abort_unless(vm->pc + off <= vm->ninst);
@@ -1557,7 +1557,7 @@ int netvm_validate(struct netvm *vm)
 			if (inst->op == NETVM_OC_JMPI)
 				newpc = inst->w;
 			else
-				newpc = sxt64(inst->w, 32) + i;
+				newpc = signx64(inst->w, 32) + i;
 			/* ok to overflow number of instructions by 1 */
 		        /* implied halt instruction */
 			if (newpc > vm->ninst)
