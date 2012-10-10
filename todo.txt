@@ -6,13 +6,12 @@ Key:
   - -- Comment
 
 PML
- + pkt_send()
  + warn when local variables shadow globals or packets
  + Add "standard include path/files"
  + More test cases (control flow especially)
+ * send-without-free
  * command line arguments to programs
  * random() intrinsic
- * Add exit() intrinsic.
  > Hash table support
  > Data structure support (maybe just hash tables)
 
@@ -62,14 +61,3 @@ pktrel:
 pktdiff:
  + everything
 
-
-Send packets in NetVM plan:
- - Alter netvm to halt with a status code
- - change netvm_prog to interpret different status codes including one to send
-   a packet and restart.
- - change 'sendpkt' to just 'send'.
- - Allow 'send' with a numeric index to send a packet out 
-   * also have 'without free' option somehow.
- - Allow 'drop' with a numeric index to drop a specific packet (replace pkt_del)
- - 'send' and 'drop' with arguments do not implicitly go to the next packet.
- - remove pkt_del()

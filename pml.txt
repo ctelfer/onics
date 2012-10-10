@@ -301,6 +301,8 @@ Intrinsics:
   -- int  meta_get_class(pnum)
   -- void meta_set_class(pnum, tc)
 
+  -- void exit(scalar) -- abort program with exit status 'scalar'
+
   -- int pop(scalar) -- population count of the scalar
   -- int log2(scalar) -- floor of the base 2 log of scalar
   -- int min(scalar1, scalar2)

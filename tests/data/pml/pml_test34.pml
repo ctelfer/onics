@@ -1,4 +1,4 @@
-# Test packet and header creation intrinsics.
+# Test 'send' with packet argument.
 #
 BEGIN {
 	pkt_new(0, 12);
@@ -9,6 +9,8 @@ BEGIN {
 	fix_dltype(0);
 	fix_all_len(0);
 	fix_all_csum(0);
+
+	send 0;
 
 	pkt_new(1, 68);
 	parse_push_back(1, @eth);
@@ -21,5 +23,7 @@ BEGIN {
 	fix_all_len(1);
 	fix_all_csum(1);
 
-	send;
+	send 1;
+
+	print "Still running\n";
 }

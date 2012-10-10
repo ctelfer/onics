@@ -102,7 +102,7 @@ struct kwtok {
 	{ "break",	PMLTOK_BREAK },
 	{ "continue",	PMLTOK_CONTINUE },
 	{ "nextrule",	PMLTOK_NEXTRULE },
-	{ "sendpkt",	PMLTOK_SENDPKT },
+	{ "send",	PMLTOK_SEND },
 	{ "drop",	PMLTOK_DROP },
 	{ "print",	PMLTOK_PRINT },
 	{ NULL,		0 }

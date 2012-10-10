@@ -691,7 +691,8 @@ restart:
 		if (debug) {
 			fprintf(dout, "Single stepping netvm program\n");
 			fprintf(dout, "Executing instruction %u\n",
-				prog->eps[epi]);
+				(epi == NVMP_EXEC_CONTINUE ? 
+				 vm->pc : prog->eps[epi]));
 		}
 
 		rv = nvmp_exec(vm, prog, epi, 1, &tos);
@@ -780,6 +781,7 @@ restart:
 			return -1;
 		} else {
 			++vm->pc;
+			epi = NVMP_EXEC_CONTINUE;
 			if (debug)
 				fprintf(dout, "Restarting at %u\n", vm->pc);
 			goto restart;

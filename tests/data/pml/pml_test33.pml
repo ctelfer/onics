@@ -54,5 +54,5 @@ BEGIN {
 	fix_dltype(0);
 	fix_all_len(0);
 	fix_all_csum(0);
-	sendpkt;
+	send;
 }

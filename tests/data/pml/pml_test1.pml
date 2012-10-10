@@ -1,2 +1,2 @@
 # basic parse.
-BEGIN { sendpkt; }
+BEGIN { send; }

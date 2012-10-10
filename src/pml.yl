@@ -759,6 +759,28 @@ stmt(S) ::= RETURN expr(E) SEMICOLON.  {
 	S = (union pml_node *)m;
 }
 
+stmt(S) ::= SEND expr(E) SEMICOLON.  {
+	struct pml_cfmod *m = pmln_alloc(ast, PMLTT_CFMOD);
+	if (m != NULL) {
+		m->cftype = PML_CFM_SENDONE;
+		m->expr = E;
+	} else {
+		pmln_free(E);
+	}
+	S = (union pml_node *)m;
+}
+
+stmt(S) ::= DROP expr(E) SEMICOLON.  {
+	struct pml_cfmod *m = pmln_alloc(ast, PMLTT_CFMOD);
+	if (m != NULL) {
+		m->cftype = PML_CFM_DROPONE;
+		m->expr = E;
+	} else {
+		pmln_free(E);
+	}
+	S = (union pml_node *)m;
+}
+
 stmt(S) ::= cfmkw(C) SEMICOLON. {
 	struct pml_cfmod *m = pmln_alloc(ast, PMLTT_CFMOD);
 	if (m != NULL)
@@ -769,8 +791,8 @@ stmt(S) ::= cfmkw(C) SEMICOLON. {
 cfmkw(C) ::= BREAK. { C = PML_CFM_BREAK; }
 cfmkw(C) ::= CONTINUE. { C = PML_CFM_CONTINUE; }
 cfmkw(C) ::= NEXTRULE. { C = PML_CFM_NEXTRULE; }
-cfmkw(C) ::= SENDPKT. { C = PML_CFM_SENDPKT; }
-cfmkw(C) ::= DROP. { C = PML_CFM_DROP; }
+cfmkw(C) ::= SEND. { C = PML_CFM_SENDALL; }
+cfmkw(C) ::= DROP. { C = PML_CFM_DROPALL; }
 
 /* this is separate because a print 'statement' with multiple */
 /* arguments gets parsed as a set of individual print statements */

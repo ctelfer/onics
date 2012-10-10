@@ -80,11 +80,6 @@ Functions
       Variable: pnsrc [param; width=8, addr=1]
    Body -- 
       (null)
-   Function[intrinsic]: pkt_del() -- 1 args, 0 vars, return type=void
-   Parameters & Variables -- 
-      Variable: pnum [param; width=8, addr=0]
-   Body -- 
-      (null)
    Function[intrinsic]: pkt_ins_u() -- 3 args, 0 vars, return type=void
    Parameters & Variables -- 
       Variable: pnum [param; width=8, addr=0]
@@ -249,6 +244,11 @@ Functions
       Variable: val [param; width=8, addr=1]
    Body -- 
       (null)
+   Function[intrinsic]: exit() -- 1 args, 0 vars, return type=void
+   Parameters & Variables -- 
+      Variable: rval [param; width=8, addr=0]
+   Body -- 
+      (null)
    Function[inline, intrinsic, pconst]: pop() -- 1 args, 0 vars, return type=scalar
    Parameters & Variables -- 
       Variable: num [param; width=8, addr=0]
@@ -384,10 +384,10 @@ Packet Rules
       True body -- 
          List:
          -----
-         Control Flow Modification: 'drop'
+         Control Flow Modification: 'drop(all)'
          -----
       -----
-      Control Flow Modification: 'sendpkt'
+      Control Flow Modification: 'send(all)'
       -----
    Rule: (packet)
    Pattern -- 
@@ -423,10 +423,10 @@ Packet Rules
       True body -- 
          List:
          -----
-         Control Flow Modification: 'drop'
+         Control Flow Modification: 'drop(all)'
          -----
       -----
-      Control Flow Modification: 'sendpkt'
+      Control Flow Modification: 'send(all)'
       -----
    Rule: (packet)
    Pattern -- 
@@ -466,10 +466,10 @@ Packet Rules
       True body -- 
          List:
          -----
-         Control Flow Modification: 'drop'
+         Control Flow Modification: 'drop(all)'
          -----
       -----
-      Control Flow Modification: 'sendpkt'
+      Control Flow Modification: 'send(all)'
       -----
    Rule: (packet)
    Pattern -- 
@@ -504,10 +504,10 @@ Packet Rules
       True body -- 
          List:
          -----
-         Control Flow Modification: 'drop'
+         Control Flow Modification: 'drop(all)'
          -----
       -----
-      Control Flow Modification: 'sendpkt'
+      Control Flow Modification: 'send(all)'
       -----
 -----------
 End Rule

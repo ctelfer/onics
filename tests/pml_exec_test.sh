@@ -5,9 +5,15 @@ OBIN=../bin
 TOUT=tmp
 
 
-# $1 - test number, $2 - infile|NONE $3 - flags
+# $1 - test number, $2 - infile|NONE $3 - flags, $4 - expected return (optional)
 pml_test() { 
 	FAIL=0
+	if [ $# -gt 3 ]
+	then
+		EXPRET=$4
+	else
+		EXPRET=0
+	fi
 	echo "------------------"
 	echo -n "PML execution test $1: "
 	head -1 data/pml/pml_test$1.pml | sed -e 's/# *//'
@@ -23,9 +29,10 @@ pml_test() {
 			2>$TOUT/pml_test$1.err
 	fi
 
-	if [ $? -ne 0 ]
+	STATUS=$?
+	if [ $STATUS -ne $EXPRET ]
 	then
-		echo Error running program
+		echo Error running program: exit code $STATUS expecting $EXPRET
 		echo FAILED
 		ERR=1
 		FAIL=1
@@ -87,5 +94,7 @@ pml_test 30 NONE
 pml_test 31 NONE
 pml_test 32 NONE
 pml_test 33 NONE
+pml_test 34 NONE
+pml_test 35 NONE "" 1
 
 exit $ERR

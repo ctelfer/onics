@@ -373,8 +373,6 @@ static struct pml_intrinsic stdintr[] = {
 		{ _INTP(pndst), _INTP(pnsrc) } },
 	{ "pkt_copy", PML_ETYPE_VOID, 2, 0, NULL,
 		{ _INTP(pndst), _INTP(pnsrc) } },
-	{ "pkt_del", PML_ETYPE_VOID, 1, 0, NULL,
-		{ _INTP(pnum) } },
 	{ "pkt_ins_u", PML_ETYPE_VOID, 3, 0, NULL,
 		{ _INTP(pnum), _INTP(off), _INTP(len) } },
 	{ "pkt_ins_d", PML_ETYPE_VOID, 3, 0, NULL,
@@ -432,6 +430,8 @@ static struct pml_intrinsic stdintr[] = {
 		{ _INTP(pnum) } },
 	{ "meta_set_class", PML_ETYPE_VOID, 2, 0, NULL,
 		{ _INTP(pnum), _INTP(val) } },
+	{ "exit", PML_ETYPE_VOID, 1, 0, NULL,
+		{ _INTP(rval) } },
 	{ "pop", PML_ETYPE_SCALAR, 1, PML_FF_PCONST|PML_FF_INLINE, _e_pop,
 		{ _INTP(num) } },
 	{ "log2", PML_ETYPE_SCALAR, 1, PML_FF_PCONST|PML_FF_INLINE, _e_log2,
@@ -1497,13 +1497,13 @@ static const char *opstr(struct pml_op *op)
 
 
 static const char *cfm_strs[] = {
-	"unknown", "return", "break", "continue", "nextrule", "sendpkt",
-	"drop"
+	"unknown", "return", "break", "continue", "nextrule", "send(all)",
+	"drop(all)", "send(one)", "drop(one)"
 };
 static const char *cfmstr(struct pml_cfmod *m)
 {
 	abort_unless(m && m->cftype >= PML_CFM_UNKNOWN && 
-		     m->cftype <= PML_CFM_DROP);
+		     m->cftype <= PML_CFM_DROPONE);
 	return cfm_strs[m->cftype];
 }
 

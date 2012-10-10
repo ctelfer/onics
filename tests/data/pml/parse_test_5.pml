@@ -28,7 +28,7 @@ int true() {
 	if ( true() ) {
 		drop;
 	}
-	sendpkt;
+	send;
 }
 
 ?- ip -? { 
@@ -37,7 +37,7 @@ int true() {
 	if ( 1 and true() ) {
 		drop;
 	}
-	sendpkt;
+	send;
 }
 
 ?- ip -? { 
@@ -46,7 +46,7 @@ int true() {
 	if ( 1 and true() ) {
 		drop;
 	}
-	sendpkt;
+	send;
 }
 
 ?- ip -? { 
@@ -54,6 +54,6 @@ int true() {
 	if ( $(0,i)tcp and true() ) {
 		drop;
 	}
-	sendpkt;
+	send;
 }
 

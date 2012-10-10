@@ -828,7 +828,6 @@ struct cg_intr intrinsics[] = {
 	{ "pkt_new_z", NULL, _i_scarg, NULL, 1, { NETVM_OP(PKNEW,0,0,0,0) } },
 	{ "pkt_swap", NULL, _i_scarg, NULL, 1, { NETVM_OP(PKSWAP,0,0,0,0) } },
 	{ "pkt_copy", NULL, _i_scarg, NULL, 1, { NETVM_OP(PKCOPY,0,0,0,0) } },
-	{ "pkt_del", NULL, _i_scarg, NULL, 1, { NETVM_OP(PKDEL,0,0,0,0) }  },
 	{ "pkt_ins_u", NULL, _i_ins, NULL, 1, { NETVM_OP(PKINS,1,0,0,0) } },
 	{ "pkt_ins_d", NULL, _i_ins, NULL, 1, { NETVM_OP(PKINS,0,0,0,0) } },
 	{ "pkt_cut_u", NULL, _i_cut, NULL, 1, { NETVM_OP(PKCUT,1,0,0,0) } },
@@ -875,6 +874,8 @@ struct cg_intr intrinsics[] = {
 	{ "meta_set_flowid",  _i_cg_mset, NULL, &_i_flow_ctx,  0, { {0} } },
 	{ "meta_set_class",   _i_cg_mset, NULL, &_i_class_ctx, 0, { {0} } },
 
+	{ "exit", NULL, _i_scarg, 0, 1, 
+		{ NETVM_OP(HALT,0,0,0,NVMP_STATUS_EXIT) } },
 	{ "pop", NULL, _i_scarg, 0, 1, { NETVM_OP(POPL,8,0,0,0) } },
 	{ "log2", NULL, _i_scarg, 0, 2, 
 		{ NETVM_OP(NLZ,8,0,0,0), NETVM_OP(SUBI,1,0,0,63) } },
@@ -2702,11 +2703,23 @@ static int cg_cfmod(struct pmlncg *cg, struct pml_cfmod *cfm)
 		if (pcg_save_nextrule(cg) < 0)
 			return -1;
 		break;
-	case PML_CFM_SENDPKT:
+	case PML_CFM_SENDALL:
 		EMIT_W(cg, HALT, NVMP_STATUS_SENDALL);
 		break;
-	case PML_CFM_DROP:
+	case PML_CFM_DROPALL:
 		EMIT_W(cg, HALT, NVMP_STATUS_DROPALL);
+		break;
+	case PML_CFM_SENDONE:
+		if (cg_expr(cg, (union pml_node *)cfm->expr,
+			    PML_ETYPE_SCALAR) < 0)
+			return -1;
+		EMIT_W(cg, HALT, NVMP_STATUS_SEND);
+		break;
+	case PML_CFM_DROPONE:
+		if (cg_expr(cg, (union pml_node *)cfm->expr,
+			    PML_ETYPE_SCALAR) < 0)
+			return -1;
+		EMIT_NULL(cg, PKDEL);
 		break;
 	}
 

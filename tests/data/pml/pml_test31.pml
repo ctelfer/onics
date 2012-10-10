@@ -54,5 +54,5 @@ BEGIN {
 	pkt_splice(&tcp.payload, &"HTTP GET / 1.0\n\n");
 	fix_all_len(0);
 	fix_all_csum(0);
-	sendpkt;
+	send;
 }
