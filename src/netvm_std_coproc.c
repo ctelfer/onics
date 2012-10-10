@@ -185,7 +185,8 @@ void xpktcp_ldtag(struct netvm *vm, struct netvm_coproc *cp, int cpi)
 	width = inst->z;
 	FATAL(vm, NETVM_ERR_MEMADDR, addr > XPKT_TAG_MAXW * 4 - (width & 0x7F));
 	netvm_p2stk(vm, (byte_t *)(xcp->tag + addr), width);
-	if (!vm->error && inst->w != 0) {
+	VMCKRET(vm);
+	if (inst->w != 0) {
 		val = S_GET(vm, 0);
 		switch(width & 0x7F) {
 		case 2: val = swap16(val);
@@ -278,7 +279,7 @@ static int outport_validate(struct netvm_inst *inst, struct netvm *vm)
 	if ((inst->y == NETVM_CPOC_PRBIN) || (inst->y == NETVM_CPOC_PROCT) || 
 	    (inst->y == NETVM_CPOC_PRDEC) || (inst->y == NETVM_CPOC_PRHEX)) {
 		if (inst->w > 64)
-			return NETVM_ERR_CPERR;
+			return NETVM_VERR_CPERR;
 	}
 	return 0;
 }
@@ -372,8 +373,7 @@ static void nci_prip(struct netvm *vm, struct netvm_coproc *ncp, int cpi)
 	abort_unless(cp->outport);
 	S_POP(vm, addr);
 	netvm_get_uaddr_ptr(vm, addr, 0, 4, &p);
-	if (vm->error)
-		return;
+	VMCKRET(vm);
 
 	len = snprintf(str, sizeof(str), "%u.%u.%u.%u", p[0], p[1], p[2], p[3]);
 	outstr(cp->outport, str, len, inst->w, inst->z);
@@ -393,8 +393,7 @@ static void nci_preth(struct netvm *vm, struct netvm_coproc *ncp, int cpi)
 	abort_unless(cp->outport);
 	S_POP(vm, addr);
 	netvm_get_uaddr_ptr(vm, addr, 0, 6, &p);
-	if (vm->error)
-		return;
+	VMCKRET(vm);
 	len = snprintf(str, sizeof(str), "%02x:%02x:%02x:%02x:%02x:%02x",
 		       p[0], p[1], p[2], p[3], p[4], p[5]);
 	outstr(cp->outport, str, len, inst->w, inst->z);
@@ -414,8 +413,7 @@ static void nci_pripv6(struct netvm *vm, struct netvm_coproc *ncp, int cpi)
 	abort_unless(cp->outport);
 	S_POP(vm, addr);
 	netvm_get_uaddr_ptr(vm, addr, 0, 16, &p);
-	if (vm->error)
-		return;
+	VMCKRET(vm);
 	len = snprintf(str, sizeof(str), 
 		       "%02x%02x:%02x%02x:%02x%02x:%02x%02x:"
 		       "%02x%02x:%02x%02x:%02x%02x:%02x%02x",
@@ -439,9 +437,9 @@ static void nci_prstr(struct netvm *vm, struct netvm_coproc *ncp, int cpi)
 	if (inst->y == NETVM_CPOC_PRSTR) {
 		S_POP(vm, len);
 		S_POP(vm, addr);
-		netvm_get_uaddr_ptr(vm, addr, 0, len, &p);
 		if (len < inst->w)
 			plen = inst->w - len;
+		netvm_get_uaddr_ptr(vm, addr, 0, len, &p);
 	} else {
 		abort_unless(inst->y == NETVM_CPOC_PRSTRI);
 		len = (inst->w >> 24) & 0xFF;
@@ -450,15 +448,15 @@ static void nci_prstr(struct netvm *vm, struct netvm_coproc *ncp, int cpi)
 		netvm_get_seg_ptr(vm, seg, addr, 0, len, &p);
 	}
 
-	if (!vm->error) {
-		if (plen > 0 && inst->z == 0)
-			padspc(cp->outport, plen);
+	VMCKRET(vm);
 
-		emit_raw(cp->outport, p, len);
+	if (plen > 0 && inst->z == 0)
+		padspc(cp->outport, plen);
 
-		if (plen > 0 && inst->z != 0)
-			padspc(cp->outport, plen);
-	}
+	emit_raw(cp->outport, p, len);
+
+	if (plen > 0 && inst->z != 0)
+		padspc(cp->outport, plen);
 }
 
 
@@ -477,8 +475,7 @@ static void nci_prxstr(struct netvm *vm, struct netvm_coproc *ncp, int cpi)
 	S_POP(vm, len);
 	S_POP(vm, addr);
 	netvm_get_uaddr_ptr(vm, addr, 0, len, &p);
-	if (vm->error)
-		return;
+	VMCKRET(vm);
 
 	if (2*len < inst->w)
 		plen = inst->w - 2 * len;
@@ -704,8 +701,7 @@ static void nci_rex_init(struct netvm *vm, struct netvm_coproc *ncp, int cpi)
 
 	FATAL(vm, NETVM_ERR_BADCPOP, (ridx >= NETVM_MAXREXPAT));
 	netvm_get_uaddr_ptr(vm, addr, 0, len, &p);
-	if (vm->error)
-		return;
+	VMCKRET(vm);
 
 	pat = &cp->rexes[ridx];
 	if (cp->rinit[ridx]) {
@@ -780,8 +776,7 @@ static void _rex_match(struct netvm *vm, struct netvm_coproc *ncp, int cpi,
 	FATAL(vm, NETVM_ERR_BADCPOP, (cp->rinit[ridx] == 0));
 	FATAL(vm, NETVM_ERR_BADCPOP, (nmatch > NETVM_MAXREXMATCH));
 	netvm_get_uaddr_ptr(vm, addr, 0, len, &p);
-	if (vm->error)
-		return;
+	VMCKRET(vm);
 
 	/* regular expression matches reside within the lower 32 bits of */
 	/* address space. */

@@ -288,7 +288,7 @@ int main(int argc, char *argv[])
 
 		if (nvmp_run_all(&vm, &prog, stdin, stdout, stderr, flags) < 0)
 			err("error running netvm program: %s\n",
-			    netvm_estr(vm.error));
+			    netvm_estr(vm.status));
 
 		nvmp_clear(&prog);
 

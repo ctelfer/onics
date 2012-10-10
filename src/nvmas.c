@@ -183,7 +183,7 @@ struct nvmop Operations[] = {
 	{ "bnzi",   NETVM_OC_BNZI,   1, ARGW|BRREL },
 	{ "bzi",    NETVM_OC_BZI,    1, ARGW|BRREL },
 	{ "jmpi",   NETVM_OC_JMPI,   1, ARGW },
-	{ "halt",   NETVM_OC_HALT,   0, 0 },
+	{ "halt",   NETVM_OC_HALT,   1, ARGW },
 	{ "cpop",   NETVM_OC_CPOP,   0, 0 },
 	{ "br",     NETVM_OC_BR,     0, 0 },
 	{ "bnz",    NETVM_OC_BNZ,    0, 0 },

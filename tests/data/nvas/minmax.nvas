@@ -9,4 +9,5 @@
 	umax
 	push	20
 	umin
+	halt	1
 

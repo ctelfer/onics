@@ -8,5 +8,5 @@ start:
 	sub%
 	divi	10
 	divi%	27
-	halt
+	halt	1
 

@@ -23,4 +23,4 @@ start:
 	swap	0, 2
 	ld
 	and
-	halt
+	halt	1

@@ -26,13 +26,17 @@
 extern int netvm_dbgabrt();
 
 #define VMERR(__vm, __e) \
-	do { __vm->error = __e; netvm_dbgabrt(); return; } while (0)
+	do { __vm->status = __e; netvm_dbgabrt(); return; } while (0)
 
 #define VMERRRET(__vm, __e, __r) \
-	do { __vm->error = __e; netvm_dbgabrt(); return __r; } while (0)
+	do { __vm->status = __e; netvm_dbgabrt(); return __r; } while (0)
 
 #define FATAL(__vm, __e, __cond) \
-	if (__cond) { __vm->error = __e; netvm_dbgabrt(); return; }
+	if (__cond) { __vm->status = __e; netvm_dbgabrt(); return; }
+
+/* check our run status and return if we it is not 'RUNNING' */
+#define VMCKRET(__vm) \
+	do { if ((__vm)->status != NETVM_STATUS_RUNNING) return; } while (0)
 
 #define S_EMPTY(__vm)           (__vm->sp == __vm->bp)
 #define S_HAS(__vm, __n)        (__vm->sp - __vm->bp >= __n)

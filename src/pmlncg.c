@@ -2703,12 +2703,10 @@ static int cg_cfmod(struct pmlncg *cg, struct pml_cfmod *cfm)
 			return -1;
 		break;
 	case PML_CFM_SENDPKT:
-		EMIT_W(cg, PUSH, 1);
-		EMIT_NULL(cg, HALT);
+		EMIT_W(cg, HALT, NVMP_STATUS_SENDALL);
 		break;
 	case PML_CFM_DROP:
-		EMIT_W(cg, PUSH, 0);
-		EMIT_NULL(cg, HALT);
+		EMIT_W(cg, HALT, NVMP_STATUS_DROPALL);
 		break;
 	}
 
@@ -3132,20 +3130,20 @@ int cg_print(struct pmlncg *cg, struct pml_print *pr)
 	case PML_FMT_IPA:
 		EMIT_W(cg, EQI, 4);
 		EMIT_W(cg, BRI, 3);
-		EMIT_W(cg, PUSH, 0); /* TODO: sw generated runtime errors */
-		EMIT_NULL(cg, HALT);
+		EMIT_W(cg, PUSH, 0);
+		EMIT_W(cg, HALT, NETVM_ERR_BADCPOP);
 		break;
 	case PML_FMT_IP6A:
 		EMIT_W(cg, EQI, 16);
 		EMIT_W(cg, BRI, 3);
-		EMIT_W(cg, PUSH, 0); /* TODO: sw generated runtime errors */
-		EMIT_NULL(cg, HALT);
+		EMIT_W(cg, PUSH, 0);
+		EMIT_W(cg, HALT, NETVM_ERR_BADCPOP);
 		break;
 	case PML_FMT_ETHA:
 		EMIT_W(cg, EQI, 6);
 		EMIT_W(cg, BRI, 3);
-		EMIT_W(cg, PUSH, 0); /* TODO: sw generated runtime errors */
-		EMIT_NULL(cg, HALT);
+		EMIT_W(cg, PUSH, 0);
+		EMIT_W(cg, HALT, NETVM_ERR_BADCPOP);
 		break;
 
 	default:
@@ -3320,24 +3318,23 @@ static int cg_begin_end(struct pmlncg *cg)
 	pml_ast_get_rexarr(cg->ast, &rexarr, &nrex);
 
 	/* Do BEGIN if there's a rule OR if there are regexes to initialize */
-	if (nrex > 0 || cg->ast->b_rule != NULL)
+	if (nrex > 0 || cg->ast->b_rule != NULL) {
 		cg->prog->eps[NVMP_EP_START] = nexti(&cg->ibuf);
 
-	if (add_regexes(cg, rexarr, nrex) < 0)
-		return -1;
-
-	if (cg->ast->b_rule != NULL) {
-		r = cg->ast->b_rule;
-		nvars = r->vars.addr_rw2;
-		if (nvars > 0)
-			EMIT_W(cg, ZPUSH, nvars);
-		if (cg_stmt(cg, (union pml_node *)r->stmts) < 0)
+		if (add_regexes(cg, rexarr, nrex) < 0)
 			return -1;
-	}
 
-	/* Close up BEGIN */
-	if (nrex > 0 || cg->ast->b_rule != NULL)
-		EMIT_NULL(cg, HALT);
+		if (cg->ast->b_rule != NULL) {
+			r = cg->ast->b_rule;
+			nvars = r->vars.addr_rw2;
+			if (nvars > 0)
+				EMIT_W(cg, ZPUSH, nvars);
+			if (cg_stmt(cg, (union pml_node *)r->stmts) < 0)
+				return -1;
+		}
+
+		EMIT_W(cg, HALT, NVMP_STATUS_DONE);
+	}
 
 	if (cg->ast->e_rule != NULL) {
 		cg->prog->eps[NVMP_EP_END] = nexti(&cg->ibuf);
@@ -3347,7 +3344,7 @@ static int cg_begin_end(struct pmlncg *cg)
 			EMIT_W(cg, ZPUSH, nvars);
 		if (cg_stmt(cg, (union pml_node *)r->stmts) < 0)
 			return -1;
-		EMIT_NULL(cg, HALT);
+		EMIT_W(cg, HALT, NVMP_STATUS_DONE);
 	}
 
 	return 0;
@@ -3401,7 +3398,7 @@ static int cg_rules(struct pmlncg *cg)
 	}
 
 	EMIT_W(cg, PUSH, 1);
-	EMIT_NULL(cg, HALT);
+	EMIT_W(cg, HALT, NVMP_STATUS_DONE);
 
 	return 0;
 }

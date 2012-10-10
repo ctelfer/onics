@@ -268,8 +268,7 @@ struct netvm {
 	struct netvm_coproc *	coprocs[NETVM_MAXCOPROC];
 
 	int			matchonly;
-	int			running;
-	int			error;
+	int			status;
 };
 
 
@@ -403,7 +402,7 @@ enum {
 	NETVM_OC_BNZI,		/* [c] PC += w if c is non-zero (ditto) */
 	NETVM_OC_BZI,		/* [c] PC += w if c is zero (ditto) */
 	NETVM_OC_JMPI,		/* branch to absolute address w */
-	NETVM_OC_HALT,		/* halt program */
+	NETVM_OC_HALT,		/* halt program and put 'w' in 'status' */
 	NETVM_OC_MAX_MATCH = NETVM_OC_HALT,
 
 	/* 
@@ -521,22 +520,25 @@ enum {
 #define NETVM_BRIFNOT_B(amt) NETVM_OP(BZI, 0, 0, 0, NETVM_BRB(amt))
 
 enum {
-	/* Validation error */
-	NETVM_ERR_UNINIT = -1,
-	NETVM_ERR_BADOP = -2,
-	NETVM_ERR_BRADDR = -3,
-	NETVM_ERR_BRMONLY = -4,
-	NETVM_ERR_BADLAYER = -5,
-	NETVM_ERR_BADWIDTH = -6,
-	NETVM_ERR_BADNUMRET = -7,
-	NETVM_ERR_BADCP = -8,
-	NETVM_ERR_CPERR = -9,
-	NETVM_ERR_CPREQ = -10,
-	NETVM_ERR_PROG = -11,
-	NETVM_ERR_MIN = NETVM_ERR_PROG,
+	/* standard status */
+	NETVM_STATUS_RUNNING = 0,
+	NETVM_STATUS_STOPPED = 1,
+	NETVM_STATUS_OOCYCLES = 2,
+	NETVM_STATUS_BPT = 3,
+
+	/* defined by the runtime */
+	NETVM_STATUS_RTDEF0 = 16,
+	NETVM_STATUS_RTDEF1 = 17,
+	NETVM_STATUS_RTDEF2 = 18,
+	NETVM_STATUS_RTDEF3 = 19,
+	NETVM_STATUS_RTDEF4 = 20,
+	NETVM_STATUS_RTDEF5 = 21,
+	NETVM_STATUS_RTDEF6 = 22,
+	NETVM_STATUS_RTDEF7 = 23,
 
 	/* runtime errors */
-	NETVM_ERR_UNIMPL = 1,
+	NETVM_ERR_MIN = 64,
+	NETVM_ERR_UNIMPL = NETVM_ERR_MIN,
 	NETVM_ERR_STKOVFL,
 	NETVM_ERR_STKUNDF,
 	NETVM_ERR_WIDTH,
@@ -563,7 +565,25 @@ enum {
 	NETVM_ERR_BADCOPROC,
 	NETVM_ERR_BADCPOP,
 	NETVM_ERR_MAX = NETVM_ERR_BADCPOP,
+
+	/* Validation error */
+	/* these should not appear in vm->status */
+	NETVM_VERR_UNINIT = -1,
+	NETVM_VERR_BADOP = -2,
+	NETVM_VERR_BRADDR = -3,
+	NETVM_VERR_BRMONLY = -4,
+	NETVM_VERR_BADLAYER = -5,
+	NETVM_VERR_BADWIDTH = -6,
+	NETVM_VERR_BADNUMRET = -7,
+	NETVM_VERR_BADCP = -8,
+	NETVM_VERR_CPERR = -9,
+	NETVM_VERR_CPREQ = -10,
+	NETVM_VERR_PROG = -11,
+	NETVM_VERR_MIN = NETVM_VERR_PROG,
+
 };
+
+#define NETVM_STATUS_ISERR(x) ((x) >= NETVM_ERR_MIN && (x) <= NETVM_ERR_MAX)
 
 
 /* mem may be NULL and memsz 0.  roseg must be <= memsz.  stack must not be */
@@ -604,6 +624,9 @@ void netvm_reset(struct netvm *vm);
 
 /* set the program counter in the vm to pc */
 void netvm_set_pc(struct netvm *vm, uint pc);
+
+/* returns 1 if the given slot holds a valid packet and 0 otherwise */
+int netvm_pkt_isvalid(struct netvm *vm, int slot);
 
 /* will free existing packets if they are slotted.  Note this gives up */
 /* control of the packet.  netvm_clrpkt() or netvm_reset() or other native */

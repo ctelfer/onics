@@ -29,6 +29,7 @@
 #include <cat/pack.h>
 
 #include "netvm_prog.h"
+#include "netvm_op_macros.h"
 
 STATIC_BUG_ON(uint_larger_than_32_bits, sizeof(uint32_t) < sizeof(uint));
 
@@ -103,7 +104,7 @@ int nvmp_validate(struct netvm *vm, struct netvm_program *prog)
 	abort_unless(vm && prog);
 
 	if (prog->ninst < 1)
-		return NETVM_ERR_PROG;
+		return NETVM_VERR_PROG;
 
 	for (i = 0; i < NETVM_MAXMSEGS; ++i) {
 		sd = &prog->sdescs[i];
@@ -111,7 +112,7 @@ int nvmp_validate(struct netvm *vm, struct netvm_program *prog)
 		if (((sd->perms & ~NETVM_SEG_PMASK) != 0) ||
 		    ((sd->perms & ms->perms) != sd->perms) ||
 		    (sd->len > ms->len))
-			return NETVM_ERR_PROG;
+			return NETVM_VERR_PROG;
 	}
 
 	if ((prog->ninits > 0) && (prog->inits == NULL))
@@ -119,21 +120,21 @@ int nvmp_validate(struct netvm *vm, struct netvm_program *prog)
 	for (i = 0; i < prog->ninits; ++i) {
 		mi = &prog->inits[i];
 		if (mi->segnum >= NETVM_MAXMSEGS)
-			return NETVM_ERR_PROG;
+			return NETVM_VERR_PROG;
 		if (vm->msegs[mi->segnum].base == NULL)
-			return NETVM_ERR_PROG;
+			return NETVM_VERR_PROG;
 		sd = &prog->sdescs[mi->segnum];
 		/* check for overflow */
 		if (UINT_MAX - mi->off < mi->val.len)
-			return NETVM_ERR_PROG;
+			return NETVM_VERR_PROG;
 		if (mi->off + mi->val.len > sd->len)
-			return NETVM_ERR_PROG;
+			return NETVM_VERR_PROG;
 	}
 
 	for (i = 0; i < NETVM_MAXCOPROC; ++i)
 		if ((prog->cpreqs[i] != NETVM_CPT_NONE) && 
 		    (vm->coprocs[i]->type != prog->cpreqs[i]))
-			return NETVM_ERR_BADCP;
+			return NETVM_VERR_BADCP;
 
 	netvm_set_code(vm, prog->inst, prog->ninst);
 	netvm_set_matchonly(vm, prog->matchonly);
@@ -550,12 +551,12 @@ void nvmp_prret(FILE *f, struct netvm *vm, int rv, uint64_t rc)
 			(ullong)rc);
 	} else if (rv == -1) {
 		fprintf(f, "VM returned error @%u: %s\n", vm->pc,
-			netvm_estr(vm->error));
+			netvm_estr(vm->status));
 	} else if (rv == -2) {
 		fprintf(f, "VM quanta expired @%u\n", vm->pc);
 	} else {
 		fprintf(f, "VM returned unknown error @%u: %s\n", vm->pc,
-			netvm_estr(vm->error));
+			netvm_estr(vm->status));
 	}
 }
 
@@ -574,48 +575,73 @@ void nvmp_prstk(FILE *f, struct netvm *vm)
 }
 
 
+static int sendpkt(struct netvm *vm, uint64_t pn, FILE *f, FILE *dout,
+		   int flags)
+{
+	int debug = flags & NVMP_RUN_DEBUG;
+	struct pktbuf *p;
+	int esave;
+
+	if (pn >= NETVM_MAXPKTS) {
+		if (debug)
+			fprintf(dout, "Packet number %llu is not valid.\n",
+				(ullong)pn);
+		return -1;
+	}
+
+	p = netvm_clr_pkt(vm, pn, 1);
+
+	if (p == NULL) {
+		if (debug)
+			fprintf(dout, "Packet %llu does not exist.\n",
+				(ullong)pn);
+		return -1;
+	}
+
+	if (pkb_pack(p) < 0) {
+		if (debug) {
+			esave = errno;
+			fprintf(dout, "Error packet packet for writing\n");
+			errno = esave;
+		}
+		return -1;
+	}
+
+	if (pkb_file_write(p, f) < 0) {
+		if (debug) {
+			esave = errno;
+			fprintf(dout, "Error writing out packet\n");
+			errno = esave;
+		}
+		return -1;
+	}
+
+	if (debug)
+		fprintf(dout, "Sent packet\n");
+
+	return 0;
+}
+
+
 static int flushpkts(struct netvm *vm, int send, FILE *f, FILE *dout, int flags)
 {
 	int debug = flags & NVMP_RUN_DEBUG;
 	int i;
-	int esave;
 	struct pktbuf *p;
 
 	for (i = 0; i < NETVM_MAXPKTS; ++i) {
-		p = netvm_clr_pkt(vm, i, 1);
-
-		if (p != NULL) {
-			if (debug)
-				fprintf(dout, "Removed packet %d\n", i);
-
+		if (netvm_pkt_isvalid(vm, i)) {
 			if (send) {
+				if (sendpkt(vm, i, f, dout, flags) < 0)
+					return -1;
+			} else {
 				if (debug)
-					fprintf(dout, "Sending packet %d\n", i);
+					fprintf(dout, "Dropping packet %d\n",
+						i);
 
-				if (pkb_pack(p) < 0) {
-					if (dout != NULL) {
-						esave = errno;
-						fprintf(dout, 
-							"Error packing packet "
-							"for writing");
-						errno = esave;
-					}
-					return -1;
-				}
-
-				if (pkb_file_write(p, f) < 0) {
-					if (dout != NULL) {
-						esave = errno; 
-						fprintf(dout,
-							"Error writing out "
-							"packet");
-						errno = esave;
-					}
-					return -1;
-				}
+				p = netvm_clr_pkt(vm, i, 1);
+				pkb_free(p);
 			}
-
-			pkb_free(p);
 		}
 	}
 
@@ -639,11 +665,15 @@ static const char *nvmp_epstr(int epi)
 
 
 static int _nvmp_run(struct netvm *vm, struct netvm_program *prog, int epi,
-		     FILE *dout, uint64_t *tos, int flags)
+		     FILE *pout, FILE *dout, int flags)
 {
 	int rv;
+	int status;
+	int pass;
 	int debug = flags & NVMP_RUN_DEBUG;
+	int ignerr = flags & NVMP_RUN_IGNORE_ERR;
 	int prstk = flags & NVMP_RUN_PRSTK;
+	uint64_t tos = 0;
 
 	if (prog->eps[epi] == NVMP_EP_INVALID) {
 		if (debug)
@@ -655,6 +685,7 @@ static int _nvmp_run(struct netvm *vm, struct netvm_program *prog, int epi,
 		fprintf(dout, "Program has a valid %s entry point\n",
 			nvmp_epstr(epi));
 
+restart:
 	if (flags & NVMP_RUN_SINGLE_STEP) {
 
 		if (debug) {
@@ -663,7 +694,7 @@ static int _nvmp_run(struct netvm *vm, struct netvm_program *prog, int epi,
 				prog->eps[epi]);
 		}
 
-		rv = nvmp_exec(vm, prog, epi, 1, tos);
+		rv = nvmp_exec(vm, prog, epi, 1, &tos);
 
 		if (prstk)
 			nvmp_prstk(dout, vm);
@@ -674,7 +705,7 @@ static int _nvmp_run(struct netvm *vm, struct netvm_program *prog, int epi,
 				fprintf(dout, "Executing instruction %u\n",
 					vm->pc);
 
-			rv = nvmp_exec(vm, prog, NVMP_EXEC_CONTINUE, 1, tos);
+			rv = nvmp_exec(vm, prog, NVMP_EXEC_CONTINUE, 1, &tos);
 
 			if (prstk)
 				nvmp_prstk(dout, vm);
@@ -683,16 +714,86 @@ static int _nvmp_run(struct netvm *vm, struct netvm_program *prog, int epi,
 		if (debug)
 			fprintf(dout, "Running netvm program to completion\n");
 
-		rv = nvmp_exec(vm, prog, epi, -1, tos);
+		rv = nvmp_exec(vm, prog, epi, -1, &tos);
 	}
 
 	if (debug)
-		nvmp_prret(dout, vm, rv, *tos);
+		nvmp_prret(dout, vm, rv, tos);
 
 	if (prstk)
 		nvmp_prstk(dout, vm);
 
-	return rv;
+	status = vm->status;
+	if (rv < 0) {
+		if (ignerr)
+			status = NVMP_STATUS_DROPALL;
+		else
+			return -1;
+	}
+
+	switch (status) {
+	case NVMP_STATUS_DONE:
+		if (rv == 0)
+			tos = 0;
+
+		if (debug)
+			fprintf(dout, "Halt status DONE: top of stack %llu\n",
+				(ullong)tos);
+
+		if (flushpkts(vm, tos != 0, pout, dout, flags) < 0)
+			return (ignerr ? 0 : -1);
+		return tos != 0;
+
+	case NVMP_STATUS_SENDALL:
+		if (debug)
+			fprintf(dout, "Halt status SENDALL\n");
+
+		if (flushpkts(vm, 1, pout, dout, flags) < 0)
+			return (ignerr ? 0 : -1);
+		return 1;
+
+	case NVMP_STATUS_DROPALL:
+		if (debug)
+			fprintf(dout, "Halt status DROPALL\n");
+
+		if (flushpkts(vm, 0, pout, dout, flags) < 0)
+			return (ignerr ? 0 : -1);
+		return 0;
+
+	case NVMP_STATUS_SEND:
+		/* make sure there is a top of stack and send one packet */
+		if (rv == 0) {
+			if (debug)
+				fprintf(dout, 
+					"Halt status SEND with no "
+					"packet number on the stack\n");
+			return -1;
+		}
+
+		if (debug)
+			fprintf(dout, "Halt condition was SEND of packet %d\n",
+			        (int)tos);
+
+		S_POP_NOCK(vm, tos);
+		rv = sendpkt(vm, tos, pout, dout, flags);
+		if (rv < 0 && !ignerr) {
+			return -1;
+		} else {
+			++vm->pc;
+			if (debug)
+				fprintf(dout, "Restarting at %u\n", vm->pc);
+			goto restart;
+		}
+
+	case NVMP_STATUS_EXIT:
+		if (rv == 0)
+			tos = 0;
+
+		if (debug)
+			fprintf(dout, "Halt status EXIT with code %d\n", (int)tos);
+
+		exit(tos);
+	}
 }
 
 
@@ -704,7 +805,6 @@ int nvmp_run_all(struct netvm *vm, struct netvm_program *prog, FILE *pin,
 	int ignerr = flags & NVMP_RUN_IGNORE_ERR;
 	int debug = flags & NVMP_RUN_DEBUG;
 	int rv;
-	int pass;
 	int esave;
 	uint64_t tos;
 	struct pktbuf *p;
@@ -716,14 +816,9 @@ int nvmp_run_all(struct netvm *vm, struct netvm_program *prog, FILE *pin,
 
 	nvmp_init_mem(vm, prog);
 
-	rv = _nvmp_run(vm, prog, NVMP_EP_START, dout, &tos, flags);
-	if (rv < 0 && !ignerr)
-		return rv;
-
-	pass = (rv == 1) && tos;
-	rv = flushpkts(vm, pass, pout, dout, flags);
-	if (rv < 0 && !ignerr)
-		return rv;
+	rv = _nvmp_run(vm, prog, NVMP_EP_START, pout, dout, flags);
+	if (rv < 0)
+		return -1;
 
 	if (prog->eps[NVMP_EP_PACKET] != NVMP_EP_INVALID) {
 
@@ -749,22 +844,17 @@ int nvmp_run_all(struct netvm *vm, struct netvm_program *prog, FILE *pin,
 				fprintf(dout, "Read packet %lu\n", npkt);
 
 			netvm_load_pkt(vm, p, 0);
-			rv = _nvmp_run(vm, prog, NVMP_EP_PACKET, dout, &tos,
+			rv = _nvmp_run(vm, prog, NVMP_EP_PACKET, pout, dout,
 				       flags);
-			if (rv < 0 && !ignerr)
-				return rv;
+			if (rv < 0)
+				return -1;
 
-			pass = (rv == 1) && tos;
-			if (pass) {
+			if (rv == 1) {
 				if (debug)
 					fprintf(dout, "Packet %lu passed\n",
 						npkt);
 				++npass;
 			}
-
-			rv = flushpkts(vm, pass, pout, dout, flags);
-			if (rv < 0 && !ignerr)
-				return rv;
 
 		}
 
@@ -782,14 +872,9 @@ int nvmp_run_all(struct netvm *vm, struct netvm_program *prog, FILE *pin,
 	}
 
 
-	rv = _nvmp_run(vm, prog, NVMP_EP_END, dout, &tos, debug);
-	if (rv < 0 && !ignerr)
-		return rv;
-
-	pass = (rv == 1) && tos;
-	rv = flushpkts(vm, pass, pout, dout, flags);
-	if (rv < 0 && !ignerr)
-		return rv;
+	rv = _nvmp_run(vm, prog, NVMP_EP_END, pout, dout, flags);
+	if (rv < 0)
+		return -1;
 
 	return 0;
 }

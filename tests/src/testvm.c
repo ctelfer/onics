@@ -60,6 +60,7 @@ struct meminit {
 
 struct netvm_inst vm_prog_istcp[] = {
 	NETVM_PDIOP(LDPFI, 0, 0, PRID_TCP, 0, NETVM_PRP_PIDX, 0),
+	NETVM_OP(HALT, 0, 0, 0, 1),
 };
 
 
@@ -69,6 +70,7 @@ struct netvm_inst vm_prog_tcperr[] = {
 	/*2 */ NETVM_BRIFNOT_F(3),
 	/*3 */ NETVM_PDIOP(LDPFI, 0, 0, PRID_TCP, 0, NETVM_PRP_ERR, 0),
 	/*4 */ NETVM_OP(NEQI, 0, 0, 0, 0),
+	/*5 */ NETVM_OP(HALT, 0, 0, 0, 1),
 };
 
 
@@ -76,10 +78,12 @@ struct netvm_inst vm_prog_isudp[] = {
 	NETVM_PDIOP(LDPFI, 0, 0, PRID_PCLASS_XPORT, 0, NETVM_PRP_PRID, 0),
 	NETVM_OP(PUSH, 0, 0, 0, PRID_UDP),
 	NETVM_OP(EQ, 0, 0, 0, 0),
+	NETVM_OP(HALT, 0, 0, 0, 1),
 };
 
 struct netvm_inst vm_prog_fixcksum[] = {
 	NETVM_PDIOP(PKFXCI, 0, 0, PRID_NONE, 0, 0, 0),
+	NETVM_OP(HALT, 0, 0, 0, 1),
 };
 
 struct netvm_inst vm_prog_toggledf[] = {
@@ -92,6 +96,7 @@ struct netvm_inst vm_prog_toggledf[] = {
 	/*4 */ NETVM_OP(XORI, 0, 0, 0, IPH_DFMASK),
 	/*5 */ NETVM_PDIOP(STPDI, 2, 0, PRID_IPV4, 0, NETVM_PRP_SOFF, 6),
 	/*6 */ NETVM_PDIOP(PKFXCI, 0, 0, PRID_IPV4, 0, 0, 0),
+	/*7 */ NETVM_OP(HALT, 0, 0, 0, 1),
 };
 
 
@@ -120,6 +125,7 @@ struct netvm_inst vm_prog_count10[] = {
 	/*17*/ NETVM_OP(PUSH, 0, 0, 0, 72), 	/* RWSEG is 0 in seg bits */
 	/*18*/ NETVM_OP(PUSH, 0, 0, 0, 1), 
 	/*19*/ NETVM_OP(CPOPI, NETVM_CPI_OUTPORT, NETVM_CPOC_PRSTR, 0, 0), 
+	/*20*/ NETVM_OP(HALT, 0, 0, 0, 1),
 };
 
 
@@ -133,6 +139,7 @@ struct meminit hwmi[] = {
 
 struct netvm_inst vm_prog_helloworld[] = {
 	/*0 */ NETVM_CPOP_PRSTRI(ROSEG, HWS_OFFSET, HWS_SIZE), 
+	/*1 */ NETVM_OP(HALT, 0, 0, 0, 1),
 };
 
 
@@ -165,7 +172,7 @@ struct netvm_inst vm_prog_fib[] = {
 	/* 6 */ NETVM_OP(CALL, 0, 0, 0, 0),
 	/* 7 */ NETVM_OP(CPOPI, NETVM_CPI_OUTPORT, NETVM_CPOC_PRDEC, 4, 0),
 	/* 8 */ NETVM_CPOP_PRSTRI(ROSEG, FIB_I3_OFFSET, FIB_I3_SIZE),
-	/* 9 */ NETVM_OP(HALT, 0, 0, 0, 0),
+	/* 9 */ NETVM_OP(HALT, 0, 0, 0, 1),
 
 	/* (v) <- Fib(n) */
 	/*10 */ NETVM_OP(LDBPI, 1, 0, 0, 2), /* load 3rd(0-base) val BELOW bp */
@@ -196,10 +203,11 @@ struct netvm_inst vm_prog_dup1st[] = {
 	/* 5 */ NETVM_BRIF_F(4), 
 	/* 6 */ NETVM_OP(PUSH, 0, 0, 0, 0),
 	/* 7 */ NETVM_OP(PKDEL, 0, 0, 0, 0),
-	/* 8 */ NETVM_OP(HALT, 0, 0, 0, 0),
+	/* 8 */ NETVM_OP(HALT, 0, 0, 0, 1),
 	/* 9 */ NETVM_OP(PUSH, 0, 0, 0, 1), /* to packet 1 */
 	/*10 */ NETVM_OP(PUSH, 0, 0, 0, 0), /* from packet 0 */
 	/*11 */ NETVM_OP(PKCOPY, 0, 0, 0, 0), /* copy */
+	/*12 */ NETVM_OP(HALT, 0, 0, 0, 1),
 };
 
 
@@ -234,7 +242,7 @@ struct netvm_inst vm_prog_bulkmove[] = {
 	/*11 */ NETVM_BRIF_F(4),
 	/*12 */ NETVM_OP(PUSH, 0, 0, 0, 0),
 	/*13 */ NETVM_OP(PKDEL, 0, 0, 0, 0),
-	/*14 */ NETVM_OP(HALT, 0, 0, 0, 0),
+	/*14 */ NETVM_OP(HALT, 0, 0, 0, 1),
 
 	/* First print the first 16 bytes of the payload */
 	/*15 */ NETVM_PDIOP(LDPFI, 0, 0, PRID_TCP, 0, NETVM_PRP_POFF, 0),
@@ -260,6 +268,7 @@ struct netvm_inst vm_prog_bulkmove[] = {
 	/*33 */ NETVM_OP(ORHI, 0, 0, 0, (NETVM_SEG_ISPKT<<NETVM_UA_SEG_HI_OFF)),
 	/*34 */ NETVM_OP(PUSH, 0, 0, 0, BMS1_SIZE),
 	/*35 */ NETVM_OP(MOVE, 0, 0, 0, 0),
+	/*36 */ NETVM_OP(HALT, 0, 0, 0, 1),
 };
 
 
@@ -327,7 +336,7 @@ struct netvm_inst vm_prog_hexdump[] = {
 	/*28 */ NETVM_CPOP_PRSTRI(ROSEG, HDS4_OFFSET, HDS4_SIZE),
 	/*29 */ NETVM_OP(PUSH, 0, 0, 0, 0),
 	/*30 */ NETVM_OP(PKDEL, 0, 0, 0, 0),
-	/*31 */ NETVM_OP(HALT, 0, 0, 0, 0),
+	/*31 */ NETVM_OP(HALT, 0, 0, 0, 1),
 };
 
 
@@ -357,6 +366,7 @@ struct netvm_inst vm_prog_maskeq[] = {
 	/* 7 */ NETVM_OP(ORHI, 0, 0, 0, (ROSEG << NETVM_UA_SEG_HI_OFF)),
 	/* 8 */ NETVM_OP(PUSH, 0, 0, 0, MEQ_MASK_SIZE), 
 	/* 9 */ NETVM_OP(MSKCMP, 0, 0, 0, 0),
+	/*10 */ NETVM_OP(HALT, 0, 0, 0, 1),
 };
 
 
@@ -473,7 +483,7 @@ void run_without_packets(struct netvm *vm, struct meminit *mi, size_t nmi)
 	uint64_t rc;
 	init_memory(vm, mi, nmi);
 	vmrv = netvm_run(vm, -1, &rc);
-	print_vmret(vmrv, vm->error, vm->pc, rc);
+	print_vmret(vmrv, vm->status, vm->pc, rc);
 }
 
 
@@ -516,7 +526,7 @@ void run_with_packets(struct netvm *vm, int filter, struct meminit *mi,
 		if ((vmrv == 1) && rc)
 			++npass;
 		fprintf(stderr, "Packet %5u: ", npkt);
-		print_vmret(vmrv, vm->error, vm->pc, rc);
+		print_vmret(vmrv, vm->status, vm->pc, rc);
 
 		if (filter && vmrv >= 0)
 			send_clr_packets(vm, npkt);

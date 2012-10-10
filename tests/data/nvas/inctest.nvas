@@ -1,3 +1,4 @@
 	push	5
 	push	6
 	add
+	halt	1

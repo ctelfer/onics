@@ -84,7 +84,7 @@ struct prparse *netvm_find_header(struct netvm *vm, struct netvm_prp_desc *pd,
 	int n = 0;
 
 	netvm_get_pd(vm, pd, onstack);
-	if (vm->error)
+	if (vm->status != NETVM_STATUS_RUNNING)
 		return NULL;
 
 	if (pd->pktnum >= NETVM_MAXPKTS)
@@ -122,8 +122,7 @@ void netvm_get_prp_ptr(struct netvm *vm, int onstack, int len, byte_t **p)
 	struct pktbuf *pkb;
 
 	prp = netvm_find_header(vm, &pd0, onstack);
-	if (vm->error)
-		return;
+	VMCKRET(vm);
 	FATAL(vm, NETVM_ERR_NOPRP, prp == NULL);
 	FATAL(vm, NETVM_ERR_PRPFLD, !NETVM_ISPRPOFF(pd0.field));
 	oidx = pd0.field - NETVM_PRP_OFF_BASE;
@@ -145,7 +144,7 @@ void netvm_get_prp_ptr(struct netvm *vm, int onstack, int len, byte_t **p)
 
 static void ni_unimplemented(struct netvm *vm)
 {
-	vm->error = NETVM_ERR_UNIMPL;
+	vm->status = NETVM_ERR_UNIMPL;
 }
 
 
@@ -319,8 +318,7 @@ static void ni_ldpf(struct netvm *vm)
 	uint64_t val;
 
 	prp = netvm_find_header(vm, &pd0, (inst->op == NETVM_OC_LDPF));
-	if (vm->error)
-		return;
+	VMCKRET(vm);
 
 	if (!prp) {
 		S_PUSH(vm, 
@@ -457,7 +455,7 @@ void netvm_get_uaddr_ptr(struct netvm *vm, uint64_t uaddr, int iswr,
 	uint8_t seg;
 	seg = (uaddr >> NETVM_UA_SEG_OFF);
 	uaddr &= ~((uint64_t)0xff << NETVM_UA_SEG_OFF);
-	return netvm_get_seg_ptr(vm, seg, uaddr, iswr, len, p);
+	netvm_get_seg_ptr(vm, seg, uaddr, iswr, len, p);
 }
 
 
@@ -478,8 +476,8 @@ static void ni_ld(struct netvm *vm)
 	if (width > 8)
 		width = 8;
 	netvm_get_uaddr_ptr(vm, addr, 0, width, &p);
-	if (!vm->error)
-		netvm_p2stk(vm, p, (int)(len & 0xFF));
+	VMCKRET(vm);
+	netvm_p2stk(vm, p, (int)(len & 0xFF));
 }
 
 
@@ -493,8 +491,8 @@ static void ni_ldi(struct netvm *vm)
 	width = inst->x;
 	addr = inst->w;
 	netvm_get_seg_ptr(vm, inst->y, addr, 0, width & 0x7F, &p);
-	if (!vm->error)
-		netvm_p2stk(vm, p, width);
+	VMCKRET(vm);
+	netvm_p2stk(vm, p, width);
 }
 
 
@@ -506,8 +504,8 @@ static void ni_ldpd(struct netvm *vm)
 
 	width = inst->x;
 	netvm_get_prp_ptr(vm, (inst->op == NETVM_OC_LDPD), width & 0x7F, &p);
-	if (!vm->error)
-		netvm_p2stk(vm, p, width);
+	VMCKRET(vm);
+	netvm_p2stk(vm, p, width);
 }
 
 
@@ -522,11 +520,9 @@ static void ni_cmp(struct netvm *vm)
 
 	FATAL(vm, NETVM_ERR_IOVFL, (a1 + len < len) || (a2 + len < len));
 	netvm_get_uaddr_ptr(vm, a1, 0, len, &p1);
-	if (vm->error)
-		return;
+	VMCKRET(vm);
 	netvm_get_uaddr_ptr(vm, a2, 0, len, &p2);
-	if (vm->error)
-		return;
+	VMCKRET(vm);
 
 	val = memcmp(p1, p2, len);
 
@@ -551,11 +547,9 @@ static void ni_pcmp(struct netvm *vm)
 	      (a1 + nbytes < nbytes) || (a2 + nbytes < nbytes));
 
 	netvm_get_uaddr_ptr(vm, a1, 0, len, &p1);
-	if (vm->error)
-		return;
+	VMCKRET(vm);
 	netvm_get_uaddr_ptr(vm, a2, 0, len, &p2);
-	if (vm->error)
-		return;
+	VMCKRET(vm);
 
 	val = 0;
 	while (len > 8) {
@@ -595,14 +589,11 @@ static void ni_mskcmp(struct netvm *vm)
 	      (am + len < len));
 
 	netvm_get_uaddr_ptr(vm, a1, 0, len, &p1);
-	if (vm->error)
-		return;
+	VMCKRET(vm);
 	netvm_get_uaddr_ptr(vm, a2, 0, len, &p2);
-	if (vm->error)
-		return;
+	VMCKRET(vm);
 	netvm_get_uaddr_ptr(vm, am, 0, len, &pm);
-	if (vm->error)
-		return;
+	VMCKRET(vm);
 
 	while (len > 0) {
 		if ((*p1++ & *pm) != (*p2++ & *pm)) {
@@ -844,9 +835,14 @@ static void ni_jmpi(struct netvm *vm)
 }
 
 
+/* this instruction ALWAYS signals the ME to halt even if the new status */
+/* is NETVM_STATUS_RUNNING */
 static void ni_halt(struct netvm *vm)
 {
-	vm->running = 0;
+	struct netvm_inst *inst = &vm->inst[vm->pc];
+	vm->status = inst->w;
+	if (vm->status == NETVM_STATUS_RUNNING)
+		vm->status = NETVM_STATUS_STOPPED;
 }
 
 
@@ -985,8 +981,8 @@ static void ni_st(struct netvm *vm)
 	if (width > 8)
 		width = 8;
 	netvm_get_uaddr_ptr(vm, addr, 1, width, &p);
-	if (!vm->error)
-		netvm_stk2p(vm, p, val, (int)(len & 0xFF));
+	VMCKRET(vm);
+	netvm_stk2p(vm, p, val, (int)(len & 0xFF));
 }
 
 
@@ -1002,8 +998,8 @@ static void ni_sti(struct netvm *vm)
 	addr = inst->w;
 	S_POP(vm, val);
 	netvm_get_seg_ptr(vm, inst->y, addr, 1, width & 0x7F, &p);
-	if (!vm->error)
-		netvm_stk2p(vm, p, val, width);
+	VMCKRET(vm);
+	netvm_stk2p(vm, p, val, width);
 }
 
 
@@ -1015,11 +1011,10 @@ static void ni_stpd(struct netvm *vm)
 	byte_t *p;
 
 	width = inst->x;
+	S_POP(vm, val);
 	netvm_get_prp_ptr(vm, (inst->op == NETVM_OC_STPD), width & 0x7F, &p);
-	if (!vm->error) {
-		S_POP(vm, val);
-		netvm_stk2p(vm, p, val, width);
-	}
+	VMCKRET(vm);
+	netvm_stk2p(vm, p, val, width);
 }
 
 
@@ -1034,11 +1029,9 @@ static void ni_move(struct netvm *vm)
 
 	FATAL(vm, NETVM_ERR_IOVFL, (saddr + len < len) || (daddr + len < len));
 	netvm_get_uaddr_ptr(vm, saddr, 0, len, &s);
-	if (vm->error)
-		return;
+	VMCKRET(vm);
 	netvm_get_uaddr_ptr(vm, daddr, 1, len, &d);
-	if (vm->error)
-		return;
+	VMCKRET(vm);
 	memmove(d, s, len);
 }
 
@@ -1110,8 +1103,7 @@ static void ni_pksla(struct netvm *vm)
 	struct prparse *prp;
 
 	prp = netvm_find_header(vm, &pd0, 0);
-	if (vm->error)
-		return;
+	VMCKRET(vm);
 
 	FATAL(vm, NETVM_ERR_NOPRP, prp == NULL);
 	pkb_set_layer(vm->packets[pd0.pktnum], prp, inst->x);
@@ -1213,8 +1205,7 @@ static void ni_pkpup(struct netvm *vm)
 	struct pktbuf *pkb;
 
 	prp = netvm_find_header(vm, &pd0, 1);
-	if (vm->error)
-		return;
+	VMCKRET(vm);
 	FATAL(vm, NETVM_ERR_NOPRP, prp == NULL);
 	pkb = vm->packets[pd0.pktnum];
 	prp_update(prp, pkb->buf);
@@ -1229,8 +1220,7 @@ static void ni_pkfxl(struct netvm *vm)
 	struct prparse *prp;
 
 	prp = netvm_find_header(vm, &pd0, (inst->op == NETVM_OC_PKFXL));
-	if (vm->error)
-		return;
+	VMCKRET(vm);
 
 	FATAL(vm, NETVM_ERR_NOPRP, prp == NULL);
 
@@ -1267,8 +1257,7 @@ static void ni_pkfxc(struct netvm *vm)
 	struct prparse *prp;
 
 	prp = netvm_find_header(vm, &pd0, (inst->op == NETVM_OC_PKFXC));
-	if (vm->error)
-		return;
+	VMCKRET(vm);
 
 	FATAL(vm, NETVM_ERR_NOPRP, prp == NULL);
 
@@ -1354,8 +1343,7 @@ static void ni_pkadj(struct netvm *vm)
 
 	S_POP(vm, val);
 	prp = netvm_find_header(vm, &pd0, 1);
-	if (vm->error)
-		return;
+	VMCKRET(vm);
 
 	FATAL(vm, NETVM_ERR_NOPRP, prp == NULL);
 	if ((pd0.field < NETVM_PRP_OFF_BASE) ||
@@ -1520,6 +1508,7 @@ void netvm_init(struct netvm *vm, uint64_t *stack, uint ssz)
 	vm->sp = 0;
 	vm->bp = 0;
 	vm->matchonly = 0;
+	vm->status = NETVM_STATUS_STOPPED;
 
 	memset(vm->packets, 0, sizeof(vm->packets));
 
@@ -1542,12 +1531,13 @@ int netvm_validate(struct netvm *vm)
 
 	if (!vm || !vm->stack || !vm->inst || (vm->ninst < 1) || 
 	    (vm->ninst > MAXINST))
-		return NETVM_ERR_UNINIT;
+		return NETVM_VERR_UNINIT;
+
 	maxi = vm->matchonly ? NETVM_OC_MAX_MATCH : NETVM_OC_MAXOP;
 	for (i = 0; i < vm->ninst; i++) {
 		inst = &vm->inst[i];
 		if (inst->op > maxi)
-			return NETVM_ERR_BADOP;
+			return NETVM_VERR_BADOP;
 
 		/* validate branch immediate instructions */
 		if ((inst->op == NETVM_OC_BRI) ||
@@ -1561,9 +1551,9 @@ int netvm_validate(struct netvm *vm)
 			/* ok to overflow number of instructions by 1 */
 		        /* implied halt instruction */
 			if (newpc > vm->ninst)
-				return NETVM_ERR_BRADDR;
+				return NETVM_VERR_BRADDR;
 			if (vm->matchonly && (newpc <= i))
-				return NETVM_ERR_BRMONLY;
+				return NETVM_VERR_BRMONLY;
 
 		/* validate widths for load/store operations */
 		} else if ((inst->op == NETVM_OC_LDLI) ||
@@ -1573,13 +1563,13 @@ int netvm_validate(struct netvm *vm)
 			   (inst->op == NETVM_OC_POPL) ||
 			   (inst->op == NETVM_OC_NLZ)) {
 			if (((inst->x & 0x7F) < 1) || ((inst->x & 0x7F) > 8))
-				return NETVM_ERR_BADWIDTH;
+				return NETVM_VERR_BADWIDTH;
 
 		/* Validate layer indices for set/clear layer operations */
 		} else if ((inst->op == NETVM_OC_PKSLA) ||
 			   (inst->op == NETVM_OC_PKCLA)) {
 			if (inst->x >= PKB_LAYER_NUM)
-				return NETVM_ERR_BADLAYER;
+				return NETVM_VERR_BADLAYER;
 
 		/* Validate coprocessor operations where cpi and cpop are */
 		/* specified in the instruction itself. */
@@ -1588,16 +1578,16 @@ int netvm_validate(struct netvm *vm)
 			struct netvm_coproc *cp;
 			if ((inst->x >= NETVM_MAXCOPROC) ||
 			    ((cp = vm->coprocs[inst->x]) == NULL))
-				return NETVM_ERR_BADCP;
+				return NETVM_VERR_BADCP;
 			if (inst->y >= cp->numops)
-				return NETVM_ERR_BADCP;
+				return NETVM_VERR_BADCP;
 			if ((cp->validate != NULL)
 			    && ((rv = (*cp->validate)(inst, vm)) < 0))
 				return rv;
 		} else if ((inst->op == NETVM_OC_POPFR) ||
 			   (inst->op == NETVM_OC_RET)) {
 			if (inst->x > NETVM_MAXRET)
-				return NETVM_ERR_BADNUMRET;
+				return NETVM_VERR_BADNUMRET;
 		}
 	}
 	return 0;
@@ -1649,10 +1639,21 @@ void netvm_set_matchonly(struct netvm *vm, int matchonly)
 }
 
 
+int netvm_pkt_isvalid(struct netvm *vm, int slot)
+{
+	if ((slot >= 0) && (slot < NETVM_MAXPKTS))
+		return vm->packets[slot] != NULL;
+	else
+		return 0;
+}
+
+
 void netvm_load_pkt(struct netvm *vm, struct pktbuf *pkb, int slot)
 {
-	pkb_free(vm->packets[slot]);
-	vm->packets[slot] = pkb;
+	if ((slot >= 0) && (slot < NETVM_MAXPKTS)) {
+		pkb_free(vm->packets[slot]);
+		vm->packets[slot] = pkb;
+	}
 }
 
 
@@ -1725,6 +1726,7 @@ void netvm_restart(struct netvm *vm)
 	vm->nxtpc = 0;
 	vm->sp = 0;
 	vm->bp = 0;
+	vm->status = NETVM_STATUS_STOPPED;
 }
 
 
@@ -1746,51 +1748,71 @@ void netvm_set_pc(struct netvm *vm, uint pc)
 }
 
 
+static void run_to_completion(struct netvm *vm)
+{
+	struct netvm_inst *inst;
+
+	vm->nxtpc = vm->pc;
+	while (vm->status == NETVM_STATUS_RUNNING) {
+		vm->pc = vm->nxtpc;
+		if (vm->pc >= vm->ninst) {
+			vm->status = NETVM_ERR_INSTADDR;
+			break;
+		}
+		vm->nxtpc = vm->pc + 1;
+		inst = &vm->inst[vm->pc];
+		(*g_netvm_ops[inst->op])(vm);
+	}
+}
+
+
+static void run_max_cycles(struct netvm *vm, int maxcycles)
+{
+	struct netvm_inst *inst;
+
+	if (maxcycles <= 0) {
+		vm->status = NETVM_STATUS_OOCYCLES;
+		return;
+	}
+
+	vm->nxtpc = vm->pc;
+	while (vm->status == NETVM_STATUS_RUNNING) {
+		vm->pc = vm->nxtpc;
+		if (vm->pc >= vm->ninst) {
+			vm->status = NETVM_ERR_INSTADDR;
+			break;
+		}
+		vm->nxtpc = vm->pc + 1;
+		inst = &vm->inst[vm->pc];
+		(*g_netvm_ops[inst->op])(vm);
+		if (--maxcycles == 0) {
+			if (vm->status == NETVM_STATUS_RUNNING) {
+				vm->pc = vm->nxtpc;
+				vm->status = NETVM_STATUS_OOCYCLES;
+			}
+		} 
+	}
+}
+
+
 /* 0 if run ok and no retval, 1 if run ok and stack not empty, */
 /* -1 on error, -2 if max cycle count reached */
 int netvm_run(struct netvm *vm, int maxcycles, uint64_t *rv)
 {
-	struct netvm_inst *inst;
-
 	abort_unless(vm && vm->stack && vm->inst &&
 		     vm->ninst >= 0 && vm->ninst <= MAXINST);
-	vm->error = 0;
-	vm->running = 1;
 
-	if (vm->pc >= vm->ninst) {
-		if (vm->pc == vm->ninst) { 
-			vm->running = 0;
-		} else {
-			vm->error = NETVM_ERR_INSTADDR;
-			return -1;
-		}
-	}
+	vm->status = NETVM_STATUS_RUNNING;
 
-	while (vm->running) {
-		vm->nxtpc = vm->pc + 1;
-		inst = &vm->inst[vm->pc];
-		(*g_netvm_ops[inst->op])(vm);
+	if (maxcycles > 0)
+		run_max_cycles(vm, maxcycles);
+	else
+		run_to_completion(vm);
 
-		if (vm->error == 0) {
-			vm->pc = vm->nxtpc;
-			/* return -2 if we are out of cycles, but */
-			/* don't return -2 if program already halted */
-			if ((maxcycles > 0) && (--maxcycles == 0) && 
-			    vm->running) {
-				vm->running = 0;
-				return -2;
-			} else if (vm->pc >= vm->ninst) {
-				vm->running = 0;
-			} 
-		} else {
-			/* if there was an error do not alter the PC so that */
-			/* the erroneous error can be determined */
-			vm->running = 0;
-		}
-	}
-
-	if (vm->error) {
+	if (NETVM_STATUS_ISERR(vm->status)) {
 		return -1;
+	} else if (vm->status == NETVM_STATUS_OOCYCLES) {
+		return -2;
 	} else if (vm->sp == 0) {
 		return 0;
 	} else {
@@ -1801,7 +1823,7 @@ int netvm_run(struct netvm *vm, int maxcycles, uint64_t *rv)
 }
 
 
-static const char *val_error_strings[-(NETVM_ERR_MIN) + 1] = {
+static const char *val_error_strings[-(NETVM_VERR_MIN) + 1] = {
 	"ok",
 	"VM not properly initialized",
 	"Invalid opcode",
@@ -1817,8 +1839,7 @@ static const char *val_error_strings[-(NETVM_ERR_MIN) + 1] = {
 };
 
 
-static const char *rt_error_strings[NETVM_ERR_MAX+1] = {
-	"ok",
+static const char *rt_error_strings[NETVM_ERR_MAX] = {
 	"unimplemented instruction",
 	"stack overflow",
 	"stack underflow",
@@ -1850,11 +1871,13 @@ static const char *rt_error_strings[NETVM_ERR_MAX+1] = {
 
 const char *netvm_estr(int error)
 {
-	if ((error < NETVM_ERR_MIN) || (error > NETVM_ERR_MAX)) {
+	if ((error < NETVM_VERR_MIN) || 
+	    (error >= 0 && error < NETVM_ERR_MIN) || 
+	    (error > NETVM_ERR_MAX)) {
 		return "Unknown";
 	} else if (error < 0) {
 		return val_error_strings[-error];
 	} else {
-		return rt_error_strings[error];
+		return rt_error_strings[error - NETVM_ERR_MIN];
 	}
 }

@@ -48,4 +48,4 @@ start:
 	call
 	cpopi	cpout, prnum, 4, 0
 	cpopi	cpout, prstri, fibs3_mem.seg, fibs3
-	halt
+	halt	1

@@ -25,7 +25,5 @@ start:
 	ldi 4, RWSEG, 262
 	cpopi cpout, prhex, 4, 8
 	cpopi cpout, prstri, newline.seg, nl
-	halt
+	halt 1
 	
-
-

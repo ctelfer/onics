@@ -8,3 +8,4 @@ start:
 	ldpfi *0:net:0:prid[0]
 	push ipv6
 	eq
+	halt	1

@@ -3,13 +3,9 @@ done parsing:  optimizing the program
 Program has a valid START entry point
 Single stepping netvm program
 Executing instruction 0
-Stack: (SP = 1, BP = 0)
-	   0: 1 (0x1)
-Executing instruction 1
-Stack: (SP = 1, BP = 0)
-	   0: 1 (0x1)
-VM returned value 1 (0x1)
-Stack: (SP = 1, BP = 0)
-	   0: 1 (0x1)
+Stack: (SP = 0, BP = 0)
+VM provided no return value
+Stack: (SP = 0, BP = 0)
+Halt status SENDALL
 No PACKET entry point: no packet read/write
 No END entry point

@@ -19,11 +19,57 @@
  *  You should have received a copy of the GNU General Public License
  *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
+
+/*
+ * This file prototypes the interface for a program format for netvm programs.
+ * The programs described in this file format follow an AWK-style format
+ * where there are code snippits to run at the beginning and end of processing
+ * and then there are rule snippits to run on each packet in the stream.
+ * NetVM itself is not tied to this mode of operation.  So, perhaps this file
+ * should be renamed to be a bit more clear.  This file format is the one
+ * that the NetVM assembler (nvmas) currently targets and th NetVM packet 
+ * filter (nvmpf) currently runs.  
+ *
+ * This API provides the following:
+ *  - An external file format for NetVM programs
+ *  - Routines for loading, initializing and running programs from the format
+ *  - Conventions for moving packets through the programs in this format
+ *  - Debugging facilities for inspecting NetVM programs and their runtime
+ *    state.
+ */
 #ifndef __netvm_prog_h
 #define __netvm_prog_h
 
 #include "netvm.h"
 #include <stdio.h>
+
+/* 
+ * status conditions to be handled by the runtime environment 
+ *
+ *  - DONE expects a single boolean value on the stack.  It
+ *    indicates that the program should halt the current processing
+ *    (BEGIN block, END block or rules for this packet).  If the
+ *    boolean stack value is 'true' all remaining packets should be
+ *    sent.  Otherwise they should be discarded.
+ *
+ *  - SENDALL expects nothing on the stack but is equivalent to DONE
+ *    with a value of 1 on the top of the stack.
+ *
+ *  - DROPALL expects nothing on the stack but is equivalent to DONE
+ *    with a value of 0 on the top of the stack.
+ *
+ *  - SEND expects a packet number on the stack.  It indicates for
+ *    the runtime to transmit the packet and then re-enter execution.
+ * 
+ *  - EXIT expects a value on the stack.  It indicates that all
+ *    processing should immediately cease and the process should
+ *    should exit with the value on the stack modulo 256.
+ */ 
+#define NVMP_STATUS_DONE   	NETVM_STATUS_STOPPED
+#define NVMP_STATUS_SENDALL	NETVM_STATUS_RTDEF0
+#define NVMP_STATUS_DROPALL	NETVM_STATUS_RTDEF1
+#define NVMP_STATUS_SEND	NETVM_STATUS_RTDEF2
+#define NVMP_STATUS_EXIT 	NETVM_STATUS_RTDEF3
 
 struct netvm_segdesc {
 	uint			len;

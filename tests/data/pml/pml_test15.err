@@ -105,5 +105,6 @@ Stack: (SP = 3, BP = 0)
 	   2: 2 (0x2)
 	   1: 11 (0xb)
 	   0: 5 (0x5)
+Halt status DONE: top of stack 2
 No PACKET entry point: no packet read/write
 No END entry point
