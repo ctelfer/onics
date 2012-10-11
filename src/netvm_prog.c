@@ -576,7 +576,7 @@ void nvmp_prstk(FILE *f, struct netvm *vm)
 
 
 static int sendpkt(struct netvm *vm, uint64_t pn, FILE *f, FILE *dout,
-		   int flags)
+		   int flags, int freepkt)
 {
 	int debug = flags & NVMP_RUN_DEBUG;
 	struct pktbuf *p;
@@ -619,6 +619,16 @@ static int sendpkt(struct netvm *vm, uint64_t pn, FILE *f, FILE *dout,
 	if (debug)
 		fprintf(dout, "Sent packet\n");
 
+	if (freepkt) {
+		if (debug)
+			fprintf(dout, "Freeing packet buffer\n");
+		pkb_free(p);
+	} else {
+		if (debug)
+			fprintf(dout, "Reloading packet buffer\n");
+		netvm_load_pkt(vm, p, pn);
+	}
+
 	return 0;
 }
 
@@ -632,7 +642,7 @@ static int flushpkts(struct netvm *vm, int send, FILE *f, FILE *dout, int flags)
 	for (i = 0; i < NETVM_MAXPKTS; ++i) {
 		if (netvm_pkt_isvalid(vm, i)) {
 			if (send) {
-				if (sendpkt(vm, i, f, dout, flags) < 0)
+				if (sendpkt(vm, i, f, dout, flags, 1) < 0)
 					return -1;
 			} else {
 				if (debug)
@@ -762,6 +772,7 @@ restart:
 		return 0;
 
 	case NVMP_STATUS_SEND:
+	case NVMP_STATUS_SENDKEEP:
 		/* make sure there is a top of stack and send one packet */
 		if (rv == 0) {
 			if (debug)
@@ -776,7 +787,8 @@ restart:
 			        (int)tos);
 
 		S_POP_NOCK(vm, tos);
-		rv = sendpkt(vm, tos, pout, dout, flags);
+		rv = sendpkt(vm, tos, pout, dout, flags, 
+			     (status == NVMP_STATUS_SEND));
 		if (rv < 0 && !ignerr) {
 			return -1;
 		} else {

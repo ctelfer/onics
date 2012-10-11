@@ -2721,6 +2721,12 @@ static int cg_cfmod(struct pmlncg *cg, struct pml_cfmod *cfm)
 			return -1;
 		EMIT_NULL(cg, PKDEL);
 		break;
+	case PML_CFM_SENDNOFREE:
+		if (cg_expr(cg, (union pml_node *)cfm->expr,
+			    PML_ETYPE_SCALAR) < 0)
+			return -1;
+		EMIT_W(cg, HALT, NVMP_STATUS_SENDKEEP);
+		break;
 	}
 
 	return 0;

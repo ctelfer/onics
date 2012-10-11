@@ -375,7 +375,7 @@ enum {
 	PML_CFM_DROPALL,
 	PML_CFM_SENDONE,
 	PML_CFM_DROPONE,
-
+	PML_CFM_SENDNOFREE,
 };
 struct pml_cfmod {
 	int			type;

@@ -1498,12 +1498,12 @@ static const char *opstr(struct pml_op *op)
 
 static const char *cfm_strs[] = {
 	"unknown", "return", "break", "continue", "nextrule", "send(all)",
-	"drop(all)", "send(one)", "drop(one)"
+	"drop(all)", "send(one)", "drop(one)", "send w/o free"
 };
 static const char *cfmstr(struct pml_cfmod *m)
 {
 	abort_unless(m && m->cftype >= PML_CFM_UNKNOWN && 
-		     m->cftype <= PML_CFM_DROPONE);
+		     m->cftype <= PML_CFM_SENDNOFREE);
 	return cfm_strs[m->cftype];
 }
 

@@ -61,6 +61,10 @@
  *  - SEND expects a packet number on the stack.  It indicates for
  *    the runtime to transmit the packet and then re-enter execution.
  * 
+ *  - SENDKEEP expects a packet number on the stack.  It indicates for
+ *    the runtime to transmit the packet and then re-enter execution.
+ *    Unlike other transmits, this one should not free the packet buffer.
+ * 
  *  - EXIT expects a value on the stack.  It indicates that all
  *    processing should immediately cease and the process should
  *    should exit with the value on the stack modulo 256.
@@ -69,7 +73,8 @@
 #define NVMP_STATUS_SENDALL	NETVM_STATUS_RTDEF0
 #define NVMP_STATUS_DROPALL	NETVM_STATUS_RTDEF1
 #define NVMP_STATUS_SEND	NETVM_STATUS_RTDEF2
-#define NVMP_STATUS_EXIT 	NETVM_STATUS_RTDEF3
+#define NVMP_STATUS_SENDKEEP	NETVM_STATUS_RTDEF3
+#define NVMP_STATUS_EXIT 	NETVM_STATUS_RTDEF4
 
 struct netvm_segdesc {
 	uint			len;

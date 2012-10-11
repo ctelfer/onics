@@ -282,6 +282,7 @@ int pml_y_bpt() { return 1; }
 
 %type type { int }
 
+%type cfmekw { int }
 %type cfmkw { int }
 
 %type iddecl { struct ident }
@@ -748,10 +749,10 @@ stmt(S) ::= IF LPAREN expr(E) RPAREN stmtorlist(SLT) ELSE stmtorlist(SLF). {
 	S = (union pml_node *)ifs;
 }
 
-stmt(S) ::= RETURN expr(E) SEMICOLON.  {
+stmt(S) ::= cfmekw(M) expr(E) SEMICOLON.  {
 	struct pml_cfmod *m = pmln_alloc(ast, PMLTT_CFMOD);
 	if (m != NULL) {
-		m->cftype = PML_CFM_RETURN;
+		m->cftype = M;
 		m->expr = E;
 	} else {
 		pmln_free(E);
@@ -759,27 +760,11 @@ stmt(S) ::= RETURN expr(E) SEMICOLON.  {
 	S = (union pml_node *)m;
 }
 
-stmt(S) ::= SEND expr(E) SEMICOLON.  {
-	struct pml_cfmod *m = pmln_alloc(ast, PMLTT_CFMOD);
-	if (m != NULL) {
-		m->cftype = PML_CFM_SENDONE;
-		m->expr = E;
-	} else {
-		pmln_free(E);
-	}
-	S = (union pml_node *)m;
-}
-
-stmt(S) ::= DROP expr(E) SEMICOLON.  {
-	struct pml_cfmod *m = pmln_alloc(ast, PMLTT_CFMOD);
-	if (m != NULL) {
-		m->cftype = PML_CFM_DROPONE;
-		m->expr = E;
-	} else {
-		pmln_free(E);
-	}
-	S = (union pml_node *)m;
-}
+/* CFM keywords that can be used with an expression */
+cfmekw(M) ::= RETURN. { M = PML_CFM_RETURN; } 
+cfmekw(M) ::= SEND. { M = PML_CFM_SENDONE; } 
+cfmekw(M) ::= SENDNOFREE. { M = PML_CFM_SENDNOFREE; } 
+cfmekw(M) ::= DROP. { M = PML_CFM_DROPONE; } 
 
 stmt(S) ::= cfmkw(C) SEMICOLON. {
 	struct pml_cfmod *m = pmln_alloc(ast, PMLTT_CFMOD);
