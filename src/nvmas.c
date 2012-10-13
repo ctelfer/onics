@@ -503,7 +503,7 @@ static int read_pdesc(char *s, struct netvm_inst *ni, struct htab *ct)
 		return rv;
 	offset = v & NETVM_PPD_OFF_MASK;
 
-	ni->y = pktnum | NETVM_SEG_ISPKT;
+	ni->y = pktnum;
 	ni->z = (index << NETVM_PPD_IDX_OFF) | (field << NETVM_PPD_FLD_OFF);
 	ni->w = (prid << NETVM_PPD_PRID_OFF) | (offset << NETVM_PPD_OFF_OFF);
 
@@ -614,7 +614,7 @@ static int pdesc2str(const struct netvm_inst *ni, char *s, size_t len, int xa)
 		str_fmt(pfx, sizeof(pfx), "%u, ", ni->x);
 
 	/* example: *0:0x0103.0.0[3] */
-	str_fmt(s, len, "%s*%u:%u.%u.%u[%u]", pfx, (ni->y & ~NETVM_SEG_ISPKT), 
+	str_fmt(s, len, "%s*%u:%u:%u:%u[%u]", pfx, (ni->y & ~NETVM_SEG_ISPKT), 
 		prid, (ni->z >> NETVM_PPD_IDX_OFF) & NETVM_PPD_IDX_MASK,
 		(ni->z >> NETVM_PPD_FLD_OFF) & NETVM_PPD_FLD_MASK,
 		(ni->w >> NETVM_PPD_OFF_OFF) & NETVM_PPD_OFF_MASK);
@@ -1265,6 +1265,58 @@ void emit_program(struct asmctx *ctx, FILE *outfile)
 }
 
 
+static void write_meminit(FILE *f, struct netvm_meminit *mi, uint idx)
+{
+	char name[MAXSTR];
+	char init[MAXSTR];
+	int ilen;
+	int llen;
+	char *cp;
+	char *lp;
+	size_t nc;
+	uint off;
+	uint subidx = 0;
+
+	off = mi->off;
+	nc = mi->val.len;
+	cp = mi->val.data;
+	if (mi->val.data == NULL) {
+		snprintf(name, sizeof(name), "init-%u", idx);
+		fprintf(f, ".mem %s %u %u %u\n", name, mi->segnum, off,
+			(unsigned)nc);
+	} else {
+		while (nc > 0) {
+			snprintf(name, sizeof(name), "mi_%u_%u", idx, subidx);
+			lp = init;
+			for (ilen = 0, llen = 0; llen < 40 && nc > 0; 
+			     --nc, ++cp) {
+				if (isprint(*cp)) {
+					if (*cp == '"' || *cp == '\\') {
+						*lp++ = '\\';
+						++llen;
+					}
+					*lp++ = *cp;
+					++ilen;
+					++llen;
+				} else {
+					snprintf(lp, 5, "\\x%02x", *cp);
+					lp += 4;
+					llen += 4;
+					++ilen;
+				}
+			}
+			*lp = '\0';
+
+			fprintf(f, ".mem %s %u %u %u \"%s\"\n", name, mi->segnum,
+				off, ilen, init);
+			++subidx;
+			off += ilen;
+		}
+
+	}
+}
+
+
 void disassemble(FILE *infile, FILE *outfile)
 {
 	struct netvm_program prog;
@@ -1288,7 +1340,7 @@ void disassemble(FILE *infile, FILE *outfile)
 		sd = &prog.sdescs[i];
 		if (sd->perms == 0)
 			continue;
-		fprintf(outfile, ".segment %u, %u, %u\n", i, sd->perms, 
+		fprintf(outfile, ".segment %u %u %u\n", i, sd->perms, 
 			sd->len);
 	}
 
@@ -1297,6 +1349,9 @@ void disassemble(FILE *infile, FILE *outfile)
 			fprintf(outfile, ".coproc %u %llu\n", i, 
 			        (unsigned long long)prog.cpreqs[i]);
 	}
+
+	for (i = 0; i < prog.ninits; ++i)
+		write_meminit(outfile, &prog.inits[i], i);
 
 	fprintf(outfile, "\n# Instructions (%u total)\n", prog.ninst);
 	for (i = 0; i < prog.ninst; ++i) {

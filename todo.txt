@@ -6,23 +6,25 @@ Key:
   - -- Comment
 
 PML
- + warn when local variables shadow globals or packets
- + Add "standard include path/files"
  + More test cases (control flow especially)
- * send-without-free
- * command line arguments to programs
+ ? proper 'global' variable resolutions in functions and rules
+ ? Add "standard include path/files"
+ * command line arguments to programs (requires number parsing to be useful)
  * random() intrinsic
- > Hash table support
- > Data structure support (maybe just hash tables)
+ > Either hash table or multi-dimensional array support
 
 
-Proto parsing
+Protocol parsing & Namespace
  * Check restrictions on parsing to ensure termination.
+ > Allow extensible aspects of a namespace element and make the 
+   parsing formats one of those aspects.
+ > Add short-form parsing for protocols using the above.
  > More checking of ICMP/ICMPv6 packets by type.
  > MPLS
  > PPP
  > GRE
  > GTP
+ > v4inv6 and other tunnel formats
 
 
 x2hpkt:
@@ -30,24 +32,17 @@ x2hpkt:
 
 
 netvm_prog API:
- > Alter format to allow for coprocessor patching.
+ > Add coprocessor patching to the external format & loader.
 
-
-NetVM:
- ? Revise netvm cmp, pcmp and mskcmp to check lengths
 
 NetVM Coprocessors
  + Fix up / test regex compilation on error patterns (catlib).
  * DNS Resolver coprocessor
  * Generic C library netvm coprocessor
  > Hash table coprocessor
- > Backing store coprocessor for packets
+ > Backing store coprocessor for packets (replaces queue coprocessor)
  > Coprocessor for RNG
- ? Create compatible regex coprocessor for other regex libraries.
 
-
-nvas:
- * Have disassembler produce memory segment declarations
 
 pktmux/pktdemux:
  * Allow easier specification of sources and sinks rather than just shell 
