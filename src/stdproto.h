@@ -51,7 +51,7 @@ void unregister_std_proto();
 #define PRP_IPV6FLD_AHH		(PRP_OI_EXTRA + 2)
 #define PRP_IPV6FLD_FRAGH	(PRP_OI_EXTRA + 3)
 
-#define PRP_TCP_NXFIELDS	6
+#define PRP_TCP_NXFIELDS	7
 #define PRP_TCPFLD_MSS		(PRP_OI_EXTRA + 0)
 #define PRP_TCPFLD_WSCALE	(PRP_OI_EXTRA + 1)
 #define PRP_TCPFLD_SACKOK	(PRP_OI_EXTRA + 2)
