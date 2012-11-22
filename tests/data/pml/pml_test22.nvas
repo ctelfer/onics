@@ -1,10 +1,16 @@
 # Declarations
 .entry start 46
-.segment 0, 1, 172
+.segment 0 1 172
 .coproc 0 1
 .coproc 1 2
 .coproc 2 3
 .coproc 3 4
+.mem mi_0_0 0 0 34 "got fib(7) == 13\x0a\x00got fib2a(1) == "
+.mem mi_0_1 0 34 28 "1\x0a\x00got fib2a(2) == 1\x0a\x00got fi"
+.mem mi_0_2 0 62 31 "b2a(3) == 2\x0a\x00got fib2a(4) == 3\x0a"
+.mem mi_0_3 0 93 31 "\x00got fib2a(5) == 5\x0a\x00got fib2a(6"
+.mem mi_0_4 0 124 28 ") == 8\x0a\x00got fib2a(7) == 13\x0a\x00"
+.mem mi_0_5 0 152 20 "got fib2a(8) == 21\x0a\x00"
 
 # Instructions (119 total)
 #   0: 0x08 0x01 0x00 0x00 0x00000002

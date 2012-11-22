@@ -1,11 +1,31 @@
 # Declarations
 .entry start 0
-.segment 0, 1, 513
-.segment 1, 3, 16
+.segment 0 1 513
+.segment 1 3 16
 .coproc 0 1
 .coproc 1 2
 .coproc 2 3
 .coproc 3 4
+.mem mi_0_0 0 0 15 "\x11\"3DUfw\xff\xff\xff\xff\xff\xff\xff\xff"
+.mem mi_0_1 0 15 30 "\x00\x11\"3DUfw\xffbad length match for "
+.mem mi_0_2 0 45 34 "byte string\x0a\x00good length match fai"
+.mem mi_0_3 0 79 27 "l for byte string\x0a\x00\x11\"3DUfw\xff"
+.mem mi_0_4 0 106 34 "good byte match for byte string\x0a\x00b"
+.mem mi_0_5 0 140 32 "ad byte match for byte string\x0a\x00\x11"
+.mem mi_0_6 0 172 36 "\"3DUfw\xffbad byte match for byte strin"
+.mem mi_0_7 0 208 34 "g offset\x0a\x00good byte match fail for"
+.mem mi_0_8 0 242 25 " byte string offset\x0a\x00p\xff\xff\xff"
+.mem mi_0_9 0 267 28 "\xff\xff\xff\xffbad length match for mas"
+.mem mi_0_10 0 295 34 "k string\x0a\x00good length match fail f"
+.mem mi_0_11 0 329 22 "or mask string\x0a\x00p\xff\xff\xff\xff\xff"
+.mem mi_0_12 0 351 30 "\xff\xffgood match for mask string\x0a\x00"
+.mem mi_0_13 0 381 34 "bad match fail for mask string\x0a\x00p\xff"
+.mem mi_0_14 0 415 22 "\xff\xff\xff\xff\xff\xffbad match for ma"
+.mem mi_0_15 0 437 34 "sk string at wrong offset\x0a\x00good ma"
+.mem mi_0_16 0 471 40 "tch fail for mask string at wrong offset"
+.mem mi_0_17 0 511 2 "\x0a\x00"
+.mem mi_1_0 1 0 15 "\x11\"3DUfw\xff\xff\xff\xff\xff\xff\xff\xff"
+.mem mi_1_1 1 15 1 "\x00"
 
 # Instructions (139 total)
 #   0: 0x02 0x00 0x00 0x00 0x00000000

@@ -1,11 +1,14 @@
 # Declarations
 .entry start 44
-.segment 0, 1, 22
-.segment 1, 3, 24
+.segment 0 1 22
+.segment 1 3 24
 .coproc 0 1
 .coproc 1 2
 .coproc 2 3
 .coproc 3 4
+.mem mi_0_0 0 0 22 "foo bar baz ook \x00'\x00'\x0a\x00"
+.mem mi_1_0 1 0 16 "\x00\x00\x00\x00\x00\x00\x00\x01foo bar "
+.mem mi_1_1 1 16 8 "baz ook "
 
 # Instructions (63 total)
 #   0: 0x08 0x01 0x00 0x00 0x00000003

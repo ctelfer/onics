@@ -1,10 +1,21 @@
 # Declarations
 .entry packet 295
-.segment 0, 1, 279
+.segment 0 1 279
 .coproc 0 1
 .coproc 1 2
 .coproc 2 3
 .coproc 3 4
+.mem mi_0_0 0 0 31 "before\x0a\x00timestamp = \x00 seconds a"
+.mem mi_0_1 0 31 31 "nd \x00 nanoseconds\x0a\x00pre-snap leng"
+.mem mi_0_2 0 62 24 "th = \x00\x0a\x00input port = \x00\x0a\x00"
+.mem mi_0_3 0 86 30 "output port = \x00\x0a\x00flow id = 0x\x00"
+.mem mi_0_4 0 116 24 "\x0a\x00traffic class = 0x\x00\x0a\x00\x0a"
+.mem mi_0_5 0 140 28 "\x00after\x0a\x00timestamp = \x00 second"
+.mem mi_0_6 0 168 31 "s and \x00 nanoseconds\x0a\x00pre-snap l"
+.mem mi_0_7 0 199 26 "ength = \x00\x0a\x00input port = \x00\x0a"
+.mem mi_0_8 0 225 28 "\x00output port = \x00\x0a\x00flow id = "
+.mem mi_0_9 0 253 25 "0x\x00\x0a\x00traffic class = 0x\x00\x0a"
+.mem mi_0_10 0 278 1 "\x00"
 
 # Instructions (485 total)
 #   0: 0x08 0x01 0x00 0x00 0x00000002

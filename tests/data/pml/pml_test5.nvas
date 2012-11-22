@@ -1,10 +1,11 @@
 # Declarations
 .entry start 0
-.segment 0, 1, 13
+.segment 0 1 13
 .coproc 0 1
 .coproc 1 2
 .coproc 2 3
 .coproc 3 4
+.mem mi_0_0 0 0 13 "Hello World\x0a\x00"
 
 # Instructions (4 total)
 #   0: 0x02 0x00 0x00 0x00 0x00000000

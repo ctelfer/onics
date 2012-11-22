@@ -1,10 +1,12 @@
 # Declarations
 .entry start 0
-.segment 0, 1, 45
+.segment 0 1 45
 .coproc 0 1
 .coproc 1 2
 .coproc 2 3
 .coproc 3 4
+.mem mi_0_0 0 0 27 "(i,j) = (\x00,\x00)\x0a\x00(i,j,k) = (\x00"
+.mem mi_0_1 0 27 18 ",\x00,\x00)\x0a\x00keeping k\x0a\x00"
 
 # Instructions (82 total)
 #   0: 0x04 0x00 0x00 0x00 0x00000003
