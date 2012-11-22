@@ -2010,7 +2010,7 @@ static struct ns_pktfld ipv4_ns_opt =
 
 extern struct ns_elem *stdproto_ipv4_addr_ns_elems[STDPROTO_NS_SUB_ELEN];
 static struct ns_namespace ipv4_addr_ns = 
-	NS_NAMESPACE_I("addr", &ipv4_ns, PRID_INVALID, PRID_NONE,
+	NS_NAMESPACE_NOFLD("addr", &ipv4_ns, PRID_INVALID, PRID_NONE,
 		"Reserved IP addresses and address masks",
 		stdproto_ipv4_addr_ns_elems, 
 		array_length(stdproto_ipv4_addr_ns_elems));
@@ -2246,7 +2246,7 @@ static struct ns_pktfld tcp_ns_urgp =
 	NS_BYTEFIELD_I("urgp", &tcp_ns, PRID_TCP, 18, 2,
 		"Urgent Pointer:       %lu", &ns_fmt_num);
 static struct ns_pktfld tcp_ns_opt =
-	NS_BYTEFIELD_VARLEN_I("opt", &tcp_ns, PRID_TCP, 20, PRP_OI_SOFF,
+	NS_BYTEFIELD_VARLEN_I("opt", &tcp_ns, PRID_TCP, PRP_OI_SOFF, 20,
 		PRP_OI_POFF,
 		"TCP Options -- Offset %lu, Length %lu", &ns_fmt_hdr);
 
@@ -2261,7 +2261,7 @@ extern struct ns_elem *stdproto_tcp_md5_ns_elems[STDPROTO_NS_SUB_ELEN];
 /* TCP MSS Option */
 static struct ns_namespace tcp_mss_ns = 
 	NS_NAMESPACE_IDX_I("mss", &tcp_ns, PRID_TCP, PRID_NONE, PRP_TCPFLD_MSS, 4,
-		"TCP Maximum Segment Size Option -- Length %lu, Offset %lu",
+		"TCP Maximum Segment Size Option -- Offset %lu, Length %lu",
 		stdproto_tcp_mss_ns_elems,
 		array_length(stdproto_tcp_mss_ns_elems));
 static struct ns_pktfld tcp_mss_kind =
@@ -2282,7 +2282,7 @@ struct ns_elem *stdproto_tcp_mss_ns_elems[STDPROTO_NS_SUB_ELEN] = {
 static struct ns_namespace tcp_wscale_ns = 
 	NS_NAMESPACE_IDX_I("wscale", &tcp_ns, PRID_TCP, PRID_NONE,
 		PRP_TCPFLD_WSCALE, 4,
-		"TCP Window Scale Option -- Length %lu, Offset %lu",
+		"TCP Window Scale Option -- Offset %lu, Length %lu",
 		stdproto_tcp_wscale_ns_elems,
 		array_length(stdproto_tcp_wscale_ns_elems));
 static struct ns_pktfld tcp_wscale_kind =
@@ -2306,7 +2306,7 @@ struct ns_elem *stdproto_tcp_wscale_ns_elems[STDPROTO_NS_SUB_ELEN] = {
 static struct ns_namespace tcp_sackok_ns = 
 	NS_NAMESPACE_IDX_I("sackok", &tcp_ns, PRID_TCP, PRID_NONE,
 		PRP_TCPFLD_SACKOK, 2,
-		"TCP Window Scale Option -- Length %lu, Offset %lu",
+		"TCP Window Scale Option -- Offset %lu, Length %lu",
 		stdproto_tcp_sackok_ns_elems,
 		array_length(stdproto_tcp_sackok_ns_elems));
 static struct ns_pktfld tcp_sackok_kind =
@@ -2326,7 +2326,7 @@ static struct ns_namespace tcp_sack_ns =
 	NS_NAMESPACE_VARLEN_I("sack", &tcp_ns, PRID_TCP, PRID_NONE,
 		PRP_TCPFLD_SACK,
 		PRP_TCPFLD_SACK_END,
-		"TCP Selective Acknowledgement Option -- Length %lu, Offset %lu",
+		"TCP Selective Acknowledgement Option -- Offset %lu, Length %lu",
 		stdproto_tcp_sack_ns_elems,
 		array_length(stdproto_tcp_sack_ns_elems));
 static struct ns_pktfld tcp_sack_kind =
@@ -2352,7 +2352,7 @@ struct ns_elem *stdproto_tcp_sack_ns_elems[STDPROTO_NS_SUB_ELEN] = {
 static struct ns_namespace tcp_ts_ns = 
 	NS_NAMESPACE_IDX_I("ts", &tcp_ns, PRID_TCP, PRID_NONE,
 		PRP_TCPFLD_TSTAMP, 10,
-		"TCP Timestamp Option -- Length %lu, Offset %lu",
+		"TCP Timestamp Option -- Offset %lu, Length %lu",
 		stdproto_tcp_ts_ns_elems,
 		array_length(stdproto_tcp_ts_ns_elems));
 static struct ns_pktfld tcp_ts_kind =
@@ -2381,7 +2381,7 @@ struct ns_elem *stdproto_tcp_ts_ns_elems[STDPROTO_NS_SUB_ELEN] = {
 static struct ns_namespace tcp_md5_ns = 
 	NS_NAMESPACE_IDX_I("md5", &tcp_ns, PRID_TCP, PRID_NONE,
 		PRP_TCPFLD_MD5, 18,
-		"TCP MD5 Signature Option -- Length %lu, Offset %lu",
+		"TCP MD5 Signature Option -- Offset %lu, Length %lu",
 		stdproto_tcp_md5_ns_elems,
 		array_length(stdproto_tcp_md5_ns_elems));
 static struct ns_pktfld tcp_md5_kind =
@@ -2395,7 +2395,7 @@ static struct ns_pktfld tcp_md5_len =
 static struct ns_pktfld tcp_md5_sig =
 	NS_BYTEFIELD_IDX_I("sig", &tcp_md5_ns, PRID_TCP, PRP_TCPFLD_MD5,
 		2, 16, 
-		"Signature -- Length %lu, Offset %lu", &ns_fmt_hdr);
+		"Signature -- Offset %lu, Length %lu", &ns_fmt_hdr);
 struct ns_elem *stdproto_tcp_md5_ns_elems[STDPROTO_NS_SUB_ELEN] = {
 	(struct ns_elem *)&tcp_md5_kind, (struct ns_elem *)&tcp_md5_len,
 	(struct ns_elem *)&tcp_md5_sig,

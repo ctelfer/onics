@@ -22,8 +22,10 @@
 #include <stdio.h>
 #include <ctype.h>
 #include <limits.h>
+#include <stdlib.h>
 #include <cat/optparse.h>
 #include <cat/err.h>
+#include <string.h>
 #include "prid.h"
 #include "util.h"
 #include "pktbuf.h"
@@ -38,6 +40,25 @@ ulong g_pbase;
 ulong g_len;
 byte_t *g_p;
 int g_do_flush = 0;
+
+struct field {
+	struct list		le;
+	struct ns_elem *	elem;
+	struct prparse *	prp;
+	struct ns_namespace *	ns;
+	ulong			off;	/* in bits */
+	ulong			len;	/* in bits */
+	int			depth;
+	int			ishdr;
+};
+
+
+struct list free_fields;
+struct list packet_fields;
+struct list *next_field = NULL;
+
+#define l_to_field(_le) container((_le), struct field, le)
+
 
 struct clopt g_optarr[] = {
 	CLOPT_INIT(CLOPT_NOARG, 'x', "--keep-xhdr", "keep xpkt hdr in dump"),
@@ -93,15 +114,12 @@ void printsep()
 }
 
 
-void print_unparsed(ulong soff, ulong eoff, const char *pfx)
+void hexdump_at(ulong soff, ulong eoff)
 {
-	if (soff < eoff) {
-		printf("%s Data -- %lu bytes [%lu, %lu]\n", pfx, 
-		       eoff - soff, soff - g_pbase + g_ioff, 
-		       eoff - g_pbase + g_ioff);
-		hexdump(stdout, soff - g_pbase + g_ioff, g_p + soff, 
-			eoff - soff);
-	}
+	/* effective address == soff - (packet base + xpkt hdr off) */
+	/* pointer offset = g_p + soff */
+	/* length = end - start */
+	hexdump(stdout, soff - g_pbase + g_ioff, g_p + soff, eoff - soff);
 }
 
 
@@ -119,11 +137,84 @@ int getpfx(char *pfx, const char *in, uint plen)
 }
 
 
-ulong get_offset(struct ns_pktfld *pf, struct prparse *prp)
+static int off_is_valid(struct prparse *prp, uint oi)
 {
-	if ((pf->oidx >= prp->noff) || (prp->offs[pf->oidx] == PRP_OFF_INVALID))
+	return (oi < prp->noff) && (prp->offs[oi] != PRP_OFF_INVALID);
+}
+
+
+ulong get_pf_offset(struct ns_pktfld *pf, struct prparse *prp)
+{
+	if (!off_is_valid(prp, pf->oidx))
 		return PRP_OFF_INVALID;
-	return prp->offs[pf->oidx] + pf->off;
+	return (prp->offs[pf->oidx] + pf->off) * 8;
+}
+
+
+ulong get_ns_offset(struct ns_namespace *ns, struct prparse *prp)
+{
+	if (!off_is_valid(prp, ns->oidx))
+		return PRP_OFF_INVALID;
+	return prp->offs[ns->oidx] * 8;
+}
+
+
+ulong get_offset(struct ns_elem *e, struct prparse *prp)
+{
+	if (e->type == NST_NAMESPACE)
+		return get_ns_offset((struct ns_namespace *)e, prp);
+	else if (e->type == NST_PKTFLD)
+		return get_pf_offset((struct ns_pktfld *)e, prp);
+	else
+		return PRP_OFF_INVALID;
+}
+
+
+ulong get_pf_len(struct ns_pktfld *pf, struct prparse *prp)
+{
+	ulong soff, eoff;
+
+	abort_unless(pf->oidx < prp->noff);
+
+	soff = prp->offs[pf->oidx];
+	abort_unless(soff != PRP_OFF_INVALID);
+
+	if (NSF_IS_VARLEN(pf->flags)) {
+		abort_unless(pf->len < prp->noff);
+		abort_unless(prp->offs[pf->len] != PRP_OFF_INVALID);
+		eoff = prp->offs[pf->len];
+		abort_unless(eoff >= soff);
+		return (eoff - soff) * 8;
+	} else if (NSF_IS_INBITS(pf->flags)) {
+		abort_unless(pf->len <= 32);
+		return NSF_BITOFF(pf->flags) + pf->len * 8;
+	} else {
+		return pf->len * 8;
+	}
+}
+
+
+ulong get_ns_len(struct ns_namespace *ns, struct prparse *prp)
+{
+	abort_unless(off_is_valid(prp, ns->oidx));
+
+	if (NSF_IS_VARLEN(ns->flags)) {
+		abort_unless(off_is_valid(prp, ns->len));
+		return (prp->offs[ns->len] - prp->offs[ns->oidx]) * 8;
+	} else {
+		return ns->len * 8;
+	}
+}
+
+
+ulong get_len(struct ns_elem *e, struct prparse *prp)
+{
+	if (e->type == NST_NAMESPACE)
+		return get_ns_len((struct ns_namespace *)e, prp);
+	else if (e->type == NST_PKTFLD)
+		return get_pf_len((struct ns_pktfld *)e, prp);
+	else
+		abort_unless(0);
 }
 
 
@@ -156,113 +247,272 @@ void printerr(uint err)
 }
 
 
-#define MAXLINE		256
-#define MAXPFX		16
-void print_ns(struct ns_namespace *ns, struct prparse *prp, ulong soff,
-	      ulong eoff, char line[MAXLINE])
+int get_depth(struct prparse *prp)
 {
-	ulong foff;
-	struct ns_pktfld *pf;
-	struct raw r;
-	int rv;
-	int plen;
 	int i;
+	for (i = 0; prp != NULL; prp = prp->region, ++i)
+		;
+	return i;
+}
 
-	plen = getpfx(line, ns->name, 16);
-	r.data = line + plen;
-	r.len = MAXLINE - plen;
 
-	if (ns->prid != PRID_INVALID && ns->oidx == PRP_OI_SOFF) {
-		printsep();
-		rv = (*ns->fmt)((struct ns_elem *)ns, g_p, prp, &r);
-		if (rv >= 0) {
-			fputs(line, stdout);
-			fputc('\n', stdout);
-		}
-		printerr(prp->error);
-		printsep();
+void init_fields()
+{
+	l_init(&free_fields);
+	l_init(&packet_fields);
+}
+
+
+struct field *alloc_field()
+{
+	struct list *l;
+	struct field *f;
+
+	if (l = l_deq(&free_fields)) {
+		f = l_to_field(l);
+		memset(f, 0, sizeof(*f));
+	} else {
+		f = (struct field *)calloc(sizeof(*f), 1);
 	}
 
-	for (i = 0; i < ns->nelem; ++i) {
-		if (ns->elems[i] == NULL)
+	return f;
+}
+
+
+int field_cmp(struct field *f1, struct field *f2)
+{
+	if (f1->off > f2->off)
+		return 1;
+	if (f1->off == f2->off)
+		return f2->depth - f1->depth;
+	return -1;
+}
+
+
+void insert_field(struct field *f)
+{
+	struct list *trav;
+
+	l_for_each_rev(trav, &packet_fields)
+		if (field_cmp(l_to_field(trav), f) <= 0)
 			break;
-		if (ns->elems[i]->type == NST_NAMESPACE) {
-			print_ns((struct ns_namespace *)ns->elems[i], prp, 
-				 soff, eoff, line);
-		} else if (ns->elems[i]->type == NST_PKTFLD) {
-			pf = (struct ns_pktfld *)ns->elems[i];
-			foff = get_offset(pf, prp);
-			if ((foff >= soff) && (foff < eoff)) {
-				rv = (*pf->fmt)(ns->elems[i], g_p, prp, &r);
-				if (rv >= 0) {
-					fputs(line, stdout);
-					fputc('\n', stdout);
-				}
+
+	l_ins(trav, &f->le);
+}
+
+
+void release_fields()
+{
+	l_move(&packet_fields, &free_fields);
+}
+
+
+int add_fields(struct prparse *prp, struct ns_namespace *ns)
+{
+	ulong off;
+	int i, j;
+	struct ns_elem *e;
+	struct field *f;
+	struct ns_namespace *subns;
+	int depth;
+
+	depth = get_depth(prp);
+
+	if (ns == NULL) {
+		ns = ns_lookup_by_prid(prp->prid);
+		if (ns == NULL)
+			return 0; 
+		
+		if ((f = alloc_field()) == NULL)
+			return -1;
+
+		f->elem = (struct ns_elem *)ns;
+		f->prp = prp;
+		f->ns = ns;
+		f->off = prp_soff(prp) * 8;
+		f->len = prp_totlen(prp) * 8;
+		f->depth = depth;
+		f->ishdr = 1;
+
+		insert_field(f);
+	}
+			
+	for (i = 0; i < ns->nelem; ++i) {
+		e = ns->elems[i];
+
+		if (e == NULL)
+			break;
+
+		off = get_offset(e, prp);
+		if (off == PRP_OFF_INVALID)
+			continue;
+
+		if ((f = alloc_field()) == NULL)
+			return -1;
+
+		f->elem = e;
+		f->prp = prp;
+		f->ns = ns;
+		f->off = off;
+		f->len = get_len(e, prp);
+		f->depth = depth;
+
+		insert_field(f);
+			
+		if (e->type == NST_NAMESPACE) {
+			subns = (struct ns_namespace *)e;
+			if (add_fields(prp, subns) < 0)
+				return -1;
+		}
+	}
+
+	return 0;
+}
+
+
+#define MAXLINE		256
+#define MAXPFX		16
+/* print all the fields in the array up through eoff */
+void print_fields(ulong eoff)
+{
+	char line[MAXLINE];
+	struct raw r;
+	struct ns_elem *e;
+	struct ns_namespace *ns, *lastns = NULL;
+	struct ns_pktfld *pf;
+	struct field *f;
+	int rv;
+	int i;
+
+
+	while (next_field != l_end(&packet_fields)) {
+
+		f = l_to_field(next_field);
+
+		if (f->off >= eoff)
+			return;
+
+		e = f->elem;
+		/* check for change of prefix */
+		if (f->ns != lastns) {
+			i = getpfx(line, f->ns->name, MAXPFX);
+			r.data = line + i;
+			r.len = MAXLINE - i;
+		}
+
+		if (e->type == NST_NAMESPACE) {
+			ns = (struct ns_namespace *)e;
+			printsep();
+			rv = (*ns->fmt)(e, g_p, f->prp, &r);
+			if (rv >= 0) {
+				fputs(line, stdout);
+				fputc('\n', stdout);
+			}
+			if (f->ishdr)
+				printerr(f->prp->error);
+			printsep();
+		} else {
+			pf = (struct ns_pktfld *)e;
+			rv = (*pf->fmt)(e, g_p, f->prp, &r);
+			if (rv >= 0) {
+				fputs(line, stdout);
+				fputc('\n', stdout);
 			}
 		}
+
+		next_field = l_next(next_field);
 	}
 }
 
 
 
 /* 
- * Print fields between soff and feoff.  Print data between soff and
- * deoff.
+ * Print fields and data between soff and eoff.
  */
-void print_parse(struct prparse *prp, ulong soff, ulong feoff, ulong deoff,
-		 int print_fields)
+void dump_data(struct prparse *prp, ulong soff, ulong eoff, int prhdr)
 {
-	char line[MAXLINE];
+	char pfx[MAXPFX];
 	struct ns_namespace *ns;
+	int rv = 0;
+	ulong sbyte, ebyte;
+
+	if (soff >= eoff)
+		return;
+
+	sbyte = (soff + 7) / 8;
+	ebyte = (eoff + 7) / 8;
 
 	ns = ns_lookup_by_prid(prp->prid);
-	if (ns == NULL) {
-		if ( prp->prid == PRID_NONE )
-			snprintf(line, MAXPFX, "# DATA: ");
-		else
-			snprintf(line, MAXPFX, "# PRID-%u: ", prp->prid);
-		print_unparsed(soff, deoff, line);
-	} else if (print_fields) {
-		print_ns(ns, prp, soff, feoff, line);
-		hexdump(stdout, soff - g_pbase + g_ioff, g_p + soff, 
-			deoff - soff);
-	} else {
-		getpfx(line, ns->name, 16);
-		print_unparsed(soff, deoff, line);
-	}
+
+	if (ns != NULL)
+		getpfx(pfx, ns->name, MAXPFX);
+	else if (prp->prid == PRID_NONE)
+		snprintf(pfx, MAXPFX, "# DATA: ");
+	else
+		snprintf(pfx, MAXPFX, "# PRID-%u: ", prp->prid);
+
+	if (prhdr)
+		printf("%s Data -- %lu bytes [%lu, %lu]\n", pfx, 
+		       ebyte - sbyte, sbyte - g_pbase + g_ioff, 
+		       ebyte - g_pbase + g_ioff);
+
+	hexdump_at(sbyte, ebyte);
 }
 
 
 
-ulong walk_parse(struct prparse *from, struct prparse *region, ulong off)
+ulong walk_and_print_parse(struct prparse *from, struct prparse *region,
+			   ulong off)
 {
 	struct prparse *next;
+	ulong soff, eoff;
 
-	if ((next = prp_next_in_region(from, region)) != NULL) {
-		if (off < prp_soff(next))
-			print_parse(region, off, prp_soff(next),
-				    prp_soff(next), 0);
-
-		print_parse(next, prp_soff(next), prp_toff(next), 
-			    prp_poff(next), 1);
-
-		off = walk_parse(next, next, prp_poff(next));
-
-		if (off < prp_eoff(next)) {
-			print_parse(next, off, prp_eoff(next), prp_eoff(next), 
-				    1);
-			off = prp_eoff(next);
+	if ((next = prp_next_in_region(from, region)) == NULL) {
+		eoff = (prp_list_head(region) ? prp_toff(region) :
+		        prp_eoff(region)) * 8;
+		if (off < eoff) {
+			print_fields(eoff);
+			dump_data(region, off, eoff, 1);
 		}
-
-		return walk_parse(next, region, off);
-	} else { 
-		ulong eoff = prp_list_head(region) ? 
-				prp_toff(region) : 
-				prp_eoff(region);
-		if (off < eoff)
-			print_parse(region, off, eoff, eoff, 0);
 		return eoff;
 	}
+
+	soff = prp_soff(next) * 8;
+	eoff = prp_poff(next) * 8;
+
+	if (off < soff) {
+		print_fields(eoff);
+		dump_data(region, off, soff, from != region);
+	}
+
+	print_fields(eoff);
+	dump_data(next, soff, eoff, 0);
+
+	off = walk_and_print_parse(next, next, eoff);
+
+	eoff = prp_eoff(next) * 8;
+	if (off < eoff) {
+		print_fields(eoff);
+		dump_data(next, off, eoff, 1);
+		off = eoff;
+	}
+
+	return walk_and_print_parse(next, region, off);
+}
+
+
+void gather_fields(struct prparse *pktp)
+{
+	struct prparse *prp;
+	for (prp = prp_next(pktp) ; !prp_list_end(prp) ; prp = prp_next(prp))
+		if (add_fields(prp, NULL) < 0)
+			err("Out of memory for packet %lu\n", g_pktnum);
+}
+
+
+void reset_field_pointer()
+{
+	next_field = l_head(&packet_fields);
 }
 
 
@@ -299,11 +549,16 @@ void dump_to_hex_packet(struct pktbuf *pkb)
 		printsep();
 	}
 
-	walk_parse(prp, prp, prp_poff(prp));
+	gather_fields(prp);
+	reset_field_pointer();
+
+	walk_and_print_parse(prp, prp, prp_poff(prp) * 8);
 
 	printf("\n\n");
 	if (g_do_flush)
 		fflush(stdout);
+
+	release_fields();
 }
 
 
@@ -314,7 +569,10 @@ int main(int argc, char *argv[])
 
 	optparse_reset(&g_oparser, argc, argv);
 	parse_options();
+
 	register_std_proto();
+
+	init_fields();
 
 	pkb_init(1);
 

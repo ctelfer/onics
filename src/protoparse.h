@@ -145,6 +145,7 @@ struct prparse_ops {
 #define PRP_OI_EOFF 3
 #define PRP_OI_MIN_NUM 4
 #define PRP_OI_EXTRA PRP_OI_MIN_NUM
+#define PRP_OI_INVALID ((uint)-1)
 #define PRP_OFF_INVALID ((ulong)-1)
 #define PRP_OFF_MAX (((ulong)-1) - 1)
 

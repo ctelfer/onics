@@ -83,6 +83,10 @@ struct ns_namespace {
 	{ NST_NAMESPACE, (NSF_VARLEN), (par), (name), (prid), (pc),	    \
 	  PRP_OI_SOFF, PRP_OI_EOFF, (desc), &ns_fmt_hdr, (elems), (nelem) }
 
+#define NS_NAMESPACE_NOFLD(name, par, prid, pc, desc, elems, nelem)	    \
+	{ NST_NAMESPACE, (NSF_VARLEN), (par), (name), (prid), (pc),	    \
+	  PRP_OI_INVALID, PRP_OI_INVALID, (desc), &ns_fmt_hdr, (elems), (nelem)}
+
 #define NS_NAMESPACE_IDX_I(name, par, prid, pc, oidx, len, desc, elems, nelem)\
 	{ NST_NAMESPACE, 0, (par), (name), (prid), (pc), (oidx), 	      \
 	  (len), (desc), &ns_fmt_hdr, (elems), (nelem) }
