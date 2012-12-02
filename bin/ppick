@@ -20,20 +20,19 @@ LO=`getarg $1`
 if [ $# -gt 1 ]
 then
 	HI=`getarg $2`
+	echo "LO = '$LO', HI = '$HI'" >&2 
+	pml -e "
+		int P = 0;
+		int allow = 0;
+
+		{ P = P + 1; }
+		?- $LO -? { allow = 1; }
+		?- allow -? { send_no_free 0; }
+		?- $HI -? { allow = 0; drop; }
+		{ drop; }
+	"
 else
-	HI=1
+	pml -e "?- not ($LO) -? { drop; }"
 fi
 
-echo "LO = '$LO', HI = '$HI'" >&2 
 
-pml -e "
-	int P = 0;
-	int dropit = 0;
-	int allow = 0;
-
-	{ P = P + 1; dropit = 1; }
-
-	?- $LO -? { allow = 1; dropit = 0; }
-	?- $HI -? { allow = 0; }
-	?- dropit and not allow -? { drop; }
-"

@@ -26,6 +26,9 @@
 #include <signal.h>
 #include <unistd.h>
 #include <sys/time.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 #include <cat/err.h>
 #include <cat/optparse.h>
 #include <cat/time.h>
@@ -33,6 +36,7 @@
 ulong g_npkts = 0;
 double g_start_delay = 0.0;
 double g_interval = 0.0;
+char *infile;
 
 struct clopt g_optarr[] = {
 	CLOPT_INIT(CLOPT_NOARG, 'h', "--help", "print help"),
@@ -50,15 +54,16 @@ void usage(const char *estr)
 	if (estr != NULL)
 		fprintf(stderr, "Error -- %s\n", estr);
 	optparse_print(&g_oparser, ubuf, sizeof(ubuf));
-	err("usage: %s [options]\n" "%s", g_oparser.argv[0], ubuf);
+	err("usage: %s [options] [file]\n" "%s", g_oparser.argv[0], ubuf);
 }
 
 
-void parse_options()
+void parse_args(int argc, char *argv[], int *fd)
 {
 	int rv;
 	struct clopt *opt;
 
+	optparse_reset(&g_oparser, argc, argv);
 	while (!(rv = optparse_next(&g_oparser, &opt))) {
 		switch (opt->ch) {
 		case 'd':
@@ -73,25 +78,29 @@ void parse_options()
 	}
 	if (rv < 0)
 		usage(g_oparser.errbuf);
-	if (g_oparser.argc - rv != 0)
-		usage("Extra arguments present");
+
+	if (rv < argc) {
+		*fd = open(argv[rv], O_RDONLY);
+		if (*fd < 0)
+			errsys("unable to open file '%s'", argv[rv]);
+	}
 }
 
 
-void alarm_handler(int sig)
+void sleepfor(cat_time_t amt, cat_time_t start)
 {
-}
+	cat_time_t elapsed;
 
+	if (tm_gtz(amt)) {
+		while (tm_sec(amt) > 0) {
+			sleep(tm_sec(amt));
+			elapsed = tm_sub(tm_uget(), start);
+			amt = tm_sub(amt, elapsed);
+		} 
 
-void sleepfor(struct cat_time *amt)
-{
-	struct itimerval it;
-	it.it_interval.tv_sec = 0;
-	it.it_interval.tv_usec = 0;
-	it.it_value.tv_sec = amt->sec;
-	it.it_value.tv_usec = amt->nsec / 1000;
-	setitimer(ITIMER_REAL, &it, NULL);
-	pause();
+		if (tm_gtz(amt))
+			usleep(tm_nsec(amt) / 1000);
+	}
 }
 
 
@@ -99,42 +108,49 @@ int main(int argc, char *argv[])
 {
 	int rv;
 	struct pktbuf *p;
-	struct cat_time cur = { 0, 0 }, next, diff;
+	cat_time_t pkts, now, base_now, base_pkts, dp, dn;
 	struct xpkt_tag_ts *ts;
+	int infd = 0;
 
 	pkb_init(1);
 
-	signal(SIGALRM, alarm_handler);
-	if (g_start_delay > 0) {
-		struct cat_time t;
-		sleepfor(tm_dset(&t, g_start_delay));
-	}
+	parse_args(argc, argv, &infd);
 
-	while ((rv = pkb_fd_read(&p, 0)) > 0) {
+	if (g_start_delay > 0)
+		sleepfor(tm_dset(g_start_delay), tm_uget());
+
+	while ((rv = pkb_fd_read(&p, infd)) > 0) {
+		now = tm_uget();
+
 		ts = (struct xpkt_tag_ts *)pkb_find_tag(p, XPKT_TAG_TIMESTAMP, 0);
-		if (ts) {
-			tm_lset(&next, ts->sec, ts->nsec);
-		} else {
-			/* free all packets that lack timestamp fields */
-			pkb_free(p);
-			continue;
-		}
 
-		if (next.sec < 0 || next.nsec < 0) {
-			fprintf(stderr,
-				"Invalid timestamp on packet %lu (%ld.%09ld)",
-				g_npkts + 1, next.sec, next.nsec);
-			continue;
-		}
-		if (++g_npkts == 1)
-			cur = next;
+		++g_npkts;
 
 		if (g_interval > 0.0) {
-			sleepfor(tm_dset(&diff, g_interval));
-		} else if (tm_cmp(&next, &cur) > 0) {
-			diff = next;
-			sleepfor(tm_sub(&diff, &cur));
-			cur = next;
+			sleepfor(tm_dset(g_interval), now);
+		} else if (ts) {
+			pkts = tm_lset(ts->sec, ts->nsec);
+
+			if (tm_ltz(pkts)) {
+				fprintf(stderr,
+					"Invalid timestamp on packet %lu "
+					"(%ld,%ld)\n",
+					g_npkts, tm_sec(pkts), tm_nsec(pkts));
+				pkb_free(p);
+				continue;
+			}
+
+			if (g_npkts == 1) {
+				base_now = now;
+				base_pkts = pkts;
+			}
+
+			dn = tm_sub(now, base_now);
+			dp = tm_sub(pkts, base_pkts);
+			if (tm_cmp(dp, dn) > 0)
+				sleepfor(tm_sub(dp, dn), now);
+		} else {
+			fprintf(stderr, "no timestamp on packet %lu: sending\n", g_npkts);
 		}
 
 		rv = pkb_pack(p);
@@ -144,7 +160,7 @@ int main(int argc, char *argv[])
 		pkb_free(p);
 	}
 	if (rv < 0)
-		errsys("Error reading packet %lu", g_npkts + 1);
+		errsys("Error reading packet %lu: ", g_npkts + 1);
 
 	return 0;
 }

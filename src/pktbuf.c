@@ -367,7 +367,7 @@ int pkb_fd_read(struct pktbuf **pkbp, int fd)
 
 	abort_unless((fd >= 0) && pkbp);
 
-	if ((nr = io_read(fd, &xh, sizeof(XPKT_HLEN))) < XPKT_HLEN)
+	if ((nr = io_read(fd, &xh, XPKT_HLEN)) < XPKT_HLEN)
 		return (nr == 0) ? 0 : -1;
 	xpkt_unpack_hdr(&xh);
 	if (xpkt_validate_hdr(&xh) < 0) {
