@@ -701,7 +701,7 @@ struct xpkt *pkb_get_xpkt(struct pktbuf *pkb)
 
 struct xpkt_tag_hdr *pkb_next_tag(struct pktbuf *pkb, struct xpkt_tag_hdr *t)
 {
-	abort_unless(pkb && t);
+	abort_unless(pkb);
 	if ((pkb->flags & PKB_F_PACKED))
 		return NULL;
 	return xpkt_next_tag(pkb->xpkt, t);

@@ -516,6 +516,72 @@ void reset_field_pointer()
 }
 
 
+void dump_xpkt_meta(struct pktbuf *pkb)
+{
+	struct xpkt_tag_hdr *t;
+	struct xpkt_tag_ts *ts;
+	struct xpkt_tag_snapinfo *si;
+	struct xpkt_tag_iface *ifa;
+	struct xpkt_tag_flowid *f;
+	struct xpkt_tag_class *c;
+	struct xpkt_tag_seq *seq;
+	struct xpkt_tag_parseinfo *pi;
+
+	for (t = pkb_next_tag(pkb, NULL); t != NULL; t = pkb_next_tag(pkb, t)) {
+		switch (t->type) {
+		case XPKT_TAG_NOP: break;
+
+		case XPKT_TAG_TIMESTAMP: 
+			ts = (struct xpkt_tag_ts *)t;
+			printf("# XPKT: Timestamp = %lu sec and %lu nsec\n",
+			       (ulong)ts->sec, (ulong)ts->nsec);
+			break;
+
+		case XPKT_TAG_SNAPINFO: 
+			si = (struct xpkt_tag_snapinfo *)t;
+			printf("# XPKT: Packet snapped: wire length = %lu\n",
+			       (ulong)si->wirelen);
+			break;
+
+		case XPKT_TAG_INIFACE:
+			ifa = (struct xpkt_tag_iface *)t;
+			printf("# XPKT: Incoming interface = %u\n",
+			       (uint)ifa->iface);
+			break;
+
+		case XPKT_TAG_OUTIFACE:
+			ifa = (struct xpkt_tag_iface *)t;
+			printf("# XPKT: Outgoing interface = %u\n",
+			       (uint)ifa->iface);
+			break;
+
+		case XPKT_TAG_FLOW:
+			f = (struct xpkt_tag_flowid *)t;
+			printf("# XPKT: Flow id = %llu\n", (ullong)f->flowid);
+			break;
+
+		case XPKT_TAG_CLASS:
+			c = (struct xpkt_tag_class *)t;
+			printf("# XPKT: Packet class = %llu\n", (ullong)c->tag);
+			break;
+
+		case XPKT_TAG_SEQ:
+			seq = (struct xpkt_tag_seq *)t;
+			printf("# XPKT: Packet sequence number = %llu\n",
+			       (ullong)seq->seq);
+			break;
+
+		case XPKT_TAG_PARSEINFO:
+			pi = (struct xpkt_tag_parseinfo *)t;
+			printf("# XPKT: Parse info for proto %04x: "
+			       "off = %llu, length = %llu\n",
+			       (uint)pi->proto, (ullong)pi->off, (ullong)pi->len);
+			break;
+		}
+	}
+}
+
+
 void dump_to_hex_packet(struct pktbuf *pkb)
 {
 	struct prparse *prp;
@@ -533,10 +599,9 @@ void dump_to_hex_packet(struct pktbuf *pkb)
 		printsep();
 		printf("# Packet %lu -- %lu bytes\n", g_pktnum, g_len + g_ioff);
 		printsep();
-		printf("# eX-Packet Header %lu bytes\n", g_ioff);
+		printf("# XPKT: eX-PacKeT Header %lu bytes\n", g_ioff);
 		printsep();
-
-		/* TODO: write up parsing for tags */
+		dump_xpkt_meta(pkb);
 
 		if ((rv = pkb_pack(pkb)) < 0)
 			err("Error packing packet %lu: %d\n", g_pktnum, rv);
