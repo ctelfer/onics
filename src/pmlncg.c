@@ -670,7 +670,7 @@ static int _i_cg_mget(struct pmlncg *cg, struct pml_function *f,
 		      struct cg_intr *intr)
 {
 	struct pml_ibuf *b = &cg->ibuf;
-	struct cg_meta_ctx *x = intr->ctx;;
+	struct cg_meta_ctx *x = intr->ctx;
 	struct cg_func_ctx *fc = (struct cg_func_ctx *)f->cgctx;
 
 	abort_unless(x);
@@ -803,6 +803,7 @@ struct cg_meta_ctx _i_inp_ctx = { 2, XPKT_TAG_INIFACE, 2, 0, 0x03000000 };
 struct cg_meta_ctx _i_outp_ctx = { 2, XPKT_TAG_OUTIFACE, 2, 0, 0x04000000 };
 struct cg_meta_ctx _i_flow_ctx = { 8, XPKT_TAG_FLOW, 4, 0, 0x05020000 };
 struct cg_meta_ctx _i_class_ctx = { 8, XPKT_TAG_CLASS, 4, 0, 0x06020000 };
+struct cg_meta_ctx _i_seq_ctx = { 8, XPKT_TAG_SEQ, 4, 0, 0x07020000 };
 
 struct cg_intr intrinsics[] = { 
 	{ "str_len", NULL, _i_str, NULL, 2, 
@@ -867,12 +868,14 @@ struct cg_intr intrinsics[] = {
 	{ "meta_get_outport", _i_cg_mget, NULL, &_i_outp_ctx,  0, { {0} } },
 	{ "meta_get_flowid",  _i_cg_mget, NULL, &_i_flow_ctx,  0, { {0} } },
 	{ "meta_get_class",   _i_cg_mget, NULL, &_i_class_ctx, 0, { {0} } },
+	{ "meta_get_seq",     _i_cg_mget, NULL, &_i_seq_ctx,   0, { {0} } },
 	{ "meta_set_tstamp",  _i_cg_mset, NULL, &_i_ts_ctx,    0, { {0} } },
 	{ "meta_set_presnap", _i_cg_mset, NULL, &_i_snap_ctx,  0, { {0} } },
 	{ "meta_set_inport",  _i_cg_mset, NULL, &_i_inp_ctx,   0, { {0} } },
 	{ "meta_set_outport", _i_cg_mset, NULL, &_i_outp_ctx,  0, { {0} } },
 	{ "meta_set_flowid",  _i_cg_mset, NULL, &_i_flow_ctx,  0, { {0} } },
 	{ "meta_set_class",   _i_cg_mset, NULL, &_i_class_ctx, 0, { {0} } },
+	{ "meta_set_seq",     _i_cg_mset, NULL, &_i_seq_ctx,   0, { {0} } },
 
 	{ "exit", NULL, _i_scarg, 0, 1, 
 		{ NETVM_OP(HALT,0,0,0,NVMP_STATUS_EXIT) } },

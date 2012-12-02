@@ -214,8 +214,9 @@ int xpkt_del_tag(struct xpkt *x, byte_t tag, int idx, int pulldown);
 #define XPKT_TAG_OUTIFACE	4
 #define XPKT_TAG_FLOW		5
 #define XPKT_TAG_CLASS		6
-#define XPKT_TAG_PARSEINFO	7
-#define XPKT_TAG_NUM_TYPES	8	/* Number of basic types defined */
+#define XPKT_TAG_SEQ		7
+#define XPKT_TAG_PARSEINFO	8
+#define XPKT_TAG_NUM_TYPES	9	/* Number of basic types defined */
 
 #define XPKT_TAG_INVALID	127
 #define XPKT_TAG_ANY		XPKT_TAG_INVALID
@@ -301,10 +302,23 @@ struct xpkt_tag_class {
 void xpkt_tag_class_init(struct xpkt_tag_class *t, uint64_t tag);
 
 
+#define XPKT_TAG_SEQ_NWORDS		2
+ONICS_PACK_DECL(
+struct xpkt_tag_seq {
+	byte_t			type;	/* 7 */
+	byte_t			nwords; /* 2 */
+	uint16_t		zero;	/* 0 */
+	uint64_t		seq;
+}
+);
+
+void xpkt_tag_seq_init(struct xpkt_tag_seq *t, uint64_t seq);
+
+
 #define XPKT_TAG_PARSEINFO_NWORDS	2
 ONICS_PACK_DECL(
 struct xpkt_tag_parseinfo {
-	byte_t			type;	/* 6 */
+	byte_t			type;	/* 8 */
 	byte_t			nwords; /* 2 */
 	uint16_t		proto;
 	uint32_t		off;
@@ -318,7 +332,7 @@ void xpkt_tag_pi_init(struct xpkt_tag_parseinfo *t, uint16_t proto,
 
 ONICS_PACK_DECL(
 struct xpkt_tag_appinfo {
-	byte_t			type;	/* 6 */
+	byte_t			type;	/* 128 */
 	byte_t			nwords; /* 0+ */
 	uint16_t		subtype;
 	byte_t			data[255 * 4];

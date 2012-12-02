@@ -111,6 +111,21 @@ static void class_pack(struct xpkt_tag_hdr *xth)
 }
 
 
+/* sequence tag */
+static void seq_unpack(struct xpkt_tag_hdr *xth)
+{
+	struct xpkt_tag_seq *xts = (struct xpkt_tag_seq *)xth;
+	xts->seq = ntoh64(xts->seq);
+}
+
+
+static void seq_pack(struct xpkt_tag_hdr *xth)
+{
+	struct xpkt_tag_seq *xts = (struct xpkt_tag_seq *)xth;
+	xts->seq = hton64(xts->seq);
+}
+
+
 /* Parse info */
 static void pi_unpack(struct xpkt_tag_hdr *xth)
 {
@@ -143,6 +158,7 @@ struct xpkt_tag_ops {
 	{XPKT_TAG_OUTIFACE_NWORDS, 0, tvalid_always, packop_none, packop_none},
 	{XPKT_TAG_FLOW_NWORDS,     0, tvalid_zeroxh, flowid_unpack,flowid_pack},
 	{XPKT_TAG_CLASS_NWORDS,    0, tvalid_zeroxh, class_unpack, class_pack},
+	{XPKT_TAG_SEQ_NWORDS,      0, tvalid_zeroxh, seq_unpack, seq_pack},
 	{XPKT_TAG_PARSEINFO_NWORDS,1, tvalid_always, pi_unpack, pi_pack},
 };
 
@@ -494,6 +510,16 @@ void xpkt_tag_class_init(struct xpkt_tag_class *t, uint64_t tag)
 	t->nwords = XPKT_TAG_CLASS_NWORDS;
 	t->zero = 0;
 	t->tag = tag;
+}
+
+
+void xpkt_tag_seq_init(struct xpkt_tag_seq *t, uint64_t seq)
+{
+	abort_unless(t);
+	t->type =  XPKT_TAG_SEQ;
+	t->nwords = XPKT_TAG_SEQ_NWORDS;
+	t->zero = 0;
+	t->seq = seq;
 }
 
 

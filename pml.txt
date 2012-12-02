@@ -300,6 +300,8 @@ Intrinsics:
   -- void meta_set_flowid(pnum, id)
   -- int  meta_get_class(pnum)
   -- void meta_set_class(pnum, tc)
+  -- int  meta_get_seq(pnum)
+  -- void meta_set_seq(pnum, seq)
 
   -- void exit(scalar) -- abort program with exit status 'scalar'
 
