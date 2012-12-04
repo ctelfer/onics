@@ -210,7 +210,7 @@ uint64_t be64val(void *vp, size_t len)
 {
 	uint64_t x = 0;
 	byte_t *p = vp;
-	switch(len) {
+	switch (len) {
 	case 0: break;
 	default:
 	case 8: x = *p++;
@@ -223,4 +223,22 @@ uint64_t be64val(void *vp, size_t len)
 	case 1: x = (x << 8) | *p++;
 	}
 	return x;
+}
+
+
+void wrbe64(void *dp, size_t len, uint64_t x)
+{
+	byte_t *p = dp;
+	switch (len) {
+	case 0: break;
+	default:
+	case 8: *p++ = (x >> 56) & 0xFF;
+	case 7: *p++ = (x >> 48) & 0xFF;
+	case 6: *p++ = (x >> 40) & 0xFF;
+	case 5: *p++ = (x >> 32) & 0xFF;
+	case 4: *p++ = (x >> 24) & 0xFF;
+	case 3: *p++ = (x >> 16) & 0xFF;
+	case 2: *p++ = (x >> 8) & 0xFF;
+	case 1: *p++ = x & 0xFF;
+	}
 }

@@ -36,7 +36,6 @@
 ulong g_npkts = 0;
 double g_start_delay = 0.0;
 double g_interval = 0.0;
-char *infile;
 
 struct clopt g_optarr[] = {
 	CLOPT_INIT(CLOPT_NOARG, 'h', "--help", "print help"),

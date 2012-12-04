@@ -51,10 +51,10 @@ uint16_t ones_sum(void *p, ulong len, uint16_t val);
  *   uint32_t flowlabel = getbits((byte_t *)v6p, 12, 20);
  *   
  */
-ulong getbits(const byte_t * p, ulong off, uint len);
+ulong getbits(const byte_t *p, ulong off, uint len);
 
 /* set up to 32 bits in a byte array (delimited as above in getbits()) */
-void setbits(byte_t * p, ulong off, uint len, ulong val);
+void setbits(byte_t *p, ulong off, uint len, ulong val);
 
 /* return 1 if bit #n is set in p */
 int getbit(const byte_t * p, ulong n);
@@ -95,6 +95,11 @@ void hexdump(FILE *out, ulong addr, byte_t *p, ulong len);
 
 /* returns the numerical value of the min(8, len) bytes in big-endian format */
 uint64_t be64val(void *p, size_t len);
+
+
+/* sets the byte string pointed to by 'p' to the numeric value in 'val' */
+/* modulo 2^(min(8, len) * 8) */
+void wrbe64(void *p, size_t len, uint64_t val);
 
 
 #endif /* __util_h */

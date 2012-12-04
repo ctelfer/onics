@@ -159,24 +159,38 @@ struct prparse {
 	uint			noff;
 	ulong			offs[PRP_OI_MIN_NUM];
 };
-#define prp_soff(prp) ((prp)->offs[PRP_OI_SOFF])
-#define prp_poff(prp) ((prp)->offs[PRP_OI_POFF])
-#define prp_toff(prp) ((prp)->offs[PRP_OI_TOFF])
-#define prp_eoff(prp) ((prp)->offs[PRP_OI_EOFF])
-#define prp_hlen(prp) (prp_poff(prp) - prp_soff(prp))
-#define prp_plen(prp) (prp_toff(prp) - prp_poff(prp))
-#define prp_tlen(prp) (prp_eoff(prp) - prp_toff(prp))
-#define prp_totlen(prp) (prp_eoff(prp) - prp_soff(prp))
-#define prp_header(prp, buf, type) ((type *)((byte_t *)(buf) + prp_soff(prp)))
-#define prp_payload(prp, buf) ((byte_t *)(buf) + prp_poff(prp))
-#define prp_trailer(prp, buf, type) ((type *)((byte_t *)(buf)+ prp_toff(prp)))
-#define prp_prev(prp) container((prp)->node.prev, struct prparse, node)
-#define prp_next(prp) container((prp)->node.next, struct prparse, node)
-#define prp_is_base(prp) ((prp)->region == NULL)
-#define prp_list_head(prp) prp_is_base(prp)
-#define prp_list_end(prp) prp_is_base(prp)
-#define prp_empty(prp) (l_isempty(&(prp)->node))
-#define prp_off_valid(prp, off) ((prp)->offs[(off)] != PRP_OFF_INVALID)
+#define prp_soff(_prp) ((_prp)->offs[PRP_OI_SOFF])
+#define prp_poff(_prp) ((_prp)->offs[PRP_OI_POFF])
+#define prp_toff(_prp) ((_prp)->offs[PRP_OI_TOFF])
+#define prp_eoff(_prp) ((_prp)->offs[PRP_OI_EOFF])
+#define prp_hlen(_prp) (prp_poff(_prp) - prp_soff(_prp))
+#define prp_plen(_prp) (prp_toff(_prp) - prp_poff(_prp))
+#define prp_tlen(_prp) (prp_eoff(_prp) - prp_toff(_prp))
+#define prp_totlen(_prp) (prp_eoff(_prp) - prp_soff(_prp))
+#define prp_header(_prp, _buf, _type) \
+	((_type *)((byte_t *)(_buf) + prp_soff(_prp)))
+#define prp_payload(_prp, _buf) ((byte_t *)(_buf) + prp_poff(_prp))
+#define prp_trailer(_prp, _buf, _type) \
+	((_type *)((byte_t *)(_buf) + prp_toff(_prp)))
+#define prp_prev(_prp) container((_prp)->node.prev, struct prparse, node)
+#define prp_next(_prp) container((_prp)->node.next, struct prparse, node)
+#define prp_is_base(_prp) ((_prp)->region == NULL)
+#define prp_list_head(_prp) prp_is_base(_prp)
+#define prp_list_end(_prp) prp_is_base(_prp)
+#define prp_empty(_prp) (l_isempty(&(_prp)->node))
+#define prp_off_valid(_prp, _off) \
+	( ((uint)(_off) < (_prp)->noff) && \
+	  ((_prp)->offs[(uint)(_off)] != PRP_OFF_INVALID) )
+
+#define prp_for_each(_prp, _plist)		\
+	for ((_prp) = prp_next(_plist) ;	\
+	     !prp_list_head(_prp) ;		\
+	     (_prp) = prp_next(_prp))
+
+#define prp_for_each_safe(_prp, _x_plist)			\
+	for ((_prp) = prp_next(_plist), (_x) = prp_next(_prp) ;	\
+	     !prp_list_head(_prp) ;				\
+	     (_prp) = (_x), (_x) = prp_next(_prp))
 
 /* Find the next parse in the specified region or return NULL if none */
 /* exists in the parse list.  use the region parse as the 'from' for */
