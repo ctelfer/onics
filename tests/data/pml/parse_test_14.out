@@ -244,6 +244,17 @@ Functions
       Variable: val [param; width=8, addr=1]
    Body -- 
       (null)
+   Function[intrinsic]: meta_get_seq() -- 1 args, 0 vars, return type=scalar
+   Parameters & Variables -- 
+      Variable: pnum [param; width=8, addr=0]
+   Body -- 
+      (null)
+   Function[intrinsic]: meta_set_seq() -- 2 args, 0 vars, return type=void
+   Parameters & Variables -- 
+      Variable: pnum [param; width=8, addr=0]
+      Variable: val [param; width=8, addr=1]
+   Body -- 
+      (null)
    Function[intrinsic]: exit() -- 1 args, 0 vars, return type=void
    Parameters & Variables -- 
       Variable: rval [param; width=8, addr=0]
