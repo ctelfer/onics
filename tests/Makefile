@@ -4,6 +4,7 @@ tests:
 	./vm_test.sh
 	bin/testns
 	./pp_test.sh
+	./fld_test.sh
 	./pml_lex_test.sh
 	./pml_parse_test.sh
 	./pml_cg_watch.sh

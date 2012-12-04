@@ -18,7 +18,8 @@ TARGETS= \
 	$(BINDIR)/testvm \
 	$(BINDIR)/testns \
 	$(BINDIR)/testpmllex \
-	$(BINDIR)/testpmlparse
+	$(BINDIR)/testpmlparse \
+	$(BINDIR)/testfld
 
 all: $(TARGETS)
 
@@ -58,6 +59,20 @@ $(BINDIR)/testpmlparse: testpmlparse.c $(TOOLSRC)/pmllex.o $(TOOLSRC)/pml.o \
 $(BINDIR)/testpmllex: testpmllex.c $(TOOLSRC)/pml_tok_strs.o $(TOOLSRC)/pmllex.o
 	$(CC) -o ../bin/testpmllex testpmllex.c $(TOOLSRC)/pmllex.o \
 		$(TOOLSRC)/pml_tok_strs.o \
+		$(DEFS) $(OPTS) $(INCS) $(LIBS)
+
+
+$(BINDIR)/testfld: testfld.c \
+		   $(TOOLSRC)/fld.o $(TOOLSRC)/fld.h \
+		   $(TOOLSRC)/util.o $(TOOLSRC)/util.h \
+		   $(TOOLSRC)/protoparse.o $(TOOLSRC)/protoparse.h \
+		   $(TOOLSRC)/ns.o $(TOOLSRC)/ns.h \
+		   $(TOOLSRC)/pktbuf.o $(TOOLSRC)/pktbuf.h \
+		   $(TOOLSRC)/xpkt.o $(TOOLSRC)/xpkt.h \
+		   $(TOOLSRC)/stdproto.o $(TOOLSRC)/stdproto.h
+	$(CC) -o ../bin/testfld testfld.c $(TOOLSRC)/fld.o $(TOOLSRC)/util.o \
+		$(TOOLSRC)/protoparse.o $(TOOLSRC)/ns.o $(TOOLSRC)/pktbuf.o \
+		$(TOOLSRC)/xpkt.o $(TOOLSRC)/stdproto.o \
 		$(DEFS) $(OPTS) $(INCS) $(LIBS)
 
 $(LIBOBJS):

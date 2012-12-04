@@ -3,6 +3,7 @@
 TOUT=tmp
 TBIN=bin
 DATA=data/pp
+RET=0
 
 echo "---------------"
 echo "Protocol parse test"
@@ -14,6 +15,8 @@ then
 	echo PASSED
 else
 	echo FAILED
+	RET=1
 fi
 echo "---------------"
 echo
+exit $RET

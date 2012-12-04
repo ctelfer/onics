@@ -1,0 +1,6 @@
+old eth src addr
+    000000:  00 30 65 c1 b3 a8                                |.0e...|
+old ip dest addr
+    000000:  c0 a8 00 04                                      |....|
+old tcp ack flag: 1
+old tcp syn flag: 0

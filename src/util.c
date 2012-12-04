@@ -123,7 +123,7 @@ void setbits(byte_t *p, ulong bitoff, uint bitlen, ulong val)
 	abort_unless(p && (bitlen <= sizeof(ulong) << 3));
 
 	/* get to the correct start byte */
-	p += bitoff >> 8;
+	p += bitoff >> 3;
 	bitoff &= 7;
 
 	/* header */

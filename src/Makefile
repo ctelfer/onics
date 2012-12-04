@@ -11,7 +11,7 @@ DEFS=
 BINDIR=../bin
 LIBOBJS= xpkt.o ns.o netvm.o netvm_prog.o pktbuf.o stdproto.o \
 	 protoparse.o util.o pmltree.o netvm_std_coproc.o \
-	 pmllex.o pml.o pmlncg.o pml_tok_strs.o
+	 pmllex.o pml.o pmlncg.o pml_tok_strs.o fld.o
 
 TARGETS=${BINDIR}/pcapin \
 	${BINDIR}/pcapout \
