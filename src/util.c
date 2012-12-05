@@ -226,6 +226,22 @@ uint64_t be64val(void *vp, size_t len)
 }
 
 
+ulong be32val(void *vp, size_t len)
+{
+	ulong x = 0;
+	byte_t *p = vp;
+	switch (len) {
+	case 0: break;
+	default:
+	case 4: x = *p++;
+	case 3: x = (x << 8) | *p++;
+	case 2: x = (x << 8) | *p++;
+	case 1: x = (x << 8) | *p++;
+	}
+	return x;
+}
+
+
 void wrbe64(void *dp, size_t len, uint64_t x)
 {
 	byte_t *p = dp;
@@ -236,6 +252,20 @@ void wrbe64(void *dp, size_t len, uint64_t x)
 	case 7: *p++ = (x >> 48) & 0xFF;
 	case 6: *p++ = (x >> 40) & 0xFF;
 	case 5: *p++ = (x >> 32) & 0xFF;
+	case 4: *p++ = (x >> 24) & 0xFF;
+	case 3: *p++ = (x >> 16) & 0xFF;
+	case 2: *p++ = (x >> 8) & 0xFF;
+	case 1: *p++ = x & 0xFF;
+	}
+}
+
+
+void wrbe32(void *dp, size_t len, ulong x)
+{
+	byte_t *p = dp;
+	switch (len) {
+	case 0: break;
+	default:
 	case 4: *p++ = (x >> 24) & 0xFF;
 	case 3: *p++ = (x >> 16) & 0xFF;
 	case 2: *p++ = (x >> 8) & 0xFF;

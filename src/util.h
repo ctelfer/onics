@@ -96,10 +96,15 @@ void hexdump(FILE *out, ulong addr, byte_t *p, ulong len);
 /* returns the numerical value of the min(8, len) bytes in big-endian format */
 uint64_t be64val(void *p, size_t len);
 
+/* returns the numerical value of the min(8, len) bytes in big-endian format */
+ulong be32val(void *p, size_t len);
 
 /* sets the byte string pointed to by 'p' to the numeric value in 'val' */
 /* modulo 2^(min(8, len) * 8) */
 void wrbe64(void *p, size_t len, uint64_t val);
 
+/* sets the byte string pointed to by 'p' to the numeric value in 'val' */
+/* modulo 2^(min(4, len) * 8) */
+void wrbe32(void *p, size_t len, ulong val);
 
 #endif /* __util_h */
