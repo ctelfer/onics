@@ -635,9 +635,7 @@ int set_pktq_num(struct netvm_pktq_cp *cp, uint nqueues)
 	abort_unless(cp);
 
 	if (nqueues > 0) {
-		/* overflow check */
-		abort_unless(SIZE_MAX / sizeof(struct list) >= nqueues);
-		if ((queues = malloc(sizeof(struct list) * nqueues)) == NULL)
+		if ((queues = calloc(sizeof(struct list), nqueues)) == NULL)
 			return -1;
 		for (i = 0; i < nqueues; ++i)
 			l_init(&queues[i]);

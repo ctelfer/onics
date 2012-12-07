@@ -26,7 +26,7 @@
 #include "protoparse.h"
 
 enum {
-	NST_NAMESPACE,
+	NST_NAMESPACE = 0,
 	NST_PKTFLD,
 	NST_SCALAR,
 	NST_BYTESTR,

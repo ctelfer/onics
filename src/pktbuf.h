@@ -152,10 +152,10 @@ void pkb_clr_layer(struct pktbuf *pkb, int layer);
 void pkb_fix_dltype(struct pktbuf *pkb);
 
 /* Push a new protocol parse to the innermost region of the packet */
-int  pkb_pushprp(struct pktbuf *pkb, int ptype);
+int pkb_pushprp(struct pktbuf *pkb, int ptype);
 
 /* Push a new protocol parse to the outermost region of the packet */
-int  pkb_wrapprp(struct pktbuf *pkb, int ptype);
+int pkb_wrapprp(struct pktbuf *pkb, int ptype);
 
 /* Remove a protocol parse from the beginning or end of the packet */
 void pkb_popprp(struct pktbuf *pkb, int fromfront);

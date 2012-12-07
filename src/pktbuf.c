@@ -431,7 +431,7 @@ err_have_buf:
 int pkb_pack(struct pktbuf *pkb)
 {
 	struct xpkt *x;
-	uint32_t len;
+	ulong len;
 
 	abort_unless(pkb);
 
@@ -444,7 +444,7 @@ int pkb_pack(struct pktbuf *pkb)
 	pkb->xhlen = xpkt_doff(x);
 
 	len = pkb->xhlen + prp_plen(&pkb->prp);
-	if (len > SIZE_MAX)
+	if (len < pkb->xhlen || len > pkb->bufsize)
 		return -1;
 	if (xpkt_validate_tags(x->tags, x->hdr.tlen) < 0)
 		return -2;

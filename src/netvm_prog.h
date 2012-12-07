@@ -89,7 +89,7 @@ struct netvm_meminit {
 };
 
 
-#define NVMP_EP_INVALID		(uint)-1
+#define NVMP_EP_INVALID		((uint)-1)
 #define NVMP_EXEC_CONTINUE	NVMP_EP_INVALID
 /* Entry points in the netvm program */
 enum {

@@ -30,7 +30,7 @@ static struct ns_elem *rootelem[256] = { 0 };
 static struct ns_namespace rootns =
 	NS_NAMESPACE_ROOT(rootelem, array_length(rootelem));
 
-#define TYPEOK(t) ((t) >= NST_NAMESPACE && (t) <= NST_MASKSTR)
+#define TYPEOK(t) ((t) <= NST_MASKSTR)
 
 
 int ns_add_elem(struct ns_namespace *ns, struct ns_elem *e)

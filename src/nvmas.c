@@ -1253,8 +1253,6 @@ void emit_program(struct asmctx *ctx, FILE *outfile)
 	prog.ninits = ctx->ninits;
 	if (prog.ninits != 0) {
 		mi = ecalloc(sizeof(struct netvm_meminit), prog.ninits);
-		abort_unless(SIZE_MAX / sizeof(struct netvm_meminit) >= 
-			     prog.ninits);
 		memcpy(mi, ctx->minits, 
 		       sizeof(struct netvm_meminit) * prog.ninits);
 		prog.inits = mi;
