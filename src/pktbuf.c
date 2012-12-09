@@ -86,7 +86,7 @@ struct pktbuf *pkb_create(ulong bufsize)
 	int pl;
 
 	/* calculate the total size of the buffer */
-	if (bufsize > PKB_MAX_DATA_LEN) {
+	if (bufsize > PKB_MAX_PKTLEN) {
 		errno = ENOMEM;
 		return NULL;
 	}
@@ -307,7 +307,8 @@ int pkb_file_read(struct pktbuf **pkbp, FILE *fp)
 
 	off = dlt_offset(xh.dltype);
 	n = hpad + TPADMIN + off;
-	if ((xh.len > PKB_MAX_DATA_LEN - n) ||
+	if ((xh.len > PKB_MAX_PKTLEN) ||
+	    (xh.len > PKB_MAX_DATA_LEN - n) ||
 	    (xh.tlen * 4 + XPKT_HLEN > pkb_xpkt_pool_size)) {
 		errno = ENOMEM;
 		return -1;
@@ -381,7 +382,8 @@ int pkb_fd_read(struct pktbuf **pkbp, int fd)
 
 	off = dlt_offset(xh.dltype);
 	n = hpad + TPADMIN + off;
-	if ((xh.len > PKB_MAX_DATA_LEN - n) ||
+	if ((xh.len > PKB_MAX_PKTLEN) ||
+	    (xh.len > PKB_MAX_DATA_LEN - n) ||
 	    (xh.tlen * 4 + XPKT_HLEN > pkb_xpkt_pool_size)) {
 		errno = ENOMEM;
 		return -1;

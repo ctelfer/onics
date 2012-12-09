@@ -15,6 +15,7 @@ LIBOBJS= xpkt.o ns.o netvm.o netvm_prog.o pktbuf.o stdproto.o \
 
 TARGETS=${BINDIR}/pcapin \
 	${BINDIR}/pcapout \
+	${BINDIR}/rawpkt \
 	${BINDIR}/pktdemux \
 	${BINDIR}/pktmux \
 	${BINDIR}/pktrel \
@@ -35,6 +36,11 @@ ${BINDIR}/pcapout: pcapout.o pktbuf.o xpkt.o protoparse.o ns.o util.o
 	${CC} -o ${BINDIR}/pcapout pcapout.o pktbuf.o xpkt.o protoparse.o ns.o \
 		util.o \
 		${DEFS} ${OPTS} ${INCS} ${LIBS} -lpcap
+
+${BINDIR}/rawpkt: rawpkt.c pktbuf.o xpkt.o protoparse.o ns.o util.o 
+	${CC} -o ${BINDIR}/rawpkt rawpkt.c pktbuf.o xpkt.o protoparse.o ns.o \
+		util.o \
+		${DEFS} ${OPTS} ${INCS} ${LIBS}
 
 ${BINDIR}/pktmux: pktmux.o pktbuf.o xpkt.o protoparse.o ns.o util.o
 	${CC} -o ${BINDIR}/pktmux pktmux.o pktbuf.o xpkt.o protoparse.o ns.o \

@@ -28,7 +28,7 @@
 /*
  * Format:  
  *  - packet_len(4) 		- must be >= tag len * 4 + 8
- *  - dltype(2)			- one of dltype.h: not INVALID
+ *  - dltype(2)			- a PRID (see prid.h)
  *  - tag_len(2)		- 0 - 65535.  number of tag 4-byte words
  *  - tags(tag_len * 4)
  *  - payload(packet_len - tag_len - 8)

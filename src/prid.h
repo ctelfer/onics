@@ -37,8 +37,16 @@
    Protocol types for family _RES indices 128-255 are reserved 
    "meta protocol types".  They stand for entire classes of packets
    or special cases like 'no type', 'invalid' or 'any' (for matching).
+
+   Some notable reserved values:
+     * PRID_NONE - represents no parse at all
+     * PRID_DATA - parse represents raw unparsed data
+     * PRID_ANY - not a parse type, but used in queries taking a
+                  parse type to refer to any parse
+     * PRID_INVALID - similarly, used to refer to an invalid PRID
 */
 #define PRID_NONE               PRID_BUILD(PRID_PF_RES, 0)
+#define PRID_DATA		PRID_BUILD(PRID_PF_RES, 1)
 #define PRID_META_MIN_PROTO	128
 #define PRID_PCLASS_LINK	PRID_BUILD(PRID_PF_RES, 128)
 #define PRID_PCLASS_TUNNEL	PRID_BUILD(PRID_PF_RES, 129)
