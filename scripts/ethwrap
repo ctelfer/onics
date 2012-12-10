@@ -7,7 +7,7 @@ usage() {
 
 PMLSCRIPT="{
 	pkt_ins_d(0, str_addr(&pkt.payload), 20);
-	parse_push_front(0, @tcp);
+	parse_push_front(0, @eth);
 "
 
 INFILE=""
@@ -32,6 +32,8 @@ done
 
 PMLSCRIPT="$PMLSCRIPT
 	fix_dltype(0);
+	fix_all_len(0);
+	fix_all_csum(0);
 }"
 
 echo "Script is : $PMLSCRIPT" >&2 

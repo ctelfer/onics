@@ -639,12 +639,14 @@ void pkb_clr_layer(struct pktbuf *pkb, int layer)
 void pkb_fix_dltype(struct pktbuf *pkb)
 {
 	uint16_t dltype = PRID_INVALID;
+	struct prparse *prp;
 	abort_unless((pkb->flags & PKB_F_PACKED) == 0);
-	if (pkb->layers[PKB_LAYER_DL] != NULL) {
-		dltype = pkb->layers[PKB_LAYER_DL]->prid;
-		abort_unless(dltype != PRID_INVALID);
+	if (!prp_empty(&pkb->prp)) {
+		prp = prp_next(&pkb->prp);
+		pkb->xpkt->hdr.dltype = prp->prid;
+	} else {
+		pkb->xpkt->hdr.dltype = PRID_RAWPKT;
 	}
-	pkb->xpkt->hdr.dltype = dltype;
 }
 
 
