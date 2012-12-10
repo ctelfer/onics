@@ -6,7 +6,7 @@ usage() {
 }
 
 PMLSCRIPT="{
-	pkt_ins_d(0, str_addr(&pkt.payload), 20);
+	pkt_ins_d(0, str_addr(&pkt.payload), 14);
 	parse_push_front(0, @eth);
 "
 
@@ -36,7 +36,6 @@ PMLSCRIPT="$PMLSCRIPT
 	fix_all_csum(0);
 }"
 
-echo "Script is : $PMLSCRIPT" >&2 
 if [ "$INFILE" != "" ]
 then
 	exec pml -e "$PMLSCRIPT" < "$INFILE"

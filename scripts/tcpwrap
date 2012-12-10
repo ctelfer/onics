@@ -34,7 +34,6 @@ PMLSCRIPT="$PMLSCRIPT
 	fix_dltype(0);
 }"
 
-echo "Script is : $PMLSCRIPT" >&2 
 if [ "$INFILE" != "" ]
 then
 	exec pml -e "$PMLSCRIPT" < "$INFILE"
