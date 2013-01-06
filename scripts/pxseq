@@ -17,8 +17,8 @@ usage() {
 	echo "        -ipdst		-- set in IPv4/v6 destination address"
 	echo "        -v6fid		-- set in IPv6 Flow ID"
 	echo "        -tpld [off[,len]] -- set in TCP payload"
-	echo "        -upld [off[,len]] -- set in TCP payload"
-	echo "        -ipld [off[,len]] -- set in TCP payload"
+	echo "        -upld [off[,len]] -- set in UDP payload"
+	echo "        -ipld [off[,len]] -- set in ICMP payload"
 	echo "        -i6pld [off[,len]] -- set in ICMPv6 payload"
 	echo
 	exit 1
@@ -78,37 +78,50 @@ do
 	elif [ "$1" = "-v6fid" ] 
 	then
 		PROG="$PROG
-		      ?- ip6 -? { meta_set_seq(0, ip.flowid); send; }"
+		      ?- ip6 -? { meta_set_seq(0, ip6.flowid); send; }"
         else
-		OLEN=0
+		OLEN="0,8"
+		PLEN=8
 		DOSHIFT=0
 		if [ $# -gt 1 ] && echo "$2" | 
 				   grep '^[0-9][0-9]*,[0-9][0-9]*' > /dev/null
 		then
 			OLEN=$2
+			if echo "$2" | grep ',' > /dev/null
+			then
+				OFF=`echo "$2" | sed -e 's/,.*//'`
+				PLEN=`echo "$2" | sed -e 's/^.*,//'`
+				PLEN=`expr $OFF \+ $PLEN`
+			else
+				PLEN=8
+			fi
 			DOSHIFT=1
 		fi
 
 		case $1 in
 		"-tpld")
 		        PROG="$PROG
-			      ?- tcp -? { meta_set_seq(0, tcp.payload[$OLEN]);
-					  send; }"
+			      ?- tcp and tcp.plen >= $PLEN -? {
+			          meta_set_seq(0, tcp.payload[$OLEN]);
+			          send; }"
 		    ;;
 		"-upld")
 			PROG="$PROG
-			      ?- udp -? { meta_set_seq(0, udp.payload[$OLEN]);
-			      		  send; }"
+			      ?- udp and udp.plen >= $PLEN -? {
+			          meta_set_seq(0, udp.payload[$OLEN]);
+			      	  send; }"
 			;;
 		"-ipld")
 			PROG="$PROG
-			      ?- icmp -? { meta_set_seq(0, icmp.payload[$OLEN]);
-			      		   send; }"
+			      ?- icmp and icmp.plen >= $PLEN -? {
+			          meta_set_seq(0, icmp.payload[$OLEN]);
+			      	  send; }"
 			;;
 		"-i6pld")
 			PROG="$PROG
-			      ?- icmp6 -? { meta_set_seq(0, icmp6.payload[$OLEN]); 
-			      		    send; }"
+			      ?- icmp6 and icmp6.plen >= $PLEN -? {
+			          meta_set_seq(0, icmp6.payload[$OLEN]); 
+			      	  send; }"
 		        ;;
 		*)
 			break
@@ -116,7 +129,7 @@ do
 
 		esac
 
-		[ $DOSHIFT > 0 ] && shift
+		[ $DOSHIFT -gt 0 ] && shift
 	fi
 
 	shift

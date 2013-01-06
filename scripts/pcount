@@ -1,0 +1,24 @@
+#!/bin/sh
+
+DROP=" drop; "
+
+if [ $# -gt 0 ]
+then
+	if [ "$1" != "-p" -a "$1" != "--pass" ]
+	then
+		echo usage: $0 "[-p|--pass]" >&2
+		exit 1
+	fi
+	DROP=""
+fi
+
+SCRIPT="int C = 0;
+	{ C = C + 1; $DROP }
+	END { print C, \" total packets seen.\n\"; }"
+
+if [ $# -gt 0 ]
+then
+	exec pml -e "$SCRIPT"
+else
+	exec pml -e "$SCRIPT" 2>&1 >/dev/null
+fi
