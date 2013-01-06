@@ -3,6 +3,7 @@
 OBIN=../bin
 TOUT=tmp
 VMOUT=data/testvm
+PDIR=data/packets
 ERR=0
 
 check_output() {
@@ -26,7 +27,7 @@ check_output() {
 
 echo ---------------------
 echo VM Test 0: Find TCP
-bin/testvm -p 0 < data/sample.xpkt > $TOUT/vm_test_0.out 2> $TOUT/vm_test_0.err
+bin/testvm -p 0 < $PDIR/sample.xpkt > $TOUT/vm_test_0.out 2> $TOUT/vm_test_0.err
 check_output 0
 echo ---------------------
 echo
@@ -34,7 +35,7 @@ echo
 
 echo ---------------------
 echo VM Test 1: Find TCP error packets
-bin/testvm -p 1 < data/modified.xpkt > $TOUT/vm_test_1.out 2> $TOUT/vm_test_1.err
+bin/testvm -p 1 < $PDIR/modified.xpkt > $TOUT/vm_test_1.out 2> $TOUT/vm_test_1.err
 check_output 1
 echo ---------------------
 echo
@@ -42,7 +43,7 @@ echo
 
 echo ---------------------
 echo VM Test 2: Test for UDP packets
-bin/testvm -p 2 < data/sample.xpkt > $TOUT/vm_test_2.out 2> $TOUT/vm_test_2.err
+bin/testvm -p 2 < $PDIR/sample.xpkt > $TOUT/vm_test_2.out 2> $TOUT/vm_test_2.err
 check_output 2
 echo ---------------------
 echo
@@ -50,7 +51,7 @@ echo
 
 echo ---------------------
 echo VM Test 3: Fix all checksums
-bin/testvm -p 3 < data/modified.xpkt 2> $TOUT/vm_test_3.err1 | 
+bin/testvm -p 3 < $PDIR/modified.xpkt 2> $TOUT/vm_test_3.err1 | 
 	$OBIN/x2hpkt > $TOUT/vm_test_3.out 2> $TOUT/vm_test_3.err2
 check_output 3
 echo ---------------------
@@ -59,7 +60,7 @@ echo
 
 echo ---------------------
 echo VM Test 4: Toggle DF flag and fix all checksums
-bin/testvm -p 4 < data/sample.xpkt 2> $TOUT/vm_test_4.err1 | 
+bin/testvm -p 4 < $PDIR/sample.xpkt 2> $TOUT/vm_test_4.err1 | 
 	$OBIN/x2hpkt > $TOUT/vm_test_4.out 2> $TOUT/vm_test_4.err2
 check_output 4
 echo ---------------------
@@ -92,7 +93,7 @@ echo
 
 echo ---------------------
 echo VM Test 8: Duplicate the first packet and drop the rest
-bin/testvm -p 8 < data/sample.xpkt 2> $TOUT/vm_test_8.err1 | 
+bin/testvm -p 8 < $PDIR/sample.xpkt 2> $TOUT/vm_test_8.err1 | 
 	$OBIN/x2hpkt > $TOUT/vm_test_8.out 2> $TOUT/vm_test_8.err2
 check_output 8
 echo ---------------------
@@ -101,7 +102,7 @@ echo
 
 echo ---------------------
 echo VM Test 9: Extract first 16 bytes from first data TCP and clobber 12
-bin/testvm -p 9 < data/sample.xpkt 2> $TOUT/vm_test_9.err1 | 
+bin/testvm -p 9 < $PDIR/sample.xpkt 2> $TOUT/vm_test_9.err1 | 
 	$OBIN/x2hpkt > $TOUT/vm_test_9.out 2> $TOUT/vm_test_9.err2
 check_output 9
 echo ---------------------
@@ -110,14 +111,14 @@ echo
 
 echo ---------------------
 echo VM Test 10: Hex dump the packets
-bin/testvm -p 10 < data/sample.xpkt > $TOUT/vm_test_10.out 2> $TOUT/vm_test_10.err
+bin/testvm -p 10 < $PDIR/sample.xpkt > $TOUT/vm_test_10.out 2> $TOUT/vm_test_10.err
 check_output 10
 echo ---------------------
 echo
 
 echo ---------------------
 echo VM Test 11: Mask equality tests for 0x45000034
-bin/testvm -p 11 < data/sample.xpkt > $TOUT/vm_test_11.out 2> $TOUT/vm_test_11.err
+bin/testvm -p 11 < $PDIR/sample.xpkt > $TOUT/vm_test_11.out 2> $TOUT/vm_test_11.err
 check_output 11
 echo ---------------------
 echo

@@ -1,0 +1,130 @@
+#!/bin/sh
+
+usage() {
+	echo usage $0 "[options] [modes] [starting sequence #] [infile]" >&2
+	echo "    Options:"
+	echo "        (if specified must be in this order)"
+	echo "        -h|--help		-- display this message and exit"
+	echo "        -s|--start <num>	-- set starting sequence # [default 1]"
+	echo "        -c|--strict     	-- drop all unsequenced packets"
+	echo
+	echo "    Modes:"
+	echo "        (can specify more than one: order matters)"
+	echo "        -esrc		-- set in ethernet source address"
+	echo "        -edst		-- set in ethernet destination address"
+	echo "        -ipid		-- set in IPv4 IP ID for non-fragments"
+	echo "        -ipsrc		-- set in IPv4/v6 source address"
+	echo "        -ipdst		-- set in IPv4/v6 destination address"
+	echo "        -v6fid		-- set in IPv6 Flow ID"
+	echo "        -tpld [off[,len]] -- set in TCP payload"
+	echo "        -upld [off[,len]] -- set in TCP payload"
+	echo "        -ipld [off[,len]] -- set in TCP payload"
+	echo "        -i6pld [off[,len]] -- set in ICMPv6 payload"
+	echo
+	exit 1
+}
+
+[ "$1" = "-h" -o "$1" = "--help" ] && usage
+
+DROP=""
+S=1
+
+if [ "$1" = "-s" -o "$1" = "--start" ]
+then
+	[ $# -ge 2 ] || usage
+	S=$2
+	shift
+	shift
+fi
+
+if [ "$1" = "-c" -o "$1" = "--strict" ]
+then
+	DROP="drop; "
+	shift
+fi
+
+PROG="	int P = $S;
+	int U = 0;"
+
+
+while [ $# -gt 0 ]
+do
+
+	if [ "$1" = "-esrc" ] 
+	then
+		PROG="$PROG
+		      ?- eth -? { eth.src[2,4] = P; P = P + 1; send; }"
+	elif [ "$1" = "-edst" ] 
+	then
+		PROG="$PROG
+		      ?- eth -? { eth.dst[2,4] = P; P = P + 1; send; }"
+	elif [ "$1" = "-ipid" ] 
+	then
+		PROG="$PROG
+		      ?- ip and ip.mf == 0 and ip.fragoff == 0 -? { 
+			  ip.id = P; P = P + 1; send; }"
+	elif [ "$1" = "-ipsrc" ] 
+	then
+		PROG="$PROG
+		      ?- ip -? { ip.saddr = P; P = P + 1; send; }
+		      ?- ip6 -? { ip6.saddr[8,8] = P; P = P + 1; send; }"
+	elif [ "$1" = "-ipdst" ] 
+	then
+		PROG="$PROG
+		      ?- ip -? { ip.daddr = P; P = P + 1; send; }
+		      ?- ip6 -? { ip6.daddr[8,8] = P; P = P + 1; send; }"
+	elif [ "$1" = "-v6fid" ] 
+	then
+		PROG="$PROG
+		      ?- ip6 -? { ip.flowid = P; P = P + 1; send; }"
+        else
+		OLEN=0
+		DOSHIFT=0
+		if [ $# -gt 1 ] && echo "$2" | 
+				   grep '^[0-9][0-9]*,[0-9][0-9]*' > /dev/null
+		then
+			OLEN=$2
+			DOSHIFT=1
+		fi
+
+		case $1 in
+		"-tpld")
+		    PROG="$PROG
+		          ?- tcp -? { tcp.payload[$OLEN] = P ;
+			  	      P = P + 1; send; }"
+		    ;;
+		"-upld")
+			PROG="$PROG
+			      ?- udp -? { udp.payload[$OLEN] = P ;
+			      		  P = P + 1; send; }"
+			;;
+		"-ipld")
+			PROG="$PROG
+			      ?- icmp -? { icmp.payload[$OLEN] = P ;
+			      		   P = P + 1; send; }"
+			;;
+		"-i6pld")
+			PROG="$PROG
+			      ?- icmp6 -? { icmp6.payload[$OLEN] = P ; 
+			      		    P = P + 1; send; }"
+		        ;;
+		*)
+			break
+			;;
+
+		esac
+
+		[ $DOSHIFT > 0 ] && shift
+	fi
+
+	shift
+done
+
+[ $# -gt 1 ] && usage
+
+PROG="$PROG
+      { U = U + 1; $DROP }
+      END { print U, \" unsequenced frames\\n\"; }"
+
+
+exec pml -e "$PROG" $1

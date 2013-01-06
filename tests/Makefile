@@ -9,6 +9,7 @@ tests:
 	./pml_parse_test.sh
 	./pml_cg_watch.sh
 	./pml_exec_test.sh
+	./seq_test.sh
 	@echo All tests passed
 	@echo
 

@@ -1,0 +1,137 @@
+#!/bin/sh
+
+usage() {
+	echo usage $0 "[options] [modes] [starting sequence #] [infile]" >&2
+	echo "    Options:"
+	echo "        (if specified must be in this order)"
+	echo "        -h|--help		-- display this message and exit"
+	echo "        -s|--start <num>	-- set starting sequence # [default 1]"
+	echo "        -c|--strict     	-- drop all unsequenced packets"
+	echo
+	echo "    Modes:"
+	echo "        (can specify more than one: order matters)"
+	echo "        -esrc		-- set in ethernet source address"
+	echo "        -edst		-- set in ethernet destination address"
+	echo "        -ipid		-- set in IPv4 IP ID for non-fragments"
+	echo "        -ipsrc		-- set in IPv4/v6 source address"
+	echo "        -ipdst		-- set in IPv4/v6 destination address"
+	echo "        -v6fid		-- set in IPv6 Flow ID"
+	echo "        -tpld [off[,len]] -- set in TCP payload"
+	echo "        -upld [off[,len]] -- set in TCP payload"
+	echo "        -ipld [off[,len]] -- set in TCP payload"
+	echo "        -i6pld [off[,len]] -- set in ICMPv6 payload"
+	echo
+	exit 1
+}
+
+[ "$1" = "-h" -o "$1" = "--help" ] && usage
+
+DROP=""
+S=1
+PATTERN=0
+
+if [ "$1" = "-s" -o "$1" = "--start" ]
+then
+	[ $# -ge 2 ] || usage
+	S=$2
+	shift
+	shift
+fi
+
+if [ "$1" = "-c" -o "$1" = "--strict" ]
+then
+	DROP="drop; "
+	shift
+fi
+
+PROG="	int U = 0;
+	int P = $S;"
+
+
+while [ $# -gt 0 ]
+do
+	PATTERN=1
+
+	if [ "$1" = "-esrc" ] 
+	then
+		PROG="$PROG
+		      ?- eth -? { meta_set_seq(0, eth.src[2,4]); send; }"
+	elif [ "$1" = "-edst" ] 
+	then
+		PROG="$PROG
+		      ?- eth -? { meta_set_seq(0, eth.dst[2,4]); send; }"
+	elif [ "$1" = "-ipid" ] 
+	then
+		PROG="$PROG
+		      ?- ip and ip.mf == 0 and ip.fragoff == 0 -? { 
+			  meta_set_seq(0, ip.id); send; }"
+	elif [ "$1" = "-ipsrc" ] 
+	then
+		PROG="$PROG
+		      ?- ip -? { meta_set_seq(0, ip.saddr); send; }
+		      ?- ip6 -? { meta_set_seq(0, ip6.saddr[8,8]); send; }"
+	elif [ "$1" = "-ipdst" ] 
+	then
+		PROG="$PROG
+		      ?- ip -? { meta_set_seq(0, ip.daddr); send; }
+		      ?- ip6 -? { meta_set_seq(0, ip6.daddr[8,8]); send; }"
+	elif [ "$1" = "-v6fid" ] 
+	then
+		PROG="$PROG
+		      ?- ip6 -? { meta_set_seq(0, ip.flowid); send; }"
+        else
+		OLEN=0
+		DOSHIFT=0
+		if [ $# -gt 1 ] && echo "$2" | 
+				   grep '^[0-9][0-9]*,[0-9][0-9]*' > /dev/null
+		then
+			OLEN=$2
+			DOSHIFT=1
+		fi
+
+		case $1 in
+		"-tpld")
+		        PROG="$PROG
+			      ?- tcp -? { meta_set_seq(0, tcp.payload[$OLEN]);
+					  send; }"
+		    ;;
+		"-upld")
+			PROG="$PROG
+			      ?- udp -? { meta_set_seq(0, udp.payload[$OLEN]);
+			      		  send; }"
+			;;
+		"-ipld")
+			PROG="$PROG
+			      ?- icmp -? { meta_set_seq(0, icmp.payload[$OLEN]);
+			      		   send; }"
+			;;
+		"-i6pld")
+			PROG="$PROG
+			      ?- icmp6 -? { meta_set_seq(0, icmp6.payload[$OLEN]); 
+			      		    send; }"
+		        ;;
+		*)
+			break
+			;;
+
+		esac
+
+		[ $DOSHIFT > 0 ] && shift
+	fi
+
+	shift
+done
+
+[ $# -gt 1 ] && usage
+
+if [ $PATTERN -eq 0 ]
+then
+	PROG="$PROG
+	      { meta_set_seq(0, P); P = P + 1; send; }"
+else
+	PROG="$PROG
+	      { U = U + 1; $DROP }
+	      END { print U, \" unsequenced frames\\n\"; }"
+fi
+
+exec pml -e "$PROG" $1

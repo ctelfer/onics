@@ -3,6 +3,7 @@
 ERR=0
 OBIN=../bin
 TOUT=tmp
+PDIR=data/packets
 
 
 # $1 - test number, $2 - infile|NONE $3 - flags, $4 - expected return (optional)
@@ -62,30 +63,30 @@ pml_test() {
 
 
 pml_test 1 NONE -svvv
-pml_test 2 data/onepkt.xpkt
-pml_test 3 data/onev4onev6.xpkt
+pml_test 2 $PDIR/onepkt.xpkt
+pml_test 3 $PDIR/onev4onev6.xpkt
 # 4 omitted for now
 pml_test 5 NONE
-pml_test 6 data/twoudp.xpkt
-pml_test 7 data/onetcp.xpkt
-pml_test 8 data/onepkt.xpkt
+pml_test 6 $PDIR/twoudp.xpkt
+pml_test 7 $PDIR/onetcp.xpkt
+pml_test 8 $PDIR/onepkt.xpkt
 pml_test 9 NONE
-pml_test 10 data/goodbad.xpkt
-pml_test 11 data/sample.xpkt
+pml_test 10 $PDIR/goodbad.xpkt
+pml_test 11 $PDIR/sample.xpkt
 pml_test 12 NONE -svvv
 pml_test 13 NONE
-pml_test 14 data/sample.xpkt
+pml_test 14 $PDIR/sample.xpkt
 pml_test 15 NONE -svvv
-pml_test 16 data/onetcp.xpkt
+pml_test 16 $PDIR/onetcp.xpkt
 # 17 is code generation only
 pml_test 18 NONE
-pml_test 19 data/onepkt.xpkt
+pml_test 19 $PDIR/onepkt.xpkt
 pml_test 20 NONE
 pml_test 21 NONE
 pml_test 22 NONE
-pml_test 23 data/hellogoodbye.xpkt
+pml_test 23 $PDIR/hellogoodbye.xpkt
 pml_test 24 NONE
-pml_test 25 data/onepkt.xpkt
+pml_test 25 $PDIR/onepkt.xpkt
 pml_test 26 NONE
 pml_test 27 NONE
 pml_test 28 NONE
@@ -96,8 +97,8 @@ pml_test 32 NONE
 pml_test 33 NONE
 pml_test 34 NONE
 pml_test 35 NONE "" 1
-pml_test 36 data/onepkt.xpkt
-pml_test 37 data/onepkt.xpkt
-pml_test 38 data/raw.xpkt
+pml_test 36 $PDIR/onepkt.xpkt
+pml_test 37 $PDIR/onepkt.xpkt
+pml_test 38 $PDIR/raw.xpkt
 
 exit $ERR
