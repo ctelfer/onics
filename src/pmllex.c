@@ -18,8 +18,8 @@
 
 
 #define SIDCHARS "_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
-#define IDCHARS \
-	"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_"
+#define IDCHARS	"_abcdefghijklmnopqrstuvwxyz"\
+		"ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 #define WSCHARS " \t\r\n"
 #define OPCHARS "=!<>~+-*/%&|^.@?{}[](),;$"
 #define QUOTE		'"'

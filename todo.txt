@@ -7,6 +7,7 @@ Key:
 
 PML
  + More test cases (control flow especially)
+ + String references to arbitrary 'str' values
  ? proper 'global' variable resolutions in functions and rules
  ? Add "standard include path/files"
  * command line arguments to programs (requires number parsing to be useful)

@@ -1,3 +1,6 @@
+PML INTRODUCTION
+----------------
+
 PML is a simple scripting language intended to be similar to 'awk' for packet
 streams instead of text records.  PML stands for Packet Manipulation
 Language.  The PML implementation in this distribution compiles to the
@@ -15,90 +18,560 @@ statements can include operations to create and delete packets.  They
 can also halt processing on the current packet to circumvent the
 remaining rules.
 
-PML supports named fields in network protocols.  The language (supported
-by NetVM) parses packets according to the 'protoparse' API when each
-packet arrives.  This API divides each protocol header into a header,
-payload and trailer section.  Thus, at a minimum, a PML program knows
-the offsets of the start, payload, trailer and end of each parsed
-protocol.  A specific protocol can include further offsets of interest
-and, more importantly, defines packet fields based on these offsets.
-The protocol definition can supports variable length fields through a
-starting and ending offset.  So the protocol field defines each named
-protocol field as a fixed offset from a parsed offset, and either a
-fixed length or an ending offset.  The framework also supports
-fixed-length bitfields up to 32-bits in length.
-
-The upshot of all of this for PML is that the actual "vocabulary" of a
-PML program depends on the protocol definitions that the PML
-compiler/interpreter loads.  This makes the language readily extensible
-to new protocols.  The NetVM can support and future work will
+PML supports an extensible namespace for packet protocols.  When a
+programmer generates the definitions for parsing a protocol, defining
+its fields and its constants through the ONICS protoparse framework, the
+PML parser automatically picks up those definitions and allows the PML
+programmer to access them.  The upshot of all of this for PML is that the 
+actual "vocabulary" of a PML program depends on the protocol definitions 
+that the PML compiler/interpreter loads.  This makes the language readily
+extensible to new protocols.  The NetVM can support and future work will
 include making the protocol namespaces and fields discoverable and
 allowing access to packet fields based on protocol identifiers and
-indices, rather than field names.
+indices, rather than field names.  The current ONICS toolkit includes
+protocol definitions for Ethernet II, IP, IPv6, ICMP, ICMPv6, UDP and
+TCP protocols.
 
-PML supports five data types.  These are: signed 64-bit integers, byte
-strings, masked byte strings, regular expressions and the 'void' type
-meaning no value.  It supports global and local variables.  Global
-variables can have a type of byte string or scalar.  Local variables
-(and function parameters which are a type of local variable) can only be
-scalar values.  Masked byte strings and regular expressions are only
-available as literal constants currently.  
+PML has six basic data types: signed 64-bit integers (int), byte 
+strings (str), byte string references (sref), masked byte strings, 
+regular expressions and the void type.  However, PML can only store
+a subset of these types in variables.  A PML global variable can hold a
+int, str or sref.  A PML local variable or parameter can only hold an
+int or sref.  Masked byte strings and regular expressions are only 
+available as literal constants (currently).  The void type can only 
+be a return type for a function.
 
-PML also supports named constant expressions.  A program can not
-modify a constant value and said value may not have any associated 
-memory space in the final program.  These values are used like #defines 
-in the C language.  A program can define these constant symbols to PML 
-expressions as long as the expression itself is constant and the compiler 
-can determine its final value at compile time.  Thus a program can define 
-a constant in terms of operations on other constants.
+PML also supports named constants.  A program can not modify a constant 
+value and said value may not have any associated memory space in the 
+final program.  These values are used like #defines in the C language.  
+A program can define these symbols as PML expressions as long as the 
+expression itself is constant and the compiler can determine its final
+value at compile time.  Thus a program can define a constant in terms of
+operations on other constants.
 
-PML supports two types of functions both of which take a fixed number of
-scalar parameters.  A regular function can return a scalar value or a void value
-(meaning no return type).  A regular function executes a list of statements 
-and can be recursive or mutually recursive with another regular function.  
-An inline function contains only a single scalar expression and can not be
-recursive.  One use of an inline function is as a safe macro.  The
-compiler can even use constant propagation to determine its result at
-compile time provided every parameter to the inline function is
-constant.  Inline functions can invoke other inline functions but again,
-can not recurse directly or indirectly.  (An inline function that
-invokes a regular function that invokes the inline function does not recurse,
-the regular function does.)
+PML has three types of subroutines all of which take a fixed number of
+parameters.  A function subroutine can return a scalar, reference or a 
+void value (meaning no return type).  A function executes a list of
+statements and can be recursive or mutually recursive with another function.
+
+An 'inline' contains only a single scalar expression and can not be
+recursive.  PML inlines are safe macros without side effects.  The
+compiler can even use constant propagation to determine an inline 
+result at compile time provided every parameter to the inline is
+constant.  Inlines can invoke other inlines but, again, can not recurse 
+directly or indirectly.  An inline can invoke a function that invokes 
+the inline.  But this will not result in an inline expansion past the
+function call so the inline itself is not recursive.  The function in
+that case, however, is.
+
+An 'intrinsic' is a subroutine whose definition is outside of the PML
+language.  This provides function-style syntax for operations that the
+PML program simply can not perform, but needs access to.  The PML
+language defines intrinsics for accessing packet metadata, manipulating
+packet buffers, manipulating packet parses, premature program exit and
+accelerated bit operations.  An intrinsic returns an int or void but in
+it is possible for one to return any data type including those not
+usually available to functions.
 
 
+PROGRAM SYNTAX
+--------------
 
-Locators are the 'r-' and 'l-'values of the language.  They represent a way
-to extract a value from some location.  This may be a simple variable
-reference or may be a matter of extracting bits from a named packet field.
-The forms of locators are:
+At the highest level, a PML program consists of a set of declarations.
+Each declaration can declare:
+  * a rule
+  * a function prototype (needed for recursion)
+  * a function definition
+  * an inline
+  * a constant
+  * a global variable 
 
-  name		-- could be: variable, constant, packet field,
-		   protocol name, protocol constant
-  name.name2...	-- could be: packet field, protocol name or protocol constant
+
+RULES
+-----
+
+A rule definition take the form:
+
+  RULE ::= PATTERN '{' [LOCAL_VAR_DECL]* [STATEMENT_LIST]* '}'
+
+A PATTERN must be one of 'BEGIN', 'END' or a PML expression enclosed by
+'?-' and '-?'.  The order of rule declaration matters because the PML
+program executes rules in their declaration order.  There can be
+multiple rules with the 'BEGIN' and 'END' pattern.  PML executes rules
+with the 'BEGIN' pattern at startup before any packets are read in the
+system.  It exectues rules with the 'END' pattern after it determines
+that there are no further packets to process.  Note that the exit()
+intrinsic will abort execution immediately and the program will not
+execute rules in the 'END' pattern that it has not already executed.
+
+PML evaluates a rule with an expression pattern once for every packet
+that it receives.  The PML program evaluates the PATTERN exression (the
+'rule pattern').  If the expression returns non-zero scalar result then
+the program executes the STATEMENT_LIST (the 'rule action').  It is also 
+worth noting that PML can coerce any type to an integer value (see below)
+so any PML expression is valid in a rule pattern.  Again, PML evaluates
+the rules in order and a rule's actions (in the STATEMENT_LIST) can cause
+the program to skip later rules.  So order of declaration is important.  
+A PML program can omit the pattern expression which will cause the rule
+action to fire on every packet.
+
+The LOCAL_VAR_DECL is an optional series of local variable declarations.
+These are discussed in the next section.
+
+If PML comes to the end of the packet rules without any other statement
+that aborts control on the current packet (see STATEMENTS), then
+PML will transmit all packets remaining in the working set.  (see PACKET
+WORKING SET)
+
+
+TYPES
+-----
+
+PML supports the following native types:
+ - void			-> no type or value
+ - int			-> signed 64-bit integer
+ - str			-> byte string
+ - sref			-> reference to a byte string
+ - mstr			-> byte string with equal length byte string mask
+ - regex		-> regular expression
+
+The type void may only be used for a function return value.  The program
+is not able to declare variables of type mstr and regex.  Local
+variables and function parameters may not have type str:  only global
+varaibles can have that type in this version of the language.
+   
+
+VARIABLE DECLARATIONS
+---------------------
+
+PML allows one to declare four types of variables:  global variables, local
+variables, function parameters and constants.  A global variable is the
+only variable that can be defined to have a type of 'str'.  It can also
+have a type of 'int' or 'sref'.  A global variable declaration takes the form:
+
+  int NAME [= EXPRESSION] ;
+  sref NAME ;
+  str NAME '[' LENGTH ']' [= EXPRESSION] ;
+
+The first form declares a 64-byte integer variable.  If EXPRESSION is
+present, then the variable is initialized to the value of the
+expression.  Otherwise it is initialized to 0.  The second form declares
+a globally accessible string reference.  It may not be initialized at
+compile time.  The third form declares a byte string of LENGTH bytes.
+If EXPRESSION is present, then the string is initialized to the value of
+the expression (which must be of type 'str').  If the variable has a
+longer length than the initialization expression, then the program
+initializes the remaining bytes in the string are initialized to 0.  If
+the initializer is greater in length than the variable then the compiler
+will report an error.  A byte string variable without an initializer
+will initially contain all 0s in every byte.
+
+
+A program can have local variable declarations at the beginning of the
+action portions of a rule or the body of a function.  They may not
+appear in inlines however.  A rule action or function body may use
+variables of type 'int' without declaring them.  Referencing a variable
+name in a function body or rule action statement that has no binding to
+a previously declared variable or protocol-specific name (see 'LOCATORS'
+below) automatically declares a local variable of type 'int'.
+
+PML initializes all uninitialized variables to 0 (int), a string of 0s
+(str) or a null reference (sref) depending on the variable type.
+
+
+EXPRESSIONS
+-----------
+
+In the following, let 'E', 'E1', 'E2' ... refer to expressions.  Tokens of 
+the form *LOC refers to a 'locator'.  This is an rvalue consisting of a 
+variable name or a protocol namespace constant.  
+
+In PML an expression is one of:
+  - a positive decimal integer
+  - a hexadecimal integer preceeded by '0x'
+  - a locator (see below)
+  - a function or inline call of the form:
+	<funcname> '(' [E1, E2...] ')'
+  - a literal byte string:  
+	a double quoted string with usual C substitutions
+	  OR
+  	'\x' followed by an even number of hex digits
+	  OR
+	a dotted quad IPv4 address (4 byte string)
+	  OR
+	an IPv6 address (16 byte string)
+	  OR
+	an 802.1 MAC address (6 byte string)
+
+
+  (In order of precedence)
+
+  - '(' E ')'   : parenthesized expression
+  - '&' E	: string reference to E (value has type 'sref')
+  - '-' E       : numerically negated expression
+  - 'not' E	: logcal inversion (value is 0 or 1)
+  - '~' E	: binary inversion (bit-wise inversion)
+  - E1 << E2	: E1 left-shifted by E2
+  - E1 >> E2	: E1 right-shifted by E2
+  - E1 % E2	: E1 modulo E2
+  - E1 / E2	: E1 divided by E2
+  - E1 * E2	: E1 multiplied by E2
+  - E1 + E2	: E1 plus E2
+  - E1 - E2	: E1 minus E2
+  - E1 & E2	: E1 binary-ANDed with E2
+  - E1 | E2	: E1 binary-ORed with E2
+  - E1 ^ E2	: E1 binary-XORed with E2
+  - E1 == E2	: E1 equals E2 (numeric compare, value is 0 or 1)
+  - E1 != E2	: E1 does not equal E2 (numeric compare, value is 0 or 1)
+  - E1 < E2	: E1 less than E2 (numeric compare, value is 0 or 1)
+  - E1 > E2	: E1 greater than E2 (numeric compare, value is 0 or 1)
+  - E1 <= E2	: E1 less or equal to E2 (numeric compare, value is 0 or 1)
+  - E1 >= E2	: E1 greater or equal to E2 (numeric compare, value is 0 or 1)
+  - E1 =~ E2	: E1 matches E1
+  - E1 !~ E2	: E1 does not match E2
+  - E1 'and' E2 : E1 and E2 (boolean comparison, value is 0 or 1)
+  - E1 'or ' E2 : E1 or E2 (boolean comparison, value is 0 or 1)
+
+
+The type of an expression is usually 'int'.  There are four exceptions.
+A string reference expression (& E) has type 'sref'.  A byte string
+literal has type 'str'.  A function or inline call has a type of the
+return value of the function or inline (always 'int' for inlines).
+Finally, a locator expression's type is equal to the type value that the
+locator refers to.  (see below)
+
+The value of the expression E in a string reference operator must be a
+byte string.  ** Currently, 'E' must be a locator and can not any other
+type of expression that has type 'str'.  I intend to fix this. **
+
+The match comparison operators (=~ and !~) perform different comparisons
+depending on the type of the right hand expression.  The left-hand 
+expression must have a type of str or sref.  The right hand expression
+must have type str, mstr or regex.  For the rest of this discussion
+Let E1 be the left-hand side expression in the match expression and 
+let E2 be the right-hand side.
+
+If E2 has type 'str', then PML performs an exact string comparison (the
+lengths of the E1 and E2 must be equal in order to be equal).  If the
+E2 has type 'mstr' then PML performs a masked string comparison.  A
+masked string value has a 'value' component and a 'mask' component both
+of which are byte strings.  Both 'value' and 'mask' must have the same
+length.  Expression E1 matches an mstr E2 if and only if: 1) the length of
+E1 matches the lengths of E2's value and mask and 2) each bit b1 in
+E1 matches its corresponding bit b2 in E2.value when the corresponding 
+bit 'm' in E2.mask is set.  Finally, if E2 has type regex then PML
+performs a regular expression mask of the pattern E2 against E1.
+
+Aside from the match and reference operators, all other operators
+require the types of their subexpressions to be 'int'.  Each expression
+argument in a function or inline call must have the same type as the 
+corresponding formal paramenter in the function declaration.
+
+
+TYPE CONVERSION
+---------------
+
+PML will automatically attempt to convert an expression to the type
+required by a given operator or function parameter.  PML will also try
+to implicitly convert the expression in a 'return' statement (see below)
+to the return type of the enclosing function.  The language performs the
+following type conversion implicitly:
+
+  mstr->str - returns the 'value' portion of the masked string
+
+  str->int  - treat up to the first 8 bytes of the string as a big
+              endian 2s-compliment arithmetic integer.  If the string
+	      is less than 8 bytes, logcially pad to 8 bytes with
+	      zeros in the high order bits.
+
+  mstr->int - convert the value and the mask of the masked string
+	      to 'int' as above and return the binary AND of the
+	      two resulting values.
+
+  str->void - discards the value
+  int->void
+  sref->void
+  mstr->void
+
+
+LOCATORS
+--------
+A locator is a named reference to a value.  The name may refer to a
+variable, a protocol, a field in a packet or a constant.  A locator can
+have the following forms:
+
+DIRECT ACCESS:
+  name		-- could refer to: variable, constant, packet field,
+		   protocol, or protocol constant
+
+  name.name2[...]
+		-- could refer to: packet field, protocol or protocol constant
 
   @name{p}
   @name{p}.name2...
   @name{p,i}
   @name{p,i}.name2...
-		-- could be: packet field, protocol name
+		-- could refer to: packet field
 
-  name[0]	-- could be: variable, byte string or mask value constant,
-  		   packet field as a byte string.
+SUBSTRING ACCESS: 
 
+(DA is a locator string with a direct access form.  DA must refer to a
+value of type 'str' or 'sref'.)
+
+  DA[off]	
+  DA[off, len]	
+		-- could refer to: variable, protocol, protocol constant 
+		   packet field. (The form of the direct access
+		   substring restricts possible types for this locator.)
+
+PROTOCOL ID:
   @@name
-  @@name.name2	-- could be: protocol name
+  @@name.name2	-- could refer to: protocol name
 
-  &name		-- could be variable, packet field, protocol name
-  &name.name2	-- could be packet field, protocol name
 
-  Resolution lookup order is:  protocol namespace, parameters, 
-	global variables, local variables
 
-	- local/global seems backwards but global vars are explicitly
-	  declared and local vars are not.
+At a given point in the PML program, the compiler consults the following
+namespaces in the following order to determine which value a locator
+refers to: protocol namespace, parameters, constants global variables, local
+variables.  Recall from VARIABLES above, that a locator matches none of
+the above namespaces will implicitly cause a local variable declaration
+if the reference is in the body of a function or the action of a rule.
+However, the only locator form allowable for such a declaration is
+the very first direct access form:  a name with no '@', '.', '{' or '}'
+symbols.
 
+
+The type of a locator expression is the type of the value it refers to
+with one exception.  A locator that refers to a 'sref' variable has type
+'str' (unless modified with the unary & operator in which case the
+expression has type 'sref').
+
+
+STATEMENTS
+----------
+
+PML has the following types of statements:
+
+ - if ( EXPR ) { STATEMENT_LIST1 } [else { STATEMENT_LIST2 }]
+
+   Evaluate EXPR (typecasting to an int if necessary) and if it is 
+   true (non-zero) then execute STATEMENT_LIST1.  If the 'else' clause
+   is present and EXPR is false (0), then execute STATEMENT_LIST2
+   instead.
+
+ - while ( EXPR ) { STATEMENT_LIST }
+
+   Executes the STATEMENT_LIST while EXPR returns true (non-zero integer).
+   (EXPR will be typecast to an integer if possible otherwise the
+   compiler will flag an error.)
+
+ - print EXPR ;
+
+   Evaluate EXPR and then print its value.  (the print goes to standard
+   error by default when PML is running from the command line.)
+
+ - return EXPR ;
+
+   Evaluate EXPR and immediately exit the currently executing function
+   and returning the value of EXPR as the return value of the function.
+   If EXPR's type doesn't match the return type of the function then PML
+   will implicitly confert it if possible or give a compile time error
+   if it is not possible.
+
+ - EXPR ;
+
+   Evaluate and discard the value of EXPR.  (could be a function call
+   with side effects.)
+
+ - send ;
+ - send EXPR ;
+
+   There are two forms of the 'send' statement.  The first, with no
+   expression, sends all of the packets currently in the working set and
+   aborts all rule processing on the current packet.  If the EXPR is
+   present then the program evaluates EXPR (typecasting to an integer if
+   necessary) and sends the packet with the corresponding numeric value.
+   The program will abort with an error if EXPR evaluates to an
+   erroneous packet number.  After sending, the packet is freed.
+   However the program will continue running from the next statement
+   after the 'send'.
+
+ - send_no_free EXPR ;
+
+   This statement evaluates EXPR and transmits the packet just as with
+   'send EXPR'.  However, with the send_no_free statement, the packet
+   remains in the working set.  As with 'send EXPR' execution continues
+   after the statement.
+
+ - drop [EXPR] ; 
+
+   As with the 'send' statement, the 'drop' statement has two forms with
+   differing control flow semantics.  A 'drop' with no arguments drops
+   all packets in the working set and aborts rule processing (starting
+   over with the next packet).  If the 'drop' statement has a expression
+   argument (EXPR) then the program evaluates the argument typecasting
+   the result to an integer and then frees the packet buffer with the
+   corresponding numeric index.  As with 'send EXPR', this second form
+   of drop continues execution afterwards.  Dropping a packet index that
+   is out of range will abort the PML program, but dropping a valid
+   packet index that does not actually refer to a packet is simply a
+   no-op.
+
+ - break ;
+
+   Immediately jump to the end of the innermost enclosing 'while' loop.
+   This will not send control outside of executing functions or rules.
+   A break statement outside of any enclosing loop is a compile time
+   error.
+
+ - continue ; 
+
+   Immediately jump to the test of the currently innermost loop and 
+   evaluate it.  This will not send control outside of the current
+   function or rule.  A continue statement outside of any enclosing loop
+   is a compile time error.
+
+ - nextrule ;
+
+   Immediately jump to the end of the current rule.  If this occurs
+   within a BEGIN rule then this statement will end processing in
+   all BEGIN rules.  The same behavior holds for END rules.  For packet
+   rules, this statement directs execution to the test for the next
+   rule (or to transmit all remaining packets if no further rules are
+   present.)
+
+ - LOCATOR = EXPR ;
+   & LOCATOR = EXPR ;
+
+   Evaluate EXPR and assign its value to the location denoted by
+   LOCATOR.  LOCATOR and EXPR must have the same type or the PML program
+   must be able to type cast the EXPR to the type of LOCATOR.  In 
+   assignment statement that is prefixed with a '&', the expression must 
+   have type 'sref' and LOCATOR must be a variable of type 'sref'.  This
+   assignment modifies the LOCATOR variable to point to refer to a new
+   string.
+
+
+PACKET WORKING SET
+------------------
+
+PML keeps a small, fixed size working set of packet buffers during
+execution.  The packets are indexed numerically from 0 to 15.
+During BEGIN and END rules the working set start out empty;  none of the
+packet indices refer to live packet buffers.  During packet rules,
+PML sets packet index 0 to refer to the next packet that it pulls from
+ingress.  The remaining packet indices still refer to nothing.
+
+A PML program can make a packet index refer to a packet buffer by
+copying packet buffers or creating packet buffers.  A program creates
+new packets with the pkt_new() and pkt_new_z() intrinsics.  It copies
+packets with the pkt_copy() intrinsic.  A program can also swap the 
+packet buffers that two packet indices refer to through the pkt_swap()
+intrinsic.  
+
+In the future, there will also be new intrinsics to save packets to a
+backing store and restore them to the working set.  However, this is not
+yet implemented.
+
+
+PROTOCOL NAMESPACES
+-------------------
+
+A PML program has access to a set of protocol modules.  These
+libraries extend the PML namespace with strings that refer to the
+protocols themselves, protocol-specific constants and parsed regions
+within packets.  In the ONICS tool-suite, the command-line pml tool uses
+the ONICS 'protoparse' and 'ns' APIs to implement these protocol
+modules.  
+
+The term 'protocol namespace' refers to the set of symbols that a PML 
+protocol module imports into the PML namespace.  Each protocol namespace
+has members.  One refers to a member in a namespace by following the
+protocol name with a '.' and then the member name.  For example,
+"ip.ttl" refers to member "ttl" in the "ip" namespace.  Each protocol
+namespace member has one of the following types:
+  - namespace	 -- namespaces can nest within each other
+  - constant	 -- a constant value with some relationship to the protocol
+  - packet field -- a definition of a field within a parsed protocol unit.
+
+In PML each protocol is assumed to have an encoding format in the
+packet.  When each packet arrives in PML, the runtime first decodes it
+(using the 'protoparse' library in the CLI version) which produces
+offsets to all of the 'protocol unit's in the packet.  A protocol unit
+is a set of bytes in the packet that are meaningful in the context of a
+given protocol.  The same bytes in a packet can be members of several
+protocol units.  For example, a byte the payload of a TCP segment might
+be within a TCP protocol unit, an IP protocol unit and an Ethernet
+protocol unit.
+
+When a PML program uses a protocol name as a locator, the locator's
+expression type is 'int' and it returns a true or false (1 or 0) value
+indicating whether the protocol is present in the given packet (which
+defaults to packet index if not specified 0).  If the PML program gives 
+the protocol name, but also adds an offset/length substring reference, 
+then the locator type is 'str' and it refers to the portion of the packet
+encapsulated in that protocol (both header and data).
+
+Every protocol has several members regardless of the protocol type.
+These are always accessible to the PML program if the protocol is
+present in the packet.  The members for a protocol P are:
+
+  - P.exists -- more explicit form of just plain "P"
+  - P.hlen -- the length of the header of the protocol unit
+  - P.plen -- the length of the payload of the protocol unit
+  - P.tlen -- the length of the trailer of the protocol unit
+  - P.totlen -- P.hlen + P.plen + P.tlen
+  - P.error -- A bitmap of errors found in the parsing of the protocol
+  - P.prid -- the protocol ID of this protocol (will be used in future
+              versions for parses referring to groups of protocols such
+	      as 'transport' or 'tunnel' to get the actual protocol type)
+  - P.index -- the numeric index of the protocol header in the list of
+               all the protocol headers (sorted by starting offset).
+  - P.header -- A 'str' value referring to the header portion of the data
+  - P.payload -- A 'str' value referring to the payload portion of the data
+  - P.trailer -- A 'str' value referring to the trailer of the data
+  - P.parse -- A 'str' value referring to the entire protocol unit.
+	       (One can access this as P[0] as well.)
+
+
+Each constant member in a protocol namespace has a type of either 'int', 
+'str' or 'mstr'.  An example of such a constant might be "ip.broadcast"
+which equals a byte string for 255.255.255.255.
+
+Finally, a packet field member in a protocol namespace provides a way to
+access a field within a protocol unit.  There are two forms of packet
+fields:  byte fields and bit fields.  Byte fields have type 'str',
+start on a byte boundary and have a length in bits that is a multiple of
+8.  Byte fields can have variable lengths.  A bitfield can start at any 
+bit in the packet, but its length (in bits) must be fixed and less than 
+or equal to 32.  A bitfield's type is 'int', unlike a bytefield.
+
+A PML program can both read and write packet fields in the packet.  The
+program must observe rules for assignment based on the type of the
+packet field.
+
+
+FUNCTION DECLARATIONS
+---------------------
+
+
+INLINE DECLARATIONS
+-------------------
+
+
+FORMATTED PRINTING
+------------------
+
+
+OPTIMIZATION
+------------
+
+
+
+RANDOM NOTES
+------------
   Types:
-    - void			- void (functions only)
+    - void			- void (function return type only)
     - signed integer		- int
     - byte string		- str
     - masked byte string	- mstr (NOT DECLARABLE)
@@ -114,9 +587,9 @@ The forms of locators are:
    - local variables have types int, sref
    - parameters can have types int, sref 
    - global variables have types int, str, sref
-   - const's have type int only
-   - functions can return int, sref, mstr, str, void
-   - inlines can return int, sref, str(?)
+   - const's have type int
+   - functions can return int, sref, str, void
+   - inlines can return int
    - intrinsics can return void, int, sref, str, mstr, regex
   
   
@@ -261,10 +734,10 @@ Intrinsics:
 				      shifting up
   -- void pkt_ins_d(pnum, off, len) - insert 'len' bytes at 'off' in 'pnum'
 				      shifting down
-  -- void pkt_cut_u(str) - cut the string from its packet shifting bytes up
-			   from the front
-  -- void pkt_cut_d(str) - cut the string from its packet shifting bytes down
-			   from the end
+  -- void pkt_cut_u(sref) - cut the string from its packet shifting bytes up
+			    from the front
+  -- void pkt_cut_d(sref) - cut the string from its packet shifting bytes down
+			    from the end
   -- void pkt_parse(pnum) - reparse a packet 'pnum'
 
   /* very low level functions */
