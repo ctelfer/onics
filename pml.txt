@@ -87,6 +87,13 @@ Each declaration can declare:
   * a global variable 
 
 
+COMMENTS
+--------
+
+Comments in PML start with a '#' that isn't in a string constant and
+they continue until the end of the line.
+
+
 RULES
 -----
 
@@ -370,13 +377,15 @@ PML has the following types of statements:
    Evaluate EXPR and then print its value.  (the print goes to standard
    error by default when PML is running from the command line.)
 
+ - return ;
  - return EXPR ;
 
    Evaluate EXPR and immediately exit the currently executing function
    and returning the value of EXPR as the return value of the function.
    If EXPR's type doesn't match the return type of the function then PML
    will implicitly confert it if possible or give a compile time error
-   if it is not possible.
+   if it is not possible.  If the function's return type is 'void' then
+   the EXPR must be omitted.  Otherwise EXPR must be included.
 
  - EXPR ;
 
@@ -554,9 +563,72 @@ packet field.
 FUNCTION DECLARATIONS
 ---------------------
 
+Functions in PML are subroutines that support direct or indirect 
+recursion.  PML functions, like rules, can have local variables and
+parameters that are of type 'int' or 'sref'.  A PML program can also
+have a prototype declaration of a function to allow other functions to
+invoke it before the actual function declaration.
+
+A function prototype takes the form:
+
+  RTYPE NAME ( [TYPE NAME [, TYPE NAME]...] ) ;
+
+The RTYPE can be 'int', 'sref' or 'void'.  Again, 'void' indicates
+that there is no return value from the function.
+
+A function declaration has the form:
+
+  RTYPE NAME ( [TYPE NAME [, TYPE NAME]...] ) { STATEMENT_LIST }
+
+Obviously, it is an error for a function declaration not to match its
+prototype.  It is also an error to have multiple prototypes that do not
+match.
+
+If there are any 'return' statements in the STATEMENT_LIST then the
+program will attempt to automatically convert them to the return type of
+the function.  This means that if the return type is 'void', then the
+program will discard the return value of the return expression (if
+present).  If control reaches the end of STATEMENT_LIST without
+encountering a return statement, then the program returns a value of '0'
+if the return type is 'int' or an empty string reference if the type is
+'sref'.  
+
 
 INLINE DECLARATIONS
 -------------------
+
+An 'inline' is a special type of subroutine that must have a return type
+of 'int' and whose body is a single expression (that can be type cast to
+'int') instead of a list of statements.  Upon invocation, an inline
+actually embeds the expansion of the expression in the PML program
+directly.  The compiler takes care to evaluate each parameter to the
+inline exactly once and the inline can not modify it.  
+
+So an 'inline' is a safe macro for arithmetic computations.  It does not 
+have the full cost of performing a function call.  More importantly, the
+restrictions on the inline make it trivial to optimize using constant
+propagation (see OPTIMIZATION below).  If the arguments to an inline are
+known to be constant and all parts of the inline expression depend only
+on constants (as opposed to, say, global variables or packet values,
+etc..) then the compiler can simply precompute the result of the inline
+rather than having the program compute it every time.  This property
+also allows the program to invoke inlines in constant definitions.
+
+An inline declaration takes the form:
+
+  inline NAME ( [TYPE NAME [, TYPE NAME]...] ) { EXPR }
+
+Example:
+
+  inline double(int x) { x * x }
+
+  const A = 5;
+  const B = double(A);		# legal and gets the value 10
+  const C = double(tcp.seq);	# illegal, arg not constant so return value
+  				#   isn't constant and can't init a const
+  int D;
+  { D = double(tcp.seq); }	# legal: call needn't be a constant expr here
+
 
 
 FORMATTED PRINTING
