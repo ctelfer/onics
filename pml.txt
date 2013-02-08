@@ -372,10 +372,12 @@ PML has the following types of statements:
    (EXPR will be typecast to an integer if possible otherwise the
    compiler will flag an error.)
 
- - print EXPR ;
+ - print [% FMT %] EXPR [,[% FMT %] EXPR ...] ;
 
-   Evaluate EXPR and then print its value.  (the print goes to standard
-   error by default when PML is running from the command line.)
+   Evaluate each EXPR and then print its value.  (the print goes to standard
+   error by default when PML is running from the command line.)  If a
+   FMT directive is present, then it modifies the output string.  See
+   FORMATTED PRINTING.
 
  - return ;
  - return EXPR ;
@@ -501,17 +503,17 @@ protocol name with a '.' and then the member name.  For example,
 namespace member has one of the following types:
   - namespace	 -- namespaces can nest within each other
   - constant	 -- a constant value with some relationship to the protocol
-  - packet field -- a definition of a field within a parsed protocol unit.
+  - packet field -- a definition of a field within a parsed protocol data unit.
 
 In PML each protocol is assumed to have an encoding format in the
 packet.  When each packet arrives in PML, the runtime first decodes it
 (using the 'protoparse' library in the CLI version) which produces
-offsets to all of the 'protocol unit's in the packet.  A protocol unit
-is a set of bytes in the packet that are meaningful in the context of a
-given protocol.  The same bytes in a packet can be members of several
-protocol units.  For example, a byte the payload of a TCP segment might
-be within a TCP protocol unit, an IP protocol unit and an Ethernet
-protocol unit.
+offsets to all of the 'protocol data unit's in the packet.  A protocol 
+data unit is a set of bytes in the packet that are meaningful in the 
+context of a given protocol.  The same bytes in a packet can be members 
+of several protocol data units.  For example, a byte the payload of a TCP 
+segment might be within a TCP protocol data unit, an IP protocol data unit
+and an Ethernet protocol data unit.
 
 When a PML program uses a protocol name as a locator, the locator's
 expression type is 'int' and it returns a true or false (1 or 0) value
@@ -526,9 +528,9 @@ These are always accessible to the PML program if the protocol is
 present in the packet.  The members for a protocol P are:
 
   - P.exists -- more explicit form of just plain "P"
-  - P.hlen -- the length of the header of the protocol unit
-  - P.plen -- the length of the payload of the protocol unit
-  - P.tlen -- the length of the trailer of the protocol unit
+  - P.hlen -- the length of the header of the protocol data unit
+  - P.plen -- the length of the payload of the protocol data unit
+  - P.tlen -- the length of the trailer of the protocol data unit
   - P.totlen -- P.hlen + P.plen + P.tlen
   - P.error -- A bitmap of errors found in the parsing of the protocol
   - P.prid -- the protocol ID of this protocol (will be used in future
@@ -539,7 +541,7 @@ present in the packet.  The members for a protocol P are:
   - P.header -- A 'str' value referring to the header portion of the data
   - P.payload -- A 'str' value referring to the payload portion of the data
   - P.trailer -- A 'str' value referring to the trailer of the data
-  - P.parse -- A 'str' value referring to the entire protocol unit.
+  - P.parse -- A 'str' value referring to the entire protocol data unit.
 	       (One can access this as P[0] as well.)
 
 
@@ -548,7 +550,7 @@ Each constant member in a protocol namespace has a type of either 'int',
 which equals a byte string for 255.255.255.255.
 
 Finally, a packet field member in a protocol namespace provides a way to
-access a field within a protocol unit.  There are two forms of packet
+access a field within a protocol data unit.  There are two forms of packet
 fields:  byte fields and bit fields.  Byte fields have type 'str',
 start on a byte boundary and have a length in bits that is a multiple of
 8.  Byte fields can have variable lengths.  A bitfield can start at any 
@@ -634,9 +636,277 @@ Example:
 FORMATTED PRINTING
 ------------------
 
+PML's print statement supports formatted printing for nicer display of
+output.  A print statement is not required to have a print format.
+The formats are:
+    %[W]d% - signed decimal (int, default format for 'int' expressions)
+    %[W]u% - unsigned decimal (int)
+    %[W]x% - unsigned hex (int)
+    %[W]o% - unsigned oct (int)
+    %[W]b% - binary (int)
+
+    %[W]s% - string (str, length == any, default for 'str' expressions)
+    %[W]hex% - hex string (str, length any)
+    %[W]ip% - IPv4 address (str, length == 4)
+    %[W]ipv6% - IPv6 address (str, length == 16)
+    %[W]eth% - 802.11 address (str, length == 6)
+
+ - W is a positive or negative integer.
+   * positive = W is the minimum width for the output and
+   		output is right justified within that width
+   * negative = |W| is the minimum width for the output and
+   		the output is left justified within that width
+
+
+INTRINSICS
+----------
+
+Intrinsics are basically functions that operate on resources outside
+of those available within the PML language itself.  PML intrinsics allow
+the programmer to access properties about strings, manipulate active
+packets, manipulate parsed protocol data units, fix checksums and perform
+some binary operations quickly.  The intrinsics are given below.
+
+
+String Operations
+
+  int str_len(sref s)
+  	- return the length of a string reference
+
+  int str_addr(sref s)
+  	- return the address of a string reference
+
+  int str_ispkt(sref s)
+  	- return whether the string reference refers to a packet
+
+  int str_seg(sref s)
+  	- return the segment index/packet # that the reference refers to
+
+  int str_isnull(sref s)
+  	- return whether the reference is an empty reference
+
+
+Packet Manipulation
+
+  void pkt_new(int pnum, int len)
+  	- create a new packet with 'len' bytes of data
+
+  void pkt_new_z(int pnum, int len)
+  	- create a new packet with 0 bytes but 'len' buffer space bytes
+
+  void pkt_swap(int pn1, int pn2)
+  	- swap two packets by index
+
+  void pkt_copy(int pndst, int pnsrc)
+  	- copy pnsrc to pndst
+
+
+Packet Buffer / Protocol Unit Manipulation
+
+  void pkt_ins_u(int pnum, int off, int len)
+  	- insert 'len' bytes at offset 'off' in packet 'pnum' shifting
+	  data up in the buffer
+
+  void pkt_ins_d(int pnum, int off, int len)
+  	- insert 'len' bytes at offset 'off' in packet 'pnum' shifting 
+	  data down in the buffer
+
+  void pkt_cut_u(sref s)
+  	- cut the string from its packet shifting bytes up from the
+	  front.  's' must be a reference to packet data.
+
+  void pkt_cut_d(sref s)
+  	- cut the string from its packet shifting bytes down from the
+	  end.  's' must be a reference to packet data.
+
+  void pkt_parse(int pnum)
+  	- reparse a packet 'pnum'
+
+  int pkt_get_off(int pnum, int prid, int idx, int oid)
+  	- get offset 'oid' of the 'idx'th protocol data unit with 
+	  protocol ID 'prid' in packet 'pnum'
+
+  void pkt_adj_off(int pnum, int prid, int idx, int oid, int amt)
+  	- add 'amt' to offset 'oid' of the 'idx'th protocol data unit 
+	  with protocol ID 'prid' in packet 'pnum'.
+
+  void parse_push_back(int pnum, int prid)
+  	- push a new protocol header of protocol ID 'prid' to the back
+	  of the protocol data unit chain of packet 'pnum'.  There must
+	  be space within the innermost protocol data unit to hold this
+	  new header.  (Use pkt_ins_* of necessary to create it.)
+
+  void parse_pop_back(int pnum)
+  	- remove the innermost protocol data unit from packet 'pnum'.
+	  This does not remove the data itself: only the parse of the
+	  data unit.  To remove the data, follow this up with pkt_cut_*.
+
+  void parse_push_front(int pnum, int prid)
+  	- push a new protocol header of protocol ID 'prid' to the front
+	  of the protocol data unit chain of packet 'pnum'.  There must
+	  be space outside the outermost protocol data unit to hold this
+	  new header.  (Use pkt_ins_* of necessary to create it.)
+
+  void parse_pop_front(int pnum)
+  	- remove the outermost protocol data unit from packet 'pnum'.
+	  This does not remove the data itself: only the parse of the
+	  data unit.  To remove the data, follow this up with pkt_cut_*.
+
+
+  void fix_dltype(pnum)
+  	- Set the datalink type of the packet to the outermost protocol
+	  data unit's protocol ID.
+
+  void fix_all_len(pnum)
+  	- Walk the protocol data units and fix all length fields within
+	  each unit.
+
+  void fix_all_csum(pnum)
+  	- Walk the protocol data units and fix all the checksum fields
+	  within each unit.
+
+
+Special Locator Intrinsics
+
+  These intrinsics are special in that the user does not provide a
+  standard data type as an argument to the intrinsic.  The 'pdesc'
+  argument must be a packet locator that refers to a protocol or packet
+  field.  Each intrinsic performs an operation on the specific protocol 
+  data unit that the locator identifies.
+
+  Examples:
+  	tcp		-> the first TCP PDU of packet 0
+	@ip{1,2}	-> the 2nd IP PDU of packet 1
+	@icmp6{1}	-> the first ICMPv6 PDU of packet 0
+
+  void parse_update(pdesc)
+  	- Update the protocol parsed fields for the PDU.  One might use
+	  this, for example, after inserting IP option data in an IP
+	  header to make PML able to recognize the IP option fields.
+
+  void fix_len(pdesc)
+  	- Fix the length fields in the given PDU.
+
+  void fix_csum(pdesc)
+  	- Fix the checksum fields in the given PDU.
+
+
+Numeric Operations
+
+  int pop(int v)
+  	- returns the number of bits set in 'v'
+
+  int log2(int v)
+  	- returns the position of the first bit set in 'v' or -1 if v
+	  == 0.
+
+  int min(int x, int y)
+  	- returns the minimum of x and y
+
+  int max(int x, int y)
+  	- returns the maximum of x and y
+
+
+Packet Metadata Intrinsics
+
+  Per packet metadata that may or may not be present in a given packet.
+  If the data is not present the meta_get_* function returns -1.
+  Similarly, setting the metadata to -1 removes the tag rather than 
+  setting it.
+
+  int meta_get_tstamp(int pnum)
+  	- get the timestamp in nano-seconds for packet 'pnum'
+
+  void meta_set_tstamp(pnum, ts)
+  	- set the timestamp in nano-seconds for packet 'pnum'
+
+  int meta_get_presnap(int pnum)
+  	- get the pre-snapped packet length for packet 'pnum'
+
+  void meta_set_presnap(int pnum, int len)
+  	- set the pre-snapped packet length for packet 'pnum' to 'len'
+
+  int meta_get_inport(int pnum)
+  	- get the input port for packet 'pnum'.
+
+  void meta_set_inport(int pnum, int port)
+  	- set the input port for packet 'pnum' to 'port'.
+
+  int meta_get_outport(pnum)
+  	- get the output port for packet 'pnum'.
+
+  void meta_set_outport(pnum, port)
+  	- set the output port for packet 'pnum' to 'port'.
+
+  int meta_get_flowid(int pnum)
+  	- get the flow identifier of packet 'pnum'.
+  	
+  void meta_set_flowid(int pnum, int id)
+  	- set the flow identifier of packet 'pnum' to 'id'.
+
+  int meta_get_class(int pnum)
+  	- get the traffic class of packet 'pnum'.
+
+  void meta_set_class(int pnum, int tc)
+  	- set the traffic class of packet 'pnum' to 'tc'.
+
+  int meta_get_seq(int pnum)
+  	- get the packet sequence number of packet 'pnum'.
+
+  void meta_set_seq(int pnum, int seq)
+  	- set the packet sequence number of packet 'pnum' to 'seq'.
+
+Miscellaneous
+  void exit(int status) 
+  	- abort program with exit status 'status'.
+
 
 OPTIMIZATION
 ------------
+
+The PML compiler has basic optimization support built in.  It
+automatically attempts to use constant propagation to simplify
+expressions whose values it can determine at compile time.  An
+expression is a 'constant expression' if it is:
+
+	- a literal value
+	- a const
+	- a binary or unary operator whose operands are constant
+	  expressions
+	- a 'parameter constant inline' all of whose arguments are
+	  constant expressions.
+
+A 'parameter constant inline' is an inline whose expression body
+would be a constant expression if all of the parameters were constant.
+
+Assume the following declarations:
+
+	inline double(int x) { x * x }
+	inline somefunc(int x, int y) { (2 * x) % y }
+	inline isHTTP() { tcp and tcp.dport == 80 or tcp.sport == 80 }
+	const A = 5;
+	int X;
+
+
+Then, the following are constant expression:
+	3
+	3 + 5
+	3 & 5 * 18
+	A / 3
+	double(3)
+	double(A * 5)
+	somefunc(double(3), somefunc(8 * 4 / 2, A))
+
+
+The following are not constant expressoins:
+	X
+	double(X)
+	tcp
+	isHTTP()
+	@ip{2}
+
+The inline's double and somefunc are parameter-constant inlines, but
+isHTTP is not.  A PML program may assign any constant expression to a 'const'.
 
 
 
@@ -857,19 +1127,19 @@ Intrinsics:
 
 
 Formatted printing in PML
- - print [%<fmt>:]<expr> [,[%<fmt>:]<expr> ...]
+ - print [%<fmt>%]<expr> [,[%<fmt>%]<expr> ...]
  - <fmt> is one of:
-    %[<w>]d - signed decimal (scalar, default for scalar)
-    %[<w>]u - unsigned decimal (scalar)
-    %[<w>]x - unsigned hex (scalar)
-    %[<w>]o - unsigned oct (scalar)
-    %[<w>]b - binary (scalar)
+    %[<w>]d% - signed decimal (scalar, default for scalar)
+    %[<w>]u% - unsigned decimal (scalar)
+    %[<w>]x% - unsigned hex (scalar)
+    %[<w>]o% - unsigned oct (scalar)
+    %[<w>]b% - binary (scalar)
 
-    %[<w>]s - string (byte string, length == any, default for byte string)
-    %[<w>]hex - hex string (byte string, length any)
-    %[<w>]ip - IPv4 address (byte string, length == 4)
-    %[<w>]ipv6 - IPv6 address (byte string, length == 16)
-    %[<w>]eth - 802.11 address (byte string, length == 6)
+    %[<w>]s% - string (byte string, length == any, default for byte string)
+    %[<w>]hex% - hex string (byte string, length any)
+    %[<w>]ip% - IPv4 address (byte string, length == 4)
+    %[<w>]ipv6% - IPv6 address (byte string, length == 16)
+    %[<w>]eth% - 802.11 address (byte string, length == 6)
  - <w> is a positive or negative integer.
    * positive = min width right justify
    * negative = min width left justify
