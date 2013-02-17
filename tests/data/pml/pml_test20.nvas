@@ -6,13 +6,13 @@
 .coproc 1 2
 .coproc 2 3
 .coproc 3 4
-.mem mi_0_0 0 0 13 "\xff\xff\xff\xff\x124Vx\x12\x13\x14\x15\x16"
+.mem mi_0_0 0 0 13 "\xde\xad\xbe\xef\x124Vx\x12\x13\x14\x15\x16"
 .mem mi_0_1 0 13 25 "\x17\x18\x19foo agrees\x0a\x00error: foo"
 .mem mi_0_2 0 38 29 " does not agree\x0a\x00bar agrees\x0a\x00"
 .mem mi_0_3 0 67 34 "error: bar does not agree\x0a\x00good: f"
 .mem mi_0_4 0 101 34 "p[5,3] == 0x345678\x0a\x00error: fp[3,3]"
 .mem mi_0_5 0 135 14 " != 0x345678\x0a\x00"
-.mem mi_1_0 1 0 13 "\xff\xff\xff\xff\x124Vx\x12\x13\x14\x15\x16"
+.mem mi_1_0 1 0 13 "\xde\xad\xbe\xef\x124Vx\x12\x13\x14\x15\x16"
 .mem mi_1_1 1 13 3 "\x17\x18\x19"
 .mem init-2 1 16 32
 

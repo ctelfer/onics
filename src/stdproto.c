@@ -246,7 +246,7 @@ int eth_nxtcld(struct prparse *reg, byte_t *buf, struct prparse *cld,
 	abort_unless(buf);
 	abort_unless(reg->offs[PRP_ETHFLD_ETYPE] <= prp_poff(reg) - 2);
 	p = buf + reg->offs[PRP_ETHFLD_ETYPE];
-	unpack(p, 2, "h", &etype);
+	etype = ntoh16x(p);
 	switch (etype) {
 	case ETHTYPE_IP:
 		*prid = PRID_IPV4;
@@ -312,7 +312,7 @@ static int eth_add(struct prparse *reg, byte_t *buf, struct prpspec *ps,
 					break;
 				}
 				p = buf + prp_poff(prp) - 2;
-				pack(p, 2, "h", etype);
+				hton16i(etype, p);
 			}
 		}
 	}
@@ -340,7 +340,8 @@ static void eth_update(struct prparse *prp, byte_t *buf)
 	vidx = PRP_ETHFLD_VLAN0;
 	poff = prp_soff(prp) + ETHHLEN;
 	do {
-		unpack(p, 2, "h", &etype);
+		etype = ntoh16x(p);
+
 		if (etype == ETHTYPE_VLAN) {
 			if (prp_totlen(prp) <  (poff - prp_soff(prp) + 4)) {
 				prp->error = PRP_ERR_TOOSMALL;
@@ -676,7 +677,7 @@ static void ipv4_update(struct prparse *prp, byte_t *buf)
 		return;
 	}
 
-	unpack(&ip->len, 2, "h", &iplen);
+	iplen = ntoh16x(&ip->len);
 	if (len < iplen) {
 		prp->error |= PRP_ERR_LENGTH;
 		return;
@@ -715,7 +716,7 @@ static int ipv4_fixlen(struct prparse *prp, byte_t *buf)
 	if (prp_totlen(prp) > 65535)
 		return -1;
 	tlen = prp_totlen(prp);
-	pack(&ip->len, 2, "h", tlen);
+	hton16i(tlen, &ip->len);
 	prp->error &= ~(PRP_ERR_LENGTH | PRP_ERR_HLEN | PRP_ERR_TOOSMALL);
 
 	return 0;
@@ -835,7 +836,7 @@ static int udp_add(struct prparse *reg, byte_t *buf, struct prpspec *ps,
 	if (buf) {
 		udp = prp_header(prp, buf, struct udph);
 		memset(udp, 0, sizeof(*udp));
-		pack(&udp->len, 2, "h", (ushort)prp_totlen(prp));
+		hton16i(prp_totlen(prp), &udp->len);
 	}
 
 	return 0;
@@ -856,7 +857,7 @@ static void udp_update(struct prparse *prp, byte_t *buf)
 	prp_poff(prp) = prp_soff(prp) + 8;
 
 	udp = prp_header(prp, buf, struct udph);
-	unpack(&udp->len, 2, "h", &ulen);
+	ulen = ntoh16x(&udp->len);
 	if (prp_totlen(prp) < ulen) {
 		prp->error |= PRP_ERR_LENGTH;
 		return;
@@ -880,8 +881,7 @@ static int udp_fixlen(struct prparse *prp, byte_t *buf)
 		return -1;
 	if (prp_plen(prp) > 65527)
 		return -1;
-	pack(&prp_header(prp, buf, struct udph)->len, 2, "h",
-	     (ushort)prp_totlen(prp));
+	hton16i(prp_totlen(prp), &prp_header(prp, buf, struct udph)->len);
 	prp->error &= ~(PRP_ERR_LENGTH | PRP_ERR_HLEN | PRP_ERR_TOOSMALL);
 	return 0;
 }
@@ -1405,7 +1405,7 @@ int ipv6_nxtcld(struct prparse *reg, byte_t *buf, struct prparse *cld,
 			/* we can't parse the next header if we aren't the */
 			/* first fragment. */
 			p = buf + reg->offs[PRP_IPV6FLD_FRAGH] + 2;
-			unpack(p, 2, "h", &foff);
+			foff = ntoh16x(p);
 			foff &= ~7;
 			if (foff > 0)
 				return 0;
@@ -1479,7 +1479,7 @@ static void ipv6_update(struct prparse *prp, byte_t *buf)
 	if (IPV6H_PVERSION(ip6) != 6)
 		prp->error |= PRP_ERR_INVALID;
 
-	unpack(&ip6->len, 2, "h", &paylen);
+	paylen = ntoh16x(&ip6->len);
 	if (paylen > len - IPV6H_LEN) {
 		prp->error |= PRP_ERR_LENGTH;
 		return;
@@ -1505,7 +1505,7 @@ static void ipv6_update(struct prparse *prp, byte_t *buf)
 			prp->error |= PRP_ERR_LENGTH;
 			return;
 		}
-		unpack(buf + prp->offs[PRP_IPV6FLD_JLEN], 4, "w", &jlen);
+		jlen = ntoh32x(buf + prp->offs[PRP_IPV6FLD_JLEN]);
 		if (jlen > len - IPV6H_LEN) {
 			prp->error |= PRP_ERR_OPTERR | PRP_ERR_LENGTH;
 			return;
@@ -1540,14 +1540,12 @@ static int ipv6_fixlen(struct prparse *prp, byte_t *buf)
 		if (prp_plen(prp) > 65535)
 			return -1;
 		plen = prp_plen(prp);
-		pack(&ip6->len, 2, "h", plen);
+		hton16i(plen, &ip6->len);
 	} else {
 		if (prp->offs[PRP_IPV6FLD_JLEN] > prp_totlen(prp) - 2)
 			return -1;
-		plen = 0;
-		pack(&ip6->len, 2, "h", plen);
-		pack(buf + prp->offs[PRP_IPV6FLD_JLEN], 4, "w",
-		     (ulong)prp_plen(prp));
+		hton16i(0, &ip6->len);
+		hton32i(prp_plen(prp), buf + prp->offs[PRP_IPV6FLD_JLEN]);
 	}
 	prp->error &= ~(PRP_ERR_LENGTH | PRP_ERR_HLEN | PRP_ERR_TOOSMALL);
 

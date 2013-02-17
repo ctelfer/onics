@@ -5,7 +5,7 @@
 .coproc 1 2
 .coproc 2 3
 .coproc 3 4
-.mem mi_0_0 0 0 2 "\xff\xff"
+.mem mi_0_0 0 0 2 "\xbb\xaa"
 
 # Instructions (39 total)
 #   0: 0x0e 0x00 0x00 0x06 0x00060000

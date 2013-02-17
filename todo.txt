@@ -50,10 +50,6 @@ pktmux/pktdemux:
    operations and conventions.  These are a bit too cumbersome. 
 
 
-pktrel:
- + everyting
-
-
 pktdiff:
  + everything
 

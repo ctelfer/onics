@@ -1269,7 +1269,7 @@ static void write_meminit(FILE *f, struct netvm_meminit *mi, uint idx)
 	char init[MAXSTR];
 	int ilen;
 	int llen;
-	char *cp;
+	byte_t *cp;
 	char *lp;
 	size_t nc;
 	uint off;
@@ -1278,7 +1278,7 @@ static void write_meminit(FILE *f, struct netvm_meminit *mi, uint idx)
 	off = mi->off;
 	nc = mi->val.len;
 	cp = mi->val.data;
-	if (mi->val.data == NULL) {
+	if (cp == NULL) {
 		snprintf(name, sizeof(name), "init-%u", idx);
 		fprintf(f, ".mem %s %u %u %u\n", name, mi->segnum, off,
 			(unsigned)nc);

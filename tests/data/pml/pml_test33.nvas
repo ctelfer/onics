@@ -9,7 +9,7 @@
 .mem mi_0_1 0 31 31 "ader offset was \x00\x0a\x00TCP trailer "
 .mem mi_0_2 0 62 31 "starts at \x00\x0a\x00TCP segment ends a"
 .mem mi_0_3 0 93 22 "t \x00\x0a\x00HTTP GET / 1.0\x0a\x0a\x00"
-.mem mi_0_4 0 115 22 "\xff\xffd\x02\xff\xffd\x01initial header"
+.mem mi_0_4 0 115 22 "\xc0\xa8d\x02\xc0\xa8d\x01initial header"
 .mem mi_0_5 0 137 31 "s in packet\x0a\x00\x0aafter payload spa"
 .mem mi_0_6 0 168 31 "ce insertion\x0a\x00\x0aafter header off"
 .mem mi_0_7 0 199 16 "set adjustment\x0a\x00"

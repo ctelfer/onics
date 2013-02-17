@@ -5,7 +5,7 @@
 .coproc 1 2
 .coproc 2 3
 .coproc 3 4
-.mem mi_0_0 0 0 16 "\xff\xff\x00\x02\xff\xff\x00\x01HTTP GET"
+.mem mi_0_0 0 0 16 "\xc0\xa8\x00\x02\xc0\xa8\x00\x01HTTP GET"
 .mem mi_0_1 0 16 9 " / 1.0\x0a\x0a\x00"
 
 # Instructions (167 total)
