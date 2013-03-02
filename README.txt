@@ -15,10 +15,7 @@ QUICK START
 
 To build:
      1) First download both Catlib and ONICS and put the distributions in
-     the same top level directory.  You must also have 'libpcap' installed 
-     on the machine and currently gcc.  Strictly speaking, libpcap is only
-     required for two of the tools and any compiler should be usable.  But
-     for now these are required without further tweaking.
+     the same top level directory. 
 
      2) Change to the catlib directory and type:
        make
@@ -26,11 +23,19 @@ To build:
      3) Change to the onics directory and type
        make
 
+     4) To build platform specific tools:
+       cd src
+       make pcap       # if libpcap is installed
+       make cfglinux   # if running on linux
+       make platform   # if on a supported platform (linux only for now)
+
   This will:
    * build the tools
    * build test programs (under tests/bin)
    * run regression tests
-   * the tools themselves go in bin/
+
+  The tools themselves go in bin/.  There are also scripts in the scripts/
+  directory that use the tools in bin/.
 
 Examples:
 
@@ -183,6 +188,12 @@ shell scripts using these tools for common tasks.
     pml - an AWK-like program for packets using the Packet Manipulation
         Language and running on the NetVM.
 
+    pktin - a platform-specific program to read packets from a network
+	interface
+
+    pktout - a platform specific program to write packets to a network
+	interface
+
     pcapin - reads in pcap files or interfaces through libpcap and emits
         XPKT packets.
 
@@ -210,8 +221,37 @@ shell scripts using these tools for common tasks.
     pdiff - a program to compare packet streams or traces and emit
         differences between them. (not started)
 
+    rawpkt - convert a file into a packet with no datalink types.
+
+
+There are also various scripts built on the above tools.  All of these scripts
+should be in strictly compliant bourne shell script.
+
     ppick - a program to select a subset of packets from a stream.  This is
 	a PML script.
+
+    peseq - embed a sequence number into various fields in a packet stream.
+
+    pxseq - extract a sequence number from embedded fields in a packet stream.
+
+    pcount - count the packets in a stream.
+
+    ethwrap - wrap a packet in an ethernet frame header.
+
+    ipwrap  - wrap a packet in an IPv4 header.
+
+    ip6wrap - wrap a packet in an IPv6 header.
+
+    icmpwrap - wrap a packet in an ICMP header.
+
+    icmp6wrap - wrap a packet in an ICMPv6 header.
+
+    udpwrap - wrap a packet in a UDP header.
+
+    tcpwrap - wrap a packet in a TCP header.
+
+    tcpsess - generate a partial or complete TCP stream from a set of data 
+	files for traffic in the flow.
 
 
 

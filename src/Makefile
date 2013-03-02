@@ -9,9 +9,15 @@ OPTS=-g
 LIBS=-L${CATLIB_ROOT}/lib -lcat_dbg
 DEFS=
 BINDIR=../bin
-LIBOBJS= xpkt.o ns.o netvm.o netvm_prog.o pktbuf.o stdproto.o \
-	 protoparse.o util.o pmltree.o netvm_std_coproc.o \
-	 pmllex.o pml.o pmlncg.o pml_tok_strs.o fld.o
+
+# common objects for packets
+PKTOBJ= xpkt.o protoparse.o ns.o util.o pktbuf.o
+PKTHDR= xpkt.h protoparse.h ns.h util.h pktbuf.h
+
+# all base object files
+LIBOBJS= ${PKTOBJ} stdproto.o netvm.o netvm_prog.o pmltree.o \
+	 netvm_std_coproc.o pmllex.o pml.o pmlncg.o pml_tok_strs.o fld.o
+
 
 COMMON_TARGETS= \
 	${BINDIR}/rawpkt \
@@ -46,77 +52,62 @@ cfglinux: pktin-linux.c pktout-linux.c
 	[ -h pktout.c ] || ln -s pktout-linux.c pktout.c
 
 
-${BINDIR}/pktin: pktin.o pktbuf.o xpkt.o protoparse.o ns.o util.o
-	${CC} -o ${BINDIR}/pktin pktin.o pktbuf.o xpkt.o protoparse.o \
-		ns.o util.o \
+${BINDIR}/pktin: pktin.o ${PKTOBJ} ${PKTHDR}
+	${CC} -o ${BINDIR}/pktin pktin.o ${PKTOBJ} \
 		${DEFS} ${OPTS} ${INCS} ${LIBS}
 
-${BINDIR}/pktout: pktout.o pktbuf.o xpkt.o protoparse.o ns.o util.o
-	${CC} -o ${BINDIR}/pktout pktout.o pktbuf.o xpkt.o protoparse.o \
-		ns.o util.o \
+${BINDIR}/pktout: pktout.o ${PKTOBJ} ${PKTHDR}
+	${CC} -o ${BINDIR}/pktout pktout.o ${PKTOBJ} \
 		${DEFS} ${OPTS} ${INCS} ${LIBS}
 
-${BINDIR}/pcapin: pcapin.o pktbuf.o xpkt.o protoparse.o ns.o util.o
-	${CC} -o ${BINDIR}/pcapin pcapin.o pktbuf.o xpkt.o protoparse.o ns.o \
-		util.o \
+${BINDIR}/pcapin: pcapin.o ${PKTOBJ} ${PKTHDR}
+	${CC} -o ${BINDIR}/pcapin pcapin.o ${PKTOBJ} \
 		${DEFS} ${OPTS} ${INCS} ${LIBS} -lpcap
 
-${BINDIR}/pcapout: pcapout.o pktbuf.o xpkt.o protoparse.o ns.o util.o
-	${CC} -o ${BINDIR}/pcapout pcapout.o pktbuf.o xpkt.o protoparse.o ns.o \
-		util.o \
+${BINDIR}/pcapout: pcapout.o ${PKTOBJ} ${PKTHDR}
+	${CC} -o ${BINDIR}/pcapout pcapout.o ${PKTOBJ} \
 		${DEFS} ${OPTS} ${INCS} ${LIBS} -lpcap
 
-${BINDIR}/rawpkt: rawpkt.c pktbuf.o xpkt.o protoparse.o ns.o util.o 
-	${CC} -o ${BINDIR}/rawpkt rawpkt.c pktbuf.o xpkt.o protoparse.o ns.o \
-		util.o \
+${BINDIR}/rawpkt: rawpkt.o ${PKTOBJ}
+	${CC} -o ${BINDIR}/rawpkt rawpkt.o ${PKTOBJ} \
 		${DEFS} ${OPTS} ${INCS} ${LIBS}
 
-${BINDIR}/pktmux: pktmux.o pktbuf.o xpkt.o protoparse.o ns.o util.o
-	${CC} -o ${BINDIR}/pktmux pktmux.o pktbuf.o xpkt.o protoparse.o ns.o \
-		util.o \
+${BINDIR}/pktmux: pktmux.o ${PKTOBJ} ${PKTHDR}
+	${CC} -o ${BINDIR}/pktmux pktmux.o ${PKTOBJ} \
 		${DEFS} ${OPTS} ${INCS} ${LIBS}
 
-${BINDIR}/pktdemux: pktdemux.o pktbuf.o xpkt.o protoparse.o ns.o util.o
-	${CC} -o ${BINDIR}/pktdemux pktdemux.o pktbuf.o xpkt.o protoparse.o ns.o \
-		util.o \
+${BINDIR}/pktdemux: pktdemux.o ${PKTOBJ} ${PKTHDR}
+	${CC} -o ${BINDIR}/pktdemux pktdemux.o ${PKTOBJ} \
 		${DEFS} ${OPTS} ${INCS} ${LIBS}
 
-${BINDIR}/pktrel: pktrel.o pktbuf.o xpkt.o protoparse.o ns.o util.o
-	${CC} -o ${BINDIR}/pktrel pktrel.o pktbuf.o xpkt.o protoparse.o ns.o \
-		util.o \
+${BINDIR}/pktrel: pktrel.o ${PKTOBJ} ${PKTHDR}
+	${CC} -o ${BINDIR}/pktrel pktrel.o ${PKTOBJ} \
 		${DEFS} ${OPTS} ${INCS} ${LIBS}
 
-${BINDIR}/x2hpkt: x2hpkt.o pktbuf.o xpkt.o protoparse.o stdproto.o util.o ns.o
-	${CC} -o ${BINDIR}/x2hpkt x2hpkt.o pktbuf.o xpkt.o protoparse.o \
-		stdproto.o util.o ns.o \
+${BINDIR}/x2hpkt: x2hpkt.o ${PKTOBJ} ${PKTHDR} stdproto.o
+	${CC} -o ${BINDIR}/x2hpkt x2hpkt.o ${PKTOBJ} stdproto.o \
 		${DEFS} ${OPTS} ${INCS} ${LIBS}
 
-${BINDIR}/h2xpkt: h2xpkt.o pktbuf.o xpkt.o protoparse.o ns.o util.o
-	${CC} -o ${BINDIR}/h2xpkt h2xpkt.o pktbuf.o xpkt.o protoparse.o \
-		stdproto.o ns.o util.o \
+${BINDIR}/h2xpkt: h2xpkt.o ${PKTOBJ} ${PKTHDR}
+	${CC} -o ${BINDIR}/h2xpkt h2xpkt.o ${PKTOBJ} \
 		${DEFS} ${OPTS} ${INCS} ${LIBS}
 
-${BINDIR}/nvmas: nvmas.o netvm.o netvm_prog.o pktbuf.o protoparse.o xpkt.o \
-		 ns.o util.o
-	${CC} -o ${BINDIR}/nvmas nvmas.o netvm_prog.o netvm.o pktbuf.o ns.o \
-		protoparse.o xpkt.o util.o \
+${BINDIR}/nvmas: nvmas.o netvm.o netvm_prog.o netvm.h netvm_prog.h \
+		 ${PKTOBJ} ${PKTHDR}
+	${CC} -o ${BINDIR}/nvmas nvmas.o netvm_prog.o netvm.o ${PKTOBJ} \
 		${DEFS} ${OPTS} ${INCS} ${LIBS}
 
-${BINDIR}/nvmpf: protoparse.o stdproto.o util.o pktbuf.o netvm.o xpkt.o \
-		 netvm_std_coproc.o netvm_prog.o ns.o nvmpf.c \
-	         netvm.h protoparse.h pktbuf.h xpkt.h netvm_prog.h
-	${CC} -o ${BINDIR}/nvmpf nvmpf.c protoparse.o stdproto.o util.o \
-	         pktbuf.o netvm.o xpkt.o netvm_std_coproc.o netvm_prog.o ns.o \
+${BINDIR}/nvmpf: nvmpf.o stdproto.o netvm.o netvm_std_coproc.o netvm_prog.o \
+	         netvm.h netvm_std_coproc.h netvm_prog.h ${PKTOBJ} ${PKTHDR}
+	${CC} -o ${BINDIR}/nvmpf nvmpf.o stdproto.o netvm.o netvm_std_coproc.o \
+		netvm_prog.o ${PKTOBJ} \
 		${DEFS} ${OPTS} ${INCS} ${LIBS}
 
-${BINDIR}/pml:   pml_main.c protoparse.o stdproto.o util.o pktbuf.o netvm.o \
-		 xpkt.o netvm_std_coproc.o netvm_prog.o ns.o \
-		 pmllex.o pml.o pmltree.o pmlncg.o \
-	         netvm.h protoparse.h pktbuf.h xpkt.h netvm_prog.h \
-		 pmlncg.h netvm_prog.h pmltree.h
-	${CC} -o ${BINDIR}/pml pml_main.c protoparse.o stdproto.o util.o \
-	         pktbuf.o netvm.o xpkt.o netvm_std_coproc.o netvm_prog.o ns.o \
-		 pmllex.o pml.o pmltree.o pmlncg.o \
+${BINDIR}/pml: pml_main.o pmllex.o pml.o pmltree.o pmlncg.o stdproto.o netvm.o \
+		netvm_std_coproc.o netvm_prog.o pmllex.h pmltree.h pmlncg.h \
+	        netvm.h netvm_prog.h netvm_std_coproc.h ${PKTOBJ} ${PKTHDR}
+	${CC} -o ${BINDIR}/pml pml_main.o pmllex.o pml.o pmltree.o pmlncg.o \
+		stdproto.o netvm.o netvm_std_coproc.o netvm_prog.o ${PKTOBJ} \
 		${DEFS} ${OPTS} ${INCS} ${LIBS}
 
 
