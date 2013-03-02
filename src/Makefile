@@ -13,8 +13,7 @@ LIBOBJS= xpkt.o ns.o netvm.o netvm_prog.o pktbuf.o stdproto.o \
 	 protoparse.o util.o pmltree.o netvm_std_coproc.o \
 	 pmllex.o pml.o pmlncg.o pml_tok_strs.o fld.o
 
-TARGETS=${BINDIR}/pcapin \
-	${BINDIR}/pcapout \
+COMMON_TARGETS= \
 	${BINDIR}/rawpkt \
 	${BINDIR}/pktdemux \
 	${BINDIR}/pktmux \
@@ -25,7 +24,37 @@ TARGETS=${BINDIR}/pcapin \
 	${BINDIR}/nvmpf \
 	${BINDIR}/pml
 
-all: ${LIBOBJS} ${TARGETS}
+PCAP_TARGETS= \
+	${BINDIR}/pcapin \
+	${BINDIR}/pcapout
+
+PLATFORM_TARGETS= \
+	${BINDIR}/pktin \
+	${BINDIR}/pktout
+
+TARGETS=${COMMON_TARGETS} ${PCAP_TARGETS} ${PLATFORM_TARGETS}
+
+all: ${LIBOBJS} ${COMMON_TARGETS}
+
+pcap: ${LIBOBJS} ${PCAP_TARGETS}
+
+platform: ${LIBOBJS} ${PLATFORM_TARGETS}
+
+
+cfglinux: pktin-linux.c pktout-linux.c
+	[ -h pktin.c ] || ln -s pktin-linux.c pktin.c
+	[ -h pktout.c ] || ln -s pktout-linux.c pktout.c
+
+
+${BINDIR}/pktin: pktin.o pktbuf.o xpkt.o protoparse.o ns.o util.o
+	${CC} -o ${BINDIR}/pktin pktin.o pktbuf.o xpkt.o protoparse.o \
+		ns.o util.o \
+		${DEFS} ${OPTS} ${INCS} ${LIBS}
+
+${BINDIR}/pktout: pktout.o pktbuf.o xpkt.o protoparse.o ns.o util.o
+	${CC} -o ${BINDIR}/pktout pktout.o pktbuf.o xpkt.o protoparse.o \
+		ns.o util.o \
+		${DEFS} ${OPTS} ${INCS} ${LIBS}
 
 ${BINDIR}/pcapin: pcapin.o pktbuf.o xpkt.o protoparse.o ns.o util.o
 	${CC} -o ${BINDIR}/pcapin pcapin.o pktbuf.o xpkt.o protoparse.o ns.o \
@@ -115,4 +144,5 @@ clean:
 	rm -f *.o
 	rm -f lex.pml.c pml.c pml.h pml.out pml_tok_strs.c
 	rm -f ../lemon/lemon
+	rm -f pktin.c pktout.c
 
