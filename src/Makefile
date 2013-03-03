@@ -16,7 +16,8 @@ PKTHDR= xpkt.h protoparse.h ns.h util.h pktbuf.h
 
 # all base object files
 LIBOBJS= ${PKTOBJ} stdproto.o netvm.o netvm_prog.o pmltree.o \
-	 netvm_std_coproc.o pmllex.o pml.o pmlncg.o pml_tok_strs.o fld.o
+	 netvm_std_coproc.o pmllex.o pml.o pmlncg.o pml_tok_strs.o fld.o \
+	 opcap.o
 
 
 COMMON_TARGETS= \
