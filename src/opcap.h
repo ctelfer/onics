@@ -31,6 +31,19 @@
 #define OPCAP_FHSIZE		24
 #define OPCAP_PHSIZE		16
 
+#define OPCAP_DLT_NULL		0       /* BSD loopback encapsulation */
+#define OPCAP_DLT_EN10MB	1       /* Ethernet (10Mb) */
+#define OPCAP_DLT_EN3MB		2       /* Experimental Ethernet (3Mb) */
+#define OPCAP_DLT_AX25		3       /* Amateur Radio AX.25 */
+#define OPCAP_DLT_PRONET	4       /* Proteon ProNET Token Ring */
+#define OPCAP_DLT_CHAOS		5       /* Chaos */
+#define OPCAP_DLT_IEEE802	6       /* 802.5 Token Ring */
+#define OPCAP_DLT_ARCNET	7       /* ARCNET, with BSD-style header */
+#define OPCAP_DLT_SLIP		8       /* Serial Line IP */
+#define OPCAP_DLT_PPP		9       /* Point-to-point Protocol */
+#define OPCAP_DLT_FDDI		10      /* FDDI */
+
+
 ONICS_PACK_DECL(
 struct opcap_fhdr {
 	uint32_t	magic;

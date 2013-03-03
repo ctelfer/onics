@@ -29,7 +29,7 @@
 #include <cat/err.h>
 #include <cat/optparse.h>
 
-#define PKTMAX  (1024 * 10)
+#define PKTMAX  (1024 * 64 + 64)
 
 pcap_t *g_pcap;
 FILE *g_infile = NULL;
@@ -173,7 +173,7 @@ int main(int argc, char *argv[])
 	pkb_init(1);
 
 	if (!(g_pkb = pkb_create(PKTMAX)))
-		errsys("ptk_create: ");
+		errsys("pkb_create: ");
 	pkb_set_dltype(g_pkb, dltype);
 	init_tags(g_pkb);
 	g_ts = (struct xpkt_tag_ts *)pkb_find_tag(g_pkb, XPKT_TAG_TIMESTAMP, 0);

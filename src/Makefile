@@ -12,7 +12,7 @@ BINDIR=../bin
 
 # common objects for packets
 PKTOBJ= xpkt.o protoparse.o ns.o util.o pktbuf.o
-PKTHDR= xpkt.h protoparse.h ns.h util.h pktbuf.h
+PKTHDR= xpkt.h protoparse.h ns.h util.h pktbuf.h prid.h config.h
 
 # all base object files
 LIBOBJS= ${PKTOBJ} stdproto.o netvm.o netvm_prog.o pmltree.o \
@@ -29,7 +29,9 @@ COMMON_TARGETS= \
 	${BINDIR}/h2xpkt \
 	${BINDIR}/nvmas \
 	${BINDIR}/nvmpf \
-	${BINDIR}/pml
+	${BINDIR}/pml \
+	${BINDIR}/pcapfrd \
+	${BINDIR}/pcapfwr
 
 PCAP_TARGETS= \
 	${BINDIR}/pcapin \
@@ -85,7 +87,8 @@ ${BINDIR}/pktrel: pktrel.o ${PKTOBJ} ${PKTHDR}
 	${CC} -o ${BINDIR}/pktrel pktrel.o ${PKTOBJ} \
 		${DEFS} ${OPTS} ${INCS} ${LIBS}
 
-${BINDIR}/x2hpkt: x2hpkt.o ${PKTOBJ} ${PKTHDR} stdproto.o
+${BINDIR}/x2hpkt: x2hpkt.o stdproto.o stdproto.h tcpip_hdrs.h \
+		  ${PKTOBJ} ${PKTHDR}
 	${CC} -o ${BINDIR}/x2hpkt x2hpkt.o ${PKTOBJ} stdproto.o \
 		${DEFS} ${OPTS} ${INCS} ${LIBS}
 
@@ -99,16 +102,26 @@ ${BINDIR}/nvmas: nvmas.o netvm.o netvm_prog.o netvm.h netvm_prog.h \
 		${DEFS} ${OPTS} ${INCS} ${LIBS}
 
 ${BINDIR}/nvmpf: nvmpf.o stdproto.o netvm.o netvm_std_coproc.o netvm_prog.o \
-	         netvm.h netvm_std_coproc.h netvm_prog.h ${PKTOBJ} ${PKTHDR}
+	         netvm.h netvm_std_coproc.h netvm_prog.h stdproto.h \
+		 tcpip_hdrs.h ${PKTOBJ} ${PKTHDR}
 	${CC} -o ${BINDIR}/nvmpf nvmpf.o stdproto.o netvm.o netvm_std_coproc.o \
 		netvm_prog.o ${PKTOBJ} \
 		${DEFS} ${OPTS} ${INCS} ${LIBS}
 
 ${BINDIR}/pml: pml_main.o pmllex.o pml.o pmltree.o pmlncg.o stdproto.o netvm.o \
 		netvm_std_coproc.o netvm_prog.o pmllex.h pmltree.h pmlncg.h \
-	        netvm.h netvm_prog.h netvm_std_coproc.h ${PKTOBJ} ${PKTHDR}
+	        netvm.h netvm_prog.h netvm_std_coproc.h stdproto.h \
+		tcpip_hdrs.h ${PKTOBJ} ${PKTHDR}
 	${CC} -o ${BINDIR}/pml pml_main.o pmllex.o pml.o pmltree.o pmlncg.o \
 		stdproto.o netvm.o netvm_std_coproc.o netvm_prog.o ${PKTOBJ} \
+		${DEFS} ${OPTS} ${INCS} ${LIBS}
+
+${BINDIR}/pcapfrd: pcapfrd.o opcap.o ${PKTOBJ} ${PKTHDR}
+	${CC} -o ${BINDIR}/pcapfrd pcapfrd.o opcap.o ${PKTOBJ} \
+		${DEFS} ${OPTS} ${INCS} ${LIBS}
+
+${BINDIR}/pcapfwr: pcapfwr.o opcap.o ${PKTOBJ} ${PKTHDR}
+	${CC} -o ${BINDIR}/pcapfwr pcapfwr.o opcap.o ${PKTOBJ} \
 		${DEFS} ${OPTS} ${INCS} ${LIBS}
 
 

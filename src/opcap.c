@@ -138,7 +138,7 @@ int opcap_read(opcap_h h, void *bp, size_t maxlen, struct opcap_phdr *ph)
 		ph->caplen = swap32(ph->caplen);
 	}
 
-	if (ph->caplen >= maxlen) {
+	if (ph->caplen <= maxlen) {
 		nr = fread(bp, 1, ph->caplen, pc->file);
 		if (nr < ph->caplen) {
 			errno = EIO;
@@ -170,7 +170,7 @@ int opcap_read(opcap_h h, void *bp, size_t maxlen, struct opcap_phdr *ph)
 		}
 	}
 
-	return 0;
+	return 1;
 }
 
 
@@ -224,7 +224,7 @@ int opcap_open_writer(const char *fname, uint32_t snaplen,
 		return -1;
 	}
 
-	pc = calloc(sizeof(pc), 1);
+	pc = calloc(sizeof(*pc), 1);
 	if (pc == NULL)
 		return -1;
 
