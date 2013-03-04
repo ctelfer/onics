@@ -30,8 +30,8 @@ COMMON_TARGETS= \
 	${BINDIR}/nvmas \
 	${BINDIR}/nvmpf \
 	${BINDIR}/pml \
-	${BINDIR}/pcapfrd \
-	${BINDIR}/pcapfwr
+	${BINDIR}/opcin \
+	${BINDIR}/opcout
 
 PCAP_TARGETS= \
 	${BINDIR}/pcapin \
@@ -116,12 +116,12 @@ ${BINDIR}/pml: pml_main.o pmllex.o pml.o pmltree.o pmlncg.o stdproto.o netvm.o \
 		stdproto.o netvm.o netvm_std_coproc.o netvm_prog.o ${PKTOBJ} \
 		${DEFS} ${OPTS} ${INCS} ${LIBS}
 
-${BINDIR}/pcapfrd: pcapfrd.o opcap.o ${PKTOBJ} ${PKTHDR}
-	${CC} -o ${BINDIR}/pcapfrd pcapfrd.o opcap.o ${PKTOBJ} \
+${BINDIR}/opcin: opcin.o opcap.o ${PKTOBJ} ${PKTHDR}
+	${CC} -o ${BINDIR}/opcin opcin.o opcap.o ${PKTOBJ} \
 		${DEFS} ${OPTS} ${INCS} ${LIBS}
 
-${BINDIR}/pcapfwr: pcapfwr.o opcap.o ${PKTOBJ} ${PKTHDR}
-	${CC} -o ${BINDIR}/pcapfwr pcapfwr.o opcap.o ${PKTOBJ} \
+${BINDIR}/opcout: opcout.o opcap.o ${PKTOBJ} ${PKTHDR}
+	${CC} -o ${BINDIR}/opcout opcout.o opcap.o ${PKTOBJ} \
 		${DEFS} ${OPTS} ${INCS} ${LIBS}
 
 

@@ -3,7 +3,7 @@
  * Copyright 2013
  * Christopher Adam Telfer
  *
- * pcapfwr.c -- Write an xpkt stream of packets to a pcap file.
+ * opcout.c -- Write an xpkt stream of packets to a pcap file.
  *   This program does not use libpcap.
  *
  *
@@ -29,42 +29,72 @@
 #include "opcap.h"
 
 #include <cat/err.h>
+#include <cat/optparse.h>
 
-void usage(const char *prog)
+struct clopt g_optarr[] = {
+	CLOPT_INIT(CLOPT_STRING, 'i', "--iface",
+		"interface to send out on (UNSUPPORTED)"),
+	CLOPT_INIT(CLOPT_STRING, 'o', "--outfile", "output file to write to"),
+	CLOPT_INIT(CLOPT_STRING, 'f', "--infile", "file to read from"),
+	CLOPT_INIT(CLOPT_NOARG, 'h', "--help", "print help")
+};
+
+
+struct clopt_parser g_oparser =
+CLOPTPARSER_INIT(g_optarr, array_length(g_optarr));
+
+
+void usage(const char *estr)
 {
-	fprintf(stderr, "usage: %s [-f INFILE] OUTFILE\n", prog);
-	exit(-1);
+	char ubuf[4096];
+	if (estr != NULL)
+		fprintf(stderr, "Error -- %s\n", estr);
+	optparse_print(&g_oparser, ubuf, sizeof(ubuf));
+	err("usage: %s [options]\n%s\n", g_oparser.argv[0], ubuf);
 }
+
 
 int main(int argc, char *argv[])
 {
 	int rv;
-	opcap_h pch;
+	opc_h pch;
 	struct pktbuf *pkb;
-	FILE *infile = stdin;
+	FILE *input = stdin;
 	uint dltype;
 	uint32_t pcdlt;
-	int ofi = 1;
 	ulong pktnum = 1;
-	struct opcap_phdr ph;
+	struct opc_phdr ph;
 	struct xpkt_tag_ts *ts;
 	struct xpkt_tag_snapinfo *si;
+	struct clopt *opt;
+	const char *infile = NULL;
+	const char *outfile = NULL;
 
-	if (argc < 2) 
-		usage(argv[0]);
-
-	if (strcmp(argv[1], "-f") == 0) {
-		if (argc != 4)
-			usage(argv[0]);
-		infile = fopen(argv[2], "r");
-		if (infile == NULL)
-			errsys("opening input file %s: ");
-		ofi = 3;
+	optparse_reset(&g_oparser, argc, argv);
+	while (!(rv = optparse_next(&g_oparser, &opt))) {
+		switch (opt->ch) {
+		case 'i':
+			usage("option -i unsupported");
+			break;
+		case 'o':
+			outfile = opt->val.str_val;
+			break;
+		case 'f':
+			infile = opt->val.str_val;
+			input = fopen(infile, "r");
+			if (input == NULL)
+				errsys("error opening file %s: ", infile);
+			break;
+		case 'h':
+			usage(NULL);
+		}
 	}
+	if (rv < argc)
+		usage((rv < 0) ? g_oparser.errbuf : NULL);
 
 	pkb_init(1);
 
-	if ((rv = pkb_file_read(&pkb, infile)) <= 0) {
+	if ((rv = pkb_file_read(&pkb, input)) <= 0) {
 		if (rv == 0)
 			return 0;
 		if (rv < 0)
@@ -74,14 +104,19 @@ int main(int argc, char *argv[])
 	dltype = pkb_get_dltype(pkb);
 	switch (dltype) {
 	case PRID_ETHERNET2:
-		pcdlt = OPCAP_DLT_EN10MB;
+		pcdlt = OPC_DLT_EN10MB;
 		break;
 	default:
 		err("Data link type not supported");
 	}
 
-	if (opcap_open_writer(argv[ofi], 65535, pcdlt, &pch) < 0)
-		errsys("opcap_open_writer :");
+	if (outfile != NULL) {
+		if (opc_open_file_wr(outfile, 65535, pcdlt, &pch) < 0)
+			errsys("opc_open_writer :");
+	} else { 
+		if (opc_open_stream_wr(stdout, 65535, pcdlt, &pch) < 0)
+			errsys("opc_open_writer :");
+	}
 
 	do {
 		if (dltype != pkb_get_dltype(pkb))
@@ -107,17 +142,17 @@ int main(int argc, char *argv[])
 			ph.len = ph.caplen;
 		}
 
-		if (opcap_write(pch, pkb_data(pkb), &ph) < 0)
-			errsys("opcap_write: ");
+		if (opc_write(pch, pkb_data(pkb), &ph) < 0)
+			errsys("opc_write: ");
 
 		pkb_free(pkb);
 		++pktnum;
-	} while ((rv = pkb_file_read(&pkb, infile)) > 0);
+	} while ((rv = pkb_file_read(&pkb, input)) > 0);
 
 	if (rv < 0)
 		errsys("pkb_file_read: ");
 
-	opcap_close(pch);
+	opc_close(pch);
 
 	return 0;
 }
