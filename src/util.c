@@ -22,7 +22,14 @@
 #include "util.h"
 #include <ctype.h>
 
-uint16_t ones_sum_h(void *p, uint16_t len, uint16_t val)
+/*
+ * One should not call this function with a length value of
+ * greater than 131072.  Otherwise it is possible for the
+ * sum to overflow 32 bits of accumulation and thus come out
+ * wrong.  This does not tend to be a problem with network
+ * packets as even IPv6 frames top out at 65536 + 40 + 24 bytes.
+ */
+uint16_t ones_sum(void *p, ulong len, uint16_t val)
 {
 	uint32_t sum = val;
 	int rem = len & 1;
@@ -48,19 +55,6 @@ uint16_t ones_sum_h(void *p, uint16_t len, uint16_t val)
 
 	return (uint16_t) sum;
 }
-
-
-uint16_t ones_sum(void *p, ulong len, uint16_t val)
-{
-	uint16_t sum = val;
-	while (len > 65534) {
-		sum = ones_sum_h(p, len, sum);
-		len -= 65534;
-		p += 65534;
-	}
-	return ones_sum_h(p, len, sum);
-}
-
 
 
 #define LEFTMASK(bits) (-(0x100 >> (bits)))
