@@ -31,7 +31,9 @@ COMMON_TARGETS= \
 	${BINDIR}/nvmpf \
 	${BINDIR}/pml \
 	${BINDIR}/opcin \
-	${BINDIR}/opcout
+	${BINDIR}/opcout \
+	${BINDIR}/pdiff
+
 
 PCAP_TARGETS= \
 	${BINDIR}/pcapin \
@@ -124,6 +126,9 @@ ${BINDIR}/opcout: opcout.o opcap.o ${PKTOBJ} ${PKTHDR}
 	${CC} -o ${BINDIR}/opcout opcout.o opcap.o ${PKTOBJ} \
 		${DEFS} ${OPTS} ${INCS} ${LIBS}
 
+${BINDIR}/pdiff: pdiff.o ${PKTOBJ} ${PKTHDR}
+	${CC} -o ${BINDIR}/pdiff pdiff.o ${PKTOBJ} \
+		${DEFS} ${OPTS} ${INCS} ${LIBS}
 
 .c.o:
 	${CC} -c $< -o $@ ${DEFS} ${INCS} ${OPTS}
