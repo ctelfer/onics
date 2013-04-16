@@ -26,6 +26,7 @@
 
 #include <cat/err.h>
 #include <cat/emalloc.h>
+#include <cat/crypto.h>
 
 #include "pktbuf.h"
 
@@ -57,8 +58,14 @@
  */
 
 
-struct pktarr { 
-	struct pktbuf **	pkts;
+struct pktent {
+	struct pktbuf *		pkt;
+	byte_t			hash[32];
+};
+
+
+struct pktarr {
+	struct pktent *		pkts;
 	ulong			npkts;
 	ulong			pasz;
 };
@@ -87,25 +94,33 @@ struct pdiff {
 };
 
 
+static void hash_packet(struct pktent *pe)
+{
+	struct pktbuf *p = pe->pkt;
+	sha256(pkb_data(p), pkb_get_len(p), pe->hash);
+}
+
+
 static void pa_readfile(struct pktarr *pa, FILE *fp, const char *fn)
 {
-	struct pktbuf *p;
 	int rv;
 
 	pa->pasz = 16;
-	pa->pkts = emalloc(sizeof(struct pktbuf *) * pa->pasz);
+	pa->pkts = emalloc(sizeof(struct pktent) * pa->pasz);
 	pa->npkts = 0;
 
-	while ((rv = pkb_file_read(&pa->pkts[pa->npkts], fp)) > 0) {
+	rv = pkb_file_read(&pa->pkts[pa->npkts].pkt, fp);
+	while (rv > 0) {
+		hash_packet(&pa->pkts[pa->npkts]);
 		++pa->npkts;
 		if (pa->npkts == pa->pasz) {
 			if (pa->pasz * 2 < pa->pasz)
 				err("Size overflow\n");
 			pa->pasz *= 2;
 			pa->pkts = erealloc(pa->pkts, 
-					    pa->pasz * sizeof(struct pktbuf *));
-
+					    pa->pasz * sizeof(struct pktent));
 		}
+		rv = pkb_file_read(&pa->pkts[pa->npkts].pkt, fp);
 	}
 
 	if (rv < 0)
@@ -115,19 +130,19 @@ static void pa_readfile(struct pktarr *pa, FILE *fp, const char *fn)
 
 static void pa_clear(struct pktarr *pa)
 {
-	struct pktbuf **pp;
+	struct pktent *pe;
 	ulong np;
 
 	if (pa == NULL)
 		return;
 
-	pp = pa->pkts;
+	pe = pa->pkts;
 	for (np = 0; np < pa->npkts; ++np) {
-		pkb_free(*pp);
-		pp++;
+		pkb_free(pe->pkt);
+		pe++;
 	}
 
-	memset(pa->pkts, 0, sizeof(struct pktbuf *) * pa->npkts);
+	memset(pa->pkts, 0, sizeof(struct pktent) * pa->npkts);
 	pa->npkts = 0;
 	free(pa->pkts);
 	pa->pkts = NULL;
