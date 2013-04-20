@@ -92,6 +92,8 @@ void hexdump(FILE *out, ulong addr, byte_t *p, ulong len);
 #define signx64(v, nbits) \
 	((uint64_t)(v) | ((uint64_t)0 - ((v) & (1 << ((nbits) - 1)))))
 
+#define signxul(v, nbits) \
+	((ulong)(v) | -((v) & ((ulong)1 << ((nbits) - 1))))
 
 /* returns the numerical value of the min(8, len) bytes in big-endian format */
 uint64_t be64val(void *p, size_t len);

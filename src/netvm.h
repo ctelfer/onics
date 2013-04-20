@@ -30,11 +30,11 @@ typedef void (*netvm_op)(struct netvm * vm);
 
 
 struct netvm_inst {
-	uint8_t			op;	/* NETVM_OC_* */
-	uint8_t			x;
-	uint8_t			y;
-	uint8_t			z;
-	uint32_t		w;	/* Varies with instruction */
+	uchar			op;	/* NETVM_OC_* */
+	uchar			x;
+	uchar			y;
+	uchar			z;
+	ulong			w;	/* Varies with instruction */
 };
 
 
@@ -48,30 +48,30 @@ struct netvm_inst {
  * and 1 means packet).  NETVM_SEG_ISPKT is the bitmask to apply to
  * a segment number to test this.
  */
-#define	NETVM_SEG_ISPKT		0x80
-#define	NETVM_SEG_SEGMASK	0x7F
+#define	NETVM_SEG_ISPKT		0x08
+#define	NETVM_SEG_SEGMASK	0x07
 
 /*
  * Most memory operations accept addresses in a unified address space format.
- * This format is a single 64-bit address that can refer to any memory 
+ * This format is a single 32-bit address that can refer to any memory 
  * segment or packet buffer.  The format is:
  *
  * MSB                      LSB
- *  [seg desc: 8  address: 56]
+ *  [seg desc: 4  address: 28]
  * 
  * The segment descriptor is a memory segment index with the NETVM_SEG_ISPKT
- * bit (bit 7 in the 8-bit address) cleared or a packet number with the
+ * bit (bit 3 in the 4-bit address) cleared or a packet number with the
  * NETVM_SEG_ISPKT bit set.
  */
 
-#define NETVM_UA_ISPKT_OFF	63
-#define NETVM_UA_SEG_OFF	56
-#define NETVM_UA_SEG_HI_OFF	24
-#define NETVM_UA_OFF_MASK	((((uint64_t)1 << NETVM_UA_SEG_OFF))-1)
-#define NETVM_UA_SEG_MASK	((uint64_t)0xFF << NETVM_UA_SEG_OFF)
-#define NETVM_UA_ISPKT(addr)	(((addr) >> 63) != 0)
+#define NETVM_UA_ISPKT_OFF	31
+#define NETVM_UA_SEG_OFF	28
+#define NETVM_UA_OFF_MASK	(0x0FFFFFFFul)
+#define NETVM_UA_SEG_MASK	(0xFul)
+#define NETVM_UA_ISPKT(addr)	(((addr) & 0x80000000ul) != 0)
 #define NETVM_UADDR(ispkt, idx, addr) \
-	((uint64_t)(ispkt) << 63 | (uint64_t)(idx) << 56 | (addr))
+	(((ulong)(ispkt) & 1)<< 31 | ((ulong)(idx) & 0xF) << 28 | \
+	 ((addr) & 0x0FFFFFFF))
 
 
 /* 
@@ -85,39 +85,21 @@ struct netvm_inst {
  * 	z = prp index:4 prp field:4
  *	w = (prid * 65536) + offset
  *
- * Offset is unsigned and < 2**16.  Also, only the lower 7 bits of the
+ * Offset is unsigned and < 2**16.  Also, only the lower 3 bits of the
  * packet number are considered as the NETVM_SEG_ISPKT bit may be set
  * when the 'y' field is used to differentiate between packet and memory
  * segments for LD/ST operations.  (see below)
  * 
- * Stack protocol descriptor form:
- *      MSB                                                 LSB
- *      PRID: 16  pkt number:4  prp index:4  field:8  offset:32
+ * Stack protocol descriptor form.  It takes two words:
  *
- * Stack offset is 32-bit 2s compliment signed integer.  This allows negative
- * offsets without a 64-bit field.
+ * Top of stack:
+ *     MSB                                        LSB
+ *      PRID: 16      prp index:8           field:8  
+ *      pkt/seg:4                         offset:28
+ * Bottom of stack:
  *
+ * Stack offset is 32-bit 2s compliment signed integer.
  */
-
-#define NETVM_STK_PDESC(pkt, prid, idx, fld, off)  \
-	((pkt) | NETVM_SEG_ISPKT), (((idx)& 0xF)<< 4)| ((fld) & 0xF), \
-	(((prid) << 16) | ((off) & 0xFFFF))
-
-#define NETVM_PD_PRID_OFF	48
-#define NETVM_PD_PRID_LEN	16
-#define NETVM_PD_PRID_MASK	0xffff
-#define NETVM_PD_PKT_OFF	44
-#define NETVM_PD_PKT_LEN	4
-#define NETVM_PD_PKT_MASK	0xf
-#define NETVM_PD_IDX_OFF	40
-#define NETVM_PD_IDX_LEN	4
-#define NETVM_PD_IDX_MASK	0xf
-#define NETVM_PD_FLD_OFF	32
-#define NETVM_PD_FLD_LEN	8
-#define NETVM_PD_FLD_MASK	0xff
-#define NETVM_PD_OFF_OFF	0
-#define NETVM_PD_OFF_LEN	32
-#define NETVM_PD_OFF_MASK	0xffffffff
 
 #define NETVM_PPD_PKT_MASK	0xF
 #define NETVM_PPD_IDX_OFF	4
@@ -129,25 +111,45 @@ struct netvm_inst {
 #define NETVM_PPD_OFF_OFF	0
 #define NETVM_PPD_OFF_MASK	0xFFFF
 
-#define NETVM_PDESC(pkt, prid, idx, fld, off) \
-  ((((uint64_t)(pkt) & NETVM_PD_PKT_MASK) << NETVM_PD_PKT_OFF)|\
-   (((uint64_t)(prid) & NETVM_PD_PRID_MASK) << NETVM_PD_PRID_OFF)|\
-   (((uint64_t)(idx) & NETVM_PD_IDX_MASK) << NETVM_PD_IDX_OFF)|\
-   (((uint64_t)(fld) & NETVM_PD_FLD_MASK) << NETVM_PD_FLD_OFF)|\
-   (((uint64_t)(off) & NETVM_PD_OFF_MASK) << NETVM_PD_OFF_OFF))
+#define NETVM_OP_PDESC(pkt, prid, idx, fld, off)  \
+	((pkt) & 0x7 | NETVM_SEG_ISPKT), \
+	(((idx)& 0xF)<< 4) | ((fld) & 0xF), \
+	((((prid) & 0xFFFF) << 16) | ((off) & 0xFFFF))
 
-#define NETVM_PDESC_HI(pkt, prid, idx, fld) \
-  ((((uint32_t)(pkt) & NETVM_PD_PKT_MASK) << (NETVM_PD_PKT_OFF - 32))|\
-   (((uint32_t)(prid) & NETVM_PD_PRID_MASK) << (NETVM_PD_PRID_OFF - 32))|\
-   (((uint32_t)(idx) & NETVM_PD_IDX_MASK) << (NETVM_PD_IDX_OFF - 32))|\
-   (((uint32_t)(fld) & NETVM_PD_FLD_MASK) << (NETVM_PD_FLD_OFF - 32)))
+#define NETVM_PD_OFF_OFF	0
+#define NETVM_PD_OFF_LEN	28
+#define NETVM_PD_OFF_MASK	0x0FFFFFFFul
+#define NETVM_PD_PKT_OFF	28
+#define NETVM_PD_PKT_LEN	3
+#define NETVM_PD_PKT_MASK	0x7
+
+#define NETVM_PD_PRID_OFF	16
+#define NETVM_PD_PRID_LEN	16
+#define NETVM_PD_PRID_MASK	0xffff
+#define NETVM_PD_IDX_OFF	8
+#define NETVM_PD_IDX_LEN	8
+#define NETVM_PD_IDX_MASK	0xff
+#define NETVM_PD_FLD_OFF	0
+#define NETVM_PD_FLD_LEN	8
+#define NETVM_PD_FLD_MASK	0xff
+
+#define NETVM_PDESC_W0(pkt, prid, idx, fld) \
+  ((((ulong)(pkt) & NETVM_PD_PKT_MASK) << (NETVM_PD_PKT_OFF))   |\
+   (((ulong)(prid) & NETVM_PD_PRID_MASK) << (NETVM_PD_PRID_OFF))|\
+   (((ulong)(idx) & NETVM_PD_IDX_MASK) << (NETVM_PD_IDX_OFF))   |\
+   (((ulong)(fld) & NETVM_PD_FLD_MASK) << (NETVM_PD_FLD_OFF)))
+
+#define NETVM_PDESC_W1(pkt, off) \
+	(((((pkt) & NETVM_PD_PKT_MASK) | NETVM_SEG_ISPKT) << NETVM_PD_PKT_OFF)\
+	 ((ulong)(off) & NETVM_PD_OFF_MASK))
 
 struct netvm_prp_desc {
-	uint8_t			pktnum;	/* which packet entry */
-	uint8_t			idx;	/* 0 == 1st prp, 1 == 2nd prp,... */
-	uint8_t			field;	/* NETVM_PRP_* or prp field id */
-	uint16_t		prid;	/* PRID_*;  PRID_NONE == absolute idx */
-	uint64_t		offset;	/* offset into packet for LD/STPKT */
+	uchar			pktnum;	/* which packet entry */
+	uchar			idx;	/* 0 == 1st prp, 1 == 2nd prp,... */
+	uchar			field;	/* NETVM_PRP_* or prp field id */
+	uchar			pad;
+	uint			prid;	/* PRID_*;  PRID_NONE == absolute idx */
+	ulong			offset;	/* offset into packet for LD/STPKT */
 					/* or proto field index for PRFLD */
 };
 
@@ -214,7 +216,7 @@ typedef void (*netvm_cpop)(struct netvm *vm, struct netvm_coproc *cpc, int cpi);
  *
  */
 struct netvm_coproc {
-	uint64_t		type;
+	ulong			type;
 	uint			numops;
 	netvm_cpop *		ops;
 
@@ -227,7 +229,7 @@ struct netvm_coproc {
 					    struct netvm *vm);
 };
 
-#define NETVM_CPT_NONE		((uint64_t)0)
+#define NETVM_CPT_NONE		((ulong)0)
 
 
 
@@ -256,7 +258,7 @@ struct netvm {
 	uint			pc;
 	uint			nxtpc;
 
-	uint64_t *		stack;
+	ulong *			stack;
 	uint			stksz;
 	uint			sp;
 	uint			bp;
@@ -295,7 +297,6 @@ enum {
 	NETVM_OC_POP,		/* discards top 'w' entries of stack */
 	NETVM_OC_POPTO,		/* discard all but last 'w' in stack frame */
 	NETVM_OC_PUSH,		/* pushes 'w' onto stack */
-	NETVM_OC_ORHI,		/* [v] binary OR 'w' << 32 with top of stack */
 	NETVM_OC_ZPUSH,		/* pushes 'w' 0s onto the stack */
 	NETVM_OC_DUP,		/* dups 'w' from the top of the stack */
 	NETVM_OC_SWAP,		/* swap stack pos 'x' and 'w' from SP down */
@@ -503,14 +504,14 @@ enum {
 	(((_oc) >= NETVM_OC_ADD) && ((_oc) <= NETVM_OC_UMAXI))
 
 
-#define NETVM_IADDR(w)  ((uint32_t)(w))
-#define NETVM_BRF(w)    ((uint32_t)(w))
-#define NETVM_BRB(w)    (-(uint32_t)(w))
+#define NETVM_IADDR(w)  ((ulong)(w))
+#define NETVM_BRF(w)    ((ulong)(w))
+#define NETVM_BRB(w)    (-(ulong)(w))
 
 #define NETVM_OP(OPCODE, x, y, z, w)\
 	{ NETVM_OC_##OPCODE, (x), (y), (z), (w) }
 #define NETVM_PDIOP(OPCODE, x, pkt, prid, idx, fld, off) \
-	{ NETVM_OC_##OPCODE, (x), NETVM_STK_PDESC(pkt, prid, idx, fld, off) }
+	{ NETVM_OC_##OPCODE, (x), NETVM_OP_PDESC(pkt, prid, idx, fld, off) }
 
 #define NETVM_BR_F(amt) NETVM_OP(BRI, 0, 0, 0, NETVM_BRF(amt))
 #define NETVM_BR_B(amt) NETVM_OP(BRI, 0, 0, 0, NETVM_BRB(amt))
@@ -588,7 +589,7 @@ enum {
 
 /* mem may be NULL and memsz 0.  roseg must be <= memsz.  stack must not be */
 /* 0 and ssz is the number of stack elements.  outport may be NULL */
-void netvm_init(struct netvm *vm, uint64_t *stack, uint ssz);
+void netvm_init(struct netvm *vm, ulong *stack, uint ssz);
 
 /* set the instruction code */
 void netvm_set_code(struct netvm *vm, struct netvm_inst *inst, uint ni);
@@ -641,7 +642,7 @@ struct pktbuf *netvm_clr_pkt(struct netvm *vm, int slot, int keeppktbuf);
 
 /* 0 if run ok and no retval, 1 if run ok and stack not empty, -1 if err, -2 */
 /* if out of cycles */
-int netvm_run(struct netvm *vm, int maxcycles, uint64_t *rv);
+int netvm_run(struct netvm *vm, int maxcycles, ulong *rv);
 
 /* returns the error string corresponding to the netvm error */
 const char *netvm_estr(int error);

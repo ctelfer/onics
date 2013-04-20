@@ -85,21 +85,21 @@ struct prparse *netvm_find_header(struct netvm *vm, struct netvm_prp_desc *pd,
 
 void netvm_get_prp_ptr(struct netvm *vm, int onstack, int width, byte_t **p);
 
-void netvm_get_seg_ptr(struct netvm *vm, uint8_t seg, uint64_t addr, int iswr, 
-		       uint64_t len, byte_t **p);
+void netvm_get_seg_ptr(struct netvm *vm, uint seg, ulong addr, int iswr, 
+		       ulong len, byte_t **p);
 
-void netvm_get_mem_ptr(struct netvm *vm, uint8_t seg, uint64_t addr, int iswr, 
-		       uint64_t len, byte_t **p);
+void netvm_get_mem_ptr(struct netvm *vm, uint seg, ulong addr, int iswr, 
+		       ulong len, byte_t **p);
 
-void netvm_get_pkt_ptr(struct netvm *vm, uint8_t pkt, uint64_t addr, int iswr, 
-		       uint64_t len, byte_t **p);
+void netvm_get_pkt_ptr(struct netvm *vm, uint pkt, ulong addr, int iswr, 
+		       ulong len, byte_t **p);
 
-void netvm_get_uaddr_ptr(struct netvm *vm, uint64_t uaddr, int iswr,
-		         uint64_t len, byte_t **p);
+void netvm_get_uaddr_ptr(struct netvm *vm, ulong uaddr, int iswr,
+		         ulong len, byte_t **p);
 
 void netvm_p2stk(struct netvm *vm, byte_t *p, int width);
 
-void netvm_stk2p(struct netvm *vm, byte_t *p, uint64_t val, int width);
+void netvm_stk2p(struct netvm *vm, byte_t *p, ulong val, int width);
 
 int netvm_valid_width(int width);
 

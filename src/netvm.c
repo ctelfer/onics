@@ -41,7 +41,7 @@ int netvm_dbgabrt()
 int netvm_valid_width(int width)
 {
 	return ((width & 0x7F) > 0) && 
-	       ((width & 0x7f) <= 8) && 
+	       ((width & 0x7f) <= 4) && 
 	       ((width & ~0xFF) == 0);
 }
 
@@ -50,16 +50,16 @@ int netvm_valid_width(int width)
 void netvm_get_pd(struct netvm *vm, struct netvm_prp_desc *pd, int onstack)
 {
 	struct netvm_inst *inst = &vm->inst[vm->pc];
-	uint64_t val;
+	ulong v0, v1;
 	if (onstack) {
-		S_POP(vm, val);
-		pd->prid = (val >> NETVM_PD_PRID_OFF) & NETVM_PD_PRID_MASK;
-		pd->pktnum = (val >> NETVM_PD_PKT_OFF) & NETVM_PD_PKT_MASK;
-		pd->pktnum &= ~NETVM_SEG_ISPKT;
-		pd->idx = (val >> NETVM_PD_IDX_OFF) & NETVM_PD_IDX_MASK;
-		pd->field = (val >> NETVM_PD_FLD_OFF) & NETVM_PD_FLD_MASK;
-		val = (val >> NETVM_PD_OFF_OFF) & NETVM_PD_OFF_MASK;
-		pd->offset = signx64(val, 32);
+		FATAL(vm, NETVM_ERR_STKUNDF, !S_HAS(vm, 2));
+		S_POP(vm, v0);
+		S_POP(vm, v1);
+		pd->prid = (v0 >> NETVM_PD_PRID_OFF) & NETVM_PD_PRID_MASK;
+		pd->idx = (v0 >> NETVM_PD_IDX_OFF) & NETVM_PD_IDX_MASK;
+		pd->field = (v0 >> NETVM_PD_FLD_OFF) & NETVM_PD_FLD_MASK;
+		pd->pktnum = (v1 >> NETVM_PD_PKT_OFF) & NETVM_PD_PKT_MASK;
+		pd->offset = (v1 >> NETVM_PD_OFF_OFF) & NETVM_PD_OFF_MASK;
 	} else {
 		pd->pktnum = inst->y & ~NETVM_SEG_ISPKT;
 		pd->idx = (inst->z >> NETVM_PPD_IDX_OFF) & NETVM_PPD_IDX_MASK;
@@ -118,7 +118,7 @@ void netvm_get_prp_ptr(struct netvm *vm, int onstack, int len, byte_t **p)
 	struct netvm_prp_desc pd0;
 	struct prparse *prp;
 	uint oidx;
-	uint64_t off;
+	ulong off;
 	struct pktbuf *pkb;
 
 	prp = netvm_find_header(vm, &pd0, onstack);
@@ -168,16 +168,7 @@ static void ni_popto(struct netvm *vm)
 static void ni_push(struct netvm *vm)
 {
 	struct netvm_inst *inst = &vm->inst[vm->pc];
-	S_PUSH(vm, (uint64_t)inst->w);
-}
-
-
-static void ni_orhi(struct netvm *vm)
-{
-	uint64_t val;
-	struct netvm_inst *inst = &vm->inst[vm->pc];
-	S_POP(vm, val);
-	S_PUSH_NOCK(vm, (val | ((uint64_t)inst->w << 32)));
+	S_PUSH(vm, inst->w);
 }
 
 
@@ -199,7 +190,7 @@ static void ni_zpush(struct netvm *vm)
 static void ni_dup(struct netvm *vm)
 {
 	struct netvm_inst *inst = &vm->inst[vm->pc];
-	uint64_t val;
+	ulong val;
 
 	FATAL(vm, NETVM_ERR_STKUNDF, !S_HAS(vm, inst->w + 1));
 	val = S_GET(vm, inst->w);
@@ -210,7 +201,7 @@ static void ni_dup(struct netvm *vm)
 static void ni_swap(struct netvm *vm)
 {
 	struct netvm_inst *inst = &vm->inst[vm->pc];
-	uint64_t tmp = (inst->x > inst->w) ? inst->x : inst->w;
+	ulong tmp = (inst->x > inst->w) ? inst->x : inst->w;
 	FATAL(vm, NETVM_ERR_STKUNDF, !S_HAS(vm, tmp + 1));
 	tmp = S_GET(vm, inst->x);
 	S_SET(vm, inst->x, S_GET(vm, inst->w));
@@ -221,7 +212,7 @@ static void ni_swap(struct netvm *vm)
 static void ni_ldbp(struct netvm *vm)
 {
 	struct netvm_inst *inst = &vm->inst[vm->pc];
-	uint64_t pos;
+	ulong pos;
 
 	S_POP(vm, pos);
 	if (inst->x) {
@@ -250,7 +241,7 @@ static void ni_ldbpi(struct netvm *vm)
 static void ni_stbp(struct netvm *vm)
 {
 	struct netvm_inst *inst = &vm->inst[vm->pc];
-	uint64_t pos, val;
+	ulong pos, val;
 	FATAL(vm, NETVM_ERR_STKUNDF, !S_HAS(vm, 2));
 	S_POP_NOCK(vm, pos);
 	S_POP_NOCK(vm, val);
@@ -267,7 +258,7 @@ static void ni_stbp(struct netvm *vm)
 static void ni_stbpi(struct netvm *vm)
 {
 	struct netvm_inst *inst = &vm->inst[vm->pc];
-	uint64_t val;
+	ulong val;
 	S_POP(vm, val);
 	if (inst->x) {
 		FATAL(vm, NETVM_ERR_STKUNDF, vm->bp <= inst->w);
@@ -289,8 +280,8 @@ static void ni_pushfr(struct netvm *vm)
 static void ni_popfr(struct netvm *vm)
 {
 	struct netvm_inst *inst = &vm->inst[vm->pc];
-	uint64_t bp, nsp;
-	uint64_t ret[NETVM_MAXRET];
+	ulong bp, nsp;
+	ulong ret[NETVM_MAXRET];
 	int i;
 
 	FATAL(vm, NETVM_ERR_STKUNDF, (inst->x > NETVM_MAXRET));
@@ -315,7 +306,7 @@ static void ni_ldpf(struct netvm *vm)
 	struct prparse *prp;
 	uint oidx;
 	long off;
-	uint64_t val;
+	ulong val;
 
 	prp = netvm_find_header(vm, &pd0, (inst->op == NETVM_OC_LDPF));
 	VMCKRET(vm);
@@ -368,7 +359,7 @@ static void ni_ldpf(struct netvm *vm)
 	/* address by including the packet number and ISPKT bit in the */
 	/* high order byte. */
 	if (inst->x) {
-		uint64_t seg = (NETVM_SEG_ISPKT | pd0.pktnum);
+		ulong seg = (NETVM_SEG_ISPKT | pd0.pktnum);
 		val = val | seg << NETVM_UA_SEG_OFF;
 	}
 	S_PUSH(vm, val);
@@ -377,32 +368,28 @@ static void ni_ldpf(struct netvm *vm)
 
 void netvm_p2stk(struct netvm *vm, byte_t *p, int width)
 {
-	uint64_t val;
+	ulong val;
 
 	val = 0;
 	switch (width & 0x7F) {
-	case 8: val |= (uint64_t)*p++ << 56;
-	case 7: val |= (uint64_t)*p++ << 48;
-	case 6: val |= (uint64_t)*p++ << 40;
-	case 5: val |= (uint64_t)*p++ << 32;
-	case 4: val |= (uint64_t)*p++ << 24;
-	case 3: val |= (uint64_t)*p++ << 16;
-	case 2: val |= (uint64_t)*p++ << 8;
-	case 1: val |= (uint64_t)*p;
+	case 4: val |= (ulong)*p++ << 24;
+	case 3: val |= (ulong)*p++ << 16;
+	case 2: val |= (ulong)*p++ << 8;
+	case 1: val |= (ulong)*p;
 		break;
 	default:
 		VMERR(vm, NETVM_ERR_WIDTH);
 	}
 
 	if ((width & 0x80) != 0)
-		val = signx64(val, ((width & 0x7F) * 8));
+		val = signxul(val, ((width & 0x7F) * 8)) & 0xFFFFFFFFul;
 
 	S_PUSH(vm, val);
 }
 
 
-void netvm_get_mem_ptr(struct netvm *vm, uint8_t seg, uint64_t addr, int iswr, 
-		       uint64_t len, byte_t **p)
+void netvm_get_mem_ptr(struct netvm *vm, uint seg, ulong addr, int iswr, 
+		       ulong len, byte_t **p)
 {
 	struct netvm_mseg *m;
 
@@ -423,8 +410,8 @@ void netvm_get_mem_ptr(struct netvm *vm, uint8_t seg, uint64_t addr, int iswr,
 }
 
 
-void netvm_get_pkt_ptr(struct netvm *vm, uint8_t pkt, uint64_t addr, int iswr, 
-		       uint64_t len, byte_t **p)
+void netvm_get_pkt_ptr(struct netvm *vm, uint pkt, ulong addr, int iswr, 
+		       ulong len, byte_t **p)
 {
 	struct pktbuf *pkb;
 	struct prparse *prp;
@@ -439,8 +426,8 @@ void netvm_get_pkt_ptr(struct netvm *vm, uint8_t pkt, uint64_t addr, int iswr,
 }
 
 
-void netvm_get_seg_ptr(struct netvm *vm, uint8_t seg, uint64_t addr, int iswr, 
-		       uint64_t len, byte_t **p)
+void netvm_get_seg_ptr(struct netvm *vm, uint seg, ulong addr, int iswr, 
+		       ulong len, byte_t **p)
 {
 	if ((seg & NETVM_SEG_ISPKT) == 0)
 		netvm_get_mem_ptr(vm, seg, addr, iswr, len, p);
@@ -449,12 +436,12 @@ void netvm_get_seg_ptr(struct netvm *vm, uint8_t seg, uint64_t addr, int iswr,
 }
 
 
-void netvm_get_uaddr_ptr(struct netvm *vm, uint64_t uaddr, int iswr,
-		         uint64_t len, byte_t **p)
+void netvm_get_uaddr_ptr(struct netvm *vm, ulong uaddr, int iswr,
+		         ulong len, byte_t **p)
 {
-	uint8_t seg;
+	uing seg;
 	seg = (uaddr >> NETVM_UA_SEG_OFF);
-	uaddr &= ~((uint64_t)0xff << NETVM_UA_SEG_OFF);
+	uaddr &= NETVM_UA_OFF_MASK;
 	netvm_get_seg_ptr(vm, seg, uaddr, iswr, len, p);
 }
 
@@ -462,8 +449,8 @@ void netvm_get_uaddr_ptr(struct netvm *vm, uint64_t uaddr, int iswr,
 static void ni_ld(struct netvm *vm)
 {
 	struct netvm_inst *inst = &vm->inst[vm->pc];
-	uint64_t addr;
-	uint64_t len;
+	ulong addr;
+	ulong len;
 	int width;
 	byte_t *p;
 
@@ -473,8 +460,8 @@ static void ni_ld(struct netvm *vm)
 		S_POP(vm, len);
 	S_POP(vm, addr);
 	width = len & 0x7F;
-	if (width > 8)
-		width = 8;
+	if (width > 4)
+		width = 4;
 	netvm_get_uaddr_ptr(vm, addr, 0, width, &p);
 	VMCKRET(vm);
 	netvm_p2stk(vm, p, (int)(len & 0xFF));
@@ -484,7 +471,7 @@ static void ni_ld(struct netvm *vm)
 static void ni_ldi(struct netvm *vm)
 {
 	struct netvm_inst *inst = &vm->inst[vm->pc];
-	register uint64_t addr;
+	register ulong addr;
 	int width;
 	byte_t *p;
 
@@ -511,7 +498,7 @@ static void ni_ldpd(struct netvm *vm)
 
 static void ni_cmp(struct netvm *vm)
 {
-	uint64_t a1, a2, len, val;
+	ulong a1, a2, len, val;
 	byte_t *p1, *p2;
 
 	S_POP(vm, len);
@@ -533,7 +520,7 @@ static void ni_cmp(struct netvm *vm)
 
 static void ni_pcmp(struct netvm *vm)
 {
-	uint64_t a1, a2, len, nbytes, val;
+	ulong a1, a2, len, nbytes, val;
 	byte_t *p1, *p2;
 
 	S_POP(vm, len);
@@ -554,7 +541,7 @@ static void ni_pcmp(struct netvm *vm)
 	val = 0;
 	while (len > 8) {
 		if (*p1 != *p2) {
-			val = (*p1 < *p2) ? (0 - (uint64_t)1) : 1;
+			val = (*p1 < *p2) ? 0xFFFFFFFFul : 1;
 			/* We've already popped 3 values from the stack */
 			S_PUSH_NOCK(vm, val);
 			break;
@@ -567,7 +554,7 @@ static void ni_pcmp(struct netvm *vm)
 		byte_t b1 = *p1 & -(1 << (8 - len));
 		byte_t b2 = *p2 & -(1 << (8 - len));
 		if (b1 != b2)
-			val = (b1 < b2) ? (0 - (uint64_t)1) : 1;
+			val = (b1 < b2) ? 0xFFFFFFFFul : 1;
 	}
 
 	/* We've already popped 3 values from the stack */
@@ -577,7 +564,7 @@ static void ni_pcmp(struct netvm *vm)
 
 static void ni_mskcmp(struct netvm *vm)
 {
-	uint64_t a1, a2, am, len;
+	ulong a1, a2, am, len;
 	byte_t *p1, *p2, *pm;
 
 	S_POP(vm, len);
@@ -612,7 +599,7 @@ static void ni_mskcmp(struct netvm *vm)
 static void ni_unop(struct netvm *vm)
 {
 	struct netvm_inst *inst = &vm->inst[vm->pc];
-	uint64_t val;
+	ulong val;
 
 	S_POP(vm, val);
 
@@ -621,17 +608,17 @@ static void ni_unop(struct netvm *vm)
 		val = !val;
 		break;
 	case NETVM_OC_INVERT:
-		val = ~val;
+		val = ~val & 0xFFFFFFFFul;
 		break;
 	case NETVM_OC_POPL:	/* fall through */
 	case NETVM_OC_NLZ:
-		FATAL(vm, NETVM_ERR_WIDTH, inst->x > 8);
-		if (inst->x < 8)
+		FATAL(vm, NETVM_ERR_WIDTH, inst->x > 4);
+		if (inst->x < 4)
 			val &= (1 << (inst->x * 8)) - 1;
 		if (inst->op == NETVM_OC_POPL) {
-			val = pop_64(val);
+			val = pop_32(val);
 		} else {
-			val = nlz_64(val) - (64 - inst->x * 8);
+			val = nlz_32(val) - (32 - inst->x * 8);
 		}
 		break;
 	default:
@@ -646,9 +633,9 @@ static void ni_unop(struct netvm *vm)
 
 
 
-static void binop(struct netvm *vm, int op, uint64_t v1, uint64_t v2)
+static void binop(struct netvm *vm, int op, ulong v1, ulong v2)
 {
-	uint64_t out;
+	ulong out;
 	int amt;
 
 	switch (op) {
@@ -674,16 +661,16 @@ static void binop(struct netvm *vm, int op, uint64_t v1, uint64_t v2)
 		break;
 	case NETVM_OC_SHL:
 	case NETVM_OC_SHLI:
-		out = v1 << (v2 & 0x3F);
+		out = v1 << (v2 & 0x1F);
 		break;
 	case NETVM_OC_SHR:
 	case NETVM_OC_SHRI:
-		out = v1 >> (v2 & 0x3F);
+		out = v1 >> (v2 & 0x1F);
 		break;
 	case NETVM_OC_SHRA:
 	case NETVM_OC_SHRAI:
-		amt = v2 & 0x3F;
-		out = (v1 >> amt) | -((v1 & ((uint64_t)1 << 63)) >> amt);
+		amt = v2 & 0x1F;
+		out = (v1 >> amt) | -((v1 & 0x8000000ul) >> amt);
 		break;
 	case NETVM_OC_AND:
 	case NETVM_OC_ANDI:
@@ -707,19 +694,27 @@ static void binop(struct netvm *vm, int op, uint64_t v1, uint64_t v2)
 		break;
 	case NETVM_OC_LT:
 	case NETVM_OC_LTI:
-		out = (int64_t)v1 < (int64_t)v2;
+		v1 = signxul(v1, 32);
+		v2 = signxul(v2, 32);
+		out = (long)v1 < (long)v2;
 		break;
 	case NETVM_OC_LE:
 	case NETVM_OC_LEI:
-		out = (int64_t)v1 <= (int64_t)v2;
+		v1 = signxul(v1, 32);
+		v2 = signxul(v2, 32);
+		out = (long)v1 <= (long)v2;
 		break;
 	case NETVM_OC_GT:
 	case NETVM_OC_GTI:
-		out = (int64_t)v1 > (int64_t)v2;
+		v1 = signxul(v1, 32);
+		v2 = signxul(v2, 32);
+		out = (long)v1 > (long)v2;
 		break;
 	case NETVM_OC_GE:
 	case NETVM_OC_GEI:
-		out = (int64_t)v1 >= (int64_t)v2;
+		v1 = signxul(v1, 32);
+		v2 = signxul(v2, 32);
+		out = (long)v1 >= (long)v2;
 		break;
 	case NETVM_OC_ULT:
 	case NETVM_OC_ULTI:
@@ -739,11 +734,15 @@ static void binop(struct netvm *vm, int op, uint64_t v1, uint64_t v2)
 		break;
 	case NETVM_OC_MIN:
 	case NETVM_OC_MINI:
-		out = ((int64_t)v1 < (int64_t)v2) ? v1 : v2;
+		v1 = signxul(v1, 32);
+		v2 = signxul(v2, 32);
+		out = ((long)v1 < (long)v2) ? v1 : v2;
 		break;
 	case NETVM_OC_MAX:
 	case NETVM_OC_MAXI:
-		out = ((int64_t)v1 > (int64_t)v2) ? v1 : v2;
+		v1 = signxul(v1, 32);
+		v2 = signxul(v2, 32);
+		out = ((long)v1 > (long)v2) ? v1 : v2;
 		break;
 	case NETVM_OC_UMIN:
 	case NETVM_OC_UMINI:
@@ -758,6 +757,8 @@ static void binop(struct netvm *vm, int op, uint64_t v1, uint64_t v2)
 		abort_unless(0);
 	}
 
+	out &= 0xFFFFFFFFul;
+
 	/* All binary operations have at least one operand popped from */
 	/* the stack.  So no need to check for stack bounds. */
 	S_PUSH_NOCK(vm, out);
@@ -767,7 +768,7 @@ static void binop(struct netvm *vm, int op, uint64_t v1, uint64_t v2)
 static void ni_binop(struct netvm *vm)
 {
 	struct netvm_inst *inst = &vm->inst[vm->pc];
-	uint64_t v1, v2;
+	ulong v1, v2;
 	S_POP(vm, v2);
 	S_POP(vm, v1);
 	if (inst->x)
@@ -780,7 +781,7 @@ static void ni_binop(struct netvm *vm)
 static void ni_binopi(struct netvm *vm)
 {
 	struct netvm_inst *inst = &vm->inst[vm->pc];
-	uint64_t v1, v2;
+	ulong v1, v2;
 	v2 = inst->w;
 	S_POP(vm, v1);
 	if (inst->x)
@@ -792,7 +793,7 @@ static void ni_binopi(struct netvm *vm)
 
 static void ni_getcpt(struct netvm *vm)
 {
-	uint64_t cpi;
+	ulong cpi;
 
 	S_POP(vm, cpi);
 	FATAL(vm, NETVM_ERR_BADCOPROC, cpi >= NETVM_MAXCOPROC);
@@ -807,22 +808,22 @@ static void ni_getcpt(struct netvm *vm)
 static void ni_bri(struct netvm *vm)
 {
 	struct netvm_inst *inst = &vm->inst[vm->pc];
-	uint64_t off = inst->w;
+	ulong nxtpc;
+	ulong cond;
 
-	off = signx64(off, 32);
+	nxtpc = (off + vm->pc) & 0xFFFFFFFFul;
 
 	/* should be verified before start */
-	abort_unless(vm->pc + off <= vm->ninst);
+	abort_unless(nxtpc <= vm->ninst);
 
 	if (inst->op != NETVM_OC_BRI) {
-		uint64_t cond;
 		S_POP(vm, cond);
 		if (inst->op == NETVM_OC_BZI)
 			cond = !cond;
 		if (!cond)
 			return;
 	}
-	vm->nxtpc = vm->pc + off;
+	vm->nxtpc = nxtpc;
 }
 
 
@@ -849,8 +850,8 @@ static void ni_halt(struct netvm *vm)
 static void ni_cpop(struct netvm *vm)
 {
 	struct netvm_inst *inst = &vm->inst[vm->pc];
-	uint64_t cpi;
-	uint64_t op;
+	ulong cpi;
+	ulong op;
 	struct netvm_coproc *coproc;
 
 	if (inst->op == NETVM_OC_CPOPI) {
@@ -870,34 +871,36 @@ static void ni_cpop(struct netvm *vm)
 static void ni_br(struct netvm *vm)
 {
 	struct netvm_inst *inst = &vm->inst[vm->pc];
-	uint64_t off;
+	ulong nxtpc;
+	ulong cond;
 
 	abort_unless(!vm->matchonly);
-	S_POP(vm, off);
+	S_POP(vm, nxtpc);
+
 	/* ok to overflow number of instructions by 1: implied halt */
-	FATAL(vm, NETVM_ERR_INSTADDR, (uint64_t)vm->pc + off > vm->ninst);
+	nxtpc = (vm->pc + nxtpc) & 0xFFFFFFFFul
+	FATAL(vm, NETVM_ERR_INSTADDR, nxtpc > vm->ninst);
 	if (inst->op != NETVM_OC_BR) {
-		uint64_t cond;
 		S_POP(vm, cond);
 		if (inst->op == NETVM_OC_BZ)
 			cond = !cond;
 		if (!cond)
 			return;
 	}
-	vm->nxtpc = vm->pc + off;
+	vm->nxtpc = nxtpc;
 }
 
 
 static void ni_pushpc(struct netvm *vm)
 {
 	struct netvm_inst *inst = &vm->inst[vm->pc];
-	S_PUSH(vm, (uint64_t)vm->pc + inst->w);
+	S_PUSH(vm, (vm->pc + inst->w) & 0xFFFFFFFFul);
 }
 
 
 static void ni_jmp(struct netvm *vm)
 {
-	uint64_t addr;
+	ulong addr;
 	S_POP(vm, addr);
 	FATAL(vm, NETVM_ERR_INSTADDR, addr > vm->ninst);
 	vm->nxtpc = addr;
@@ -906,7 +909,7 @@ static void ni_jmp(struct netvm *vm)
 
 static void ni_call(struct netvm *vm)
 {
-	uint64_t addr;
+	ulong addr;
 
 	S_POP(vm, addr);
 	FATAL(vm, NETVM_ERR_INSTADDR, addr > vm->ninst);
@@ -921,8 +924,8 @@ static void ni_call(struct netvm *vm)
 static void ni_ret(struct netvm *vm)
 {
 	struct netvm_inst *inst = &vm->inst[vm->pc];
-	uint64_t addr, bp, sslot;
-	uint64_t ret[NETVM_MAXRET];
+	ulong addr, bp, sslot;
+	ulong ret[NETVM_MAXRET];
 	int i;
 
 	FATAL(vm, NETVM_ERR_STKUNDF, (inst->x > NETVM_MAXRET));
@@ -943,13 +946,9 @@ static void ni_ret(struct netvm *vm)
 }
 
 
-void netvm_stk2p(struct netvm *vm, byte_t *p, uint64_t val, int width)
+void netvm_stk2p(struct netvm *vm, byte_t *p, ulong val, int width)
 {
 	switch (width & 0x7F) {
-	case 8: *p++ = val >> 56;
-	case 7: *p++ = val >> 48;
-	case 6: *p++ = val >> 40;
-	case 5: *p++ = val >> 32;
 	case 4: *p++ = val >> 24;
 	case 3: *p++ = val >> 16;
 	case 2: *p++ = val >> 8;
@@ -965,9 +964,9 @@ void netvm_stk2p(struct netvm *vm, byte_t *p, uint64_t val, int width)
 static void ni_st(struct netvm *vm)
 {
 	struct netvm_inst *inst = &vm->inst[vm->pc];
-	uint64_t addr;
-	uint64_t val;
-	uint64_t len;
+	ulong addr;
+	ulong val;
+	ulong len;
 	int width;
 	byte_t *p;
 
@@ -978,8 +977,8 @@ static void ni_st(struct netvm *vm)
 	S_POP(vm, addr);
 	S_POP(vm, val);
 	width = len & 0x7F;
-	if (width > 8)
-		width = 8;
+	if (width > 4)
+		width = 4;
 	netvm_get_uaddr_ptr(vm, addr, 1, width, &p);
 	VMCKRET(vm);
 	netvm_stk2p(vm, p, val, (int)(len & 0xFF));
@@ -989,8 +988,8 @@ static void ni_st(struct netvm *vm)
 static void ni_sti(struct netvm *vm)
 {
 	struct netvm_inst *inst = &vm->inst[vm->pc];
-	uint64_t addr;
-	uint64_t val;
+	ulong addr;
+	ulong val;
 	int width;
 	byte_t *p;
 
@@ -1006,7 +1005,7 @@ static void ni_sti(struct netvm *vm)
 static void ni_stpd(struct netvm *vm)
 {
 	struct netvm_inst *inst = &vm->inst[vm->pc];
-	uint64_t val;
+	ulong val;
 	int width;
 	byte_t *p;
 
@@ -1020,7 +1019,7 @@ static void ni_stpd(struct netvm *vm)
 
 static void ni_move(struct netvm *vm)
 {
-	uint64_t saddr, daddr, len;
+	ulong saddr, daddr, len;
 	byte_t *s, *d;
 
 	S_POP(vm, len);
@@ -1054,8 +1053,8 @@ static void ni_pkswap(struct netvm *vm)
 static void ni_pknew(struct netvm *vm)
 {
 	struct netvm_inst *inst = &vm->inst[vm->pc];
-	uint64_t pktnum;
-	uint64_t len;
+	ulong pktnum;
+	ulong len;
 	struct pktbuf *pnew;
 
 	S_POP(vm, len);
@@ -1079,7 +1078,7 @@ static void ni_pknew(struct netvm *vm)
 
 static void ni_pkcopy(struct netvm *vm)
 {
-	uint64_t pktnum, slot;
+	ulong pktnum, slot;
 	struct pktbuf *pkb, *pnew;
 
 	S_POP(vm, pktnum);
@@ -1113,7 +1112,7 @@ static void ni_pksla(struct netvm *vm)
 static void ni_pkcla(struct netvm *vm)
 {
 	struct netvm_inst *inst = &vm->inst[vm->pc];
-	uint64_t pktnum;
+	ulong pktnum;
 	struct pktbuf *pkb;
 	S_POP(vm, pktnum);
 	FATAL(vm, NETVM_ERR_PKTNUM, (pktnum >= NETVM_MAXPKTS));
@@ -1125,7 +1124,7 @@ static void ni_pkcla(struct netvm *vm)
 static void ni_pkppsh(struct netvm *vm)
 {
 	struct netvm_inst *inst = &vm->inst[vm->pc];
-	uint64_t pktnum, prid;
+	ulong pktnum, prid;
 	struct pktbuf *pkb;
 
 	FATAL(vm, NETVM_ERR_STKUNDF, !S_HAS(vm, 2));
@@ -1145,7 +1144,7 @@ static void ni_pkppsh(struct netvm *vm)
 static void ni_pkppop(struct netvm *vm)
 {
 	struct netvm_inst *inst = &vm->inst[vm->pc];
-	uint64_t pktnum;
+	ulong pktnum;
 	struct pktbuf *pkb;
 	S_POP(vm, pktnum);
 	FATAL(vm, NETVM_ERR_PKTNUM, (pktnum >= NETVM_MAXPKTS));
@@ -1158,7 +1157,7 @@ static void ni_pkppop(struct netvm *vm)
 static void ni_pkprs(struct netvm *vm)
 {
 	struct netvm_inst *inst = &vm->inst[vm->pc];
-	uint64_t pktnum;
+	ulong pktnum;
 	struct pktbuf *pkb;
 
 	S_POP(vm, pktnum);
@@ -1173,7 +1172,7 @@ static void ni_pkprs(struct netvm *vm)
 
 static void ni_pkdel(struct netvm *vm)
 {
-	uint64_t pktnum;
+	ulong pktnum;
 	struct pktbuf *pkb;
 
 	S_POP(vm, pktnum);
@@ -1188,7 +1187,7 @@ static void ni_pkdel(struct netvm *vm)
 
 static void ni_pkfxd(struct netvm *vm)
 {
-	uint64_t pktnum;
+	ulong pktnum;
 	struct pktbuf *pkb;
 
 	S_POP(vm, pktnum);
@@ -1290,8 +1289,8 @@ static void ni_pkins(struct netvm *vm)
 {
 	struct netvm_inst *inst = &vm->inst[vm->pc];
 	struct pktbuf *pkb;
-	uint64_t addr;
-	uint64_t len;
+	ulong addr;
+	ulong len;
 	uint pktnum;
 
 	S_POP(vm, len);
@@ -1313,8 +1312,8 @@ static void ni_pkcut(struct netvm *vm)
 {
 	struct netvm_inst *inst = &vm->inst[vm->pc];
 	struct pktbuf *pkb;
-	uint64_t addr;
-	uint64_t len;
+	ulong addr;
+	ulong len;
 	uint pktnum;
 
 	S_POP(vm, len);
@@ -1336,7 +1335,7 @@ static void ni_pkadj(struct netvm *vm)
 {
 	struct netvm_prp_desc pd0;
 	struct prparse *prp;
-	uint64_t val;
+	ulong val;
 	uint oid;
 	long amt;
 	int rv;
@@ -1362,7 +1361,6 @@ netvm_op g_netvm_ops[NETVM_OC_MAXOP + 1] = {
 	ni_pop,			/* POP */
 	ni_popto,		/* POPTO */
 	ni_push,		/* PUSH */
-	ni_orhi,		/* ORHI */
 	ni_zpush,		/* ZPUSH */
 	ni_dup,			/* DUP */
 	ni_swap,		/* SWAP */
@@ -1494,7 +1492,7 @@ netvm_op g_netvm_ops[NETVM_OC_MAXOP + 1] = {
 };
 
 
-void netvm_init(struct netvm *vm, uint64_t *stack, uint ssz)
+void netvm_init(struct netvm *vm, ulong *stack, uint ssz)
 {
 	int i;
 	struct netvm_mseg *m;
@@ -1527,7 +1525,7 @@ void netvm_init(struct netvm *vm, uint64_t *stack, uint ssz)
 int netvm_validate(struct netvm *vm)
 {
 	struct netvm_inst *inst;
-	uint64_t i, maxi, newpc;
+	ulong i, maxi, newpc;
 
 	if (!vm || !vm->stack || !vm->inst || (vm->ninst < 1) || 
 	    (vm->ninst > MAXINST))
@@ -1547,7 +1545,7 @@ int netvm_validate(struct netvm *vm)
 			if (inst->op == NETVM_OC_JMPI)
 				newpc = inst->w;
 			else
-				newpc = signx64(inst->w, 32) + i;
+				newpc = (inst->w + i) & 0xFFFFFFFFul;
 			/* ok to overflow number of instructions by 1 */
 		        /* implied halt instruction */
 			if (newpc > vm->ninst)
@@ -1797,7 +1795,7 @@ static void run_max_cycles(struct netvm *vm, int maxcycles)
 
 /* 0 if run ok and no retval, 1 if run ok and stack not empty, */
 /* -1 on error, -2 if max cycle count reached */
-int netvm_run(struct netvm *vm, int maxcycles, uint64_t *rv)
+int netvm_run(struct netvm *vm, int maxcycles, ulong *rv)
 {
 	abort_unless(vm && vm->stack && vm->inst &&
 		     vm->ninst >= 0 && vm->ninst <= MAXINST);

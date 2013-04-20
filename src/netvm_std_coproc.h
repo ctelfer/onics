@@ -43,9 +43,9 @@
  */
 
 struct netvm_xpktcp_tagdesc {
-	uint16_t		index;
-	uint8_t			type;
-	uint8_t			pktnum;
+	ushort			index;
+	uchar			type;
+	uchar			pktnum;
 };
 
 enum {
