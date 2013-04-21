@@ -814,11 +814,12 @@ Packet Metadata Intrinsics
   Similarly, setting the metadata to -1 removes the tag rather than 
   setting it.
 
-  int meta_get_tstamp(int pnum)
-  	- get the timestamp in nano-seconds for packet 'pnum'
+  int meta_get_ts_sec(int pnum)
+  int meta_get_ts_nsec(int pnum)
+  	- get the timestamp in seconds/nano-seconds for packet 'pnum'
 
-  void meta_set_tstamp(pnum, ts)
-  	- set the timestamp in nano-seconds for packet 'pnum'
+  void meta_set_tstamp(int pnum, int sec, int nsec)
+  	- set the timestamp for packet 'pnum'
 
   int meta_get_presnap(int pnum)
   	- get the pre-snapped packet length for packet 'pnum'

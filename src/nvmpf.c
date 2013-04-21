@@ -88,7 +88,7 @@ void parse_options(int argc, char *argv[])
 }
 
 
-static void initvm(struct netvm *vm, uint64_t *stk, uint stksz,
+static void initvm(struct netvm *vm, ulong *stk, uint stksz,
 		   struct netvm_std_coproc *cproc, struct file_emitter *fe,
 		   FILE *dout, struct netvm_program *prog)
 {
@@ -119,7 +119,7 @@ static void initvm(struct netvm *vm, uint64_t *stk, uint stksz,
 int main(int argc, char *argv[])
 {
 	struct netvm vm;
-	uint64_t vmstk[1024];
+	ulong vmstk[1024];
 	struct netvm_std_coproc cproc;
 	struct file_emitter fe;
 	struct netvm_program prog;

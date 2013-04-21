@@ -104,7 +104,7 @@ struct netvm_program {
 	uint			ninst;
 	uint			eps[NVMP_EP_NUMEP];
 	struct netvm_segdesc	sdescs[NETVM_MAXMSEGS];
-	uint64_t		cpreqs[NETVM_MAXCOPROC];
+	ulong			cpreqs[NETVM_MAXCOPROC];
 	struct netvm_meminit	*inits;
 	uint			ninits;
 };
@@ -127,7 +127,7 @@ void nvmp_init_mem(struct netvm *vm, struct netvm_program *prog);
 /* Returns the same error codes as netvm_run.  Use netvm_run() to continue */
 /* execution if the program runs out of cycles. */
 int nvmp_exec(struct netvm *vm, struct netvm_program *prog, int ep, int maxcycles,
-	      uint64_t *vmrv);
+	      ulong *vmrv);
 
 /*
  * NetVM Program file format: 
@@ -145,7 +145,7 @@ int nvmp_exec(struct netvm *vm, struct netvm_program *prog, int ep, int maxcycle
  *  -- 8 -- packet entry point
  *  -- 9 -- finalization entry point
  *  -- <# instr> * 8 bytes --  instructions
- *  -- <# cpreqs> * 12 bytes --  coprocessor requirements
+ *  -- <# cpreqs> * 8 bytes --  coprocessor requirements
  *  -- <# segs> * 12 bytes -- segment sections
  *  -- <# mem inits> -- memory initializations
  *
@@ -153,7 +153,10 @@ int nvmp_exec(struct netvm *vm, struct netvm_program *prog, int ep, int maxcycle
  *    opcode[1] x[1] y[1] z[1] w[4]
  *
  *  Co Processor requirement format:
- *    cpi[4] cpt[8]
+ *    version 1:
+ *      cpi[4] cpt[8]
+ *    version 2:
+ *      cpi[4] cpt[4]
  *
  *  Segment format:
  *    segnum[4] len[4] perms[4]
@@ -167,6 +170,7 @@ int nvmp_exec(struct netvm *vm, struct netvm_program *prog, int ep, int maxcycle
 
 #define NVMP_MAGIC	0x4E564D50
 #define NVMP_V1		1
+#define NVMP_V2		2
 #define NVMP_HLEN	40
 #define NVMP_INSTLEN	8
 #define NVMP_NUMEPS	3
@@ -206,7 +210,7 @@ int nvmp_write(struct netvm_program *prog, FILE *outfile);
 void nvmp_clear(struct netvm_program *prog);
 
 /* Pretty-print the return value of the virtual machine */
-void nvmp_prret(FILE *f, struct netvm *vm, int rv, uint64_t tos);
+void nvmp_prret(FILE *f, struct netvm *vm, int rv, ulong tos);
 
 /* Dump the stack of the virtual machine */
 void nvmp_prstk(FILE *f, struct netvm *vm);

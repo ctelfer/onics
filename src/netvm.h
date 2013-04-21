@@ -70,7 +70,7 @@ struct netvm_inst {
 #define NETVM_UA_SEG_MASK	(0xFul)
 #define NETVM_UA_ISPKT(addr)	(((addr) & 0x80000000ul) != 0)
 #define NETVM_UADDR(ispkt, idx, addr) \
-	(((ulong)(ispkt) & 1)<< 31 | ((ulong)(idx) & 0xF) << 28 | \
+	(((ulong)(ispkt) & 1) << 31 | ((ulong)(idx) & 0x7) << 28 | \
 	 ((addr) & 0x0FFFFFFF))
 
 

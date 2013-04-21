@@ -172,7 +172,6 @@ void xpktcp_deltag(struct netvm *vm, struct netvm_coproc *cp, int cpi)
 }
 
 
-/* TODO: FIXME */
 void xpktcp_ldtag(struct netvm *vm, struct netvm_coproc *cp, int cpi)
 {
 	struct netvm_xpkt_cp *xcp = container(cp, struct netvm_xpkt_cp, coproc);
@@ -187,14 +186,12 @@ void xpktcp_ldtag(struct netvm *vm, struct netvm_coproc *cp, int cpi)
 	FATAL(vm, NETVM_ERR_MEMADDR, addr > XPKT_TAG_MAXW * 4 - (width & 0x7F));
 	netvm_p2stk(vm, (byte_t *)(xcp->tag + addr), width);
 	VMCKRET(vm);
-	if (inst->w != 0) {
+	if ((width & 0x80)) {
 		val = S_GET(vm, 0);
 		switch(width & 0x7F) {
 		case 2: val = swap16(val);
 			break;
 		case 4: val = swap32(val);
-			break;
-		case 8: val = swap64(val);
 			break;
 		default:
 			VMERR(vm, NETVM_ERR_WIDTH);
@@ -204,7 +201,6 @@ void xpktcp_ldtag(struct netvm *vm, struct netvm_coproc *cp, int cpi)
 }
 
 
-/* TODO: FIXME */
 void xpktcp_sttag(struct netvm *vm, struct netvm_coproc *cp, int cpi)
 {
 	struct netvm_xpkt_cp *xcp = container(cp, struct netvm_xpkt_cp, coproc);
@@ -219,13 +215,11 @@ void xpktcp_sttag(struct netvm *vm, struct netvm_coproc *cp, int cpi)
 	p = xcp->tag + addr;
 	FATAL(vm, NETVM_ERR_MEMADDR, addr > XPKT_TAG_MAXW * 4 - (width & 0x7F));
 
-	if (inst->w != 0) {
+	if ((width & 0x80)) {
 		switch(width & 0x7F) {
 		case 2: val = swap16(val);
 			break;
 		case 4: val = swap32(val);
-			break;
-		case 8: val = swap64(val);
 			break;
 		default:
 			VMERR(vm, NETVM_ERR_WIDTH);
@@ -233,6 +227,13 @@ void xpktcp_sttag(struct netvm *vm, struct netvm_coproc *cp, int cpi)
 	}
 
 	netvm_stk2p(vm, p, val, width);
+}
+
+
+void xpktcp_clrtbuf(struct netvm *vm, struct netvm_coproc *cp, int cpi)
+{
+	struct netvm_xpkt_cp *xcp = container(cp, struct netvm_xpkt_cp, coproc);
+	memset(xcp->tag, 0, sizeof(xcp->tag));
 }
 
 
@@ -253,6 +254,7 @@ int init_xpkt_cp(struct netvm_xpkt_cp *cp)
 	opp[NETVM_CPOC_DELTAG] = xpktcp_deltag;
 	opp[NETVM_CPOC_LDTAG] = xpktcp_ldtag;
 	opp[NETVM_CPOC_STTAG] = xpktcp_sttag;
+	opp[NETVM_CPOC_CLRTBUF] = xpktcp_clrtbuf;
 	return 0;
 }
 
@@ -333,7 +335,7 @@ static void nci_prnum(struct netvm *vm, struct netvm_coproc *ncp, int cpi)
 	fmtbuf[i++] = '\0';
 
 	/* sign extend the result if we are printing a signed decimal */
-	emit_format(cp->outport, fmtbuf, (ullong)val);
+	emit_format(cp->outport, fmtbuf, (ulong)val);
 }
 
 

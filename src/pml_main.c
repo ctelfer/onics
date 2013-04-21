@@ -67,7 +67,6 @@ struct pmlinput {
 	const char *		str;
 };
 
-uint64_t vm_stack[1024];
 int verbosity = 0;
 int ignore_errors = 0;
 int single_step = 0;
@@ -215,7 +214,7 @@ void parse_pml_program(struct netvm_program *prog)
 }
 
 
-void initvm(struct netvm *vm, uint64_t *stk, uint stksz, 
+void initvm(struct netvm *vm, ulong *stk, uint stksz, 
 	    struct netvm_std_coproc *cproc, struct file_emitter *fe,
 	    struct netvm_program *prog)
 {
@@ -247,7 +246,7 @@ void initvm(struct netvm *vm, uint64_t *stk, uint stksz,
 int main(int argc, char *argv[])
 {
 	struct netvm vm;
-	uint64_t vmstk[1024];
+	ulong vmstk[1024];
 	struct netvm_std_coproc cproc;
 	struct file_emitter fe;
 	struct netvm_program prog;

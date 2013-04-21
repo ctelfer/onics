@@ -175,7 +175,7 @@ void nvmp_init_mem(struct netvm *vm, struct netvm_program *prog)
 
 
 int nvmp_exec(struct netvm *vm, struct netvm_program *prog, int ep, int maxc,
-	      uint64_t *vmrv)
+	      ulong *vmrv)
 {
 	int rv;
 	struct netvm_segdesc msave[NETVM_MAXMSEGS];
@@ -211,7 +211,7 @@ int nvmp_read(struct netvm_program *prog, FILE *infile, int *eret)
 	ulong magic, ninst, ncp, nseg, nmi, milen;
 	ulong sep, pep, eep;
 	ulong cpi;
-	ullong cpt;
+	ulong cpt;
 	ulong segnum, off, len, perms;
 	size_t ilen;
 	int e = NVMP_RDE_OK;
@@ -235,7 +235,7 @@ int nvmp_read(struct netvm_program *prog, FILE *infile, int *eret)
 	if (eep == NETVM_PROG_EXT_EP_INVALID)
 		eep = NVMP_EP_INVALID;
 
-	if ((magic != NVMP_MAGIC) || (version != NVMP_V1)) {
+	if ((magic != NVMP_MAGIC) || (version != NVMP_V2)) {
 		e = NVMP_RDE_BADMAGIC;
 		goto err;
 	}
@@ -445,7 +445,7 @@ int nvmp_write(struct netvm_program *prog, FILE *outfile)
 
 	/* write header */
 	pack(buf, sizeof(buf), "wbbbbwwwwwwww",
-	     (ulong)NVMP_MAGIC, NVMP_V1, prog->matchonly, 0, 0, 
+	     (ulong)NVMP_MAGIC, NVMP_V2, prog->matchonly, 0, 0, 
 	     (ulong)prog->ninst, ncp, nseg,
 	     (ulong)prog->ninits, milen, eps[0], eps[1], eps[2]);
 
@@ -463,8 +463,8 @@ int nvmp_write(struct netvm_program *prog, FILE *outfile)
 	for (i = 0; i < NETVM_MAXCOPROC; ++i) {
 		if (prog->cpreqs[i] == NETVM_CPT_NONE)
 			continue;
-		pack(buf, sizeof(buf), "wj", (ulong)i,
-		     (ullong)prog->cpreqs[i]);
+		pack(buf, sizeof(buf), "ww", (ulong)i,
+		     (ulong)prog->cpreqs[i]);
 		if (fwrite(buf, 1, NVMP_CPLEN, outfile) < NVMP_CPLEN)
 			return -1;
 	}
@@ -541,14 +541,14 @@ void nvmp_clear(struct netvm_program *prog)
 }
 
 
-void nvmp_prret(FILE *f, struct netvm *vm, int rv, uint64_t rc)
+void nvmp_prret(FILE *f, struct netvm *vm, int rv, ulong rc)
 {
 	abort_unless(f && vm);
 	if (rv == 0) {
 		fprintf(f, "VM provided no return value\n");
 	} else if (rv == 1) {
-		fprintf(f, "VM returned value %llu (0x%llx)\n", (ullong)rc,
-			(ullong)rc);
+		fprintf(f, "VM returned value %lu (0x%lx)\n", (ulong)rc,
+			(ulong)rc);
 	} else if (rv == -1) {
 		fprintf(f, "VM returned error @%u: %s\n", vm->pc,
 			netvm_estr(vm->status));
@@ -568,14 +568,14 @@ void nvmp_prstk(FILE *f, struct netvm *vm)
 	fprintf(f, "Stack: (SP = %u, BP = %u)\n", sp, vm->bp);
 	while (sp > 0) {
 		--sp;
-		fprintf(f, "\t%4u: %llu (0x%llx)\n", sp,
-		        (ullong)vm->stack[sp],
-		        (ullong)vm->stack[sp]);
+		fprintf(f, "\t%4u: %lu (0x%lx)\n", sp,
+		        (ulong)vm->stack[sp],
+		        (ulong)vm->stack[sp]);
 	}
 }
 
 
-static int sendpkt(struct netvm *vm, uint64_t pn, FILE *f, FILE *dout,
+static int sendpkt(struct netvm *vm, ulong pn, FILE *f, FILE *dout,
 		   int flags, int freepkt)
 {
 	int debug = flags & NVMP_RUN_DEBUG;
@@ -584,8 +584,8 @@ static int sendpkt(struct netvm *vm, uint64_t pn, FILE *f, FILE *dout,
 
 	if (pn >= NETVM_MAXPKTS) {
 		if (debug)
-			fprintf(dout, "Packet number %llu is not valid.\n",
-				(ullong)pn);
+			fprintf(dout, "Packet number %lu is not valid.\n",
+				(ulong)pn);
 		return -1;
 	}
 
@@ -593,8 +593,8 @@ static int sendpkt(struct netvm *vm, uint64_t pn, FILE *f, FILE *dout,
 
 	if (p == NULL) {
 		if (debug)
-			fprintf(dout, "Packet %llu does not exist.\n",
-				(ullong)pn);
+			fprintf(dout, "Packet %lu does not exist.\n",
+				(ulong)pn);
 		return -1;
 	}
 
@@ -683,7 +683,7 @@ static int _nvmp_run(struct netvm *vm, struct netvm_program *prog, int epi,
 	int debug = flags & NVMP_RUN_DEBUG;
 	int ignerr = flags & NVMP_RUN_IGNORE_ERR;
 	int prstk = flags & NVMP_RUN_PRSTK;
-	uint64_t tos = 0;
+	ulong tos = 0;
 
 	if (prog->eps[epi] == NVMP_EP_INVALID) {
 		if (debug)
@@ -748,8 +748,8 @@ restart:
 			tos = 0;
 
 		if (debug)
-			fprintf(dout, "Halt status DONE: top of stack %llu\n",
-				(ullong)tos);
+			fprintf(dout, "Halt status DONE: top of stack %lu\n",
+				(ulong)tos);
 
 		if (flushpkts(vm, tos != 0, pout, dout, flags) < 0)
 			return (ignerr ? 0 : -1);
@@ -820,7 +820,7 @@ int nvmp_run_all(struct netvm *vm, struct netvm_program *prog, FILE *pin,
 	int debug = flags & NVMP_RUN_DEBUG;
 	int rv;
 	int esave;
-	uint64_t tos;
+	ulong tos;
 	struct pktbuf *p;
 
 	if (debug && dout == NULL) {

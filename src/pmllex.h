@@ -38,7 +38,7 @@ struct pmll_val {
 	union {
 		byte_t v6addr[16];
 		byte_t ethaddr[6];
-		uint64_t num;
+		ulong num;
 		byte_t v4addr[4];
 		struct raw raw;
 	} u;

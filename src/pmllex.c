@@ -804,7 +804,7 @@ err:
 
 static int read_num(struct pmllex *lex, int ich)
 {
-	ullong v;
+	ulong v;
 	char *cp;
 	int ch;
 

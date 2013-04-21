@@ -103,7 +103,6 @@ struct nvmop Operations[] = {
 	{ "pop",    NETVM_OC_POP,    1, ARGW },
 	{ "popto",  NETVM_OC_POPTO,  1, ARGW },
 	{ "push",   NETVM_OC_PUSH,   1, ARGW },
-	{ "orhi",   NETVM_OC_ORHI,   1, ARGW },
 	{ "zpush",  NETVM_OC_ZPUSH,  1, ARGW },
 	{ "dup",    NETVM_OC_DUP,    1, ARGW },
 	{ "swap",   NETVM_OC_SWAP,   2, ARGX|ARGW },
@@ -255,7 +254,7 @@ struct asmctx {
 	struct hnode *		celem[TABLESIZE];
 	struct htab 		ctab;
 	struct netvm_segdesc    sdescs[NETVM_MAXMSEGS];
-	uint64_t                cpreqs[NETVM_MAXCOPROC];
+	ulong			cpreqs[NETVM_MAXCOPROC];
 	struct netvm_meminit	minits[MAXMEMINIT];
 	uint			ninits;
 };
@@ -675,7 +674,7 @@ int inst2str(const struct netvm_inst *ni, char *s, size_t len, uint inum)
 	if ((argmask & ARGZ) != 0) *ap++ = ni->z;
 	if ((argmask & ARGW) != 0) {
 		if ((argmask & BRREL) != 0) {
-			*ap++ = signx64(ni->w, 32) + inum;
+			*ap++ = signxul(ni->w, 32) + inum;
 			str_copy(a0p, "@", sizeof(a0p));
 		} else {
 			*ap++ = ni->w;
@@ -1344,8 +1343,8 @@ void disassemble(FILE *infile, FILE *outfile)
 
 	for (i = 0; i < NETVM_MAXCOPROC; ++i) {
 		if (prog.cpreqs[i] != NETVM_CPT_NONE)
-			fprintf(outfile, ".coproc %u %llu\n", i, 
-			        (unsigned long long)prog.cpreqs[i]);
+			fprintf(outfile, ".coproc %u %lu\n", i, 
+			        (ulong)prog.cpreqs[i]);
 	}
 
 	for (i = 0; i < prog.ninits; ++i)

@@ -237,7 +237,7 @@ struct pml_literal {
 	ulong			width;
 
 	union {
-		uint64_t		scalar;
+		ulong			scalar;
 		struct pml_bytestr	bytestr;
 		struct pml_maskval	maskval;
 	} u;
@@ -576,7 +576,7 @@ struct pml_retval {
 	int			etype;
 	struct pml_bytestr	bytes;
 	struct pml_bytestr	mask;
-	uint64_t		val;
+	ulong			val;
 };
 
 
@@ -677,7 +677,7 @@ int  pml_ast_walk(struct pml_ast *ast, void *ctx, pml_walk_f pre,
 		  pml_walk_f in, pml_walk_f post);
 void pmln_print(union pml_node *node, uint depth);
 void pml_ast_print(struct pml_ast *ast);
-int  pml_lit_val64(struct pml_ast *ast, struct pml_literal *lit, uint64_t *val);
+int  pml_lit_val(struct pml_ast *ast, struct pml_literal *lit, ulong *val);
 
 
 /* -- PML tree evaluation -- */

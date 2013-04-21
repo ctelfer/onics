@@ -69,7 +69,6 @@ void hexdump(FILE *out, ulong addr, byte_t *p, ulong len);
 
 #undef swap16
 #undef swap32
-#undef swap64
 
 #define swap16(v) ( (((uint16_t)(v) << 8) & 0xFF00) | \
 		    (((uint16_t)(v) >> 8) & 0xFF) )
@@ -79,31 +78,11 @@ void hexdump(FILE *out, ulong addr, byte_t *p, ulong len);
 		    (((uint32_t)(v) >> 8) & 0xFF00u)      | \
 		    (((uint32_t)(v) >> 24) & 0xFFu) )
 
-#define swap64(v) ( (((uint64_t)(v) & 0xFF) << 56) | \
-		    (((uint64_t)(v) >> 56) & 0xFF) | \
-		    (((uint64_t)(v) & 0xFF00) << 40) | \
-		    (((uint64_t)(v) >> 40) & 0xFF00) | \
-		    (((uint64_t)(v) & 0xFF0000) << 24) | \
-		    (((uint64_t)(v) >> 24) & 0xFF0000) | \
-		    (((uint64_t)(v) & 0xFF000000u) << 8) | \
-		    (((uint64_t)(v) >> 8) & 0xFF000000u) )
-
-/* sign extend to 64 bits */
-#define signx64(v, nbits) \
-	((uint64_t)(v) | ((uint64_t)0 - ((v) & (1 << ((nbits) - 1)))))
-
 #define signxul(v, nbits) \
 	((ulong)(v) | -((v) & ((ulong)1 << ((nbits) - 1))))
 
 /* returns the numerical value of the min(8, len) bytes in big-endian format */
-uint64_t be64val(void *p, size_t len);
-
-/* returns the numerical value of the min(8, len) bytes in big-endian format */
 ulong be32val(void *p, size_t len);
-
-/* sets the byte string pointed to by 'p' to the numeric value in 'val' */
-/* modulo 2^(min(8, len) * 8) */
-void wrbe64(void *p, size_t len, uint64_t val);
 
 /* sets the byte string pointed to by 'p' to the numeric value in 'val' */
 /* modulo 2^(min(4, len) * 8) */

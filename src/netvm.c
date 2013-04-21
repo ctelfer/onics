@@ -439,7 +439,7 @@ void netvm_get_seg_ptr(struct netvm *vm, uint seg, ulong addr, int iswr,
 void netvm_get_uaddr_ptr(struct netvm *vm, ulong uaddr, int iswr,
 		         ulong len, byte_t **p)
 {
-	uing seg;
+	uint seg;
 	seg = (uaddr >> NETVM_UA_SEG_OFF);
 	uaddr &= NETVM_UA_OFF_MASK;
 	netvm_get_seg_ptr(vm, seg, uaddr, iswr, len, p);
@@ -811,7 +811,7 @@ static void ni_bri(struct netvm *vm)
 	ulong nxtpc;
 	ulong cond;
 
-	nxtpc = (off + vm->pc) & 0xFFFFFFFFul;
+	nxtpc = (vm->pc + inst->w) & 0xFFFFFFFFul;
 
 	/* should be verified before start */
 	abort_unless(nxtpc <= vm->ninst);
@@ -878,7 +878,7 @@ static void ni_br(struct netvm *vm)
 	S_POP(vm, nxtpc);
 
 	/* ok to overflow number of instructions by 1: implied halt */
-	nxtpc = (vm->pc + nxtpc) & 0xFFFFFFFFul
+	nxtpc = (vm->pc + nxtpc) & 0xFFFFFFFFul;
 	FATAL(vm, NETVM_ERR_INSTADDR, nxtpc > vm->ninst);
 	if (inst->op != NETVM_OC_BR) {
 		S_POP(vm, cond);
@@ -1537,8 +1537,12 @@ int netvm_validate(struct netvm *vm)
 		if (inst->op > maxi)
 			return NETVM_VERR_BADOP;
 
+		/* All push's must be in the lower 32 bits only */
+		if (inst->op == NETVM_OC_PUSH) {
+			if (inst->w >> 32)
+				return NETVM_VERR_BADOP;
 		/* validate branch immediate instructions */
-		if ((inst->op == NETVM_OC_BRI) ||
+		} else if ((inst->op == NETVM_OC_BRI) ||
 		    (inst->op == NETVM_OC_BNZI) ||
 		    (inst->op == NETVM_OC_BZI) ||
 		    (inst->op == NETVM_OC_JMPI)) {

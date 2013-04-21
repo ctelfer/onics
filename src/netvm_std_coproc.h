@@ -56,11 +56,12 @@ enum {
 
 	/* NOTE: with these two, if the high order bit is set for width */
 	/* then the bytes will get swapped before storing.  This is only */
-	/* valid for widths 2, 4, 8. */
-	NETVM_CPOC_LDTAG,	/* [addr]/'w', z == width -- load from tag */
+	/* valid for widths 2 and 4. */
+	NETVM_CPOC_LDTAG,	/* [addr] z == width -- load from tag */
 				/*     buf onto stack  */
-	NETVM_CPOC_STTAG,	/* [v,addr]/[v](addr == 'w') z == width, */
-				/*     store 'v' into tag buffer */
+	NETVM_CPOC_STTAG,	/* [v,addr] z == width -- store 'v' */
+				/*     into tag buffer */
+	NETVM_CPOC_CLRTBUF,	/* Zero the tag buffer */
 
 	NETVM_CPOC_NUMXPKT,
 };
