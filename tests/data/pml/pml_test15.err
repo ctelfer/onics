@@ -56,7 +56,7 @@ Stack: (SP = 4, BP = 0)
 	   0: 5 (0x5)
 Executing instruction 9
 Stack: (SP = 4, BP = 0)
-	   3: 61 (0x3d)
+	   3: 29 (0x1d)
 	   2: 0 (0x0)
 	   1: 11 (0xb)
 	   0: 5 (0x5)

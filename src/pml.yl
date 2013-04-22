@@ -1289,14 +1289,14 @@ value(V) ::= AT locname(L). {
 		struct ns_namespace *ns = (struct ns_namespace *)ne;
 		v = pmln_alloc(ast, PMLTT_SCALAR);
 		if (v != NULL) {
-			v->width = 8;
+			v->width = 4;
 			v->u.scalar = ns->prid;
 		}
 	} else if (ne->type != NST_PKTFLD) {
 		struct ns_pktfld *pf = (struct ns_pktfld *)ne;
 		v = pmln_alloc(ast, PMLTT_SCALAR);
 		if (v != NULL)  {
-			v->width = 8;
+			v->width = 4;
 			v->u.scalar = pf->prid;
 		}
 	} else {
@@ -1366,7 +1366,7 @@ locname(L) ::= DOLLAR LPAREN expr(P) COMMA expr(I) RPAREN ID(TOK). {
 numval(N) ::= NUM(TOK). {
 	N = pmln_alloc(ast, PMLTT_SCALAR);
 	if (N != NULL) {
-		N->width = 8;
+		N->width = 4;
 		N->u.scalar = TOK.u.num;
 	}
 }

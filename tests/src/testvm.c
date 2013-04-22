@@ -246,9 +246,9 @@ struct netvm_inst vm_prog_bulkmove[] = {
 
 	/* First print the first 16 bytes of the payload */
 	/*15 */ NETVM_PDIOP(LDPFI, 0, 0, PRID_TCP, 0, NETVM_PRP_POFF, 0),
-	/*16 */ NETVM_OP(ORHI, 0, 0, 0, (NETVM_SEG_ISPKT<<NETVM_UA_SEG_HI_OFF)),
+	/*16 */ NETVM_OP(ORI, 0, 0, 0, (NETVM_SEG_ISPKT<<NETVM_UA_SEG_OFF)),
 	/*17 */ NETVM_OP(PUSH, 0, 0, 0, BULK_DEST_ADDRLO), /* Address 0 */
-	/*18 */ NETVM_OP(ORHI, 0, 0, 0, (RWSEG << NETVM_UA_SEG_HI_OFF)),
+	/*18 */ NETVM_OP(ORI, 0, 0, 0, (RWSEG << NETVM_UA_SEG_OFF)),
 	/*19 */ NETVM_OP(PUSH, 0, 0, 0, 16), /* Length 16 */
 	/*20 */ NETVM_OP(MOVE, 0, 0, 0, 0),
 	/*21 */ NETVM_OP(LDI, 4, RWSEG, 0, (BULK_DEST_ADDRLO + 0)),
@@ -263,9 +263,9 @@ struct netvm_inst vm_prog_bulkmove[] = {
 
 	/* Next put "hello world" into the beginning of the packet */
 	/*30 */ NETVM_OP(PUSH, 0, 0, 0, BMS1_OFFSET),
-	/*31 */ NETVM_OP(ORHI, 0, 0, 0, (ROSEG << NETVM_UA_SEG_HI_OFF)),
+	/*31 */ NETVM_OP(ORI, 0, 0, 0, (ROSEG << NETVM_UA_SEG_OFF)),
 	/*32 */ NETVM_PDIOP(LDPFI, 0, 0, PRID_TCP, 0, NETVM_PRP_POFF, 0),
-	/*33 */ NETVM_OP(ORHI, 0, 0, 0, (NETVM_SEG_ISPKT<<NETVM_UA_SEG_HI_OFF)),
+	/*33 */ NETVM_OP(ORI, 0, 0, 0, (NETVM_SEG_ISPKT<<NETVM_UA_SEG_OFF)),
 	/*34 */ NETVM_OP(PUSH, 0, 0, 0, BMS1_SIZE),
 	/*35 */ NETVM_OP(MOVE, 0, 0, 0, 0),
 	/*36 */ NETVM_OP(HALT, 0, 0, 0, 1),
@@ -299,44 +299,46 @@ struct meminit hdi[] = {
 
 struct netvm_inst vm_prog_hexdump[] = {
 	/* 0 */ NETVM_CPOP_PRSTRI(ROSEG, HDS1_OFFSET, HDS1_SIZE),
-	/* 1 */ NETVM_OP(LDI, 8, RWSEG, 0, HD_PKNADDR),
+	/* 1 */ NETVM_OP(LDI, 4, RWSEG, 0, HD_PKNADDR),
 	/* 2 */ NETVM_OP(ADDI, 0, 0, 0, 1),
 	/* 3 */ NETVM_OP(DUP, 0, 0, 0, 0),
-	/* 4 */ NETVM_OP(STI, 8, RWSEG, 0, HD_PKNADDR),
+	/* 4 */ NETVM_OP(STI, 4, RWSEG, 0, HD_PKNADDR),
 	/* 5 */ NETVM_OP(CPOPI, NETVM_CPI_OUTPORT, NETVM_CPOC_PRDEC, 8, 0),
 	/* 6 */ NETVM_CPOP_PRSTRI(ROSEG, HDS2_OFFSET, HDS2_SIZE),
 	/* 7 */ NETVM_PDIOP(LDPFI, 0, 0, PRID_NONE, 0, NETVM_PRP_PLEN, 0),
 	/* 8 */ NETVM_OP(CPOPI, NETVM_CPI_OUTPORT, NETVM_CPOC_PRDEC, 8, 0),
 	/* 9 */ NETVM_CPOP_PRSTRI(ROSEG, HDS3_OFFSET, HDS3_SIZE),
 	/*10 */ NETVM_OP(PUSH, 0, 0, 0, 0),
-	/*11 */ NETVM_OP(STI, 8, RWSEG, 0, HD_IDX),
+	/*11 */ NETVM_OP(STI, 4, RWSEG, 0, HD_IDX),
 
 	/* LOOP top */
-	/*12 */ NETVM_OP(LDI, 8, RWSEG, 0, HD_IDX),
+	/*12 */ NETVM_OP(LDI, 4, RWSEG, 0, HD_IDX),
 	/*13 */ NETVM_PDIOP(LDPFI, 0, 0, PRID_NONE, 0, NETVM_PRP_PLEN, 0),
 	/*14 */ NETVM_OP(GE, 0, 0, 0, 0),
-	/*15 */ NETVM_BRIF_F(13),
+	/*15 */ NETVM_BRIF_F(14),
 	/* END LOOP TEST */
-	/*16 */ NETVM_OP(LDI, 8, RWSEG, 0, HD_IDX),
+	/*16 */ NETVM_OP(LDI, 4, RWSEG, 0, HD_IDX),
 	/*17 */ NETVM_OP(MODI, 0, 0, 0, 16),
 	/*18 */ NETVM_BRIF_F(2),
 	/*19 */ NETVM_CPOP_PRSTRI(ROSEG, HDS5_OFFSET, HDS5_SIZE),
-	/*20 */ NETVM_OP(LDI, 8, RWSEG, 0, HD_IDX),
-	/*21 */ NETVM_OP(ORHI, 0, 0, 0,
-			 NETVM_PDESC_HI(0, PRID_NONE, 0, NETVM_PRP_POFF)),
-	/*22 */ NETVM_OP(LDPD, 1, 0, 0, 0),
-	/*23 */ NETVM_OP(CPOPI, NETVM_CPI_OUTPORT, NETVM_CPOC_PRHEX, 1, 2),
+	/*20 */ NETVM_OP(LDI, 4, RWSEG, 0, HD_IDX),
+	/*21 */ NETVM_OP(ORI, 0, 0, 0,
+			 ((NETVM_SEG_ISPKT|0) << NETVM_PD_PKT_OFF)),
+	/*22 */ NETVM_OP(PUSH, 0, 0, 0,
+			 NETVM_PDESC_W0(PRID_NONE, 0, NETVM_PRP_POFF)),
+	/*23 */ NETVM_OP(LDPD, 1, 0, 0, 0),
+	/*24 */ NETVM_OP(CPOPI, NETVM_CPI_OUTPORT, NETVM_CPOC_PRHEX, 1, 2),
 
-	/*24 */ NETVM_OP(LDI, 8, RWSEG, 0, HD_IDX),
-	/*25 */ NETVM_OP(ADDI, 0, 0, 0, 1),
-	/*26 */ NETVM_OP(STI, 8, RWSEG, 0, HD_IDX),
-	/*27 */ NETVM_BR_B(15),
+	/*25 */ NETVM_OP(LDI, 4, RWSEG, 0, HD_IDX),
+	/*26 */ NETVM_OP(ADDI, 0, 0, 0, 1),
+	/*27 */ NETVM_OP(STI, 4, RWSEG, 0, HD_IDX),
+	/*28 */ NETVM_BR_B(16),
 	/* LOOP END */
 
-	/*28 */ NETVM_CPOP_PRSTRI(ROSEG, HDS4_OFFSET, HDS4_SIZE),
-	/*29 */ NETVM_OP(PUSH, 0, 0, 0, 0),
-	/*30 */ NETVM_OP(PKDEL, 0, 0, 0, 0),
-	/*31 */ NETVM_OP(HALT, 0, 0, 0, 1),
+	/*29 */ NETVM_CPOP_PRSTRI(ROSEG, HDS4_OFFSET, HDS4_SIZE),
+	/*30 */ NETVM_OP(PUSH, 0, 0, 0, 0),
+	/*31 */ NETVM_OP(PKDEL, 0, 0, 0, 0),
+	/*32 */ NETVM_OP(HALT, 0, 0, 0, 1),
 };
 
 
@@ -355,18 +357,16 @@ struct meminit meqsi[] = {
 struct netvm_inst vm_prog_maskeq[] = {
 	/* 0 */ NETVM_PDIOP(LDPFI, 0, 0, PRID_PCLASS_NET, 0, NETVM_PRP_SOFF, 0),
 	/* 1 */ NETVM_OP(EQI, 0, 0, 0, NETVM_PF_INVALID),
-	/* 2 */ NETVM_BRIF_F(8), 
+	/* 2 */ NETVM_BRIF_F(6), 
 
 	/* Compare 1st _SIZE bytes of pkt 0's network header */ 
 	/* use 'x' bit of LDPFI to make the SOFF get generated in UA form */
 	/* 3 */ NETVM_PDIOP(LDPFI, 1, 0, PRID_PCLASS_NET, 0, NETVM_PRP_SOFF, 0),
-	/* 4 */ NETVM_OP(PUSH, 0, 0, 0, MEQ_VAL_OFFSET), 
-	/* 5 */ NETVM_OP(ORHI, 0, 0, 0, (ROSEG << NETVM_UA_SEG_HI_OFF)),
-	/* 6 */ NETVM_OP(PUSH, 0, 0, 0, MEQ_MASK_OFFSET), 
-	/* 7 */ NETVM_OP(ORHI, 0, 0, 0, (ROSEG << NETVM_UA_SEG_HI_OFF)),
-	/* 8 */ NETVM_OP(PUSH, 0, 0, 0, MEQ_MASK_SIZE), 
-	/* 9 */ NETVM_OP(MSKCMP, 0, 0, 0, 0),
-	/*10 */ NETVM_OP(HALT, 0, 0, 0, 1),
+	/* 4 */ NETVM_OP(PUSH, 0, 0, 0, NETVM_UADDR(0, ROSEG, MEQ_VAL_OFFSET)), 
+	/* 5 */ NETVM_OP(PUSH, 0, 0, 0, NETVM_UADDR(0, ROSEG, MEQ_MASK_OFFSET)), 
+	/* 6 */ NETVM_OP(PUSH, 0, 0, 0, MEQ_MASK_SIZE), 
+	/* 7 */ NETVM_OP(MSKCMP, 0, 0, 0, 0),
+	/* 8 */ NETVM_OP(HALT, 0, 0, 0, 1),
 };
 
 

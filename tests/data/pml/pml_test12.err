@@ -22,7 +22,7 @@ Stack: (SP = 3, BP = 0)
 	   0: 8 (0x8)
 Executing instruction 4
 Stack: (SP = 3, BP = 0)
-	   2: 60 (0x3c)
+	   2: 28 (0x1c)
 	   1: 0 (0x0)
 	   0: 8 (0x8)
 Executing instruction 5

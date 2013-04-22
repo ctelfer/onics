@@ -2,9 +2,8 @@
 #
 {
   print "before\n";
-  ts = meta_get_tstamp(0);
-  sec = ts / 1000000000;
-  nsec = ts % 1000000000;
+  sec = meta_get_ts_sec(0);
+  nsec = meta_get_ts_nsec(0);
   print "timestamp = ", %u%sec, " seconds and ", %u%nsec, " nanoseconds\n";
   print "pre-snap length = ", %d%meta_get_presnap(0), "\n";
   print "input port = ", %d%meta_get_inport(0), "\n";
@@ -16,7 +15,7 @@
 
 
 {
-  meta_set_tstamp(0, 1000000000);
+  meta_set_ts(0, 1, 0);
   meta_set_presnap(0, 4096);
   meta_set_inport(0, 50);
   meta_set_outport(0, 51);
@@ -27,9 +26,8 @@
 
 ?- meta_get_outport(0) == 51 -? {
   print "after\n";
-  ts = meta_get_tstamp(0);
-  sec = ts / 1000000000;
-  nsec = ts % 1000000000;
+  sec = meta_get_ts_sec(0);
+  nsec = meta_get_ts_nsec(0);
   print "timestamp = ", %u%sec, " seconds and ", %u%nsec, " nanoseconds\n";
   print "pre-snap length = ", %d%meta_get_presnap(0), "\n";
   print "input port = ", %d%meta_get_inport(0), "\n";

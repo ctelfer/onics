@@ -774,10 +774,9 @@ struct cg_intr intrinsics[] = {
 	{ "str_len", NULL, _i_str, NULL, 2, 
 		{ NETVM_OP(SWAP,0,0,0,1),
 		  NETVM_OP(POP,0,0,0,1) } },
-	{ "str_addr", NULL, _i_str, NULL, 3, 
+	{ "str_addr", NULL, _i_str, NULL, 2, 
 		{ NETVM_OP(POP,0,0,0,1),
-		  NETVM_OP(SHLI,0,0,0,8), 
-		  NETVM_OP(SHRI,0,0,0,8) } },
+		  NETVM_OP(ANDI,0,0,0,NETVM_UA_OFF_MASK) } },
 	{ "str_ispkt", NULL, _i_str, NULL, 2, 
 		{ NETVM_OP(POP,0,0,0,1), 
 		  NETVM_OP(SHRI,0,0,0,NETVM_UA_ISPKT_OFF) } },
@@ -813,14 +812,16 @@ struct cg_intr intrinsics[] = {
 		{ NETVM_OP(PKPUP,0,0,0,0) } },
 	{ "fix_dltype", NULL, _i_scarg, NULL, 1, { NETVM_OP(PKFXD,0,0,0,0) } },
 	{ "fix_len", NULL, _i_pdarg, NULL, 1, { NETVM_OP(PKFXL,0,0,0,0) } },
-	{ "fix_all_len",  NULL, _i_scarg, NULL, 3, 
-		{ NETVM_OP(ORI,0,0,0,(PRID_NONE<<4)),
-		  NETVM_OP(SHLI,0,0,0,44),
+	{ "fix_all_len",  NULL, _i_scarg, NULL, 4, 
+		{ NETVM_OP(ORI,0,0,0,NETVM_SEG_ISPKT),
+		  NETVM_OP(SHLI,0,0,0,NETVM_PD_PKT_OFF),
+		  NETVM_OP(PUSH,0,0,0,NETVM_PDESC_W0(PRID_NONE,0,0)),
 		  NETVM_OP(PKFXL,0,0,0,0), } },
 	{ "fix_csum", NULL, _i_pdarg, NULL, 1, { NETVM_OP(PKFXC,0,0,0,0) } },
-	{ "fix_all_csum", NULL, _i_scarg, NULL, 3,
-		{ NETVM_OP(ORI,0,0,0,(PRID_NONE<<4)),
-		  NETVM_OP(SHLI,0,0,0,44),
+	{ "fix_all_csum", NULL, _i_scarg, NULL, 4,
+		{ NETVM_OP(ORI,0,0,0,NETVM_SEG_ISPKT),
+		  NETVM_OP(SHLI,0,0,0,NETVM_PD_PKT_OFF),
+		  NETVM_OP(PUSH,0,0,0,NETVM_PDESC_W0(PRID_NONE,0,0)),
 		  NETVM_OP(PKFXC,0,0,0,0), } },
 
 	/* 
@@ -845,9 +846,9 @@ struct cg_intr intrinsics[] = {
 
 	{ "exit", NULL, _i_scarg, 0, 1, 
 		{ NETVM_OP(HALT,0,0,0,NVMP_STATUS_EXIT) } },
-	{ "pop", NULL, _i_scarg, 0, 1, { NETVM_OP(POPL,8,0,0,0) } },
+	{ "pop", NULL, _i_scarg, 0, 1, { NETVM_OP(POPL,4,0,0,0) } },
 	{ "log2", NULL, _i_scarg, 0, 2, 
-		{ NETVM_OP(NLZ,8,0,0,0), NETVM_OP(SUBI,1,0,0,63) } },
+		{ NETVM_OP(NLZ,4,0,0,0), NETVM_OP(SUBI,1,0,0,31) } },
 	{ "min", NULL, _i_scarg, 0, 1, { NETVM_OP(MIN,0,0,0,0) } },
 	{ "max", NULL, _i_scarg, 0, 1, { NETVM_OP(MAX,0,0,0,0) } },
 	{ NULL, NULL, NULL, 0, 0, { {0} } },
@@ -2780,7 +2781,7 @@ int cg_assign_strref_nonref(struct pmlncg *cg, struct pml_assign *a)
 			return -1;
 		if (cg_strref(cg, a->loc) < 0)
 			return -1;
-		EMIT_W(cg, UMINI, 8);
+		EMIT_W(cg, UMINI, 4);
 		EMIT_NULL(cg, ST);
 	} else {
 		if (cg_expr(cg, (union pml_node *)e, PML_ETYPE_BYTESTR) < 0)

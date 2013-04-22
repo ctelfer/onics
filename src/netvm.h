@@ -133,9 +133,8 @@ struct netvm_inst {
 #define NETVM_PD_FLD_LEN	8
 #define NETVM_PD_FLD_MASK	0xff
 
-#define NETVM_PDESC_W0(pkt, prid, idx, fld) \
-  ((((ulong)(pkt) & NETVM_PD_PKT_MASK) << (NETVM_PD_PKT_OFF))   |\
-   (((ulong)(prid) & NETVM_PD_PRID_MASK) << (NETVM_PD_PRID_OFF))|\
+#define NETVM_PDESC_W0(prid, idx, fld) \
+  ((((ulong)(prid) & NETVM_PD_PRID_MASK) << (NETVM_PD_PRID_OFF))|\
    (((ulong)(idx) & NETVM_PD_IDX_MASK) << (NETVM_PD_IDX_OFF))   |\
    (((ulong)(fld) & NETVM_PD_FLD_MASK) << (NETVM_PD_FLD_OFF)))
 
