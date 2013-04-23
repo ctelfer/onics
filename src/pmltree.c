@@ -3807,7 +3807,7 @@ void pml_ast_mem_init(struct pml_ast *ast)
 		if (r.etype == PML_ETYPE_SCALAR) {
 			len = (v->width > SCALAR_SIZE ? SCALAR_SIZE : v->width);
 			for (i = 0; i < len; ++i) {
-				shift = (SCALAR_SIZE - 1) * 8;
+				shift = (SCALAR_SIZE - 1 - i) * 8;
 				*vp++ = (r.val >> shift) & 0xFF;
 			}
 		} else if (r.etype == PML_ETYPE_BYTESTR) {

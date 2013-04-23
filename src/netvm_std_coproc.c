@@ -321,6 +321,7 @@ static void nci_prnum(struct netvm *vm, struct netvm_coproc *ncp, int cpi)
 		fmtbuf[i++] = 'o';
 		break;
 	case NETVM_CPOC_PRDEC:
+		val = signxul(val, 32);
 		fmtbuf[i++] = 'd';
 		break;
 	case NETVM_CPOC_PRUDEC:
