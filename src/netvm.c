@@ -1539,7 +1539,7 @@ int netvm_validate(struct netvm *vm)
 
 		/* All push's must be in the lower 32 bits only */
 		if (inst->op == NETVM_OC_PUSH) {
-			if (inst->w >> 32)
+			if (inst->w & ~0xFFFFFFFFul)
 				return NETVM_VERR_BADOP;
 		/* validate branch immediate instructions */
 		} else if ((inst->op == NETVM_OC_BRI) ||

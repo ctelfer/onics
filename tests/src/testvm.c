@@ -44,7 +44,7 @@ struct clopt_parser optparser =
 CLOPTPARSER_INIT(options, array_length(options));
 
 
-uint64_t vm_stack[64];
+ulong vm_stack[64];
 byte_t vm_memory[2][1024];
 #define RWSEG 0
 #define ROSEG 1
@@ -461,7 +461,7 @@ void init_memory(struct netvm *vm, struct meminit *mi, size_t nmi)
 }
 
 
-void print_vmret(int vmrv, int ec, uint pc, uint64_t rc)
+void print_vmret(int vmrv, int ec, uint pc, ulong rc)
 {
 	if (vmrv == 0) {
 		fprintf(stderr, "VM provided no return value\n");
@@ -480,7 +480,7 @@ void print_vmret(int vmrv, int ec, uint pc, uint64_t rc)
 void run_without_packets(struct netvm *vm, struct meminit *mi, size_t nmi)
 {
 	int vmrv;
-	uint64_t rc;
+	ulong rc;
 	init_memory(vm, mi, nmi);
 	vmrv = netvm_run(vm, -1, &rc);
 	print_vmret(vmrv, vm->status, vm->pc, rc);
@@ -512,7 +512,7 @@ void run_with_packets(struct netvm *vm, int filter, struct meminit *mi,
 	int npass = 0;
 	int vmrv;
 	int i;
-	uint64_t rc;
+	ulong rc;
 
 	while (pkb_file_read(&p, stdin) > 0) {
 		if (pkb_parse(p) < 0)

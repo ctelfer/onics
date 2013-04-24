@@ -2,6 +2,7 @@
 #include "protoparse.h"
 #include "ns.h"
 #include "fld.h"
+#include <string.h>
 
 int main(int argc, char *argv[])
 {

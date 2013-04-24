@@ -19,7 +19,7 @@ inline wierd(int i, int j) { i + -j }
 const J = wierd(E, A);
 const K = wierd(square(A), wierd(E, A));
 
-const L = pop(0x1818181818181818);
+const L = pop(0x18181818);
 const M = min(300, -5);
 const N = max(300, -5);
 const O = log2(0x4321);

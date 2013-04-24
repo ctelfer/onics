@@ -832,9 +832,9 @@ static int read_num(struct pmllex *lex, int ich)
 	TERMINATE(lex);
 
 	errno = 0;
-	v = strtoull(lexstr(lex), &cp, 0);
+	v = strtoul(lexstr(lex), &cp, 0);
 	if (cp != lexstr(lex) + (lexslen(lex)-1) ||
-	    (v == ULLONG_MAX && errno == ERANGE)) {
+	    (v == ULONG_MAX && errno == ERANGE)) {
 		pmll_err(lex, 1, "Invalid numeric constant");
 		return -1;
 	}

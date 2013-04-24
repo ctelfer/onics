@@ -58,7 +58,7 @@ Variables
       Scalar [[c,p]; width=4] -- width 4: 8 (8,0x8)
    Variable: M [const; width=4, addr=0]
       Initialization value -- 
-      Scalar [[c,p]; width=4] -- width 4: -5 (18446744073709551611,0xfffffffb)
+      Scalar [[c,p]; width=4] -- width 4: -5 (4294967291,0xfffffffb)
    Variable: N [const; width=4, addr=0]
       Initialization value -- 
       Scalar [[c,p]; width=4] -- width 4: 300 (300,0x12c)

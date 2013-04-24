@@ -1590,7 +1590,8 @@ void pmlt_print(struct pml_ast *ast, union pml_node *np, uint depth)
 		indent(depth);
 		printf("Scalar %s -- width %d: %ld (%lu,0x%lx)\n",
 		       efs(p, estr), (unsigned)p->width, 
-		       (long)p->u.scalar, p->u.scalar,
+		       (long)signxul(p->u.scalar, 32), 
+		       (p->u.scalar & 0xFFFFFFFFul),
 		       (p->u.scalar & 0xFFFFFFFFul));
 	} break;
 
