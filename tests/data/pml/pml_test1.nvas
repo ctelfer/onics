@@ -1,12 +1,12 @@
 # Declarations
 .entry start 0
-.coproc 0 1
-.coproc 1 2
-.coproc 2 3
-.coproc 3 4
+.coproc 0 4294967298
+.coproc 1 8589934594
+.coproc 2 12884901890
+.coproc 3 17179869186
 
 # Instructions (2 total)
-#   0: 0x53 0x00 0x00 0x00 0x00000010
+#   0: 0x52 0x00 0x00 0x00 0x00000010
 	halt      16
-#   1: 0x53 0x00 0x00 0x00 0x00000001
+#   1: 0x52 0x00 0x00 0x00 0x00000001
 	halt      1

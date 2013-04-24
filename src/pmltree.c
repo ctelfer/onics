@@ -69,6 +69,8 @@
 
 #define SCALAR_SIZE	4
 #define LG2_SCALAR_SIZE	2
+#define STRREF_SIZE	(SCALAR_SIZE * 2)
+#define LG2_STRREF_SIZE	(LG2_SCALAR_SIZE + 1)
 
 static ulong val32(struct pml_ast *ast, struct pml_retval *v);
 static const char *nts(int type);
@@ -917,7 +919,7 @@ static union pml_node *_pmln_alloc(int type)
 			p->width = 0;
 		} else {
 			p->etype = PML_ETYPE_STRREF;
-			p->width = 16;
+			p->width = STRREF_SIZE;
 		}
 		p->reftype = PML_REF_UNKNOWN;
 		p->rpfld = PML_RPF_NONE;
@@ -1180,7 +1182,7 @@ struct pml_variable *pml_var_alloc(struct pml_ast *ast, char *name,
 	if (etype == PML_ETYPE_SCALAR) {
 		v->width = SCALAR_SIZE;
 	} else if (etype == PML_ETYPE_STRREF) {
-		v->width = 16;
+		v->width = STRREF_SIZE;
 	} else {
 		v->width = size;
 		v->etype = PML_ETYPE_BYTESTR;
@@ -2998,7 +3000,7 @@ static int resolve_node_post(union pml_node *node, void *ctxp, void *xstk)
 		}
 		/* redundant? */
 		l->etype = PML_ETYPE_STRREF;
-		l->width = 16;
+		l->width = STRREF_SIZE;
 	} break;
 
 	case PMLTT_WHILE: {

@@ -649,7 +649,7 @@ static int _i_cg_mget(struct pmlncg *cg, struct pml_function *f,
 	PUSH(cg, NETVM_CPOC_HASTAG);
 	PUSH(cg, NETVM_CPI_XPKT);
 	EMIT_NULL(cg, CPOP);
-	EMIT_W(cg, BNZI, 4);
+	EMIT_W(cg, BNZI, 3);
 
 	/* [td] if no tag, then return -1  */
 	PUSH(cg, 0xFFFFFFFF);
@@ -714,19 +714,19 @@ static int _i_cg_mset(struct pmlncg *cg, struct pml_function *f,
 	EMIT_W(cg, BNZI, 2);
 	EMIT_XW(cg, RET, 0, f->arity);
 
-	/* [] write the tag header */
+	/* [td] clear the tag buffer */
+	PUSH(cg, NETVM_CPOC_CLRTBUF);
+	PUSH(cg, NETVM_CPI_XPKT);
+	EMIT_NULL(cg, CPOP);
+
+	/* [td] write the tag header */
 	PUSH(cg, x->taghdr);
 	PUSH(cg, 0);
 	PUSH(cg, NETVM_CPOC_STTAG);
 	PUSH(cg, NETVM_CPI_XPKT);
 	EMIT_Z(cg, CPOP, 4);
 
-	/* [] clear the tag buffer */
-	PUSH(cg, NETVM_CPOC_CLRTBUF);
-	PUSH(cg, NETVM_CPI_XPKT);
-	EMIT_NULL(cg, CPOP);
-
-	/* [] Load the tag value */
+	/* [td] Load the tag value */
 	EMIT_XW(cg, LDBPI, 1, 3);
 	PUSH(cg, x->addr);
 	PUSH(cg, NETVM_CPOC_STTAG);
@@ -734,7 +734,7 @@ static int _i_cg_mset(struct pmlncg *cg, struct pml_function *f,
 	EMIT_Z(cg, CPOP, x->len);
 
 	if (x->tag_type == TAG_TS) {
-		/* []: store nanosecond value to the tag buffer */
+		/* [td]: store nanosecond value to the tag buffer */
 		EMIT_XW(cg, LDBPI, 1, 4);
 		PUSH(cg, x->addr + x->len);
 		PUSH(cg, NETVM_CPOC_STTAG);

@@ -1350,7 +1350,7 @@ static void ni_pkadj(struct netvm *vm)
 	     ((pd0.field == NETVM_PRP_SOFF) || (pd0.field == NETVM_PRP_EOFF))))
 		VMERR(vm, NETVM_ERR_PRPFLD);
 	FATAL(vm, NETVM_ERR_PRPFLD, pd0.field < NETVM_PRP_OFF_BASE);
-	amt = (long)val;
+	amt = (long)signxul(val, 32);
 	oid = pd0.field - NETVM_PRP_OFF_BASE;
 	rv = prp_adj_off(prp, oid, amt);
 	FATAL(vm, NETVM_ERR_PRPADJ, rv < 0);

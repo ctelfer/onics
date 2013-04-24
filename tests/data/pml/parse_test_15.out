@@ -31,27 +31,27 @@ Functions
 -----------
    Function[intrinsic]: str_len() -- 1 args, 0-byte stack, return type=scalar
    Parameters & Variables -- 
-      Variable: ref [param; width=16, addr=0]
+      Variable: ref [param; width=8, addr=0]
    Body -- 
       (null)
    Function[intrinsic]: str_addr() -- 1 args, 0-byte stack, return type=scalar
    Parameters & Variables -- 
-      Variable: ref [param; width=16, addr=0]
+      Variable: ref [param; width=8, addr=0]
    Body -- 
       (null)
    Function[intrinsic]: str_ispkt() -- 1 args, 0-byte stack, return type=scalar
    Parameters & Variables -- 
-      Variable: ref [param; width=16, addr=0]
+      Variable: ref [param; width=8, addr=0]
    Body -- 
       (null)
    Function[intrinsic]: str_seg() -- 1 args, 0-byte stack, return type=scalar
    Parameters & Variables -- 
-      Variable: ref [param; width=16, addr=0]
+      Variable: ref [param; width=8, addr=0]
    Body -- 
       (null)
    Function[intrinsic]: str_isnull() -- 1 args, 0-byte stack, return type=scalar
    Parameters & Variables -- 
-      Variable: ref [param; width=16, addr=0]
+      Variable: ref [param; width=8, addr=0]
    Body -- 
       (null)
    Function[intrinsic]: str_mkref() -- 4 args, 0-byte stack, return type=string reference
@@ -102,12 +102,12 @@ Functions
       (null)
    Function[intrinsic]: pkt_cut_u() -- 1 args, 0-byte stack, return type=void
    Parameters & Variables -- 
-      Variable: str [param; width=16, addr=0]
+      Variable: str [param; width=8, addr=0]
    Body -- 
       (null)
    Function[intrinsic]: pkt_cut_d() -- 1 args, 0-byte stack, return type=void
    Parameters & Variables -- 
-      Variable: str [param; width=16, addr=0]
+      Variable: str [param; width=8, addr=0]
    Body -- 
       (null)
    Function[intrinsic]: pkt_parse() -- 1 args, 0-byte stack, return type=void
@@ -296,37 +296,37 @@ Functions
       (null)
    Function: foo() -- 2 args, 0-byte stack, return type=scalar
    Parameters & Variables -- 
-      Variable: x [param; width=16, addr=0]
-      Variable: off [param; width=4, addr=4]
+      Variable: x [param; width=8, addr=0]
+      Variable: off [param; width=4, addr=2]
    Body -- 
       List:
       -----
       Control Flow Modification: 'return'
-         Locator: variable(x) [[]; width=16]
+         Locator: variable(x) [[]; width=8]
          Variable -- 
-            Variable: x [param; width=16, addr=0]
+            Variable: x [param; width=8, addr=0]
          Offset -- 
             Locator: variable(off) [[]; width=4]
             Variable -- 
-               Variable: off [param; width=4, addr=4]
+               Variable: off [param; width=4, addr=2]
       -----
    Function: bar() -- 2 args, 0-byte stack, return type=string reference
    Parameters & Variables -- 
-      Variable: r [param; width=16, addr=0]
-      Variable: off [param; width=4, addr=4]
+      Variable: r [param; width=8, addr=0]
+      Variable: off [param; width=4, addr=2]
    Body -- 
       List:
       -----
       Control Flow Modification: 'return'
-         Location Address: variable(r) [[p]; width=16]
+         Location Address: variable(r) [[p]; width=8]
          Variable -- 
-            Variable: r [param; width=16, addr=0]
+            Variable: r [param; width=8, addr=0]
          Offset -- 
             Binary Operation: 'add' [[]; width=4]
             Left Operand -- 
                Locator: variable(off) [[]; width=4]
                Variable -- 
-                  Variable: off [param; width=4, addr=4]
+                  Variable: off [param; width=4, addr=2]
             Right Operand -- 
                Scalar [[c]; width=4] -- width 4: 4 (4,0x4)
          Length -- 
@@ -336,23 +336,23 @@ Functions
                Arguments -- 
                   List:
                   -----
-                  Location Address: variable(r) [[c,p]; width=16]
+                  Location Address: variable(r) [[c,p]; width=8]
                   Variable -- 
-                     Variable: r [param; width=16, addr=0]
+                     Variable: r [param; width=8, addr=0]
                   -----
             Right Operand -- 
                Binary Operation: 'subtract' [[]; width=4]
                Left Operand -- 
                   Locator: variable(off) [[]; width=4]
                   Variable -- 
-                     Variable: off [param; width=4, addr=4]
+                     Variable: off [param; width=4, addr=2]
                Right Operand -- 
                   Scalar [[c]; width=4] -- width 4: 8 (8,0x8)
       -----
    Function: baz() -- 2 args, 0-byte stack, return type=string reference
    Parameters & Variables -- 
-      Variable: r [param; width=16, addr=0]
-      Variable: off [param; width=4, addr=4]
+      Variable: r [param; width=8, addr=0]
+      Variable: off [param; width=4, addr=2]
    Body -- 
       List:
       -----
@@ -361,15 +361,15 @@ Functions
          Arguments -- 
             List:
             -----
-            Location Address: variable(r) [[p]; width=16]
+            Location Address: variable(r) [[p]; width=8]
             Variable -- 
-               Variable: r [param; width=16, addr=0]
+               Variable: r [param; width=8, addr=0]
             Offset -- 
                Binary Operation: 'add' [[]; width=4]
                Left Operand -- 
                   Locator: variable(off) [[]; width=4]
                   Variable -- 
-                     Variable: off [param; width=4, addr=4]
+                     Variable: off [param; width=4, addr=2]
                Right Operand -- 
                   Scalar [[c]; width=4] -- width 4: 2 (2,0x2)
             -----
@@ -381,14 +381,14 @@ Begin Rule
 -----------
    Rule: (begin)
       Action Variables -- 
-      Variable: r [local; width=16, addr=0]
-      Variable: r2 [local; width=16, addr=4]
+      Variable: r [local; width=8, addr=0]
+      Variable: r2 [local; width=8, addr=2]
    Action -- 
       List:
       -----
       Assignment to r
       Value -- 
-         Location Address: variable(astring) [[c,p]; width=16]
+         Location Address: variable(astring) [[c,p]; width=8]
          Variable -- 
             Variable: astring [global; width=16, addr=0]
                Initialization value -- 
@@ -403,9 +403,9 @@ Begin Rule
          Arguments -- 
             List:
             -----
-            Location Address: variable(r) [[c,p]; width=16]
+            Location Address: variable(r) [[c,p]; width=8]
             Variable -- 
-               Variable: r [local; width=16, addr=0]
+               Variable: r [local; width=8, addr=0]
             -----
             Scalar [[c]; width=4] -- width 4: 0 (0,0x0)
             -----
@@ -416,9 +416,9 @@ Begin Rule
          Arguments -- 
             List:
             -----
-            Location Address: variable(r) [[c,p]; width=16]
+            Location Address: variable(r) [[c,p]; width=8]
             Variable -- 
-               Variable: r [local; width=16, addr=0]
+               Variable: r [local; width=8, addr=0]
             -----
             Scalar [[c]; width=4] -- width 4: 4 (4,0x4)
             -----
@@ -429,7 +429,7 @@ Begin Rule
          Arguments -- 
             List:
             -----
-            Location Address: variable(astring) [[c,p]; width=16]
+            Location Address: variable(astring) [[c,p]; width=8]
             Variable -- 
                Variable: astring [global; width=16, addr=0]
                   Initialization value -- 
@@ -447,7 +447,7 @@ Begin Rule
          Arguments -- 
             List:
             -----
-            Location Address: variable(astring) [[c,p]; width=16]
+            Location Address: variable(astring) [[c,p]; width=8]
             Variable -- 
                Variable: astring [global; width=16, addr=0]
                   Initialization value -- 
@@ -465,16 +465,16 @@ Packet Rules
    Rule: (packet)
    Empty pattern
    Action Variables -- 
-      Variable: r [local; width=16, addr=0]
-      Variable: r2 [local; width=16, addr=4]
-      Variable: y [local; width=4, addr=8]
-      Variable: z [local; width=4, addr=9]
+      Variable: r [local; width=8, addr=0]
+      Variable: r2 [local; width=8, addr=2]
+      Variable: y [local; width=4, addr=4]
+      Variable: z [local; width=4, addr=5]
    Action -- 
       List:
       -----
       Assignment to r
       Value -- 
-         Location Address: variable(astring) [[c,p]; width=16]
+         Location Address: variable(astring) [[c,p]; width=8]
          Variable -- 
             Variable: astring [global; width=16, addr=0]
                Initialization value -- 
@@ -501,9 +501,9 @@ Packet Rules
          Arguments -- 
             List:
             -----
-            Location Address: variable(r) [[c,p]; width=16]
+            Location Address: variable(r) [[c,p]; width=8]
             Variable -- 
-               Variable: r [local; width=16, addr=0]
+               Variable: r [local; width=8, addr=0]
             -----
             Scalar [[c]; width=4] -- width 4: 12 (12,0xc)
             -----
@@ -514,7 +514,7 @@ Packet Rules
          Arguments -- 
             List:
             -----
-            Location Address: variable(astring) [[c,p]; width=16]
+            Location Address: variable(astring) [[c,p]; width=8]
             Variable -- 
                Variable: astring [global; width=16, addr=0]
                   Initialization value -- 

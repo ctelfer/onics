@@ -3,8 +3,8 @@ timestamp = 1261318264 seconds and 488768000 nanoseconds
 pre-snap length = -1
 input port = 0
 output port = -1
-flow id = 0xffffffffffffffff
-traffic class = 0xffffffffffffffff
+flow id = 0xffffffff
+traffic class = 0xffffffff
 
 after
 timestamp = 1 seconds and 0 nanoseconds

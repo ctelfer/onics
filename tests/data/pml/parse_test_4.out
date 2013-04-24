@@ -28,27 +28,27 @@ Functions
 -----------
    Function[intrinsic]: str_len() -- 1 args, 0-byte stack, return type=scalar
    Parameters & Variables -- 
-      Variable: ref [param; width=16, addr=0]
+      Variable: ref [param; width=8, addr=0]
    Body -- 
       (null)
    Function[intrinsic]: str_addr() -- 1 args, 0-byte stack, return type=scalar
    Parameters & Variables -- 
-      Variable: ref [param; width=16, addr=0]
+      Variable: ref [param; width=8, addr=0]
    Body -- 
       (null)
    Function[intrinsic]: str_ispkt() -- 1 args, 0-byte stack, return type=scalar
    Parameters & Variables -- 
-      Variable: ref [param; width=16, addr=0]
+      Variable: ref [param; width=8, addr=0]
    Body -- 
       (null)
    Function[intrinsic]: str_seg() -- 1 args, 0-byte stack, return type=scalar
    Parameters & Variables -- 
-      Variable: ref [param; width=16, addr=0]
+      Variable: ref [param; width=8, addr=0]
    Body -- 
       (null)
    Function[intrinsic]: str_isnull() -- 1 args, 0-byte stack, return type=scalar
    Parameters & Variables -- 
-      Variable: ref [param; width=16, addr=0]
+      Variable: ref [param; width=8, addr=0]
    Body -- 
       (null)
    Function[intrinsic]: str_mkref() -- 4 args, 0-byte stack, return type=string reference
@@ -99,12 +99,12 @@ Functions
       (null)
    Function[intrinsic]: pkt_cut_u() -- 1 args, 0-byte stack, return type=void
    Parameters & Variables -- 
-      Variable: str [param; width=16, addr=0]
+      Variable: str [param; width=8, addr=0]
    Body -- 
       (null)
    Function[intrinsic]: pkt_cut_d() -- 1 args, 0-byte stack, return type=void
    Parameters & Variables -- 
-      Variable: str [param; width=16, addr=0]
+      Variable: str [param; width=8, addr=0]
    Body -- 
       (null)
    Function[intrinsic]: pkt_parse() -- 1 args, 0-byte stack, return type=void

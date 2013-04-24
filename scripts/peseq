@@ -78,8 +78,8 @@ do
 		PROG="$PROG
 		      ?- ip6 -? { ip6.flowid = P; P = P + 1; send; }"
         else
-		OLEN="0,8"
-		PLEN=8
+		OLEN="0,4"
+		PLEN=4
 		DOSHIFT=0
 		if [ $# -gt 1 ] && echo "$2" | 
 				   grep '^[0-9][0-9]*,[0-9][0-9]*' > /dev/null
@@ -91,7 +91,7 @@ do
 				PLEN=`echo "$2" | sed -e 's/^.*,//'`
 				PLEN=`expr $OFF \+ $PLEN`
 			else
-				PLEN=8
+				PLEN=4
 			fi
 			DOSHIFT=1
 		fi
