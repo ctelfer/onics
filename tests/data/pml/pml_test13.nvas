@@ -1,10 +1,10 @@
 # Declarations
 .entry start 6
 .segment 0 1 23
-.coproc 0 4294967319
-.coproc 1 8589934615
-.coproc 2 12884901911
-.coproc 3 17179869207
+.coproc 0 1
+.coproc 1 2
+.coproc 2 3
+.coproc 3 4
 .mem mi_0_0 0 0 23 "I got the right value\x0a\x00"
 
 # Instructions (23 total)

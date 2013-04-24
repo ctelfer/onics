@@ -1,10 +1,10 @@
 # Declarations
 .entry packet 318
 .segment 0 1 279
-.coproc 0 4294967801
-.coproc 1 8589935097
-.coproc 2 12884902393
-.coproc 3 17179869689
+.coproc 0 1
+.coproc 1 2
+.coproc 2 3
+.coproc 3 4
 .mem mi_0_0 0 0 31 "before\x0a\x00timestamp = \x00 seconds a"
 .mem mi_0_1 0 31 31 "nd \x00 nanoseconds\x0a\x00pre-snap leng"
 .mem mi_0_2 0 62 24 "th = \x00\x0a\x00input port = \x00\x0a\x00"

@@ -1,10 +1,10 @@
 # Declarations
 .entry start 90
 .segment 0 1 215
-.coproc 0 4294967511
-.coproc 1 8589934807
-.coproc 2 12884902103
-.coproc 3 17179869399
+.coproc 0 1
+.coproc 1 2
+.coproc 2 3
+.coproc 3 4
 .mem mi_0_0 0 0 31 "TCP segment starts at \x00\x0a\x00TCP he"
 .mem mi_0_1 0 31 31 "ader offset was \x00\x0a\x00TCP trailer "
 .mem mi_0_2 0 62 31 "starts at \x00\x0a\x00TCP segment ends a"

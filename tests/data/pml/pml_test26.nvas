@@ -1,10 +1,10 @@
 # Declarations
 .entry start 0
 .segment 0 1 7
-.coproc 0 4294967322
-.coproc 1 8589934618
-.coproc 2 12884901914
-.coproc 3 17179869210
+.coproc 0 1
+.coproc 1 2
+.coproc 2 3
+.coproc 3 4
 .mem mi_0_0 0 0 7 "i = \x00\x0a\x00"
 
 # Instructions (26 total)

@@ -1,10 +1,10 @@
 # Declarations
 .entry packet 0
 .segment 0 1 56
-.coproc 0 4294967344
-.coproc 1 8589934640
-.coproc 2 12884901936
-.coproc 3 17179869232
+.coproc 0 1
+.coproc 1 2
+.coproc 2 3
+.coproc 3 4
 .mem mi_0_0 0 0 31 "\x08\x00Got an IP packet in ethernet\x0a"
 .mem mi_0_1 0 31 25 "\x00\x08\x00found by indirection\x0a\x00"
 

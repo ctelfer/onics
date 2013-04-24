@@ -1,10 +1,10 @@
 # Declarations
 .entry start 0
 .segment 0 1 43
-.coproc 0 4294967370
-.coproc 1 8589934666
-.coproc 2 12884901962
-.coproc 3 17179869258
+.coproc 0 1
+.coproc 1 2
+.coproc 2 3
+.coproc 3 4
 .mem mi_0_0 0 0 28 "Hello World\x0a\x00Goodbye World\x0a\x00"
 .mem mi_0_1 0 28 15 "Still running\x0a\x00"
 

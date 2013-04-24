@@ -1,10 +1,10 @@
 # Declarations
 .entry packet 0
 .segment 0 1 11
-.coproc 0 4294967303
-.coproc 1 8589934599
-.coproc 2 12884901895
-.coproc 3 17179869191
+.coproc 0 1
+.coproc 1 2
+.coproc 2 3
+.coproc 3 4
 .mem mi_0_0 0 0 11 "it's true\x0a\x00"
 
 # Instructions (7 total)

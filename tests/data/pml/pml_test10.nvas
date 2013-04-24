@@ -1,10 +1,10 @@
 # Declarations
 .entry packet 0
 .segment 0 1 79
-.coproc 0 4294967367
-.coproc 1 8589934663
-.coproc 2 12884901959
-.coproc 3 17179869255
+.coproc 0 1
+.coproc 1 2
+.coproc 2 3
+.coproc 3 4
 .mem mi_0_0 0 0 34 "header lengths match\x0a\x00header lengt"
 .mem mi_0_1 0 34 31 "hs don't match\x0a\x00Good checksum\x0a\x00"
 .mem mi_0_2 0 65 14 "Bad checksum\x0a\x00"

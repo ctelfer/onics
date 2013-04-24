@@ -1,10 +1,10 @@
 # Declarations
 .entry packet 0
 .segment 0 1 39
-.coproc 0 4294967340
-.coproc 1 8589934636
-.coproc 2 12884901932
-.coproc 3 17179869228
+.coproc 0 1
+.coproc 1 2
+.coproc 2 3
+.coproc 3 4
 .mem mi_0_0 0 0 34 "Goodbye World\x0a\x00got to end with pac"
 .mem mi_0_1 0 34 5 "ket\x0a\x00"
 

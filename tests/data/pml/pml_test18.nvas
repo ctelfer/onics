@@ -1,10 +1,10 @@
 # Declarations
 .entry start 0
 .segment 0 1 28
-.coproc 0 4294967364
-.coproc 1 8589934660
-.coproc 2 12884901956
-.coproc 3 17179869252
+.coproc 0 1
+.coproc 1 2
+.coproc 2 3
+.coproc 3 4
 .mem mi_0_0 0 0 28 "Hello World\x0a\x00Goodbye World\x0a\x00"
 
 # Instructions (68 total)

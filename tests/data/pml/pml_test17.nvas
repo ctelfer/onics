@@ -1,9 +1,9 @@
 # Declarations
 .entry packet 9
-.coproc 0 4294967322
-.coproc 1 8589934618
-.coproc 2 12884901914
-.coproc 3 17179869210
+.coproc 0 1
+.coproc 1 2
+.coproc 2 3
+.coproc 3 4
 
 # Instructions (26 total)
 #   0: 0x07 0x01 0x00 0x00 0x00000003

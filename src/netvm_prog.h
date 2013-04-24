@@ -174,7 +174,7 @@ int nvmp_exec(struct netvm *vm, struct netvm_program *prog, int ep, int maxcycle
 #define NVMP_HLEN	40
 #define NVMP_INSTLEN	8
 #define NVMP_NUMEPS	3
-#define NVMP_CPLEN	12
+#define NVMP_CPLEN	8
 #define NVMP_SEGPLEN	12
 #define NVMP_MIHLEN	12
 #define NVMP_ZINIT	0x80000000

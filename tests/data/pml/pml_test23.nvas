@@ -2,10 +2,10 @@
 .entry start 0
 .entry packet 5
 .segment 0 1 28
-.coproc 0 4294967318
-.coproc 1 8589934614
-.coproc 2 12884901910
-.coproc 3 17179869206
+.coproc 0 1
+.coproc 1 2
+.coproc 2 3
+.coproc 3 4
 .mem mi_0_0 0 0 28 "Packet\x0a\x00l.*ld\x00Hello world?\x0a\x00"
 
 # Instructions (22 total)

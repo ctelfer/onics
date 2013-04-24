@@ -1,10 +1,10 @@
 # Declarations
 .entry packet 0
 .segment 0 1 13
-.coproc 0 4294967327
-.coproc 1 8589934623
-.coproc 2 12884901919
-.coproc 3 17179869215
+.coproc 0 1
+.coproc 1 2
+.coproc 2 3
+.coproc 3 4
 .mem mi_0_0 0 0 13 "\x08\x00Found UDP\x0a\x00"
 
 # Instructions (31 total)

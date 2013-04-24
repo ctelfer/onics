@@ -1,10 +1,10 @@
 # Declarations
 .entry packet 0
 .segment 0 1 8
-.coproc 0 4294967362
-.coproc 1 8589934658
-.coproc 2 12884901954
-.coproc 3 17179869250
+.coproc 0 1
+.coproc 1 2
+.coproc 2 3
+.coproc 3 4
 .mem mi_0_0 0 0 8 "\x01\x02\x03\x04\x05\x06\x07\x08"
 
 # Instructions (66 total)

@@ -295,7 +295,7 @@ int nvmp_read(struct netvm_program *prog, FILE *infile, int *eret)
 			e = NVMP_RDE_TOOSMALL;
 			goto err;
 		}
-		unpack(buf, sizeof(buf), "wj", &cpi, &cpt);
+		unpack(buf, sizeof(buf), "ww", &cpi, &cpt);
 		if (cpi >= NETVM_MAXCOPROC) {
 			e = NVMP_RDE_BADCPI;
 			goto err;
