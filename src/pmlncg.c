@@ -1259,17 +1259,16 @@ static int cg_matchop(struct pmlncg *cg, struct pml_op *op)
 	lhs = op->arg1;
 	rhs = op->arg2;
 
-	if (rhs->base.type == PMLTT_BYTESTR) {
-		abort_unless(lhs->expr.etype == PML_ETYPE_BYTESTR);
+	if (rhs->expr.etype == PML_ETYPE_BYTESTR) {
 		/* We start with: len2, addr2, len1, addr1 */
 		EMIT_XW(cg, SWAP, 1, 2); /* len2, len1, addr2, addr1 */
 		EMIT_W(cg, DUP, 0);
 		EMIT_XW(cg, SWAP, 0, 2); /* len1, len2, len2, addr1, addr2 */
 		EMIT_NULL(cg, EQ);
-		EMIT_W(cg, BZI, 3);
+		EMIT_W(cg, BZI, 3);	/* len1=len2?, len2, addr1, addr2 */
 		EMIT_NULL(cg, CMP);
-		EMIT_W(cg, BRI, 3);
-		EMIT_W(cg, POP, 3);
+		EMIT_W(cg, BRI, 3);	/* str cmp -> skip to end */
+		EMIT_W(cg, POP, 3);	/* len2, addr1, addr2 */
 		EMIT_W(cg, PUSH, 0);
 	} else {
 		/* We start with: len2, mkaddr, paddr, len1, addr1 */
@@ -1281,8 +1280,8 @@ static int cg_matchop(struct pmlncg *cg, struct pml_op *op)
 		EMIT_NULL(cg, EQ);
 		EMIT_W(cg, BZI, 3); /* (eq?), len2, mkaddr, paddr, addr1 */
 		EMIT_NULL(cg, MSKCMP);
-		EMIT_W(cg, BRI, 3);
-		EMIT_W(cg, POP, 4);
+		EMIT_W(cg, BRI, 3); /* mask cmp -> skip to end */
+		EMIT_W(cg, POP, 4); /* len2, mkaddr, paddr, addr1 */
 		EMIT_W(cg, PUSH, 0);
 	}
 	if (op->op == PMLOP_NOTMATCH)

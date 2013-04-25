@@ -1,12 +1,12 @@
 # Declarations
 .entry packet 0
-.segment 0 1 56
+.segment 0 1 54
 .coproc 0 1
 .coproc 1 2
 .coproc 2 3
 .coproc 3 4
 .mem mi_0_0 0 0 31 "\x08\x00Got an IP packet in ethernet\x0a"
-.mem mi_0_1 0 31 25 "\x00\x08\x00found by indirection\x0a\x00"
+.mem mi_0_1 0 31 23 "\x00found by indirection\x0a\x00"
 
 # Instructions (48 total)
 #   0: 0x0d 0x01 0x00 0x08 0xff00000c
@@ -95,8 +95,8 @@
 	eqi       2048
 #  42: 0x50 0x00 0x00 0x00 0x00000004
 	bzi       @46
-#  43: 0x02 0x00 0x00 0x00 0x00000022
-	push      34
+#  43: 0x02 0x00 0x00 0x00 0x00000020
+	push      32
 #  44: 0x02 0x00 0x00 0x00 0x00000015
 	push      21
 #  45: 0x4d 0x01 0x08 0x00 0x00000000

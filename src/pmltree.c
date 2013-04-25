@@ -2873,6 +2873,8 @@ static int resolve_node_post(union pml_node *node, void *ctxp, void *xstk)
 
 	case PMLTT_BINOP: {
 		struct pml_op *op = (struct pml_op *)node;
+
+		/* propagate CONST & PCONST expression flags */
 		if (PML_EXPR_IS_CONST(op->arg1) && 
 		    PML_EXPR_IS_CONST(op->arg2)) {
 			op->eflags |= PML_EFLAG_CONST | PML_EFLAG_PCONST;
@@ -2881,6 +2883,21 @@ static int resolve_node_post(union pml_node *node, void *ctxp, void *xstk)
 		           PML_EXPR_IS_PCONST(op->arg2)) {
 			op->eflags |= PML_EFLAG_PCONST;
 		}
+
+		/*
+		 * Convert "==" or "!=" operations to match/notmatch
+		 * if both the left and right hand side args are string
+		 * expression. 
+		 */
+		if ((op->op == PMLOP_EQ || op->op == PMLOP_NEQ) &&
+		    PML_EXPR_IS_BYTESTR(op->arg1) && 
+		    PML_EXPR_IS_BYTESTR(op->arg2)) {
+			if (op->op == PMLOP_EQ)
+				op->op = PMLOP_MATCH;
+			else
+				op->op = PMLOP_NOTMATCH;
+		}
+
 		/* for now all binary operations return scalars */
 		op->etype = PML_ETYPE_SCALAR;
 	} break;

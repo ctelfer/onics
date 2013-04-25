@@ -1,0 +1,42 @@
+SUCCESS literal string match
+SUCCESS literal string not-match
+SUCCESS literal string fail match (eqlen) 
+SUCCESS literal string fail not-match (eqlen) 
+SUCCESS literal string fail match (eqlen) 
+SUCCESS literal string fail not-match (neqlen) 
+SUCCESS literal string eq
+SUCCESS literal string not-eq
+SUCCESS literal string eq (eqlen) 
+SUCCESS literal string fail not-eq (eqlen) 
+SUCCESS literal string fail eq (eqlen) 
+SUCCESS literal string fail not-eq (neqlen) 
+SUCCESS literal byte string match
+SUCCESS literal byte string not-match
+SUCCESS literal byte string fail match (eqlen) 
+SUCCESS literal byte string fail not-match (eqlen) 
+SUCCESS literal byte string fail match (eqlen) 
+SUCCESS literal byte string fail not-match (neqlen) 
+SUCCESS literal byte string match
+SUCCESS literal byte string not-match
+SUCCESS literal byte string fail match (eqlen) 
+SUCCESS literal byte string fail not-match (eqlen) 
+SUCCESS literal byte string fail match (eqlen) 
+SUCCESS literal byte string fail not-match (neqlen) 
+SUCCESS string variable eq
+SUCCESS string variable not-eq
+SUCCESS string variable eq (eqlen) 
+SUCCESS string variable fail not-eq (eqlen) 
+SUCCESS string variable fail eq (eqlen) 
+SUCCESS string variable fail not-eq (neqlen) 
+SUCCESS string reference eq
+SUCCESS string reference not-eq
+SUCCESS string reference eq (eqlen) 
+SUCCESS string reference fail not-eq (eqlen) 
+SUCCESS string reference fail eq (eqlen) 
+SUCCESS string reference fail not-eq (neqlen) 
+SUCCESS packet payload eq
+SUCCESS packet payload not-eq
+SUCCESS packet payload eq (eqlen) 
+SUCCESS packet payload fail not-eq (eqlen) 
+SUCCESS packet payload fail eq (eqlen) 
+SUCCESS packet payload fail not-eq (neqlen) 
