@@ -882,25 +882,11 @@ out_mask_match:
 	free(T1.u.raw.data);
 	free(T2.u.raw.data);
 }
-cmpexpr(E) ::= borexpr(LHS) matchop(OP) BYTESTR(T). {
-	struct pml_literal *v = pmln_alloc(ast, PMLTT_BYTESTR);
-	int r;
 
+cmpexpr(E) ::= borexpr(LHS) matchop(OP) strval(S). {
 	E = NULL;
-	if (v == NULL)
-		goto out_bytestr_match;
-
-	r = pml_bytestr_copy(ast, &v->u.bytestr, PML_SEG_ROMEM,
-			     T.u.raw.data, T.u.raw.len);
-	if (r < 0) {
-		pmln_free(v);
-		goto out_bytestr_match;
-	}
-
-	E = pml_binop_alloc(ast, OP, LHS, (union pml_expr_u *)v);
-
-out_bytestr_match:
-	free(T.u.raw.data);
+	if (S != NULL)
+		E = pml_binop_alloc(ast, OP, LHS, S);
 }
 
 cmpexpr(E) ::= borexpr(LHS) matchop(OP) IPV4ADDR(A) DIV NUM(L). {

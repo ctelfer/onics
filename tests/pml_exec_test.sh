@@ -100,5 +100,6 @@ pml_test 35 NONE "" 1
 pml_test 36 $PDIR/onepkt.xpkt
 pml_test 37 $PDIR/onepkt.xpkt
 pml_test 38 $PDIR/raw.xpkt
+pml_test 39 NONE
 
 exit $ERR
