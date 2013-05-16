@@ -24,6 +24,8 @@
 #include <stdlib.h>
 #include <errno.h>
 
+#include <cat/err.h>
+
 #include "opcap.h"
 #include "util.h"
 
