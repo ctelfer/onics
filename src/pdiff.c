@@ -58,6 +58,21 @@
  */
 
 
+ulong Drop_cost = 2;
+ulong Insert_cost = 5;
+
+
+enum {
+	DONE,
+	PASS,
+	DROP,
+	INSERT,
+	MODIFY,
+	SWAP,
+};
+
+
+
 struct pktent {
 	struct pktbuf *		pkt;
 	byte_t			hash[32];
@@ -78,8 +93,8 @@ struct chgpath {
 };
 
 
-struct cpm {
-	struct chgpath **	mtrx;
+struct cpmatrix {
+	struct chgpath **	elems;
 	ulong			nrows;
 	ulong			ncols;
 };
@@ -90,7 +105,7 @@ struct pdiff {
 	struct pktarr 		after;
 	ulong			nb;
 	ulong			na;
-	struct cpm 		cpm;
+	struct cpmatrix		cpm;
 };
 
 
@@ -149,14 +164,15 @@ static void pa_clear(struct pktarr *pa)
 }
 
 
-static ONICS_INLINE struct chgpath *cpm_elem(struct cpm *cpm, ulong r, ulong c)
+static ONICS_INLINE struct chgpath *cpm_elem(struct cpmatrix *cpm, ulong r,
+					     ulong c)
 {
 	abort_unless(cpm && r < cpm->nrows && c < cpm->ncols);
-	return &cpm->mtrx[r][c];
+	return &cpm->elems[r][c];
 }
 
 
-static void cpm_ealloc(struct cpm *cpm, ulong nr, ulong nc)
+static void cpm_ealloc(struct cpmatrix *cpm, ulong nr, ulong nc)
 {
 	struct chgpath *cpe;
 	struct chgpath **rp;
@@ -166,10 +182,10 @@ static void cpm_ealloc(struct cpm *cpm, ulong nr, ulong nc)
 
 	cpm->nrows = nr;
 	cpm->ncols = nc;
-	cpm->mtrx = ecalloc(sizeof(struct chgpath *), nr);
+	cpm->elems = ecalloc(sizeof(struct chgpath *), nr);
 	cpe = ecalloc(sizeof(struct chgpath), nr * nc);
 
-	rp = cpm->mtrx;
+	rp = cpm->elems;
 	for (i = 0; i < nr; ++i) {
 		*rp++ = cpe;
 		cpe += nc;
@@ -177,14 +193,14 @@ static void cpm_ealloc(struct cpm *cpm, ulong nr, ulong nc)
 }
 
 
-void cpm_clear(struct cpm *cpm)
+void cpm_clear(struct cpmatrix *cpm)
 {
 	if (cpm == NULL)
 		return;
-	free(cpm->mtrx[0]);
-	memset(cpm->mtrx, 0, sizeof(struct chgpth *) * cpm->nrows);
-	free(cpm->mtrx);
-	cpm->mtrx = NULL;
+	free(cpm->elems[0]);
+	memset(cpm->elems, 0, sizeof(struct chgpth *) * cpm->nrows);
+	free(cpm->elems);
+	cpm->elems = NULL;
 }
 
 
@@ -195,7 +211,7 @@ void pdiff_load(struct pdiff *pd, FILE *before, const char *bname,
 	pa_readfile(&pd->after, after, aname);
 	pd->nb = pd->before.npkts;
 	pd->na = pd->after.npkts;
-	cpm_ealloc(&pd->cpm, pd->nb, pd->na);
+	cpm_ealloc(&pd->cpm, pd->nb+1, pd->na+1);
 }
 
 
@@ -211,15 +227,123 @@ void pdiff_clear(struct pdiff *pd)
 }
 
 
+/* TODO:  actually calculate the edit distance between the packets */
+ulong pkt_cmp(struct pktent *pe0, struct pktent *pe1)
+{
+	if (memcmp(pe0->hash, pe1->hash, sizeof(pe0->hash)) == 0)
+		return 0;
+	else
+		return Insert_cost + Drop_cost;
+}
+
+
+static void getmincost(struct chgpath *p, ulong icost, ulong dcost, ulong mcost)
+{
+	if (icost < dcost) {
+		if (icost <= mcost) {
+			p->action = INSERT;
+			p->cost = icost;
+		} else {
+			p->action = (mcost == 0) ? PASS : MODIFY;
+			p->cost = mcost;
+		}
+	} else {
+		if (dcost <= mcost) {
+			p->action = DROP;
+			p->cost = dcost;
+		} else {
+			p->action = (mcost == 0) ? PASS : MODIFY;
+			p->cost = mcost;
+		}
+	}
+}
+
+
 void pdiff_compare(struct pdiff *pd)
 {
+	ulong i, j;
+	ulong mcost;
+	ulong icost;
+	ulong dcost;
+	struct cpmatrix *cpm = &pd->cpm;
+	struct chgpath *ins, *drop, *cp2;
+	struct pktarr *rpkts = &pd->before;
+	struct pktarr *cpkts = &pd->after;
 
+	cpm->elems[0][0].action = DONE;
+	cpm->elems[0][0].cost = 0;
+
+	for (i = 1; i < cpm->nrows; ++i) {
+		drop = &cpm->elems[i][0];
+		drop->action = DROP;
+		drop->cost = i * Drop_cost;
+	}
+
+	for (i = 1; i < cpm->ncols; ++i) {
+		ins = &cpm->elems[0][i];
+		ins->action = INSERT;
+		ins->cost = i * Insert_cost;
+	}
+
+
+	for (i = 1; i < cpm->nrows; ++i) {
+		for (j = 1; j < cpm->ncols; ++j) {
+			ins = &cpm->elems[i][j-1];
+			drop = &cpm->elems[i-1][j];
+			mcost = pkt_cmp(&rpkts->pkts[i-1], &cpkts->pkts[j-1]);
+
+			icost = ins->cost + Insert_cost;
+			dcost = drop->cost + Drop_cost;
+
+			getmincost(&cpm->elems[i][j], icost, dcost, mcost);
+		}
+	}
 }
 
 
 void pdiff_report(struct pdiff *pd, FILE *out)
 {
+	ulong r = pd->before.npkts;
+	ulong c = pd->after.npkts;
+	struct cpmatrix *cpm = &pd->cpm;
 
+	abort_unless(r == cpm->nrows - 1);
+	abort_unless(c == cpm->ncols - 1);
+
+	while (cpm->elems[r][c].action != DONE) {
+		abort_unless(r < cpm->nrows && c < cpm->ncols);
+
+		switch(cpm->elems[r][c].action) {
+		case PASS:
+			r -= 1;
+			c -= 1;
+			break;
+		case DROP:
+			fprintf(out, 
+				"DROP packet %lu from the original stream\n",
+				r);
+			r -= 1;
+			break;
+		case INSERT:
+			c -= 1;
+			fprintf(out,
+				"INSERT packet %lu in the result stream\n", c);
+			break;
+		case MODIFY:
+			fprintf(out,
+				"MODIFY packet %lu from the original stream\n",
+				r);
+			break;
+		case SWAP:
+			r -= 1;
+			c -= 1;
+			/* TODO */
+			abort_unless(0);
+			break;
+		default:
+			abort_unless(0);
+		}
+	}
 }
 
 
