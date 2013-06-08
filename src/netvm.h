@@ -112,7 +112,7 @@ struct netvm_inst {
 #define NETVM_PPD_OFF_MASK	0xFFFF
 
 #define NETVM_OP_PDESC(pkt, prid, idx, fld, off)  \
-	((pkt) & 0x7 | NETVM_SEG_ISPKT), \
+	(((pkt) & 0x7) | NETVM_SEG_ISPKT), \
 	(((idx)& 0xF)<< 4) | ((fld) & 0xF), \
 	((((prid) & 0xFFFF) << 16) | ((off) & 0xFFFF))
 

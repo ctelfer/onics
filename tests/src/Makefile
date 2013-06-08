@@ -1,6 +1,5 @@
 # Makefile for the paptools
-#CC=gcc
-CC=/llvm30/bin/clang
+CC=gcc
 CATLIB_ROOT=../../../catlib
 TOOLSRC=../../src
 INCS=-I$(CATLIB_ROOT)/include -I$(TOOLSRC)
