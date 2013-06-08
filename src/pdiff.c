@@ -97,7 +97,7 @@ struct chgpath {
 
 
 struct cpmatrix {
-	struct chgpath **	mtrx;
+	struct chgpath **	elems;
 	ulong			nrows;
 	ulong			ncols;
 };
@@ -290,7 +290,7 @@ static ONICS_INLINE struct chgpath *cpm_elem(struct cpmatrix *cpm, ulong r,
 					     ulong c)
 {
 	abort_unless(cpm && r < cpm->nrows && c < cpm->ncols);
-	return &cpm->mtrx[r][c];
+	return &cpm->elems[r][c];
 }
 
 
@@ -305,10 +305,10 @@ static void cpm_ealloc(struct cpmatrix *cpm, ulong nr, ulong nc)
 
 	cpm->nrows = nr;
 	cpm->ncols = nc;
-	cpm->mtrx = ecalloc(sizeof(struct chgpath *), nr);
+	cpm->elems = ecalloc(sizeof(struct chgpath *), nr);
 	cpe = ecalloc(sizeof(struct chgpath), nr * nc);
 
-	rp = cpm->mtrx;
+	rp = cpm->elems;
 	for (i = 0; i < nr; ++i) {
 		*rp++ = cpe;
 		cpe += nc;
@@ -320,10 +320,10 @@ void cpm_clear(struct cpmatrix *cpm)
 {
 	if (cpm == NULL)
 		return;
-	free(cpm->mtrx[0]);
-	memset(cpm->mtrx, 0, sizeof(struct chgpth *) * cpm->nrows);
-	free(cpm->mtrx);
-	cpm->mtrx = NULL;
+	free(cpm->elems[0]);
+	memset(cpm->elems, 0, sizeof(struct chgpth *) * cpm->nrows);
+	free(cpm->elems);
+	cpm->elems = NULL;
 }
 
 
