@@ -738,7 +738,7 @@ static int read_hexstr(struct pmllex *lex)
 	while (ch >= 0 && (isxdigit(ch) || ch == '\\')) {
 		if (ch == '\\') {
 			ch2 = nextc(lex);
-			if (ch != '\n') {
+			if (ch2 != '\n') {
 				pmll_err(lex, 1, "unterminated hexstring");
 				return -1;
 			}

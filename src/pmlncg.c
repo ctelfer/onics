@@ -1282,11 +1282,9 @@ static int typecast(struct pmlncg *cg, int otype, int ntype)
 
 static int cg_matchop(struct pmlncg *cg, struct pml_op *op)
 {
-	union pml_expr_u *lhs;
 	union pml_expr_u *rhs;
 
 	abort_unless(cg && op);
-	lhs = op->arg1;
 	rhs = op->arg2;
 
 	if (rhs->expr.etype == PML_ETYPE_BYTESTR) {

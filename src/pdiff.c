@@ -76,7 +76,6 @@ enum {
 };
 
 
-
 struct pktent {
 	struct pktbuf *		pkt;
 	byte_t			hash[32];
@@ -127,15 +126,7 @@ static int femit(struct emitter *e, struct ns_elem *elem, struct pktbuf *pkb,
 	char line[256];
 	struct raw lr = { sizeof(line), (void *)line };
 
-	if (elem->type == NST_NAMESPACE) {
-		rv = ((struct ns_namespace *)elem)->fmt(elem, pkb->buf, prp,
-							&lr);
-	} else if (elem->type == NST_PKTFLD) {
-		rv = ((struct ns_pktfld *)elem)->fmt(elem, pkb->buf, prp, &lr);
-	} else {
-		return -1;
-	}
-
+	rv = ns_tostr(elem, pkb->buf, prp, &lr);
 	if (rv < 0)
 		return -1;
 
