@@ -1,6 +1,6 @@
 /*
  * ONICS
- * Copyright 2012 
+ * Copyright 2013 
  * Christopher Adam Telfer
  *
  * stdproto.h -- Header for standard Internet protocol parse libraries.
@@ -38,12 +38,13 @@ void unregister_std_proto();
 #define PRP_ARP_NXFIELDS	1
 #define PRP_ARPFLD_ETHARP	(PRP_OI_EXTRA + 0)
 
-#define PRP_IP_NXFIELDS		5
-#define PRP_IPFLD_LSR		(PRP_OI_EXTRA + 0)
-#define PRP_IPFLD_TS		(PRP_OI_EXTRA + 1)
-#define PRP_IPFLD_RR		(PRP_OI_EXTRA + 2)
-#define PRP_IPFLD_SRR		(PRP_OI_EXTRA + 3)
-#define PRP_IPFLD_RA		(PRP_OI_EXTRA + 4)
+#define PRP_IP_NXFIELDS		6
+#define PRP_IPFLD_OPT		(PRP_OI_EXTRA + 0)
+#define PRP_IPFLD_LSR		(PRP_OI_EXTRA + 1)
+#define PRP_IPFLD_TS		(PRP_OI_EXTRA + 2)
+#define PRP_IPFLD_RR		(PRP_OI_EXTRA + 3)
+#define PRP_IPFLD_SRR		(PRP_OI_EXTRA + 4)
+#define PRP_IPFLD_RA		(PRP_OI_EXTRA + 5)
 
 #define PRP_IPV6_NXFIELDS	4
 #define PRP_IPV6FLD_NXTHDR	(PRP_OI_EXTRA + 0)
@@ -51,13 +52,14 @@ void unregister_std_proto();
 #define PRP_IPV6FLD_AHH		(PRP_OI_EXTRA + 2)
 #define PRP_IPV6FLD_FRAGH	(PRP_OI_EXTRA + 3)
 
-#define PRP_TCP_NXFIELDS	7
-#define PRP_TCPFLD_MSS		(PRP_OI_EXTRA + 0)
-#define PRP_TCPFLD_WSCALE	(PRP_OI_EXTRA + 1)
-#define PRP_TCPFLD_SACKOK	(PRP_OI_EXTRA + 2)
-#define PRP_TCPFLD_SACK		(PRP_OI_EXTRA + 3)
-#define PRP_TCPFLD_SACK_END	(PRP_OI_EXTRA + 4)
-#define PRP_TCPFLD_TSTAMP	(PRP_OI_EXTRA + 5)
-#define PRP_TCPFLD_MD5		(PRP_OI_EXTRA + 6)
+#define PRP_TCP_NXFIELDS	8
+#define PRP_TCPFLD_OPT		(PRP_OI_EXTRA + 0)
+#define PRP_TCPFLD_MSS		(PRP_OI_EXTRA + 1)
+#define PRP_TCPFLD_WSCALE	(PRP_OI_EXTRA + 2)
+#define PRP_TCPFLD_SACKOK	(PRP_OI_EXTRA + 3)
+#define PRP_TCPFLD_SACK		(PRP_OI_EXTRA + 4)
+#define PRP_TCPFLD_SACK_END	(PRP_OI_EXTRA + 5)
+#define PRP_TCPFLD_TSTAMP	(PRP_OI_EXTRA + 6)
+#define PRP_TCPFLD_MD5		(PRP_OI_EXTRA + 7)
 
 #endif /* __stdproto_h */

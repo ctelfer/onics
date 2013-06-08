@@ -20,12 +20,15 @@
  *  You should have received a copy of the GNU General Public License
  *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
+#include <stdlib.h>
+#include <string.h>
+
+#include <cat/err.h>
+
 #include "prid.h"
 #include "pmltree.h"
 #include "pmllex.h"
 #include "stdproto.h"
-#include <stdlib.h>
-#include <string.h>
 
 #define VERBOSE		1
 #define LEX		2

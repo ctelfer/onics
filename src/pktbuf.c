@@ -638,7 +638,6 @@ void pkb_clr_layer(struct pktbuf *pkb, int layer)
 
 void pkb_fix_dltype(struct pktbuf *pkb)
 {
-	uint16_t dltype = PRID_INVALID;
 	struct prparse *prp;
 	abort_unless((pkb->flags & PKB_F_PACKED) == 0);
 	if (!prp_empty(&pkb->prp)) {

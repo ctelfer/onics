@@ -511,7 +511,6 @@ void run_with_packets(struct netvm *vm, int filter, struct meminit *mi,
 	int npkt = 0;
 	int npass = 0;
 	int vmrv;
-	int i;
 	uint64_t rc;
 
 	while (pkb_file_read(&p, stdin) > 0) {

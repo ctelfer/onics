@@ -455,7 +455,7 @@
 # ETH: Ethernet Type:       0806
     000000:  ff ff ff ff ff ff 00 22 fa a7 69 90 08 06        |......."..i...|
 #####
-# ARP: Address Resolution Protocol -- Offset 206, Length 28 bytes
+# ARP: Address Resolution Protocol -- Offset 206, Length 28
 #####
 # ARP: HW Address Format:    1
 # ARP: Proto Address Format: 800
@@ -483,7 +483,7 @@
 # ETH: Ethernet Type:       0806
     000000:  00 22 fa a7 69 90 00 30 65 c1 b3 a8 08 06        |."..i..0e.....|
 #####
-# ARP: Address Resolution Protocol -- Offset 206, Length 28 bytes
+# ARP: Address Resolution Protocol -- Offset 206, Length 28
 #####
 # ARP: HW Address Format:    1
 # ARP: Proto Address Format: 800

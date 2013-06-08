@@ -50,6 +50,13 @@
 # TCP: Checksum:             d68e
 # TCP: Urgent Pointer:       0
 # TCP: TCP Options -- Offset 246, Length 12
+#####
+# TCP: TCP Timestamp Option -- Offset 248, Length 10
+#####
+# TS: Kind:                 8
+# TS: Length:               10
+# TS: Value:                56203525
+# TS: Echoed Value:         55432305
     000022:  00 16 97 cb 2d e7 b7 59 74 f9 d3 df 80 18 01 6a  |....-..Yt......j|
     000032:  d6 8e 00 00 01 01 08 0a 03 59 99 05 03 4d d4 71  |.........Y...M.q|
 # TCP:  Data -- 40 bytes [66, 106]

@@ -5,7 +5,7 @@ INCS=-I${CATLIB_ROOT}/include
 #OPTS=-O3
 #LIBS=-L${CATLIB_ROOT}/lib -lcat
 #DEFS=
-OPTS=-g
+OPTS=-g -Wall -Wno-pointer-sign
 LIBS=-L${CATLIB_ROOT}/lib -lcat_dbg
 DEFS=
 BINDIR=../bin
@@ -17,7 +17,7 @@ PKTHDR= xpkt.h protoparse.h ns.h util.h pktbuf.h prid.h config.h
 # all base object files
 LIBOBJS= ${PKTOBJ} stdproto.o netvm.o netvm_prog.o pmltree.o \
 	 netvm_std_coproc.o pmllex.o pml.o pmlncg.o pml_tok_strs.o fld.o \
-	 opcap.o
+	 opcap.o 
 
 
 COMMON_TARGETS= \
@@ -89,9 +89,9 @@ ${BINDIR}/pktrel: pktrel.o ${PKTOBJ} ${PKTHDR}
 	${CC} -o ${BINDIR}/pktrel pktrel.o ${PKTOBJ} \
 		${DEFS} ${OPTS} ${INCS} ${LIBS}
 
-${BINDIR}/x2hpkt: x2hpkt.o stdproto.o stdproto.h tcpip_hdrs.h \
+${BINDIR}/x2hpkt: x2hpkt.o stdproto.o fld.o stdproto.h tcpip_hdrs.h \
 		  ${PKTOBJ} ${PKTHDR}
-	${CC} -o ${BINDIR}/x2hpkt x2hpkt.o ${PKTOBJ} stdproto.o \
+	${CC} -o ${BINDIR}/x2hpkt x2hpkt.o ${PKTOBJ} stdproto.o fld.o \
 		${DEFS} ${OPTS} ${INCS} ${LIBS}
 
 ${BINDIR}/h2xpkt: h2xpkt.o ${PKTOBJ} ${PKTHDR}
@@ -126,8 +126,8 @@ ${BINDIR}/opcout: opcout.o opcap.o ${PKTOBJ} ${PKTHDR}
 	${CC} -o ${BINDIR}/opcout opcout.o opcap.o ${PKTOBJ} \
 		${DEFS} ${OPTS} ${INCS} ${LIBS}
 
-${BINDIR}/pdiff: pdiff.o ${PKTOBJ} ${PKTHDR}
-	${CC} -o ${BINDIR}/pdiff pdiff.o ${PKTOBJ} \
+${BINDIR}/pdiff: pdiff.o stdproto.o ${PKTOBJ} ${PKTHDR}
+	${CC} -o ${BINDIR}/pdiff pdiff.o stdproto.o ${PKTOBJ} \
 		${DEFS} ${OPTS} ${INCS} ${LIBS}
 
 .c.o:

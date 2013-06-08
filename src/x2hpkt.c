@@ -31,6 +31,7 @@
 #include "pktbuf.h"
 #include "ns.h"
 #include "stdproto.h"
+#include "fld.h"
 
 FILE *g_file = NULL;
 int g_keep_xhdr = 0;
@@ -137,87 +138,6 @@ int getpfx(char *pfx, const char *in, uint plen)
 }
 
 
-static int off_is_valid(struct prparse *prp, uint oi)
-{
-	return (oi < prp->noff) && (prp->offs[oi] != PRP_OFF_INVALID);
-}
-
-
-ulong get_pf_offset(struct ns_pktfld *pf, struct prparse *prp)
-{
-	if (!off_is_valid(prp, pf->oidx))
-		return PRP_OFF_INVALID;
-	return (prp->offs[pf->oidx] + pf->off) * 8;
-}
-
-
-ulong get_ns_offset(struct ns_namespace *ns, struct prparse *prp)
-{
-	if (!off_is_valid(prp, ns->oidx))
-		return PRP_OFF_INVALID;
-	return prp->offs[ns->oidx] * 8;
-}
-
-
-ulong get_offset(struct ns_elem *e, struct prparse *prp)
-{
-	if (e->type == NST_NAMESPACE)
-		return get_ns_offset((struct ns_namespace *)e, prp);
-	else if (e->type == NST_PKTFLD)
-		return get_pf_offset((struct ns_pktfld *)e, prp);
-	else
-		return PRP_OFF_INVALID;
-}
-
-
-ulong get_pf_len(struct ns_pktfld *pf, struct prparse *prp)
-{
-	ulong soff, eoff;
-
-	abort_unless(pf->oidx < prp->noff);
-
-	soff = prp->offs[pf->oidx];
-	abort_unless(soff != PRP_OFF_INVALID);
-
-	if (NSF_IS_VARLEN(pf->flags)) {
-		abort_unless(pf->len < prp->noff);
-		abort_unless(prp->offs[pf->len] != PRP_OFF_INVALID);
-		eoff = prp->offs[pf->len];
-		abort_unless(eoff >= soff);
-		return (eoff - soff) * 8;
-	} else if (NSF_IS_INBITS(pf->flags)) {
-		abort_unless(pf->len <= 32);
-		return NSF_BITOFF(pf->flags) + pf->len * 8;
-	} else {
-		return pf->len * 8;
-	}
-}
-
-
-ulong get_ns_len(struct ns_namespace *ns, struct prparse *prp)
-{
-	abort_unless(off_is_valid(prp, ns->oidx));
-
-	if (NSF_IS_VARLEN(ns->flags)) {
-		abort_unless(off_is_valid(prp, ns->len));
-		return (prp->offs[ns->len] - prp->offs[ns->oidx]) * 8;
-	} else {
-		return ns->len * 8;
-	}
-}
-
-
-ulong get_len(struct ns_elem *e, struct prparse *prp)
-{
-	if (e->type == NST_NAMESPACE)
-		return get_ns_len((struct ns_namespace *)e, prp);
-	else if (e->type == NST_PKTFLD)
-		return get_pf_len((struct ns_pktfld *)e, prp);
-	else
-		abort_unless(0);
-}
-
-
 static const char *errstrs[7] = {
 	"runt", 
 	"header length", 
@@ -227,6 +147,8 @@ static const char *errstrs[7] = {
 	"option field",
 	"protocol field"
 };
+
+
 void printerr(uint err)
 {
 	int first = 1;
@@ -268,7 +190,7 @@ struct field *alloc_field()
 	struct list *l;
 	struct field *f;
 
-	if (l = l_deq(&free_fields)) {
+	if ((l = l_deq(&free_fields)) != NULL) {
 		f = l_to_field(l);
 		memset(f, 0, sizeof(*f));
 	} else {
@@ -310,7 +232,7 @@ void release_fields()
 int add_fields(struct prparse *prp, struct ns_namespace *ns)
 {
 	ulong off;
-	int i, j;
+	int i;
 	struct ns_elem *e;
 	struct field *f;
 	struct ns_namespace *subns;
@@ -343,7 +265,7 @@ int add_fields(struct prparse *prp, struct ns_namespace *ns)
 		if (e == NULL)
 			break;
 
-		off = get_offset(e, prp);
+		off = fld_get_off(prp, e);
 		if (off == PRP_OFF_INVALID)
 			continue;
 
@@ -354,7 +276,7 @@ int add_fields(struct prparse *prp, struct ns_namespace *ns)
 		f->prp = prp;
 		f->ns = ns;
 		f->off = off;
-		f->len = get_len(e, prp);
+		f->len = fld_get_len(prp, e);
 		f->depth = depth;
 
 		insert_field(f);
@@ -378,8 +300,7 @@ void print_fields(ulong eoff)
 	char line[MAXLINE];
 	struct raw r;
 	struct ns_elem *e;
-	struct ns_namespace *ns, *lastns = NULL;
-	struct ns_pktfld *pf;
+	struct ns_namespace *lastns = NULL;
 	struct field *f;
 	int rv;
 	int i;
@@ -401,9 +322,8 @@ void print_fields(ulong eoff)
 		}
 
 		if (e->type == NST_NAMESPACE) {
-			ns = (struct ns_namespace *)e;
 			printsep();
-			rv = (*ns->fmt)(e, g_p, f->prp, &r);
+			rv = ns_tostr(e, g_p, f->prp, &r);
 			if (rv >= 0) {
 				fputs(line, stdout);
 				fputc('\n', stdout);
@@ -412,8 +332,7 @@ void print_fields(ulong eoff)
 				printerr(f->prp->error);
 			printsep();
 		} else {
-			pf = (struct ns_pktfld *)e;
-			rv = (*pf->fmt)(e, g_p, f->prp, &r);
+			rv = ns_tostr(e, g_p, f->prp, &r);
 			if (rv >= 0) {
 				fputs(line, stdout);
 				fputc('\n', stdout);
@@ -433,7 +352,6 @@ void dump_data(struct prparse *prp, ulong soff, ulong eoff, int prhdr)
 {
 	char pfx[MAXPFX];
 	struct ns_namespace *ns;
-	int rv = 0;
 	ulong sbyte, ebyte;
 
 	if (soff >= eoff)
@@ -504,7 +422,7 @@ ulong walk_and_print_parse(struct prparse *from, struct prparse *region,
 void gather_fields(struct prparse *pktp)
 {
 	struct prparse *prp;
-	for (prp = prp_next(pktp) ; !prp_list_end(prp) ; prp = prp_next(prp))
+	prp_for_each(prp, pktp)
 		if (add_fields(prp, NULL) < 0)
 			err("Out of memory for packet %lu\n", g_pktnum);
 }

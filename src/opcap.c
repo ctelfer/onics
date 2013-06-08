@@ -68,8 +68,6 @@ int opc_open_stream_rd(FILE *fp, opc_h *h)
 	struct pcap *pc;
 	size_t nr;
 	struct opc_fhdr *fh;
-	uint32_t *u32p;
-	uint32_t *u16p;
 	int esave;
 
 	if (fp == NULL || h == NULL) {
