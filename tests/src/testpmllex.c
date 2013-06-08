@@ -20,6 +20,7 @@
  *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 #include <stdio.h>
+#include <cat/err.h>
 #include "pml.h"
 #include "pmllex.h"
 
@@ -29,8 +30,6 @@ extern const char *pml_tok_strs[];
 const char *strof(struct pmll_val *v, int tok, char *buf, size_t bsize)
 {
 	byte_t *bp;
-	uint16_t *wp;
-
 
 	if (tok == PMLTOK_IPV4ADDR) {
 		bp = v->u.v4addr;

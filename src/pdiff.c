@@ -27,8 +27,12 @@
 #include <cat/err.h>
 #include <cat/emalloc.h>
 #include <cat/crypto.h>
+#include <cat/stdclio.h>
+#include <cat/emit_format.h>
 
+#include "ns.h"
 #include "pktbuf.h"
+#include "stdproto.h"
 
 
 /* 
@@ -58,6 +62,20 @@
  */
 
 
+double Drop_cost = 2;
+double Insert_cost = 5;
+
+
+enum {
+	DONE,
+	PASS,
+	DROP,
+	INSERT,
+	MODIFY,
+	SWAP,
+};
+
+
 struct pktent {
 	struct pktbuf *		pkt;
 	byte_t			hash[32];
@@ -73,12 +91,12 @@ struct pktarr {
 
 struct chgpath {
 	int			action;
-	ulong			swidx;
-	ulong			cost;
+	double			cost;
+	struct chgpath *	next;	/* filled in after backtrace */
 };
 
 
-struct cpm {
+struct cpmatrix {
 	struct chgpath **	mtrx;
 	ulong			nrows;
 	ulong			ncols;
@@ -90,8 +108,125 @@ struct pdiff {
 	struct pktarr 		after;
 	ulong			nb;
 	ulong			na;
-	struct cpm 		cpm;
+	struct cpmatrix		cpm;
 };
+
+
+enum {
+	PPF_PROTO,
+	PPF_FIELD,
+};
+
+typedef int (*pkbpr_filter_f)(int type, void *unit, void *ctx);
+
+static int femit(struct emitter *e, struct ns_elem *elem, struct pktbuf *pkb,
+		 struct prparse *prp)
+{
+	int rv;
+	char line[256];
+	struct raw lr = { sizeof(line), (void *)line };
+
+	rv = ns_tostr(elem, pkb->buf, prp, &lr);
+	if (rv < 0)
+		return -1;
+
+	/* sanity */
+	line[sizeof(line)-1] = '\0';
+
+	if (emit_string(e, line) < 0)
+		return -1;
+
+	if (emit_char(e, '\n') < 0)
+		return -1;
+
+	return 0;
+}
+
+
+static int off_is_valid(struct ns_elem *elem, struct prparse *prp)
+{
+	int oi;
+	if (elem->type == NST_NAMESPACE) {
+		oi = ((struct ns_namespace *)elem)->oidx;
+	} else if (elem->type == NST_PKTFLD) {
+		oi = ((struct ns_pktfld*)elem)->oidx;
+	} else {
+		return 0;
+	}
+	return prp_off_valid(prp, oi);
+}
+
+
+static int print_fields(struct emitter *e, const char *pfx, struct pktbuf *pkb,
+			struct prparse *prp, struct ns_namespace *ns,
+			pkbpr_filter_f *f, void *fctx)
+{
+	int i;
+	struct ns_elem *elem;
+	struct ns_namespace *subns;
+
+	abort_unless(e && pkb && prp);
+	if (ns == NULL) {
+		ns = ns_lookup_by_prid(prp->prid);
+		if (ns == NULL)
+			return 0;
+	} else {
+		if (!off_is_valid((struct ns_elem *)ns, prp))
+			return 0;
+	}
+
+	if (pfx != NULL && emit_string(e, pfx) < 0)
+		return -1;
+
+	if (femit(e, (struct ns_elem *)ns, pkb, prp) < 0)
+		return -1;
+
+	for (i = 0; i < ns->nelem; ++i) {
+		elem = ns->elems[i];
+
+		if (elem == NULL)
+			break;
+
+		if (!off_is_valid(elem, prp))
+			continue;
+
+		if ((f != NULL) && (*f)(PPF_FIELD, elem, fctx))
+			continue;
+
+		if (pfx != NULL && emit_string(e, pfx) < 0)
+			return -1;
+
+		if (femit(e, elem, pkb, prp) < 0)
+			return -1;
+
+		if (elem->type == NST_NAMESPACE) {
+			subns = (struct ns_namespace *)elem;
+			if (print_fields(e, pfx, pkb, prp, subns, f, fctx) < 0)
+				return -1;
+		}
+	}
+
+	return 0;
+}
+
+
+int pkb_print(struct emitter *e, struct pktbuf *pkb, const char *pfx,
+	      pkbpr_filter_f *f, void *fctx)
+{
+	struct prparse *prp;
+
+	if (e == NULL || pkb == NULL)
+		return -1;
+
+	prp_for_each(prp, &pkb->prp) {
+		if ((f != NULL) && (*f)(PPF_PROTO, prp, fctx))
+			continue;
+		if (print_fields(e, pfx, pkb, prp, NULL, f, fctx) < 0)
+			return -1;
+	}
+
+	return 0;
+}
 
 
 static void hash_packet(struct pktent *pe)
@@ -111,6 +246,8 @@ static void pa_readfile(struct pktarr *pa, FILE *fp, const char *fn)
 
 	rv = pkb_file_read(&pa->pkts[pa->npkts].pkt, fp);
 	while (rv > 0) {
+		if (pkb_parse(pa->pkts[pa->npkts].pkt) < 0)
+			err("unable to parse packet %lu\n", pa->npkts+1);
 		hash_packet(&pa->pkts[pa->npkts]);
 		++pa->npkts;
 		if (pa->npkts == pa->pasz) {
@@ -149,20 +286,22 @@ static void pa_clear(struct pktarr *pa)
 }
 
 
-static ONICS_INLINE struct chgpath *cpm_elem(struct cpm *cpm, ulong r, ulong c)
+static ONICS_INLINE struct chgpath *cpm_elem(struct cpmatrix *cpm, ulong r,
+					     ulong c)
 {
 	abort_unless(cpm && r < cpm->nrows && c < cpm->ncols);
 	return &cpm->mtrx[r][c];
 }
 
 
-static void cpm_ealloc(struct cpm *cpm, ulong nr, ulong nc)
+static void cpm_ealloc(struct cpmatrix *cpm, ulong nr, ulong nc)
 {
 	struct chgpath *cpe;
 	struct chgpath **rp;
 	ulong i;
 
-	abort_unless(nr > 0 || nc > 0 || ULONG_MAX / nc <= nr);
+	abort_unless(nr > 0 || nc > 0 || 
+		     ULONG_MAX / sizeof(struct chgpath) / nc <= nr);
 
 	cpm->nrows = nr;
 	cpm->ncols = nc;
@@ -177,7 +316,7 @@ static void cpm_ealloc(struct cpm *cpm, ulong nr, ulong nc)
 }
 
 
-void cpm_clear(struct cpm *cpm)
+void cpm_clear(struct cpmatrix *cpm)
 {
 	if (cpm == NULL)
 		return;
@@ -195,7 +334,7 @@ void pdiff_load(struct pdiff *pd, FILE *before, const char *bname,
 	pa_readfile(&pd->after, after, aname);
 	pd->nb = pd->before.npkts;
 	pd->na = pd->after.npkts;
-	cpm_ealloc(&pd->cpm, pd->nb, pd->na);
+	cpm_ealloc(&pd->cpm, pd->nb+1, pd->na+1);
 }
 
 
@@ -211,15 +350,180 @@ void pdiff_clear(struct pdiff *pd)
 }
 
 
-void pdiff_compare(struct pdiff *pd)
+/* TODO:  actually calculate the edit distance between the packets */
+ulong pkt_cmp(struct pktent *pe0, struct pktent *pe1)
 {
-
+	if (memcmp(pe0->hash, pe1->hash, sizeof(pe0->hash)) == 0)
+		return 0.0;
+	else
+		return Insert_cost + Drop_cost;
 }
 
 
-void pdiff_report(struct pdiff *pd, FILE *out)
+static void getmincost(struct chgpath *p, double icost, double dcost,
+		       double mcost, int maction)
 {
+	if (icost < dcost) {
+		if (icost < mcost) {
+			p->action = INSERT;
+			p->cost = icost;
+		} else {
+			p->action = maction;
+			p->cost = mcost;
+		}
+	} else {
+		if (dcost < mcost) {
+			p->action = DROP;
+			p->cost = dcost;
+		} else {
+			p->action = maction;
+			p->cost = mcost;
+		}
+	}
+}
 
+
+void pdiff_backtrace(struct pdiff *pd)
+{
+	ulong r = pd->before.npkts;
+	ulong c = pd->after.npkts;
+	struct cpmatrix *cpm = &pd->cpm;
+	struct chgpath *elem, *prev;
+
+	abort_unless(r == cpm->nrows - 1);
+	abort_unless(c == cpm->ncols - 1);
+
+	elem = cpm_elem(cpm, r, c);
+	while (elem->action != DONE) {
+		abort_unless(r < cpm->nrows && c < cpm->ncols);
+
+		switch(elem->action) {
+		case PASS: 	r -= 1; c -= 1; break;
+		case DROP: 	r -= 1; break;
+		case INSERT: 	c -= 1; break;
+		case MODIFY:	r -= 1; c -= 1; break;
+		case SWAP:	r -= 1; c -= 1; abort_unless(0); break;
+		default:	abort_unless(0);
+		}
+
+		prev = cpm_elem(cpm, r, c);
+		prev->next = elem;
+		elem = prev;
+	}
+}
+
+
+/* TODO: handle swaps and modifications */
+void pdiff_compare(struct pdiff *pd)
+{
+	ulong i, j;
+	int maction;
+	double mcost;
+	double icost;
+	double dcost;
+	struct cpmatrix *cpm = &pd->cpm;
+	struct chgpath *ipos, *dpos, *mpos;
+	struct pktarr *rpkts = &pd->before;
+	struct pktarr *cpkts = &pd->after;
+
+	cpm_elem(cpm, 0, 0)->action = DONE;
+	cpm_elem(cpm, 0, 0)->cost = 0;
+
+	for (i = 1; i < cpm->nrows; ++i) {
+		dpos = cpm_elem(cpm, i, 0);
+		dpos->action = DROP;
+		dpos->cost = i * Drop_cost;
+	}
+
+	for (i = 1; i < cpm->ncols; ++i) {
+		ipos = cpm_elem(cpm, 0, i);
+		ipos->action = INSERT;
+		ipos->cost = i * Insert_cost;
+	}
+
+
+	for (i = 1; i < cpm->nrows; ++i) {
+		for (j = 1; j < cpm->ncols; ++j) {
+			ipos = cpm_elem(cpm, i, j-1);
+			dpos = cpm_elem(cpm, i-1, j);
+			mpos = cpm_elem(cpm, i-1, j-1);
+
+			mcost = pkt_cmp(&rpkts->pkts[i-1], &cpkts->pkts[j-1]);
+			maction = (mcost == 0.0) ? PASS : MODIFY;
+			mcost += mpos->cost;
+			icost = ipos->cost + Insert_cost;
+			dcost = dpos->cost + Drop_cost;
+
+			getmincost(cpm_elem(cpm, i, j), icost, dcost, mcost,
+				   maction);
+		}
+	}
+
+	pdiff_backtrace(pd);
+}
+
+
+void pdiff_report(struct pdiff *pd, struct emitter *e)
+{
+	ulong r = 0;
+	ulong c = 0;
+	struct cpmatrix *cpm = &pd->cpm;
+	struct chgpath *elem, *next;
+	struct pktbuf *pkb;
+
+	elem = cpm_elem(cpm, 0, 0);
+	while (elem->next != NULL) {
+		next = elem->next;
+		switch (next->action) {
+		case PASS: 
+			r += 1; 
+			c += 1;
+			break;
+
+		case DROP:
+			emit_format(e, 
+				    "DROP packet %lu from the original "
+			 	    "stream\n", r+1);
+			pkb = pd->before.pkts[r].pkt;
+			pkb_print(e, pkb, "\t-", NULL, NULL);
+			r += 1;
+			break;
+
+		case INSERT:
+			emit_format(e,
+				    "INSERT packet %lu in the result "
+				    "stream\n", c+1);
+			pkb = pd->after.pkts[c].pkt;
+			pkb_print(e, pkb, "\t+", NULL, NULL);
+			c += 1;
+			break;
+
+		case MODIFY:
+			emit_format(e,
+				    "MODIFY packet %lu from the original "
+				    "stream\n", r+1);
+			pkb = pd->before.pkts[r].pkt;
+			/* TODO: detailed modification printing */
+			pkb_print(e, pkb, "\t*", NULL, NULL);
+			r += 1; 
+			c += 1;
+			break;
+
+		case SWAP:
+			emit_format(e,
+				    "SWAP packet %lu from the original "
+				    "stream with the packet %lu\n", r, r+1);
+			pkb = pd->before.pkts[r].pkt;
+			pkb_print(e, pkb, "\t<", NULL, NULL);
+			pkb = pd->before.pkts[r-1].pkt;
+			pkb_print(e, pkb, "\t>", NULL, NULL);
+			r += 1;
+			c += 1;
+			break;
+		}
+
+		elem = next;
+	}
 }
 
 
@@ -245,16 +549,21 @@ int main(int argc, char *argv[])
 	FILE *f2;
 	const char *f1n;
 	const char *f2n;
+	struct file_emitter fe;
 
 	if (argc < 3 || strcmp(argv[1], "-h") == 0)
 		err("usage: %s FILE1 FILE2");
 
+	file_emitter_init(&fe, stdout);
+	register_std_proto();
 	pkb_init(128);
+
 	openfile(argv[1], &f1, &f1n);
 	openfile(argv[2], &f2, &f2n);
+
 	pdiff_load(&pd, f1, f1n, f2, f2n);
 	pdiff_compare(&pd);
-	pdiff_report(&pd, stdout);
+	pdiff_report(&pd, (struct emitter *)&fe);
 	pdiff_clear(&pd);
 
 	return 0;

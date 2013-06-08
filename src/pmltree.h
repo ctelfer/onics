@@ -631,7 +631,8 @@ int pml_print_strtofmt(const char *s);
 
 /* -- helper functions for symbol values PML (vars, functions, etc) -- */
 int pml_func_add_param(struct pml_function *func, struct pml_variable *var);
-int pml_func_add_var(struct pml_function *func, struct pml_variable *var);
+int pml_func_add_var(struct pml_symtab *t, struct pml_function *f,
+		     struct pml_variable *v);
 int pml_check_func_proto(struct pml_ast *ast, struct pml_function *f1, 
 			 struct pml_function *f2);
 int pml_ast_add_func_proto(struct pml_ast *ast, struct pml_function *func);

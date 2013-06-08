@@ -18,10 +18,14 @@
  *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 #include <stdio.h>
+
+#include <cat/err.h>
+
 #include "prid.h"
 #include "pktbuf.h"
 #include "protoparse.h"
 #include "tcpip_hdrs.h"
+#include "stdproto.h"
 
 const char *pnames(uint prid)
 {

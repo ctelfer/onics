@@ -25,6 +25,80 @@
 #include "util.h"
 
 
+ulong fld_get_off(struct prparse *prp, struct ns_elem *elem)
+{
+	struct ns_namespace *ns;
+	struct ns_pktfld *pf;
+	ulong off = PRP_OFF_INVALID;
+
+	if (elem == NULL || prp == NULL)
+		return PRP_OFF_INVALID;
+
+	if (elem->type == NST_NAMESPACE) {
+		ns = (struct ns_namespace *)elem;
+
+		if (!prp_off_valid(prp, ns->oidx))
+			return PRP_OFF_INVALID;
+
+		off = prp->offs[ns->oidx] * 8;
+
+	} else if (elem->type == NST_PKTFLD) {
+		pf = (struct ns_pktfld *)elem;
+
+		if (!prp_off_valid(prp, pf->oidx))
+			return PRP_OFF_INVALID;
+
+		off = (prp->offs[pf->oidx] + pf->off) * 8;
+		if (NSF_IS_INBITS(pf->flags))
+			off += NSF_BITOFF(pf->flags);
+	}
+
+	return off;
+}
+
+
+long fld_get_len(struct prparse *prp, struct ns_elem *elem)
+{
+	struct ns_namespace *ns;
+	struct ns_pktfld *pf;
+	long len = -1;
+
+	if (elem->type == NST_NAMESPACE) {
+		ns = (struct ns_namespace *)elem;
+
+		if (!prp_off_valid(prp, ns->oidx))
+			return -1;
+
+		if (NSF_IS_VARLEN(ns->flags)) {
+			if (!prp_off_valid(prp, ns->len))
+				return -1;
+
+			len = (prp->offs[ns->len] - prp->offs[ns->oidx]) * 8;
+		} else {
+			len = ns->len * 8;
+		}
+
+
+	} else {
+		pf = (struct ns_pktfld *)elem;
+
+		if (!prp_off_valid(prp, pf->oidx))
+			return -1;
+
+		if (NSF_IS_VARLEN(pf->flags)) {
+			if (!prp_off_valid(prp, pf->len))
+				return -1;
+			len = (prp->offs[pf->len] - prp->offs[pf->oidx]) * 8;
+		} else if (NSF_IS_INBITS(pf->flags)) {
+			return pf->len;
+		} else {
+			len = pf->len * 8;
+		}
+	}
+
+	return len;
+}
+
 static struct prparse *findprp(struct prparse *plist, uint prid, uint idx)
 {
 	struct prparse *prp;
@@ -125,8 +199,8 @@ int fld_exists(struct prparse *plist, struct ns_pktfld *pf, uint idx)
 }
 
 
-struct prparse *fld_getprpi(struct prparse *plist, struct ns_namespace *ns,
-			    uint idx)
+struct prparse *fld_get_prpi(struct prparse *plist, struct ns_namespace *ns,
+			     uint idx)
 {
 	if (ns == NULL)
 		return NULL;
@@ -134,7 +208,7 @@ struct prparse *fld_getprpi(struct prparse *plist, struct ns_namespace *ns,
 }
 
 
-struct prparse *fld_getprpni(struct prparse *plist, const char *s, uint idx)
+struct prparse *fld_get_prpni(struct prparse *plist, const char *s, uint idx)
 {
 	struct ns_elem *e;
 	e = ns_lookup(NULL, s);
@@ -144,20 +218,20 @@ struct prparse *fld_getprpni(struct prparse *plist, const char *s, uint idx)
 }
 
 
-struct prparse *fld_getprp(struct prparse *plist, struct ns_namespace *ns)
+struct prparse *fld_get_prp(struct prparse *plist, struct ns_namespace *ns)
 {
-	return fld_getprpi(plist, ns, 0);
+	return fld_get_prpi(plist, ns, 0);
 }
 
 
-struct prparse *fld_getprpn(struct prparse *plist, const char *s)
+struct prparse *fld_get_prpn(struct prparse *plist, const char *s)
 {
-	return fld_getprpni(plist, s, 0);
+	return fld_get_prpni(plist, s, 0);
 }
 
 
-void *fld_gethdri(byte_t *p, struct prparse *plist, struct ns_namespace *ns,
-		  uint idx, ulong *len)
+void *fld_get_hdri(byte_t *p, struct prparse *plist, struct ns_namespace *ns,
+		   uint idx, ulong *len)
 {
 	struct prparse *prp;
 
@@ -175,8 +249,8 @@ void *fld_gethdri(byte_t *p, struct prparse *plist, struct ns_namespace *ns,
 }
 
 
-void *fld_getpldi(byte_t *p, struct prparse *plist, struct ns_namespace *ns,
-		  uint idx, ulong *len)
+void *fld_get_pldi(byte_t *p, struct prparse *plist, struct ns_namespace *ns,
+		   uint idx, ulong *len)
 {
 	struct prparse *prp;
 
@@ -194,8 +268,8 @@ void *fld_getpldi(byte_t *p, struct prparse *plist, struct ns_namespace *ns,
 }
 
 
-void *fld_gettrli(byte_t *p, struct prparse *plist, struct ns_namespace *ns,
-		  uint idx, ulong *len)
+void *fld_get_trli(byte_t *p, struct prparse *plist, struct ns_namespace *ns,
+		   uint idx, ulong *len)
 {
 	struct prparse *prp;
 
@@ -213,82 +287,82 @@ void *fld_gettrli(byte_t *p, struct prparse *plist, struct ns_namespace *ns,
 }
 
 
-void *fld_gethdrni(byte_t *p, struct prparse *plist, const char *s,
-		   uint idx, ulong *len)
+void *fld_get_hdrni(byte_t *p, struct prparse *plist, const char *s,
+		    uint idx, ulong *len)
 {
 	struct ns_elem *e;
 	e = ns_lookup(NULL, s);
 	if (e == NULL || e->type != NST_NAMESPACE)
 		return NULL;
-	return fld_gethdri(p, plist, (struct ns_namespace *)e, idx, len);
+	return fld_get_hdri(p, plist, (struct ns_namespace *)e, idx, len);
 }
 
 
-void *fld_getpldni(byte_t *p, struct prparse *plist, const char *s,
-		   uint idx, ulong *len)
+void *fld_get_pldni(byte_t *p, struct prparse *plist, const char *s,
+		    uint idx, ulong *len)
 {
 	struct ns_elem *e;
 	e = ns_lookup(NULL, s);
 	if (e == NULL || e->type != NST_NAMESPACE)
 		return NULL;
-	return fld_getpldi(p, plist, (struct ns_namespace *)e, idx, len);
+	return fld_get_pldi(p, plist, (struct ns_namespace *)e, idx, len);
 }
 
 
-void *fld_gettrlni(byte_t *p, struct prparse *plist, const char *s,
-		   uint idx, ulong *len)
+void *fld_get_trlni(byte_t *p, struct prparse *plist, const char *s,
+		    uint idx, ulong *len)
 {
 	struct ns_elem *e;
 	e = ns_lookup(NULL, s);
 	if (e == NULL || e->type != NST_NAMESPACE)
 		return NULL;
-	return fld_gettrli(p, plist, (struct ns_namespace *)e, idx, len);
+	return fld_get_trli(p, plist, (struct ns_namespace *)e, idx, len);
 }
 
 
-void *fld_gethdr(byte_t *p, struct prparse *plist, struct ns_namespace *ns,
-		 ulong *len)
-{
-	return fld_gethdri(p, plist, ns, 0, len);
-}
-
-
-void *fld_getpld(byte_t *p, struct prparse *plist, struct ns_namespace *ns,
-		 ulong *len)
-{
-	return fld_getpldi(p, plist, ns, 0, len);
-}
-
-
-void *fld_gettrl(byte_t *p, struct prparse *plist, struct ns_namespace *ns,
-		 ulong *len)
-{
-	return fld_gettrli(p, plist, ns, 0, len);
-}
-
-
-void *fld_gethdrn(byte_t *p, struct prparse *plist, const char *s,
+void *fld_get_hdr(byte_t *p, struct prparse *plist, struct ns_namespace *ns,
 		  ulong *len)
 {
-	return fld_gethdrni(p, plist, s, 0, len);
+	return fld_get_hdri(p, plist, ns, 0, len);
 }
 
 
-void *fld_getpldn(byte_t *p, struct prparse *plist, const char *s,
+void *fld_get_pld(byte_t *p, struct prparse *plist, struct ns_namespace *ns,
 		  ulong *len)
 {
-	return fld_getpldni(p, plist, s, 0, len);
+	return fld_get_pldi(p, plist, ns, 0, len);
 }
 
 
-void *fld_gettrln(byte_t *p, struct prparse *plist, const char *s,
+void *fld_get_trl(byte_t *p, struct prparse *plist, struct ns_namespace *ns,
 		  ulong *len)
 {
-	return fld_gettrlni(p, plist, s, 0, len);
+	return fld_get_trli(p, plist, ns, 0, len);
 }
 
 
-void *fld_getpi(byte_t *p, struct prparse *plist, struct ns_pktfld *pf,
+void *fld_get_hdrn(byte_t *p, struct prparse *plist, const char *s,
+		   ulong *len)
+{
+	return fld_get_hdrni(p, plist, s, 0, len);
+}
+
+
+void *fld_get_pldn(byte_t *p, struct prparse *plist, const char *s,
+		   ulong *len)
+{
+	return fld_get_pldni(p, plist, s, 0, len);
+}
+
+
+void *fld_get_trln(byte_t *p, struct prparse *plist, const char *s,
+		  ulong *len)
+{
+	return fld_get_trlni(p, plist, s, 0, len);
+}
+
+
+void *fld_get_pi(byte_t *p, struct prparse *plist, struct ns_pktfld *pf,
 		uint idx, ulong *len)
 {
 	ulong off;
@@ -300,7 +374,7 @@ void *fld_getpi(byte_t *p, struct prparse *plist, struct ns_pktfld *pf,
 }
 
 
-int fld_getvi(byte_t *p, struct prparse *plist, struct ns_pktfld *pf,
+int fld_get_vi(byte_t *p, struct prparse *plist, struct ns_pktfld *pf,
 	       uint idx, ulong *v)
 {
 	struct prparse *prp;
@@ -320,8 +394,8 @@ int fld_getvi(byte_t *p, struct prparse *plist, struct ns_pktfld *pf,
 }
 
 
-int fld_getbi(byte_t *sp, struct prparse *plist, struct ns_pktfld *pf,
-	      uint idx, void *dp, size_t len)
+int fld_get_bi(byte_t *sp, struct prparse *plist, struct ns_pktfld *pf,
+	       uint idx, void *dp, size_t len)
 {
 	struct prparse *prp;
 	ulong flen;
@@ -344,8 +418,8 @@ int fld_getbi(byte_t *sp, struct prparse *plist, struct ns_pktfld *pf,
 }
 
 
-int fld_setvi(byte_t *dp, struct prparse *plist, struct ns_pktfld *pf,
-	      uint idx, ulong v)
+int fld_set_vi(byte_t *dp, struct prparse *plist, struct ns_pktfld *pf,
+	       uint idx, ulong v)
 {
 	struct prparse *prp;
 	ulong off;
@@ -364,8 +438,8 @@ int fld_setvi(byte_t *dp, struct prparse *plist, struct ns_pktfld *pf,
 }
 
 
-int fld_setbi(byte_t *dp, struct prparse *plist, struct ns_pktfld *pf,
-	      uint idx, void *sp, size_t len)
+int fld_set_bi(byte_t *dp, struct prparse *plist, struct ns_pktfld *pf,
+	       uint idx, void *sp, size_t len)
 {
 	struct prparse *prp;
 	ulong off;
@@ -388,99 +462,99 @@ int fld_setbi(byte_t *dp, struct prparse *plist, struct ns_pktfld *pf,
 }
 
 
-int fld_getv(byte_t *p, struct prparse *plist, struct ns_pktfld *pf,
-	     ulong *v)
+int fld_get_v(byte_t *p, struct prparse *plist, struct ns_pktfld *pf,
+	      ulong *v)
 {
-	return fld_getvi(p, plist, pf, 0, v);
+	return fld_get_vi(p, plist, pf, 0, v);
 }
 
 
-int fld_getb(byte_t *sp, struct prparse *plist, struct ns_pktfld *pf,
-	     void *dp, size_t len)
-{
-	return fld_getbi(sp, plist, pf, 0, dp, len);
-}
-
-
-int fld_setv(byte_t *p, struct prparse *plist, struct ns_pktfld *pf, ulong v)
-{
-	return fld_setvi(p, plist, pf, 0, v);
-}
-
-
-int fld_setb(byte_t *dp, struct prparse *plist, struct ns_pktfld *pf,
-	     void *sp, size_t len)
-{
-	return fld_setbi(dp, plist, pf, 0, sp, len);
-}
-
-
-int fld_getvni(byte_t *p, struct prparse *prp, const char *s, uint idx,
-	       ulong *v)
-{
-	struct ns_elem *e;
-	e = ns_lookup(NULL, s);
-	if (e == NULL || e->type != NST_PKTFLD)
-		return -1;
-	return fld_getvi(p, prp, (struct ns_pktfld *)e, idx, v);
-}
-
-
-int fld_getbni(byte_t *sp, struct prparse *prp, const char *s, uint idx,
-	       void *dp, size_t len)
-{
-	struct ns_elem *e;
-	e = ns_lookup(NULL, s);
-	if (e == NULL || e->type != NST_PKTFLD)
-		return -1;
-	return fld_getbi(sp, prp, (struct ns_pktfld *)e, idx, dp, len);
-}
-
-
-int fld_setvni(byte_t *p, struct prparse *prp, const char *s, uint idx,
-	       ulong v)
-{
-	struct ns_elem *e;
-	e = ns_lookup(NULL, s);
-	if (e == NULL || e->type != NST_PKTFLD)
-		return -1;
-	return fld_setvi(p, prp, (struct ns_pktfld *)e, idx, v);
-}
-
-
-int fld_setbni(byte_t *dp, struct prparse *prp, const char *s, uint idx,
-	       void *sp, size_t len)
-{
-	struct ns_elem *e;
-	e = ns_lookup(NULL, s);
-	if (e == NULL || e->type != NST_PKTFLD)
-		return -1;
-	return fld_setbi(dp, prp, (struct ns_pktfld *)e, idx, sp, len);
-}
-
-
-int fld_getvn(byte_t *p, struct prparse *prp, const char *s, ulong *v)
-{
-	return fld_getvni(p, prp, s, 0, v);
-}
-
-
-int fld_getbn(byte_t *sp, struct prparse *prp, const char *s,
+int fld_get_b(byte_t *sp, struct prparse *plist, struct ns_pktfld *pf,
 	      void *dp, size_t len)
 {
-	return fld_getbni(sp, prp, s, 0, dp, len);
+	return fld_get_bi(sp, plist, pf, 0, dp, len);
 }
 
 
-int fld_setvn(byte_t *p, struct prparse *prp, const char *s, ulong v)
+int fld_set_v(byte_t *p, struct prparse *plist, struct ns_pktfld *pf, ulong v)
 {
-	return fld_setvni(p, prp, s, 0, v);
+	return fld_set_vi(p, plist, pf, 0, v);
 }
 
 
-int fld_setbn(byte_t *dp, struct prparse *prp, const char *s,
+int fld_set_b(byte_t *dp, struct prparse *plist, struct ns_pktfld *pf,
 	      void *sp, size_t len)
 {
-	return fld_setbni(dp, prp, s, 0, sp, len);
+	return fld_set_bi(dp, plist, pf, 0, sp, len);
+}
+
+
+int fld_get_vni(byte_t *p, struct prparse *prp, const char *s, uint idx,
+	        ulong *v)
+{
+	struct ns_elem *e;
+	e = ns_lookup(NULL, s);
+	if (e == NULL || e->type != NST_PKTFLD)
+		return -1;
+	return fld_get_vi(p, prp, (struct ns_pktfld *)e, idx, v);
+}
+
+
+int fld_get_bni(byte_t *sp, struct prparse *prp, const char *s, uint idx,
+	        void *dp, size_t len)
+{
+	struct ns_elem *e;
+	e = ns_lookup(NULL, s);
+	if (e == NULL || e->type != NST_PKTFLD)
+		return -1;
+	return fld_get_bi(sp, prp, (struct ns_pktfld *)e, idx, dp, len);
+}
+
+
+int fld_set_vni(byte_t *p, struct prparse *prp, const char *s, uint idx,
+	        ulong v)
+{
+	struct ns_elem *e;
+	e = ns_lookup(NULL, s);
+	if (e == NULL || e->type != NST_PKTFLD)
+		return -1;
+	return fld_set_vi(p, prp, (struct ns_pktfld *)e, idx, v);
+}
+
+
+int fld_set_bni(byte_t *dp, struct prparse *prp, const char *s, uint idx,
+	        void *sp, size_t len)
+{
+	struct ns_elem *e;
+	e = ns_lookup(NULL, s);
+	if (e == NULL || e->type != NST_PKTFLD)
+		return -1;
+	return fld_set_bi(dp, prp, (struct ns_pktfld *)e, idx, sp, len);
+}
+
+
+int fld_get_vn(byte_t *p, struct prparse *prp, const char *s, ulong *v)
+{
+	return fld_get_vni(p, prp, s, 0, v);
+}
+
+
+int fld_get_bn(byte_t *sp, struct prparse *prp, const char *s,
+	       void *dp, size_t len)
+{
+	return fld_get_bni(sp, prp, s, 0, dp, len);
+}
+
+
+int fld_set_vn(byte_t *p, struct prparse *prp, const char *s, ulong v)
+{
+	return fld_set_vni(p, prp, s, 0, v);
+}
+
+
+int fld_set_bn(byte_t *dp, struct prparse *prp, const char *s,
+	       void *sp, size_t len)
+{
+	return fld_set_bni(dp, prp, s, 0, sp, len);
 }
 

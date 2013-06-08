@@ -564,8 +564,6 @@ int pml_check_func_proto(struct pml_ast *ast, struct pml_function *f1,
 
 int pml_ast_add_func_proto(struct pml_ast *ast, struct pml_function *func)
 {
-	struct pml_function *ofunc;
-
 	if (PML_FUNC_IS_INLINE(func)) {
 		pml_ast_err(ast,
 			    "Attempt to add protoype for inline function: %s\n",
@@ -590,9 +588,6 @@ int pml_ast_add_func_proto(struct pml_ast *ast, struct pml_function *func)
 
 int pml_ast_add_func(struct pml_ast *ast, struct pml_function *func)
 {
-	struct list *n, *x;
-	struct pml_variable *v;
-
 	symtab_add(&ast->funcs, (struct pml_sym *)func);
 
 	if (pml_resolve_refs(ast, (union pml_node *)func) < 0)
@@ -604,7 +599,6 @@ int pml_ast_add_func(struct pml_ast *ast, struct pml_function *func)
 
 int pml_ast_add_intrinsic(struct pml_ast *ast, struct pml_intrinsic *intr)
 {
-	char *ncpy;
 	struct pml_function *f = NULL;
 	struct pml_variable *v;
 	int i;
@@ -755,8 +749,8 @@ int pml_func_add_param(struct pml_function *f, struct pml_variable *v)
 }
 
 
-int pml_add_lvar(struct pml_symtab *t, struct pml_function *f,
-		 struct pml_variable *v)
+int pml_func_add_var(struct pml_symtab *t, struct pml_function *f,
+		     struct pml_variable *v)
 {
 	abort_unless(v && v->vtype == PML_VTYPE_LOCAL);
 	if (symtab_add(t, (struct pml_sym *)v) < 0)
@@ -2565,7 +2559,7 @@ static int resolve_locsym(struct pml_resolve_ctx *ctx, struct pml_locator *l)
 	if (v == NULL)
 		return -1;
 	v->etype = PML_ETYPE_SCALAR;
-	abort_unless(pml_add_lvar(t, ctx->livefunc, v) >= 0);
+	abort_unless(pml_func_add_var(t, ctx->livefunc, v) >= 0);
 
 	l->reftype = PML_REF_VAR;
 	l->u.varref = v;
@@ -2754,7 +2748,7 @@ static int typecheck_locator(struct pml_ast *ast, struct pml_locator *loc)
 static int typecheck_node(struct pml_ast *ast, union pml_node *node,
 			  struct pml_function *livefunc)
 {
-	union pml_expr_u *e, *e2;
+	union pml_expr_u *e;
 	switch (node->base.type) {
 
 	case PMLTT_LIST:

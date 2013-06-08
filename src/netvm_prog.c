@@ -679,7 +679,6 @@ static int _nvmp_run(struct netvm *vm, struct netvm_program *prog, int epi,
 {
 	int rv;
 	int status;
-	int pass;
 	int debug = flags & NVMP_RUN_DEBUG;
 	int ignerr = flags & NVMP_RUN_IGNORE_ERR;
 	int prstk = flags & NVMP_RUN_PRSTK;
@@ -807,7 +806,13 @@ restart:
 			fprintf(dout, "Halt status EXIT with code %d\n", (int)tos);
 
 		exit(tos);
+
+	default:
+		abort_unless(0);
 	}
+
+	/* not reached */
+	return -1;
 }
 
 
@@ -816,11 +821,9 @@ int nvmp_run_all(struct netvm *vm, struct netvm_program *prog, FILE *pin,
 {
 	ulong npkt = 0;
 	ulong npass = 0;
-	int ignerr = flags & NVMP_RUN_IGNORE_ERR;
 	int debug = flags & NVMP_RUN_DEBUG;
 	int rv;
 	int esave;
-	ulong tos;
 	struct pktbuf *p;
 
 	if (debug && dout == NULL) {

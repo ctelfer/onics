@@ -18,9 +18,12 @@
  *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 #include <stdio.h>
+#include <string.h>
+
 #include <cat/cat.h>
 #include <cat/err.h>
-#include <string.h>
+#include <cat/pack.h>
+
 #include "prid.h"
 #include "ns.h"
 #include "stdproto.h"
@@ -57,7 +60,6 @@ byte_t daddr[4];
 unsigned long extract(byte_t * p, struct ns_pktfld *f)
 {
 	if (NSF_IS_INBITS(f->flags)) {
-		ulong ul;
 		return getbits(p, f->off * 8 + NSF_BITOFF(f->flags), f->len);
 	} else if (f->len == 1) {
 		byte_t b;
@@ -73,6 +75,7 @@ unsigned long extract(byte_t * p, struct ns_pktfld *f)
 		return w;
 	} else {
 		err("invalid length: %ld\n", f->len);
+		return -1; /* not reached */
 	}
 }
 
@@ -80,16 +83,16 @@ unsigned long extract(byte_t * p, struct ns_pktfld *f)
 #define arr2raw(a,r) (r.data = a, r.len = sizeof(a), &r)
 
 struct ns_namespace myipns =
-	NS_NAMESPACE_I("ip", NULL, PRID_NONE, PRID_NONE, NULL, NULL, 0);
+	NS_NAMESPACE_I("ip", NULL, PRID_NONE, PRID_NONE, NULL, NULL, NULL, 0);
 
 struct ns_elem *portsarr[32] = { 0 };
 struct ns_namespace tcpports =
-	NS_NAMESPACE_I("ports", NULL, PRID_TCP, PRID_PCLASS_XPORT, NULL, portsarr,
-			array_length(portsarr));
+	NS_NAMESPACE_I("ports", NULL, PRID_TCP, PRID_PCLASS_XPORT, NULL, NULL,
+		       portsarr, array_length(portsarr));
 struct ns_elem *oddarr[2] = { 0 };
 struct ns_namespace oddrange =
 	NS_NAMESPACE_I("oddrange", NULL, PRID_TCP, PRID_PCLASS_XPORT, NULL, 
-			oddarr, array_length(oddarr));
+			NULL, oddarr, array_length(oddarr));
 
 struct ns_scalar sshport = NS_UINT16_I("ssh", NULL, PRID_TCP, 22);
 struct ns_scalar oddlo = NS_UINT16_I("low", NULL, PRID_TCP, 80);
@@ -100,11 +103,8 @@ int main(int argc, char *argv[])
 {
 	struct ns_pktfld *f, *bf;
 	struct ns_scalar *s;
-	struct ns_bytestr *b;
-	struct ns_maskstr *m;
 	struct ns_elem *e;
 	unsigned long v, lo, hi;
-	struct raw rv, rv2;
 
 	E(register_std_proto());
 

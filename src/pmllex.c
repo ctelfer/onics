@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <errno.h>
 #include <limits.h>
+#include <ctype.h>
 
 #include <cat/cat.h>
 #include <cat/str.h>
@@ -503,10 +504,8 @@ errv6:
 
 static int read_id(struct pmllex *lex, int ch)
 {
-	ulong off = 0;
 	struct hnode *hn;
 	struct kwtok *kw;
-	size_t idlen;
 	char *ns;
 
 	do {
@@ -570,7 +569,6 @@ static int read_str(struct pmllex *lex, int quote)
 	struct inport *in;
 	int ch;
 	int d1, d2, d3;
-	int tok;
 
 	/* use inp_getc() because strings can't cross input boundaries */
 	in = CURINPUT(lex)->inp;
@@ -726,7 +724,6 @@ err:
 
 static int read_hexstr(struct pmllex *lex)
 {
-	struct inport *in;
 	int ch = nextc(lex);
 	int ch2;
 	unsigned char v;
@@ -741,7 +738,7 @@ static int read_hexstr(struct pmllex *lex)
 	while (ch >= 0 && (isxdigit(ch) || ch == '\\')) {
 		if (ch == '\\') {
 			ch2 = nextc(lex);
-			if (ch != '\n') {
+			if (ch2 != '\n') {
 				pmll_err(lex, 1, "unterminated hexstring");
 				return -1;
 			}

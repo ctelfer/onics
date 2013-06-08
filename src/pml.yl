@@ -440,9 +440,6 @@ out_func_hdr:
 
 
 funcproto(FO) ::= funchdr(FI) SEMICOLON. {
-	struct list *t, *x; 
-	struct pml_variable *p;
-
 	FO = pml_ast_lookup_func(ast, FI->name);
 	if (FO != NULL) {
 		FO = NULL;
@@ -460,7 +457,7 @@ ldecl ::= iddecl(I) SEMICOLON. {
 	struct pml_variable *v;
 	v = pml_var_alloc(ast, I.name, PML_VTYPE_LOCAL, I.type, I.width, NULL);
 	if (v != NULL) {
-		if (pml_add_lvar(ast->ltab, ast->livefunc, v) < 0) {
+		if (pml_func_add_var(ast->ltab, ast->livefunc, v) < 0) {
 			pml_ast_err(ast, "error adding local var '%s'", I.name);
 			pmln_free(v);
 		}

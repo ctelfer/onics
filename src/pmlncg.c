@@ -279,7 +279,6 @@ static int cg_load_strref_val(struct pmlncg *cg, struct pml_locator *loc,
 			      int getlen)
 {
 	ulong val;
-	struct pml_literal *lit;
 	struct pml_bytestr *bs;
 	struct pml_variable *var;
 
@@ -398,7 +397,6 @@ static int _i_str(struct pmlncg *cg, struct pml_call *c, struct cg_intr *intr)
 static int _i_str_mkref(struct pmlncg *cg, struct pml_call *c,
 			struct cg_intr *intr)
 {
-	struct pml_ibuf *b = &cg->ibuf;
 	struct pml_list *pl = c->args;
 	union pml_node *e;
 
@@ -1252,11 +1250,9 @@ static int typecast(struct pmlncg *cg, int otype, int ntype)
 
 static int cg_matchop(struct pmlncg *cg, struct pml_op *op)
 {
-	union pml_expr_u *lhs;
 	union pml_expr_u *rhs;
 
 	abort_unless(cg && op);
-	lhs = op->arg1;
 	rhs = op->arg2;
 
 	if (rhs->expr.etype == PML_ETYPE_BYTESTR) {
@@ -2384,7 +2380,6 @@ static int cg_locaddr(struct pmlncg *cg, struct pml_locator *loc, int etype)
 	ulong addr;
 	struct pml_literal *lit;
 	struct pml_variable *var;
-	struct cg_pdesc cgpd;
 
 	switch (loc->reftype) {
 	case PML_REF_VAR:
