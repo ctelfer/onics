@@ -641,7 +641,7 @@ static void insert_field(struct npf_list *npfl, struct npfield *npf)
 
 
 static int add_fields(struct npf_list *npfl, struct prparse *prp,
-		      struct ns_namespace *ns)
+		      struct ns_namespace *ns, int loadns)
 {
 	int i;
 	int rv;
@@ -662,7 +662,8 @@ static int add_fields(struct npf_list *npfl, struct prparse *prp,
 		if (npf == NULL)
 			return -1;
 		
-		insert_field(npfl, npf);
+		if (loadns)
+			insert_field(npfl, npf);
 	}
 
 	for (i = 0; i < ns->nelem; ++i) {
@@ -681,13 +682,16 @@ static int add_fields(struct npf_list *npfl, struct prparse *prp,
 		if (npf == NULL)
 			return -1;
 
-		insert_field(npfl, npf);
 
 		if (nse->type == NST_NAMESPACE) {
+			if (loadns)
+				insert_field(npfl, npf);
 			subns = (struct ns_namespace *)nse;
-			rv = add_fields(npfl, prp, subns);
+			rv = add_fields(npfl, prp, subns, loadns);
 			if (rv < 0)
 				return rv;
+		} else {
+			insert_field(npfl, npf);
 		}
 	}
 
@@ -696,7 +700,8 @@ static int add_fields(struct npf_list *npfl, struct prparse *prp,
 		      
 
 
-int npfl_load(struct npf_list *npfl, struct prparse *plist, byte_t *buf)
+int npfl_load(struct npf_list *npfl, struct prparse *plist, byte_t *buf,
+	      int loadns)
 {
 	struct prparse *prp;
 	int rv;
@@ -712,7 +717,7 @@ int npfl_load(struct npf_list *npfl, struct prparse *plist, byte_t *buf)
 	npfl->buf = buf;
 
 	prp_for_each(prp, plist) {
-		rv = add_fields(npfl, prp, NULL);
+		rv = add_fields(npfl, prp, NULL, loadns);
 		if (rv < 0) {
 			npfl_cache(npfl);
 			return rv;

@@ -339,6 +339,35 @@ void cpm_clear(struct cpmatrix *cpm)
 }
 
 
+void cpm_backtrace(struct cpmatrix *cpm)
+{
+	ulong r = cpm->nrows-1;
+	ulong c = cpm->ncols-1;
+	struct chgpath *elem, *prev;
+
+	abort_unless(r == cpm->nrows - 1);
+	abort_unless(c == cpm->ncols - 1);
+
+	elem = cpm_elem(cpm, r, c);
+	while (elem->action != DONE) {
+		abort_unless(r < cpm->nrows && c < cpm->ncols);
+
+		switch(elem->action) {
+		case PASS: 	r -= 1; c -= 1; break;
+		case DROP: 	r -= 1; break;
+		case INSERT: 	c -= 1; break;
+		case MODIFY:	r -= 1; c -= 1; break;
+		case SWAP:	r -= 1; c -= 1; abort_unless(0); break;
+		default:	abort_unless(0);
+		}
+
+		prev = cpm_elem(cpm, r, c);
+		prev->next = elem;
+		elem = prev;
+	}
+}
+
+
 void pdiff_load(struct pdiff *pd, FILE *before, const char *bname, 
 		FILE *after, const char *aname)
 {
@@ -373,14 +402,14 @@ void fdiff_init(struct fdiff *fd)
 void fdiff_load(struct fdiff *fd, struct pktbuf *before, ulong bpn,
 	        struct pktbuf *after, ulong apn)
 {
-	if (npfl_load(&fd->before, &before->prp, before->buf) < 0)
+	if (npfl_load(&fd->before, &before->prp, before->buf, 1) < 0)
 		err("out of mem loading field array for pkt %lu in stream 1",
 		    bpn);
 
 	if (npfl_fill_gaps(&fd->before))
 		err("out of mem filling gaps pkt %lu in stream 1", bpn);
 
-	if (npfl_load(&fd->after, &after->prp, after->buf) < 0)
+	if (npfl_load(&fd->after, &after->prp, after->buf, 1) < 0)
 		err("out of mem loading field array for pkt %lu in stream 2",
 		    apn);
 
@@ -547,36 +576,6 @@ double pkt_cmp(struct pktent *pe1, ulong pe1n, struct pktent *pe2, ulong pe2n)
 }
 
 
-void pdiff_backtrace(struct pdiff *pd)
-{
-	ulong r = pd->before.npkts;
-	ulong c = pd->after.npkts;
-	struct cpmatrix *cpm = &pd->cpm;
-	struct chgpath *elem, *prev;
-
-	abort_unless(r == cpm->nrows - 1);
-	abort_unless(c == cpm->ncols - 1);
-
-	elem = cpm_elem(cpm, r, c);
-	while (elem->action != DONE) {
-		abort_unless(r < cpm->nrows && c < cpm->ncols);
-
-		switch(elem->action) {
-		case PASS: 	r -= 1; c -= 1; break;
-		case DROP: 	r -= 1; break;
-		case INSERT: 	c -= 1; break;
-		case MODIFY:	r -= 1; c -= 1; break;
-		case SWAP:	r -= 1; c -= 1; abort_unless(0); break;
-		default:	abort_unless(0);
-		}
-
-		prev = cpm_elem(cpm, r, c);
-		prev->next = elem;
-		elem = prev;
-	}
-}
-
-
 /* TODO: handle swaps */
 void pdiff_compare(struct pdiff *pd)
 {
@@ -624,7 +623,72 @@ void pdiff_compare(struct pdiff *pd)
 		}
 	}
 
-	pdiff_backtrace(pd);
+	cpm_backtrace(&pd->cpm);
+}
+
+
+static void fmod_report(struct pktbuf *p1, ulong p1n, struct pktbuf *p2, 
+			ulong p2n, struct emitter *e)
+{
+	ulong r = 0;
+	ulong c = 0;
+	struct cpmatrix *cpm;
+	struct chgpath *elem, *next;
+	struct npfield *rnpf, *cnpf;
+	struct raw rl;
+	char line[256];
+
+	rl.data = line;
+	rl.len = sizeof(line);
+
+	fdiff_load(&Fdiff, p1, p1n, p2, p2n);
+	fdiff_compare(&Fdiff);
+	cpm = &Fdiff.cpm;
+	cpm_backtrace(cpm);
+
+
+	elem = cpm_elem(cpm, 0, 0);
+	rnpf = npfl_first(&Fdiff.before);
+	cnpf = npfl_first(&Fdiff.after);
+
+	while (elem->next != NULL) {
+		next = elem->next;
+		switch (next->action) {
+		case PASS: 
+			r += 1; rnpf = npf_next(rnpf);
+			c += 1; cnpf = npf_next(cnpf);
+			break;
+
+		case DROP:
+			ns_tostr(rnpf->nse, rnpf->buf, rnpf->prp, &rl);
+			emit_format(e, "\t-%s\n", line);
+			r += 1; rnpf = npf_next(rnpf);
+			break;
+
+		case INSERT:
+			ns_tostr(cnpf->nse, cnpf->buf, cnpf->prp, &rl);
+			emit_format(e, "\t+%s\n", line);
+			c += 1; cnpf = npf_next(cnpf);
+			break;
+
+		case MODIFY:
+			ns_tostr(rnpf->nse, rnpf->buf, rnpf->prp, &rl);
+			emit_format(e, "\t-%s\n", line);
+			ns_tostr(cnpf->nse, cnpf->buf, cnpf->prp, &rl);
+			emit_format(e, "\t+%s\n", line);
+			r += 1; rnpf = npf_next(rnpf);
+			c += 1; cnpf = npf_next(cnpf);
+			break;
+
+		case SWAP:
+		default: abort_unless(0);
+		}
+
+		elem = next;
+	}
+
+
+	fdiff_clear(&Fdiff);
 }
 
 
@@ -635,6 +699,7 @@ void pdiff_report(struct pdiff *pd, struct emitter *e)
 	struct cpmatrix *cpm = &pd->cpm;
 	struct chgpath *elem, *next;
 	struct pktbuf *pkb;
+	struct pktbuf *pkb2;
 
 	elem = cpm_elem(cpm, 0, 0);
 	while (elem->next != NULL) {
@@ -668,7 +733,9 @@ void pdiff_report(struct pdiff *pd, struct emitter *e)
 				    "MODIFY packet %lu from the original "
 				    "stream to become packet %lu from the"
 				    " new stream\n", r+1, c+1);
-			/* TODO: detailed modification printing */
+			pkb = pd->before.pkts[r].pkt;
+			pkb2 = pd->after.pkts[c].pkt;
+			fmod_report(pkb, r+1, pkb2, c+1, e);
 			r += 1; 
 			c += 1;
 			break;

@@ -244,7 +244,8 @@ struct npf_list {
 
 
 /* Initialize a named protocol field list and */
-int npfl_load(struct npf_list *npfl, struct prparse *plist, byte_t *buf);
+int npfl_load(struct npf_list *npfl, struct prparse *plist, byte_t *buf,
+	      int loadns);
 
 /* fill in gaps in a field list */
 int npfl_fill_gaps(struct npf_list *npfl);
