@@ -64,7 +64,7 @@ int main(int argc, char *argv[])
 	ulong pcdlt;
 	uint dltype;
 	int rv;
-	uint ifnum;
+	uint ifnum = 0;
 	opc_h pch;
 	struct pktbuf *pkb;
 	struct xpkt_tag_iface ti;

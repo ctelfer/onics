@@ -1777,6 +1777,7 @@ int cg_adjlen(struct pmlncg *cg, struct pml_locator *loc, ulong *known_len)
 		} else if (lit->type == PMLTT_MASKVAL) {
 			len = lit->u.maskval.val.len;
 		} else {
+			len = 0;
 			abort_unless(0);
 		}
 		if (loc->off != NULL) {
@@ -1956,7 +1957,7 @@ static int cg_memref(struct pmlncg *cg, struct pml_locator *loc)
 	struct pml_literal *lit;
 	struct pml_variable *var;
 	ulong addr, addr2 = 0, len;
-	int seg, seg2;
+	int seg, seg2 = 0;
 	struct numval loff;
 	ulong n;
 	int ismask = 0;
@@ -2134,7 +2135,7 @@ static int cg_pfbytefield(struct pmlncg *cg, struct pml_locator *loc, int etype)
 	struct cg_pdesc cgpd;
 	struct ns_pktfld *pf = (struct ns_pktfld *)loc->u.nsref;
 	int fixedlen = 0;
-	ulong len, n;
+	ulong len = 0, n;
 	struct pml_literal *lit;
 
 	if (!NSF_IS_VARLEN(pf->flags)) {
@@ -3118,7 +3119,7 @@ int cg_assign(struct pmlncg *cg, struct pml_assign *a)
 
 int cg_print(struct pmlncg *cg, struct pml_print *pr)
 {
-	uchar y;
+	uchar y = 0;
 	int etype;
 
 	abort_unless(cg && pr);
@@ -3368,7 +3369,7 @@ static int cg_rules(struct pmlncg *cg)
 	struct pml_rule *r;
 	union pml_node *pat;
 	uint eaddr;
-	uint tbaddr;
+	uint tbaddr = 0;
 	ulong nvars;
 
 	if (l_isempty(&cg->ast->p_rules))

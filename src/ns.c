@@ -250,6 +250,7 @@ int ns_fmt_raw(struct ns_elem *elem, byte_t *pkt, struct prparse *prp,
 			return r;
 		nlen = str_copy(out->data, pf->fmtstr, out->len);
 	} else {
+		nlen = 0;
 		abort_unless(0);
 	}
 

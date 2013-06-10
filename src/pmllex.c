@@ -726,7 +726,7 @@ static int read_hexstr(struct pmllex *lex)
 {
 	int ch = nextc(lex);
 	int ch2;
-	unsigned char v;
+	unsigned char v = 0;
 	ulong nx = 0;
 	
 	if (ch != 'x') {

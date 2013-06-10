@@ -2,7 +2,7 @@
 CC=gcc
 CATLIB_ROOT=../../catlib
 INCS=-I${CATLIB_ROOT}/include
-#OPTS=-O3
+#OPTS=-O3 -Wall -Wno-pointer-sign
 #LIBS=-L${CATLIB_ROOT}/lib -lcat
 #DEFS=
 OPTS=-g -Wall -Wno-pointer-sign
@@ -126,8 +126,8 @@ ${BINDIR}/opcout: opcout.o opcap.o ${PKTOBJ} ${PKTHDR}
 	${CC} -o ${BINDIR}/opcout opcout.o opcap.o ${PKTOBJ} \
 		${DEFS} ${OPTS} ${INCS} ${LIBS}
 
-${BINDIR}/pdiff: pdiff.o stdproto.o ${PKTOBJ} ${PKTHDR}
-	${CC} -o ${BINDIR}/pdiff pdiff.o stdproto.o ${PKTOBJ} \
+${BINDIR}/pdiff: pdiff.o stdproto.o fld.o ${PKTOBJ} ${PKTHDR}
+	${CC} -o ${BINDIR}/pdiff pdiff.o stdproto.o fld.o ${PKTOBJ} \
 		${DEFS} ${OPTS} ${INCS} ${LIBS}
 
 .c.o:

@@ -1,6 +1,6 @@
 /*
  * ONICS
- * Copyright 2012 
+ * Copyright 2012-2013
  * Christopher Adam Telfer
  *
  * fld.c -- convenience get/set operations on packet fields
@@ -558,3 +558,372 @@ int fld_set_bn(byte_t *dp, struct prparse *prp, const char *s,
 	return fld_set_bni(dp, prp, s, 0, sp, len);
 }
 
+
+static struct list npf_cache;
+static int npf_is_initialized;
+
+
+static void _npf_init(void)
+{
+	l_init(&npf_cache);
+	npf_is_initialized = 1;
+}
+
+
+static struct npfield *npf_new(struct prparse *prp, byte_t *buf,
+			       struct ns_elem *nse)
+{
+	struct npfield *npf;
+	long len;
+
+	if (l_isempty(&npf_cache)) {
+		npf = calloc(sizeof(struct npfield), 1);
+		if (npf == NULL)
+			return NULL;
+	} else {
+		npf = l_to_npf(l_pop(&npf_cache));
+	}
+
+	npf->prp = prp;
+	npf->buf = buf;
+	npf->nse = nse;
+	if (nse != NULL) {
+		npf->off = fld_get_off(prp, nse);
+		len = fld_get_len(prp, nse);
+		if (len < 0)
+			len = 0;
+		npf->len = len;
+	} else {
+		/* gaps only: should be filled in immediately afterwards */
+		npf->off = PRP_OFF_INVALID;
+		npf->len = 0;
+	}
+
+	return npf;
+}
+
+
+static void npf_free(struct npfield *npf)
+{
+	memset(npf, 0, sizeof(struct npfield));
+	free(npf);
+}
+
+
+static void npf_cache_node(struct npfield *npf)
+{
+	l_deq(&npf->le);
+	memset(npf, 0, sizeof(struct npfield));
+	l_enq(&npf_cache, &npf->le);
+}
+
+
+static void npfl_reset(struct npf_list *npfl)
+{
+	memset(npfl, 0, sizeof(struct npf_list));
+	l_init(&npfl->list.le);
+	npfl->list.len = (ulong)-1l;
+}
+
+
+static void insert_field(struct npf_list *npfl, struct npfield *npf)
+{
+	struct npfield *trav;
+
+	trav = npfl_last(npfl);
+	while (!npf_is_end(trav)) {
+		if (trav->off <= npf->off)
+			break;
+		trav = npf_prev(trav);
+	}
+	l_ins(&trav->le, &npf->le);
+}
+
+
+static int add_fields(struct npf_list *npfl, struct prparse *prp,
+		      struct ns_namespace *ns)
+{
+	int i;
+	int rv;
+	ulong off;
+	struct npfield *npf;
+	struct ns_elem *nse;
+	struct ns_namespace *subns;
+
+	if (ns == NULL) {
+
+		/* if we can't find the namespace we can't */
+		/* claim to have all the fields in the list. */
+		ns = ns_lookup_by_prid(prp->prid);
+		if (ns == NULL)
+			return 0;
+
+		npf = npf_new(prp, npfl->buf, (struct ns_elem *)ns);
+		if (npf == NULL)
+			return -1;
+		
+		insert_field(npfl, npf);
+	}
+
+	for (i = 0; i < ns->nelem; ++i) {
+
+		/* NULL terminates the array early */
+		nse = ns->elems[i];
+		if (nse == NULL)
+			break;
+
+
+		off = fld_get_off(prp, nse);
+		if (off == PRP_OFF_INVALID)
+			continue;
+
+		npf = npf_new(prp, npfl->buf, nse);
+		if (npf == NULL)
+			return -1;
+
+		insert_field(npfl, npf);
+
+		if (nse->type == NST_NAMESPACE) {
+			subns = (struct ns_namespace *)nse;
+			rv = add_fields(npfl, prp, subns);
+			if (rv < 0)
+				return rv;
+		}
+	}
+
+	return 0;
+}
+		      
+
+
+int npfl_load(struct npf_list *npfl, struct prparse *plist, byte_t *buf)
+{
+	struct prparse *prp;
+	int rv;
+
+	if (!npf_is_initialized)
+		_npf_init();
+
+	if (npfl == NULL || plist == NULL || buf == NULL)
+		return -1;
+
+	npfl_reset(npfl);
+	npfl->plist = plist;
+	npfl->buf = buf;
+
+	prp_for_each(prp, plist) {
+		rv = add_fields(npfl, prp, NULL);
+		if (rv < 0) {
+			npfl_cache(npfl);
+			return rv;
+		}
+	}
+
+	return 0;
+}
+
+
+static void clear_gaps(struct npf_list *npfl)
+{
+	struct list *le, *xtra;
+	struct npfield *npf;
+
+	l_for_each_safe(le, xtra, &npfl->list.le) {
+		npf = l_to_npf(le);
+		if (npf_is_gap(npf))
+			npf_cache_node(npf);
+	}
+}
+
+
+static struct npfield *new_gap(struct npf_list *npfl, ulong off, ulong eoff, 
+		   	       struct npfield *before, struct npfield *after)
+{
+	struct npfield *gap;
+	struct prparse *prp = NULL;
+
+	/* TODO: what if the gap crosses boundaries? */
+	if ((after != NULL) && (off >= prp_soff(after->prp)) && 
+	    	 (off < prp_eoff(after->prp)))
+		prp = after->prp;
+	else if ((before != NULL) && (off >= prp_soff(before->prp)) && 
+	    (off < prp_eoff(before->prp)))
+		prp = before->prp;
+	else
+		prp = npfl->plist;
+
+	gap = npf_new(prp, npfl->buf, NULL);
+	if (gap == NULL)
+		return NULL;
+
+	gap->off = off;
+	gap->len = eoff - off;
+
+	return gap;
+}
+
+
+static int add_gaps(struct npf_list *npfl, ulong off, struct npfield *before,
+		    struct npfield *after)
+{
+	struct list *prev;
+	ulong eoff;
+	struct npfield *gap;
+
+	abort_unless(npfl);
+
+	if (before == NULL)
+		prev = &npfl->list.le;
+	else
+		prev = &before->le;
+
+	if (after == NULL)
+		eoff = prp_toff(npfl->plist) * 8;
+	else
+		eoff = after->off;
+
+	/* add the main gap */
+	gap = new_gap(npfl, off, eoff, before, after);
+	if (gap == NULL)
+		return -1;
+	l_ins(prev, &gap->le);
+	++npfl->ngaps;
+
+	return 0;
+}
+
+
+int npfl_fill_gaps(struct npf_list *npfl)
+{
+	struct npfield *before = NULL, *after;
+	int rv;
+	ulong ohi;
+	ulong onext;
+	ulong oend;
+
+	if (!npf_is_initialized)
+		_npf_init();
+
+	if (npfl == NULL || npfl->plist == NULL || npfl->buf == NULL)
+		return -1;
+
+	/* recall that prp offsets are in bytes */
+	ohi = prp_poff(npfl->plist) * 8;
+	oend = prp_toff(npfl->plist) * 8;
+
+	after = npfl_first(npfl);
+	while (!npf_is_end(after)) {
+		if (after->off > ohi) {
+			rv = add_gaps(npfl, ohi, before, after);
+			if (rv < 0)
+				goto err;
+		}
+		if (after->nse == NULL || after->nse->type != NST_NAMESPACE) {
+			onext = after->off + after->len;
+			if (onext > ohi)
+				ohi = onext;
+		}
+		before = after;
+		after = npf_next(after);
+	}
+	after = NULL;
+
+	if (ohi < oend) {
+		rv = add_gaps(npfl, ohi, before, after);
+		if (rv < 0)
+			goto err;
+	}
+
+	return 0;
+
+err:
+	clear_gaps(npfl);
+	return rv;
+
+}
+
+
+void npfl_clear(struct npf_list *npfl)
+{
+	struct list *le, *xtra;
+
+	l_for_each_safe(le, xtra, &npfl->list.le) {
+		l_rem(le);
+		npf_free(l_to_npf(le));
+	}
+	npfl_reset(npfl);
+}
+
+
+void npfl_cache(struct npf_list *npfl)
+{
+	if (!npf_is_initialized)
+		_npf_init();
+
+	l_move(&npfl->list.le, &npf_cache);
+	npfl_reset(npfl);
+}
+
+
+void npfl_clear_cache(struct npf_list *npfl)
+{
+	struct list *le, *extra;
+
+	if (!npf_is_initialized)
+		_npf_init();
+
+	l_for_each_safe(le, extra, &npf_cache) {
+		l_rem(le);
+		npf_free(l_to_npf(le));
+	}
+}
+
+
+int npfl_length(struct npf_list *npfl)
+{
+	return l_length(&npfl->list.le);
+}
+
+
+int npf_eq(struct npfield *npf1, struct npfield *npf2)
+{
+	ulong len;
+	ulong off1;
+	ulong off2;
+
+	if (!npf_type_eq(npf1, npf2))
+		return 0;
+
+	len = npf1->len;
+	if (len != npf2->len)
+		return 0;
+
+	if ((npf1->off % 8 == 0) && (npf2->off % 8 == 0) &&
+	    (len % 8 == 0))  {
+
+		/* not need to test npf2 length: we know its equal */
+		return memcmp(npf1->buf + npf1->off/8,
+			      npf2->buf + npf2->off/8,
+			      len / 8) == 0;
+
+	} else if (npf1->len < 32) {
+
+		return getbits(npf1->buf, npf1->off, len) == 
+		       getbits(npf2->buf, npf2->off, len);
+
+	} else {
+		/* really?  skewed bit fields longer than 32 bits? sigh... */
+		/* fine, we'll go bit by bit */
+		off1 = npf1->off;
+		off2 = npf2->off;
+		while (len > 0) {
+			if (getbit(npf1->buf, off1) != getbit(npf2->buf, off2))
+				return 0;
+			++off1;
+			++off2;
+			--len;
+		}
+
+		return 1;
+	}
+}

@@ -1,9 +1,10 @@
 /*
  * ONICS
- * Copyright 2012 
+ * Copyright 2012-2013
  * Christopher Adam Telfer
  *
- * fld.h -- convenience get/set operations on packet fields
+ * fld.h -- convenience get/set operations on packet fields referenced
+ *	    by name or namespace element and protocol parse.
  *
  *
  *  This program is free software: you can redistribute it and/or modify
@@ -27,17 +28,18 @@
 #include "protoparse.h"
 #include "ns.h"
 
+
 /* 
  * Return the offset of a given field in bits from the start of the packet
  * or PRP_OFF_INVALID of the offset is invalid.
  */
-ulong fld_get_off(struct prparse *prp, struct ns_elem *elem);
+ulong fld_get_off(struct prparse *prp, struct ns_elem *nse);
 
 /* 
  * Return the length of a given field in bits from the start of the packet 
  * or -1 if invalid.
  */
-long fld_get_len(struct prparse *prp, struct ns_elem *elem);
+long fld_get_len(struct prparse *prp, struct ns_elem *nse);
 
 
 /* returns 1 if the 'idx'th 'pf' field exists in plist and 0 otherwise */
@@ -208,5 +210,58 @@ int fld_set_vn(byte_t *p, struct prparse *plist, const char *s, ulong v);
 /* as fld_setn_bi, but index is implicitly 0 */
 int fld_set_bn(byte_t *dp, struct prparse *plist, const char *s,
 	       void *sp, size_t len);
+
+
+/* Structure for named protocol fields. */
+struct npfield {
+	struct list		le;
+	struct prparse *	prp;
+	byte_t *		buf;
+	struct ns_elem *	nse;
+	uint			pidx;
+	ulong 			off;	/* in bits */
+	ulong			len;	/* in bits */
+};
+
+
+struct npf_list {
+	struct npfield 		list;	/* prp == NULL, nse == NULL */
+	struct prparse *	plist;
+	byte_t *		buf;
+	uint			ngaps;
+};
+
+
+#define l_to_npf(_lep)		container((_lep), struct npfield, le)
+#define npf_next(npf)		l_to_npf(l_next(&(npf)->le))
+#define npf_prev(npf)		l_to_npf(l_prev(&(npf)->le))
+#define npfl_first(npfl)	l_to_npf(l_head(&(npfl)->list.le))
+#define npfl_last(npfl)		l_to_npf(l_tail(&(npfl)->list.le))
+#define npf_is_end(npf)		((npf)->len == (ulong)-1l)
+#define npf_is_gap(npf)		((npf)->nse == NULL)
+#define npf_type_eq(n1, n2)	(((n1)->nse == (n2)->nse) && \
+				 (n1)->prp->prid == (n2)->prp->prid)
+
+
+/* Initialize a named protocol field list and */
+int npfl_load(struct npf_list *npfl, struct prparse *plist, byte_t *buf);
+
+/* fill in gaps in a field list */
+int npfl_fill_gaps(struct npf_list *npfl);
+
+/* free the elements of a named protcol field list */
+void npfl_clear(struct npf_list *npfl);
+
+/* cache the elements of a named protcol field list */
+void npfl_cache(struct npf_list *npfl);
+
+/* release the elements in the field list cache */
+void npfl_clear_cache(struct npf_list *npfl);
+
+/* get the length of the list */
+int npfl_length(struct npf_list *npfl);
+
+/* return 1 if the two fields are essentially equal and 0 otherwise */
+int npf_eq(struct npfield *npf1, struct npfield *npf2);
 
 #endif /* __fld_h */

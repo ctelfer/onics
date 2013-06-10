@@ -33,6 +33,7 @@
 #include "ns.h"
 #include "pktbuf.h"
 #include "stdproto.h"
+#include "fld.h"
 
 
 /* 
@@ -61,9 +62,12 @@
  * Field?  Header?
  */
 
+struct fdiff;
 
 double Drop_cost = 2;
 double Insert_cost = 5;
+double Infinity = 1e20;
+struct fdiff Fdiff;
 
 
 enum {
@@ -102,13 +106,29 @@ struct cpmatrix {
 	ulong			ncols;
 };
 
+#define cpm_elem(cpm, r, c) (&(cpm)->elems[r][c])
 
+
+
+/* packet difference comparitor */
 struct pdiff {
 	struct pktarr 		before;
 	struct pktarr 		after;
 	ulong			nb;
 	ulong			na;
 	struct cpmatrix		cpm;
+};
+
+
+/* field differentce comparitor */
+struct fdiff {
+	struct npf_list		before;
+	struct npf_list		after;
+	ulong			nb;
+	ulong			na;
+	struct cpmatrix		cpm;
+	ulong			cpm_maxr;
+	ulong			cpm_maxc;
 };
 
 
@@ -286,14 +306,6 @@ static void pa_clear(struct pktarr *pa)
 }
 
 
-static ONICS_INLINE struct chgpath *cpm_elem(struct cpmatrix *cpm, ulong r,
-					     ulong c)
-{
-	abort_unless(cpm && r < cpm->nrows && c < cpm->ncols);
-	return &cpm->elems[r][c];
-}
-
-
 static void cpm_ealloc(struct cpmatrix *cpm, ulong nr, ulong nc)
 {
 	struct chgpath *cpe;
@@ -350,19 +362,71 @@ void pdiff_clear(struct pdiff *pd)
 }
 
 
-/* TODO:  actually calculate the edit distance between the packets */
-ulong pkt_cmp(struct pktent *pe0, struct pktent *pe1)
+void fdiff_init(struct fdiff *fd)
 {
-	if (memcmp(pe0->hash, pe1->hash, sizeof(pe0->hash)) == 0)
-		return 0.0;
-	else
-		return Insert_cost + Drop_cost;
+	memset(fd, 0, sizeof(*fd));
+	fd->cpm_maxr = 0;	/* explicit */
+	fd->cpm_maxc = 0;	/* explicit */
 }
 
+
+void fdiff_load(struct fdiff *fd, struct pktbuf *before, ulong bpn,
+	        struct pktbuf *after, ulong apn)
+{
+	if (npfl_load(&fd->before, &before->prp, before->buf) < 0)
+		err("out of mem loading field array for pkt %lu in stream 1",
+		    bpn);
+
+	if (npfl_fill_gaps(&fd->before))
+		err("out of mem filling gaps pkt %lu in stream 1", bpn);
+
+	if (npfl_load(&fd->after, &after->prp, after->buf) < 0)
+		err("out of mem loading field array for pkt %lu in stream 2",
+		    apn);
+
+	if (npfl_fill_gaps(&fd->after))
+		err("out of mem filling gaps pkt %lu in stream 2", apn);
+
+	fd->nb = npfl_length(&fd->before);
+	fd->na = npfl_length(&fd->after);
+
+	if (fd->nb+1 <= fd->cpm_maxr && fd->na+1 <= fd->cpm_maxc) {
+		fd->cpm.nrows = fd->nb + 1;
+		fd->cpm.ncols = fd->na + 1;
+	} else {
+		if (fd->cpm_maxr > 0) {
+			cpm_clear(&fd->cpm);
+			fd->cpm.nrows = 0;
+			fd->cpm.ncols = 0;
+		}
+		cpm_ealloc(&fd->cpm, fd->nb+1, fd->na+1);
+		fd->cpm_maxr = fd->cpm.nrows;
+		fd->cpm_maxc = fd->cpm.ncols;
+	}
+}
+		  
+		  
+void fdiff_clear(struct fdiff *fd)
+{
+	npfl_cache(&fd->before);
+	npfl_cache(&fd->after);
+}
+		  
+		  
+void fdiff_free(struct fdiff *fd)
+{
+	npfl_cache(&fd->before);
+	npfl_cache(&fd->after);
+	cpm_clear(&fd->cpm);
+	fd->cpm.nrows = 0;
+	fd->cpm.ncols = 0;
+}
+		  
 
 static void getmincost(struct chgpath *p, double icost, double dcost,
 		       double mcost, int maction)
 {
+	/* bias towards modify */
 	if (icost < dcost) {
 		if (icost < mcost) {
 			p->action = INSERT;
@@ -380,6 +444,106 @@ static void getmincost(struct chgpath *p, double icost, double dcost,
 			p->cost = mcost;
 		}
 	}
+}
+
+
+double fdiff_cost(struct fdiff *fd)
+{
+	return cpm_elem(&fd->cpm, fd->nb, fd->na)->cost;
+}
+
+
+void fdiff_compare(struct fdiff *fd)
+{
+	ulong i, j;
+	int maction;
+	double mcost;
+	double icost;
+	double dcost;
+	struct cpmatrix *cpm = &fd->cpm;
+	struct chgpath *ipos, *dpos, *mpos;
+	struct npf_list *rnpfl = &fd->before;
+	struct npf_list *cnpfl = &fd->after;
+	struct npfield *rnpf;
+	struct npfield *cnpf;
+	double drop_bit_cost;
+	double ins_bit_cost;
+	double mod_bit_cost;
+
+	cpm_elem(cpm, 0, 0)->action = DONE;
+	cpm_elem(cpm, 0, 0)->cost = 0;
+
+	/* 
+	 * Each drop costs an amount proportional to the # of bits
+	 * being dropped in from the packet.  Similarly, each insert
+	 * costs an amount proportional to the # of bits inserted.
+	 */
+	drop_bit_cost = Drop_cost / (double)(prp_plen(rnpfl->plist) * 8);
+	ins_bit_cost = Insert_cost / (double)(prp_plen(cnpfl->plist) * 8);
+	mod_bit_cost = (drop_bit_cost + ins_bit_cost);
+
+	rnpf = npfl_first(rnpfl);
+	for (i = 1; i < cpm->nrows; ++i) {
+		dpos = cpm_elem(cpm, i, 0);
+		dpos->action = DROP;
+		dpos->cost = cpm_elem(cpm, i-1, 0)->cost + 
+			     rnpf->len * drop_bit_cost;
+		rnpf = npf_next(rnpf);
+	}
+
+	cnpf = npfl_first(cnpfl);
+	for (i = 1; i < cpm->ncols; ++i) {
+		ipos = cpm_elem(cpm, 0, i);
+		ipos->action = INSERT;
+		ipos->cost = cpm_elem(cpm, 0, i-1)->cost + 
+			     cnpf->len * ins_bit_cost;
+		cnpf = npf_next(cnpf);
+	}
+
+	rnpf = npfl_first(rnpfl);
+	for (i = 1; i < cpm->nrows; ++i) {
+		cnpf = npfl_first(cnpfl);
+		for (j = 1; j < cpm->ncols; ++j) {
+			ipos = cpm_elem(cpm, i, j-1);
+			dpos = cpm_elem(cpm, i-1, j);
+			mpos = cpm_elem(cpm, i-1, j-1);
+
+			if (npf_eq(rnpf, cnpf)) {
+				mcost = mpos->cost;
+				maction = PASS;
+			} else if (npf_type_eq(rnpf, cnpf)) {
+				mcost = mpos->cost + mod_bit_cost * rnpf->len;
+				maction = MODIFY;
+			} else {
+				mcost = Infinity;
+				maction = MODIFY;
+			}
+
+			icost = ipos->cost + ins_bit_cost * rnpf->len;
+			dcost = dpos->cost + drop_bit_cost * cnpf->len;
+
+			getmincost(cpm_elem(cpm, i, j), icost, dcost, mcost,
+				   maction);
+			cnpf = npf_next(cnpf);
+		}
+		rnpf = npf_next(rnpf);
+	}
+}
+
+
+double pkt_cmp(struct pktent *pe1, ulong pe1n, struct pktent *pe2, ulong pe2n)
+{
+	double cost;
+
+	if (memcmp(pe1->hash, pe2->hash, sizeof(pe1->hash)) == 0)
+		return 0.0;
+
+	fdiff_load(&Fdiff, pe1->pkt, pe1n, pe2->pkt, pe2n);
+	fdiff_compare(&Fdiff);
+	cost = fdiff_cost(&Fdiff);
+	fdiff_clear(&Fdiff);
+
+	return cost;
 }
 
 
@@ -413,7 +577,7 @@ void pdiff_backtrace(struct pdiff *pd)
 }
 
 
-/* TODO: handle swaps and modifications */
+/* TODO: handle swaps */
 void pdiff_compare(struct pdiff *pd)
 {
 	ulong i, j;
@@ -448,7 +612,8 @@ void pdiff_compare(struct pdiff *pd)
 			dpos = cpm_elem(cpm, i-1, j);
 			mpos = cpm_elem(cpm, i-1, j-1);
 
-			mcost = pkt_cmp(&rpkts->pkts[i-1], &cpkts->pkts[j-1]);
+			mcost = pkt_cmp(&rpkts->pkts[i-1], i,
+					&cpkts->pkts[j-1], j);
 			maction = (mcost == 0.0) ? PASS : MODIFY;
 			mcost += mpos->cost;
 			icost = ipos->cost + Insert_cost;
@@ -501,10 +666,9 @@ void pdiff_report(struct pdiff *pd, struct emitter *e)
 		case MODIFY:
 			emit_format(e,
 				    "MODIFY packet %lu from the original "
-				    "stream\n", r+1);
-			pkb = pd->before.pkts[r].pkt;
+				    "stream to become packet %lu from the"
+				    " new stream\n", r+1, c+1);
 			/* TODO: detailed modification printing */
-			pkb_print(e, pkb, "\t*", NULL, NULL);
 			r += 1; 
 			c += 1;
 			break;
@@ -554,6 +718,7 @@ int main(int argc, char *argv[])
 	if (argc < 3 || strcmp(argv[1], "-h") == 0)
 		err("usage: %s FILE1 FILE2");
 
+	fdiff_init(&Fdiff);
 	file_emitter_init(&fe, stdout);
 	register_std_proto();
 	pkb_init(128);
@@ -565,6 +730,8 @@ int main(int argc, char *argv[])
 	pdiff_compare(&pd);
 	pdiff_report(&pd, (struct emitter *)&fe);
 	pdiff_clear(&pd);
+
+	fdiff_free(&Fdiff);
 
 	return 0;
 }
