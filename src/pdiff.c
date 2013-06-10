@@ -66,6 +66,7 @@ struct fdiff;
 
 double Drop_cost = 2;
 double Insert_cost = 5;
+double Mod_cost = 7;
 double Infinity = 1e20;
 struct fdiff Fdiff;
 
@@ -402,14 +403,14 @@ void fdiff_init(struct fdiff *fd)
 void fdiff_load(struct fdiff *fd, struct pktbuf *before, ulong bpn,
 	        struct pktbuf *after, ulong apn)
 {
-	if (npfl_load(&fd->before, &before->prp, before->buf, 1) < 0)
+	if (npfl_load(&fd->before, &before->prp, before->buf, 0) < 0)
 		err("out of mem loading field array for pkt %lu in stream 1",
 		    bpn);
 
 	if (npfl_fill_gaps(&fd->before))
 		err("out of mem filling gaps pkt %lu in stream 1", bpn);
 
-	if (npfl_load(&fd->after, &after->prp, after->buf, 1) < 0)
+	if (npfl_load(&fd->after, &after->prp, after->buf, 0) < 0)
 		err("out of mem loading field array for pkt %lu in stream 2",
 		    apn);
 
@@ -500,16 +501,24 @@ void fdiff_compare(struct fdiff *fd)
 	double mod_bit_cost;
 
 	cpm_elem(cpm, 0, 0)->action = DONE;
-	cpm_elem(cpm, 0, 0)->cost = 0;
+	cpm_elem(cpm, 0, 0)->cost = 0.0;
 
 	/* 
 	 * Each drop costs an amount proportional to the # of bits
 	 * being dropped in from the packet.  Similarly, each insert
 	 * costs an amount proportional to the # of bits inserted.
+	 * Each cost should be slightly more than the cost for the same
+	 * operation on the entire packet.
 	 */
-	drop_bit_cost = Drop_cost / (double)(prp_plen(rnpfl->plist) * 8);
-	ins_bit_cost = Insert_cost / (double)(prp_plen(cnpfl->plist) * 8);
-	mod_bit_cost = (drop_bit_cost + ins_bit_cost);
+	drop_bit_cost = Mod_cost * 1.05 / (double)(prp_plen(rnpfl->plist) * 8);
+	ins_bit_cost = Mod_cost * 1.05 / (double)(prp_plen(cnpfl->plist) * 8);
+
+	/*
+	 * mod cost is slightly less than drop + ins, but still more than 
+	 * the cost of modifying the entire packet.
+	 */
+	mod_bit_cost = Mod_cost * 1.025 / (double)(prp_plen(rnpfl->plist) * 8) +
+		       Mod_cost * 1.025 / (double)(prp_plen(cnpfl->plist) * 8);
 
 	rnpf = npfl_first(rnpfl);
 	for (i = 1; i < cpm->nrows; ++i) {
@@ -548,8 +557,8 @@ void fdiff_compare(struct fdiff *fd)
 				maction = MODIFY;
 			}
 
-			icost = ipos->cost + ins_bit_cost * rnpf->len;
-			dcost = dpos->cost + drop_bit_cost * cnpf->len;
+			icost = ipos->cost + ins_bit_cost * cnpf->len;
+			dcost = dpos->cost + drop_bit_cost * rnpf->len;
 
 			getmincost(cpm_elem(cpm, i, j), icost, dcost, mcost,
 				   maction);
@@ -661,21 +670,21 @@ static void fmod_report(struct pktbuf *p1, ulong p1n, struct pktbuf *p2,
 
 		case DROP:
 			ns_tostr(rnpf->nse, rnpf->buf, rnpf->prp, &rl);
-			emit_format(e, "\t-%s\n", line);
+			emit_format(e, "\t--%s\n", line);
 			r += 1; rnpf = npf_next(rnpf);
 			break;
 
 		case INSERT:
 			ns_tostr(cnpf->nse, cnpf->buf, cnpf->prp, &rl);
-			emit_format(e, "\t+%s\n", line);
+			emit_format(e, "\t++%s\n", line);
 			c += 1; cnpf = npf_next(cnpf);
 			break;
 
 		case MODIFY:
 			ns_tostr(rnpf->nse, rnpf->buf, rnpf->prp, &rl);
-			emit_format(e, "\t-%s\n", line);
+			emit_format(e, "\t-*%s\n", line);
 			ns_tostr(cnpf->nse, cnpf->buf, cnpf->prp, &rl);
-			emit_format(e, "\t+%s\n", line);
+			emit_format(e, "\t+*%s\n", line);
 			r += 1; rnpf = npf_next(rnpf);
 			c += 1; cnpf = npf_next(cnpf);
 			break;
