@@ -29,6 +29,7 @@
 #include <cat/crypto.h>
 #include <cat/stdclio.h>
 #include <cat/emit_format.h>
+#include <cat/str.h>
 
 #include "ns.h"
 #include "pktbuf.h"
@@ -63,12 +64,14 @@
  */
 
 struct fdiff;
+struct hdiff;
 
-double Drop_cost = 2;
-double Insert_cost = 5;
-double Mod_cost = 7;
+double Pkt_drop_cost = 2;
+double Pkt_ins_cost = 5;
+double Pkt_mod_cost = 7;
 double Infinity = 1e20;
 struct fdiff Fdiff;
+struct hdiff Hdiff;
 
 
 enum {
@@ -80,9 +83,22 @@ enum {
 	SWAP,
 };
 
+#define MAXHDR		63
+
+
+struct prpent {
+	struct prparse *	prp;
+	struct npf_list		npfl;
+	int			idx;
+	ulong			nbits;
+};
+
 
 struct pktent {
 	struct pktbuf *		pkt;
+	struct prpent * 	prparr;
+	ulong			nprp;
+	ulong			pasiz;
 	byte_t			hash[32];
 };
 
@@ -121,12 +137,24 @@ struct pdiff {
 };
 
 
-/* field differentce comparitor */
+/* field difference comparitor */
 struct fdiff {
-	struct npf_list		before;
-	struct npf_list		after;
+	struct npf_list	*	before;
+	struct npf_list	*	after;
 	ulong			nb;
 	ulong			na;
+	struct cpmatrix		cpm;
+	ulong			cpm_maxr;
+	ulong			cpm_maxc;
+	double			drop_bit_cost;
+	double			ins_bit_cost;
+};
+
+
+/* header difference comparator */
+struct hdiff {
+	struct pktent *		bpke;
+	struct pktent *		apke;
 	struct cpmatrix		cpm;
 	ulong			cpm_maxr;
 	ulong			cpm_maxc;
@@ -139,6 +167,36 @@ enum {
 };
 
 typedef int (*pkbpr_filter_f)(int type, void *unit, void *ctx);
+
+
+static void emit_hex(struct emitter *e, ulong base_off, ulong off, byte_t *bp,
+		     ulong len, const char *pfx)
+{
+	/* length in bits */
+	while (len > 16) {
+		emit_format(e, "%s%08x: %02x %02x %02x %02x"
+				      " %02x %02x %02x %02x"
+				      " %02x %02x %02x %02x"
+				      " %02x %02x %02x %02x\n",
+			    pfx, off - base_off, bp[off], bp[off+1],
+			    bp[off+2], bp[off+3], bp[off+4], bp[off+5],
+			    bp[off+6], bp[off+7], bp[off+8], bp[off+9],
+			    bp[off+10], bp[off+11], bp[off+12], 
+			    bp[off+13], bp[off+14], bp[off+15]);
+
+		off += 16;
+		len -= 16;
+	}
+
+	emit_format(e, "%s%08x:", pfx, off - base_off);
+	while (len > 0) {
+		emit_format(e, " %02x", bp[off]);
+		off += 1;
+		len -= 1;
+	}
+	emit_string(e, "\n");
+}
+
 
 static int femit(struct emitter *e, struct ns_elem *elem, struct pktbuf *pkb,
 		 struct prparse *prp)
@@ -195,11 +253,17 @@ static int print_fields(struct emitter *e, const char *pfx, struct pktbuf *pkb,
 		if (!off_is_valid((struct ns_elem *)ns, prp))
 			return 0;
 	}
+	
+	if (pfx == NULL)
+		pfx = "";
 
-	if (pfx != NULL && emit_string(e, pfx) < 0)
+	if (emit_format(e, "%s*****\n", pfx) < 0)
 		return -1;
-
+	if (emit_format(e, "%s* ", pfx) < 0)
+		return -1;
 	if (femit(e, (struct ns_elem *)ns, pkb, prp) < 0)
+		return -1;
+	if (emit_format(e, "%s*****\n", pfx) < 0)
 		return -1;
 
 	for (i = 0; i < ns->nelem; ++i) {
@@ -214,7 +278,7 @@ static int print_fields(struct emitter *e, const char *pfx, struct pktbuf *pkb,
 		if ((f != NULL) && (*f)(PPF_FIELD, elem, fctx))
 			continue;
 
-		if (pfx != NULL && emit_string(e, pfx) < 0)
+		if (emit_string(e, pfx) < 0)
 			return -1;
 
 		if (femit(e, elem, pkb, prp) < 0)
@@ -250,26 +314,78 @@ int pkb_print(struct emitter *e, struct pktbuf *pkb, const char *pfx,
 }
 
 
-static void hash_packet(struct pktent *pe)
+static void hash_packet(struct pktent *pke)
 {
-	struct pktbuf *p = pe->pkt;
-	sha256(pkb_data(p), pkb_get_len(p), pe->hash);
+	struct pktbuf *p = pke->pkt;
+	sha256(pkb_data(p), pkb_get_len(p), pke->hash);
+}
+
+
+/* filter the field out if it isn't a packet field */
+static int nsfilter(struct ns_elem *elem)
+{
+	return elem->type != NST_PKTFLD;
+}
+
+
+ulong npfl_nbits(struct npf_list *npfl)
+{
+	ulong nbits;
+	struct npfield *npf;
+	for (npf = npfl_first(npfl); !npf_is_end(npf); npf = npf_next(npf))
+		nbits += npf->len;
+	return nbits;
+}
+
+
+void pktent_init(struct pktent *pke, ulong pn, const char *sname)
+{
+	struct prparse *prp;
+	struct prpent *ppe;
+	int i;
+
+	hash_packet(pke);
+	pke->nprp = 0;
+	pke->pasiz = 8;
+	pke->prparr = emalloc(sizeof(struct prpent) * pke->pasiz);
+
+	ppe = pke->prparr;
+	prp_for_each(prp, &pke->pkt->prp) {
+		if (pke->nprp == pke->pasiz) {
+			pke->pasiz *= 2;
+			pke->prparr = erealloc(pke->prparr, sizeof(struct prpent) * 
+							    pke->pasiz);
+			ppe = &pke->prparr[pke->nprp];
+		}
+		pke->nprp += 1;
+		ppe->prp = prp;
+		for (i = pke->nprp-2; i >= 0; --i)
+			if (pke->prparr[i].prp->prid == prp->prid)
+				++ppe->idx;
+		npfl_init(&ppe->npfl, &pke->pkt->prp, pke->pkt->buf);
+		if (npfl_load(&ppe->npfl, prp, 1, nsfilter) < 0)
+			errsys("pktent_init() calling npfl_load()");
+		ppe->nbits = npfl_nbits(&ppe->npfl);
+		ppe = &pke->prparr[pke->nprp];
+	}
 }
 
 
 static void pa_readfile(struct pktarr *pa, FILE *fp, const char *fn)
 {
 	int rv;
+	struct pktent *pke;
 
 	pa->pasz = 16;
 	pa->pkts = emalloc(sizeof(struct pktent) * pa->pasz);
 	pa->npkts = 0;
 
-	rv = pkb_file_read(&pa->pkts[pa->npkts].pkt, fp);
+	pke = &pa->pkts[pa->npkts];
+	rv = pkb_file_read(&pke->pkt, fp);
 	while (rv > 0) {
-		if (pkb_parse(pa->pkts[pa->npkts].pkt) < 0)
+		if (pkb_parse(pke->pkt) < 0)
 			err("unable to parse packet %lu\n", pa->npkts+1);
-		hash_packet(&pa->pkts[pa->npkts]);
+		pktent_init(pke, pa->npkts+1, fn);
 		++pa->npkts;
 		if (pa->npkts == pa->pasz) {
 			if (pa->pasz * 2 < pa->pasz)
@@ -278,7 +394,8 @@ static void pa_readfile(struct pktarr *pa, FILE *fp, const char *fn)
 			pa->pkts = erealloc(pa->pkts, 
 					    pa->pasz * sizeof(struct pktent));
 		}
-		rv = pkb_file_read(&pa->pkts[pa->npkts].pkt, fp);
+		pke = &pa->pkts[pa->npkts];
+		rv = pkb_file_read(&pke->pkt, fp);
 	}
 
 	if (rv < 0)
@@ -288,16 +405,24 @@ static void pa_readfile(struct pktarr *pa, FILE *fp, const char *fn)
 
 static void pa_clear(struct pktarr *pa)
 {
-	struct pktent *pe;
+	struct pktent *pke;
 	ulong np;
+	ulong i;
 
 	if (pa == NULL)
 		return;
 
-	pe = pa->pkts;
+	pke = pa->pkts;
 	for (np = 0; np < pa->npkts; ++np) {
-		pkb_free(pe->pkt);
-		pe++;
+		for (i = 0; i < pke->nprp; ++i) {
+			npfl_cache(&pke->prparr[i].npfl);
+			pke->prparr[i].prp = NULL;
+			pke->prparr[i].idx = 0;
+			pke->prparr[i].nbits = 0;
+		}
+		free(pke->prparr);
+		pkb_free(pke->pkt);
+		pke++;
 	}
 
 	memset(pa->pkts, 0, sizeof(struct pktent) * pa->npkts);
@@ -331,7 +456,7 @@ static void cpm_ealloc(struct cpmatrix *cpm, ulong nr, ulong nc)
 
 void cpm_clear(struct cpmatrix *cpm)
 {
-	if (cpm == NULL)
+	if (cpm->elems == NULL)
 		return;
 	free(cpm->elems[0]);
 	memset(cpm->elems, 0, sizeof(struct chgpth *) * cpm->nrows);
@@ -369,6 +494,30 @@ void cpm_backtrace(struct cpmatrix *cpm)
 }
 
 
+static void getmincost(struct chgpath *p, double icost, double dcost,
+		       double mcost, int maction)
+{
+	/* bias towards modify */
+	if (icost < dcost) {
+		if (icost < mcost) {
+			p->action = INSERT;
+			p->cost = icost;
+		} else {
+			p->action = maction;
+			p->cost = mcost;
+		}
+	} else {
+		if (dcost < mcost) {
+			p->action = DROP;
+			p->cost = dcost;
+		} else {
+			p->action = maction;
+			p->cost = mcost;
+		}
+	}
+}
+
+
 void pdiff_load(struct pdiff *pd, FILE *before, const char *bname, 
 		FILE *after, const char *aname)
 {
@@ -400,25 +549,12 @@ void fdiff_init(struct fdiff *fd)
 }
 
 
-void fdiff_load(struct fdiff *fd, struct pktbuf *before, ulong bpn,
-	        struct pktbuf *after, ulong apn)
+void fdiff_load(struct fdiff *fd, struct npf_list *fl1, struct npf_list *fl2)
 {
-	if (npfl_load(&fd->before, &before->prp, before->buf, 0) < 0)
-		err("out of mem loading field array for pkt %lu in stream 1",
-		    bpn);
-
-	if (npfl_fill_gaps(&fd->before))
-		err("out of mem filling gaps pkt %lu in stream 1", bpn);
-
-	if (npfl_load(&fd->after, &after->prp, after->buf, 0) < 0)
-		err("out of mem loading field array for pkt %lu in stream 2",
-		    apn);
-
-	if (npfl_fill_gaps(&fd->after))
-		err("out of mem filling gaps pkt %lu in stream 2", apn);
-
-	fd->nb = npfl_length(&fd->before);
-	fd->na = npfl_length(&fd->after);
+	fd->before = fl1;
+	fd->after = fl2;
+	fd->nb = npfl_length(fd->before);
+	fd->na = npfl_length(fd->after);
 
 	if (fd->nb+1 <= fd->cpm_maxr && fd->na+1 <= fd->cpm_maxc) {
 		fd->cpm.nrows = fd->nb + 1;
@@ -438,44 +574,20 @@ void fdiff_load(struct fdiff *fd, struct pktbuf *before, ulong bpn,
 		  
 void fdiff_clear(struct fdiff *fd)
 {
-	npfl_cache(&fd->before);
-	npfl_cache(&fd->after);
+	fd->before = NULL;
+	fd->after = NULL;
 }
 		  
 		  
 void fdiff_free(struct fdiff *fd)
 {
-	npfl_cache(&fd->before);
-	npfl_cache(&fd->after);
+	fd->before = NULL;
+	fd->after = NULL;
 	cpm_clear(&fd->cpm);
 	fd->cpm.nrows = 0;
 	fd->cpm.ncols = 0;
 }
 		  
-
-static void getmincost(struct chgpath *p, double icost, double dcost,
-		       double mcost, int maction)
-{
-	/* bias towards modify */
-	if (icost < dcost) {
-		if (icost < mcost) {
-			p->action = INSERT;
-			p->cost = icost;
-		} else {
-			p->action = maction;
-			p->cost = mcost;
-		}
-	} else {
-		if (dcost < mcost) {
-			p->action = DROP;
-			p->cost = dcost;
-		} else {
-			p->action = maction;
-			p->cost = mcost;
-		}
-	}
-}
-
 
 double fdiff_cost(struct fdiff *fd)
 {
@@ -483,7 +595,7 @@ double fdiff_cost(struct fdiff *fd)
 }
 
 
-void fdiff_compare(struct fdiff *fd)
+void fdiff_compare(struct fdiff *fd, double drop_bit_cost, double ins_bit_cost)
 {
 	ulong i, j;
 	int maction;
@@ -492,34 +604,17 @@ void fdiff_compare(struct fdiff *fd)
 	double dcost;
 	struct cpmatrix *cpm = &fd->cpm;
 	struct chgpath *ipos, *dpos, *mpos;
-	struct npf_list *rnpfl = &fd->before;
-	struct npf_list *cnpfl = &fd->after;
+	struct npf_list *rnpfl = fd->before;
+	struct npf_list *cnpfl = fd->after;
 	struct npfield *rnpf;
 	struct npfield *cnpf;
-	double drop_bit_cost;
-	double ins_bit_cost;
-	double mod_bit_cost;
+	double mod_bit_cost = drop_bit_cost + ins_bit_cost;
+
+	drop_bit_cost *= 1.05;
+	ins_bit_cost *= 1.05;
 
 	cpm_elem(cpm, 0, 0)->action = DONE;
 	cpm_elem(cpm, 0, 0)->cost = 0.0;
-
-	/* 
-	 * Each drop costs an amount proportional to the # of bits
-	 * being dropped in from the packet.  Similarly, each insert
-	 * costs an amount proportional to the # of bits inserted.
-	 * Each cost should be slightly more than the cost for the same
-	 * operation on the entire packet.
-	 */
-	drop_bit_cost = Mod_cost * 1.05 / (double)(prp_plen(rnpfl->plist) * 8);
-	ins_bit_cost = Mod_cost * 1.05 / (double)(prp_plen(cnpfl->plist) * 8);
-
-	/*
-	 * mod cost is slightly less than drop + ins, but still more than 
-	 * the cost of modifying the entire packet.
-	 */
-	mod_bit_cost = Mod_cost * 1.025 / (double)(prp_plen(rnpfl->plist) * 8) +
-		       Mod_cost * 1.025 / (double)(prp_plen(cnpfl->plist) * 8);
-
 	rnpf = npfl_first(rnpfl);
 	for (i = 1; i < cpm->nrows; ++i) {
 		dpos = cpm_elem(cpm, i, 0);
@@ -569,17 +664,283 @@ void fdiff_compare(struct fdiff *fd)
 }
 
 
-double pkt_cmp(struct pktent *pe1, ulong pe1n, struct pktent *pe2, ulong pe2n)
+static void print_mod(struct npf_list *npfl, struct npfield *npf,
+		      const char *pfx, struct emitter *e)
+{
+	char line[256];
+	struct raw rl;
+	ulong base_off;
+	ulong off;
+	ulong len;
+
+	rl.data = line;
+	rl.len = sizeof(line);
+
+	if (!npf_is_gap(npf)) {
+		ns_tostr(npf->nse, npf->buf, npf->prp, &rl);
+		emit_format(e, "%s%s\n", pfx, line);
+	} else {
+		base_off = prp_poff(npfl->plist);
+		off = npf->off / 8;
+		len = npf->len;
+		len += 8 - (npf->off % 8);
+		len += 8 - ((npf->off + npf->len) % 8);
+		len /= 8;
+		emit_hex(e, base_off, off, npfl->buf, len, pfx);
+	}
+}
+
+
+static void field_mod_report(struct npf_list *npfl1, struct npfield *npf1,
+			     struct npf_list *npfl2, struct npfield *npf2,
+			     struct emitter *e)
+{
+	print_mod(npfl1, npf1, "@-", e);
+	print_mod(npfl2, npf2, "@+", e);
+}
+
+
+static void hdr_mod_report(struct prpent *ppe1, ulong p1n, struct prpent *ppe2,
+			   ulong p2n, double drop_bit_cost, double ins_bit_cost,
+			   struct emitter *e)
+{
+	ulong r = 0;
+	ulong c = 0;
+	struct cpmatrix *cpm;
+	struct chgpath *elem, *next;
+	struct npfield *rnpf, *cnpf;
+	struct raw rl;
+	char line[256];
+
+	rl.data = line;
+	rl.len = sizeof(line);
+
+	fdiff_load(&Fdiff, &ppe1->npfl, &ppe2->npfl);
+	fdiff_compare(&Fdiff, drop_bit_cost, ins_bit_cost);
+	cpm = &Fdiff.cpm;
+	cpm_backtrace(cpm);
+
+
+	elem = cpm_elem(cpm, 0, 0);
+	rnpf = npfl_first(Fdiff.before);
+	cnpf = npfl_first(Fdiff.after);
+
+	while (elem->next != NULL) {
+		next = elem->next;
+		switch (next->action) {
+		case PASS: 
+			r += 1; rnpf = npf_next(rnpf);
+			c += 1; cnpf = npf_next(cnpf);
+			break;
+
+		case DROP:
+			ns_tostr(rnpf->nse, rnpf->buf, rnpf->prp, &rl);
+			emit_format(e, "--%s\n", line);
+			r += 1; rnpf = npf_next(rnpf);
+			break;
+
+		case INSERT:
+			ns_tostr(cnpf->nse, cnpf->buf, cnpf->prp, &rl);
+			emit_format(e, "++%s\n", line);
+			c += 1; cnpf = npf_next(cnpf);
+			break;
+
+		case MODIFY:
+			field_mod_report(Fdiff.before, rnpf, Fdiff.after, cnpf,
+					 e);
+			r += 1; rnpf = npf_next(rnpf);
+			c += 1; cnpf = npf_next(cnpf);
+			break;
+
+		case SWAP:
+		default: abort_unless(0);
+		}
+
+		elem = next;
+	}
+
+
+	fdiff_clear(&Fdiff);
+}
+
+
+void hdiff_init(struct hdiff *hd)
+{
+	memset(hd, 0, sizeof(*hd));
+	hd->cpm_maxr = 0;	/* explicit */
+	hd->cpm_maxc = 0;	/* explicit */
+}
+
+
+static double prp_cmp_long(struct prpent *ppe1, struct prpent *ppe2,
+			   double drop_bit_cost, double ins_bit_cost)
+{
+	double cost;
+	fdiff_load(&Fdiff, &ppe1->npfl, &ppe2->npfl);
+	fdiff_compare(&Fdiff, drop_bit_cost, ins_bit_cost);
+	cost = fdiff_cost(&Fdiff);
+	fdiff_clear(&Fdiff);
+	return cost;
+}
+
+
+static double prp_cmp(struct prpent *ppe1, struct prpent *ppe2,
+		      double dcost, double icost)
+{
+	struct npfield *npf1, *npf2;
+	double cost = 0.0;
+
+	if (ppe1->prp->prid != ppe2->prp->prid)
+		return Infinity;
+
+	npf1 = npfl_first(&ppe1->npfl);
+	npf2 = npfl_first(&ppe2->npfl);
+
+	while (!npf_is_end(npf1) && !npf_is_end(npf2)) {
+		if (!npf_eq(npf1, npf2)) {
+
+			/* we have a field mismatch: need to do it the */
+			/* long way: sad face */
+			if (!npf_type_eq(npf1, npf2))
+				return prp_cmp_long(ppe1, ppe2, dcost, icost);
+
+			/* TODO:  better payload comparison/cost */
+			/* right now it is just one large binary field */
+			cost += dcost * npf1->len;
+			cost += icost * npf2->len;
+		}
+		npf1 = npf_next(npf1);
+		npf2 = npf_next(npf2);
+	}
+
+	/* if we hit this we extra bits at the end to remove: no prob */
+	while (!npf_is_end(npf1)) {
+		cost += dcost * npf1->len;
+		npf1 = npf_next(npf1);
+	}
+
+	/* if we hit this we extra bits at the end to insert: no prob */
+	while (!npf_is_end(npf2)) {
+		cost += icost * npf2->len;
+		npf2 = npf_next(npf2);
+	}
+
+	return cost;
+}
+
+
+void hdiff_load(struct hdiff *hd, struct pktent *pke1, struct pktent *pke2)
+{
+	hd->bpke = pke1;
+	hd->apke = pke2;
+	if (pke1->nprp+1 <= hd->cpm_maxr && pke2->nprp+1 <= hd->cpm_maxc) {
+		hd->cpm.nrows = pke1->nprp + 1;
+		hd->cpm.ncols = pke2->nprp + 1;
+	} else {
+		if (hd->cpm_maxr > 0) {
+			cpm_clear(&hd->cpm);
+			hd->cpm.nrows = 0;
+			hd->cpm.ncols = 0;
+		}
+		cpm_ealloc(&hd->cpm, pke1->nprp + 1, pke2->nprp + 1);
+		hd->cpm_maxr = hd->cpm.nrows;
+		hd->cpm_maxc = hd->cpm.ncols;
+	}
+}
+
+
+void hdiff_compare(struct hdiff *hd)
+{
+	ulong i, j;
+	int maction;
+	double mcost;
+	double icost;
+	double dcost;
+	struct cpmatrix *cpm = &hd->cpm;
+	struct chgpath *ipos, *dpos, *mpos;
+	double drop_bit_cost, adj_drop_bit_cost;
+	double ins_bit_cost, adj_ins_bit_cost;
+	struct prpent *bppe, *appe;
+
+	cpm_elem(cpm, 0, 0)->action = DONE;
+	cpm_elem(cpm, 0, 0)->cost = 0.0;
+
+	/* 
+	 * Each drop costs an amount proportional to the # of bits
+	 * being dropped in from the packet.  Similarly, each insert
+	 * costs an amount proportional to the # of bits inserted.
+	 */
+	drop_bit_cost = Pkt_mod_cost /
+			(double)(pkb_get_len(hd->bpke->pkt) * 8);
+	ins_bit_cost = Pkt_mod_cost /
+		       (double)(pkb_get_len(hd->apke->pkt) * 8);
+
+	/* weight drops for headers a bit higher than the base cost */
+	adj_drop_bit_cost = drop_bit_cost * 1.05;
+	adj_ins_bit_cost = ins_bit_cost * 1.05;
+
+	for (i = 1; i < cpm->nrows; ++i) {
+		dpos = cpm_elem(cpm, i, 0);
+		dpos->action = DROP;
+		dpos->cost = cpm_elem(cpm, 0, i-1)->cost +
+			     hd->bpke->prparr[i-1].nbits * adj_drop_bit_cost;
+	}
+
+	for (i = 1; i < cpm->ncols; ++i) {
+		dpos = cpm_elem(cpm, 0, i);
+		dpos->action = INSERT;
+		dpos->cost = cpm_elem(cpm, 0, i-1)->cost +
+			     hd->apke->prparr[i-1].nbits * adj_ins_bit_cost;
+	}
+
+	bppe = hd->bpke->prparr;
+	for (i = 1; i < cpm->nrows; ++i, ++bppe) {
+		appe = hd->apke->prparr;
+		for (j = 1; j < cpm->ncols; ++j, ++appe) {
+			ipos = cpm_elem(cpm, i, j-1);
+			dpos = cpm_elem(cpm, i-1, j);
+			mpos = cpm_elem(cpm, i-1, j-1);
+
+			mcost = prp_cmp(bppe, appe, drop_bit_cost,
+					ins_bit_cost);
+			maction = (mcost == 0.0) ? PASS : MODIFY;
+			mcost += mpos->cost;
+
+			dcost = dpos->cost + adj_drop_bit_cost * bppe->nbits;
+			icost = ipos->cost + adj_ins_bit_cost * appe->nbits;
+
+			getmincost(cpm_elem(cpm, i, j), icost, dcost, mcost,
+				   maction);
+		}
+	}
+}
+
+
+double hdiff_cost(struct hdiff *hd)
+{
+	return cpm_elem(&hd->cpm, hd->cpm.nrows-1, hd->cpm.ncols-1)->cost;
+}
+
+
+void hdiff_clear(struct hdiff *hd)
+{
+	hd->bpke = NULL;
+	hd->apke = NULL;
+}
+
+
+double pkt_cmp(struct pktent *pke1, ulong pke1n, struct pktent *pke2,
+	       ulong pke2n)
 {
 	double cost;
 
-	if (memcmp(pe1->hash, pe2->hash, sizeof(pe1->hash)) == 0)
+	if (memcmp(pke1->hash, pke2->hash, sizeof(pke1->hash)) == 0)
 		return 0.0;
 
-	fdiff_load(&Fdiff, pe1->pkt, pe1n, pe2->pkt, pe2n);
-	fdiff_compare(&Fdiff);
-	cost = fdiff_cost(&Fdiff);
-	fdiff_clear(&Fdiff);
+	hdiff_load(&Hdiff, pke1, pke2);
+	hdiff_compare(&Hdiff);
+	cost = hdiff_cost(&Hdiff);
+	hdiff_clear(&Hdiff);
 
 	return cost;
 }
@@ -604,13 +965,13 @@ void pdiff_compare(struct pdiff *pd)
 	for (i = 1; i < cpm->nrows; ++i) {
 		dpos = cpm_elem(cpm, i, 0);
 		dpos->action = DROP;
-		dpos->cost = i * Drop_cost;
+		dpos->cost = i * Pkt_drop_cost;
 	}
 
 	for (i = 1; i < cpm->ncols; ++i) {
 		ipos = cpm_elem(cpm, 0, i);
 		ipos->action = INSERT;
-		ipos->cost = i * Insert_cost;
+		ipos->cost = i * Pkt_ins_cost;
 	}
 
 
@@ -624,8 +985,8 @@ void pdiff_compare(struct pdiff *pd)
 					&cpkts->pkts[j-1], j);
 			maction = (mcost == 0.0) ? PASS : MODIFY;
 			mcost += mpos->cost;
-			icost = ipos->cost + Insert_cost;
-			dcost = dpos->cost + Drop_cost;
+			icost = ipos->cost + Pkt_ins_cost;
+			dcost = dpos->cost + Pkt_drop_cost;
 
 			getmincost(cpm_elem(cpm, i, j), icost, dcost, mcost,
 				   maction);
@@ -636,68 +997,101 @@ void pdiff_compare(struct pdiff *pd)
 }
 
 
-static void fmod_report(struct pktbuf *p1, ulong p1n, struct pktbuf *p2, 
-			ulong p2n, struct emitter *e)
+static void print_hdr_op(struct prpent *ppe, ulong psoff, 
+			 struct emitter *e, int isins)
 {
-	ulong r = 0;
-	ulong c = 0;
-	struct cpmatrix *cpm;
-	struct chgpath *elem, *next;
-	struct npfield *rnpf, *cnpf;
-	struct raw rl;
 	char line[256];
+	struct raw rl;
+	const char *name;
+	char *op;
+	struct ns_namespace *ns;
+	struct prparse *prp;
+	struct npfield *npf;
 
 	rl.data = line;
 	rl.len = sizeof(line);
+	prp = ppe->prp;
+	op = isins ? "Insert" : "Drop";
 
-	fdiff_load(&Fdiff, p1, p1n, p2, p2n);
-	fdiff_compare(&Fdiff);
-	cpm = &Fdiff.cpm;
+	ns = ns_lookup_by_prid(prp->prid);
+	if (ns != NULL) {
+		name = ns->name;
+	} else {
+		str_fmt(line, sizeof(line), "PRID-%d-", prp->prid);
+		name = line;
+	}
+
+	emit_format(e, "%s header %s%d at %lu which is %lu bytes long\n", op,
+		    name, ppe->idx, prp_soff(prp) - psoff, prp_totlen(prp));
+
+	op = isins ? "+" : "-";
+	for (npf = npfl_first(&ppe->npfl) ; !npf_is_end(npf) ;
+	     npf = npf_next(npf)) {
+		ns_tostr(npf->nse, npf->buf, prp, &rl);
+		emit_format(e, "\t%s%s\n", op, line);
+	}
+}
+
+
+static void mod_pkt_report(struct pktent *pke1, ulong p1n, struct pktent *pke2, 
+			   ulong p2n, struct emitter *e)
+{
+	ulong r = 0, c = 0;
+	struct cpmatrix *cpm;
+	struct chgpath *elem, *next;
+	struct prpent *rppe, *cppe;
+	double drop_bit_cost;
+	double ins_bit_cost;
+
+	hdiff_load(&Hdiff, pke1, pke2);
+	hdiff_compare(&Hdiff);
+	cpm = &Hdiff.cpm;
 	cpm_backtrace(cpm);
+
+	drop_bit_cost = Pkt_mod_cost /
+			(double)(pkb_get_len(pke1->pkt) * 8);
+	ins_bit_cost = Pkt_mod_cost /
+		       (double)(pkb_get_len(pke2->pkt) * 8);
 
 
 	elem = cpm_elem(cpm, 0, 0);
-	rnpf = npfl_first(&Fdiff.before);
-	cnpf = npfl_first(&Fdiff.after);
-
-	while (elem->next != NULL) {
+	while (elem->next != NULL)
+	{
+		rppe = &pke1->prparr[r];
+		cppe = &pke2->prparr[c];
 		next = elem->next;
+
 		switch (next->action) {
-		case PASS: 
-			r += 1; rnpf = npf_next(rnpf);
-			c += 1; cnpf = npf_next(cnpf);
+		case PASS:
+			r += 1;
+			c += 1;
 			break;
 
 		case DROP:
-			ns_tostr(rnpf->nse, rnpf->buf, rnpf->prp, &rl);
-			emit_format(e, "\t--%s\n", line);
-			r += 1; rnpf = npf_next(rnpf);
+			print_hdr_op(rppe, pkb_get_off(pke1->pkt), e, 0);
+			r += 1;
 			break;
 
 		case INSERT:
-			ns_tostr(cnpf->nse, cnpf->buf, cnpf->prp, &rl);
-			emit_format(e, "\t++%s\n", line);
-			c += 1; cnpf = npf_next(cnpf);
+			print_hdr_op(cppe, pkb_get_off(pke2->pkt), e, 1);
+			c += 1;
 			break;
+
 
 		case MODIFY:
-			ns_tostr(rnpf->nse, rnpf->buf, rnpf->prp, &rl);
-			emit_format(e, "\t-*%s\n", line);
-			ns_tostr(cnpf->nse, cnpf->buf, cnpf->prp, &rl);
-			emit_format(e, "\t+*%s\n", line);
-			r += 1; rnpf = npf_next(rnpf);
-			c += 1; cnpf = npf_next(cnpf);
+			hdr_mod_report(rppe, r+1, cppe, c+1, drop_bit_cost,
+				       ins_bit_cost, e);
+			r += 1;
+			c += 1;
 			break;
-
-		case SWAP:
-		default: abort_unless(0);
+		default:
+			abort_unless(0);
 		}
 
 		elem = next;
 	}
 
-
-	fdiff_clear(&Fdiff);
+	hdiff_clear(&Hdiff);
 }
 
 
@@ -708,7 +1102,6 @@ void pdiff_report(struct pdiff *pd, struct emitter *e)
 	struct cpmatrix *cpm = &pd->cpm;
 	struct chgpath *elem, *next;
 	struct pktbuf *pkb;
-	struct pktbuf *pkb2;
 
 	elem = cpm_elem(cpm, 0, 0);
 	while (elem->next != NULL) {
@@ -720,43 +1113,43 @@ void pdiff_report(struct pdiff *pd, struct emitter *e)
 			break;
 
 		case DROP:
-			emit_format(e, 
-				    "DROP packet %lu from the original "
-			 	    "stream\n", r+1);
+			emit_string(e, "#####\n");
+			emit_format(e, "# DROP packet %lu\n", r+1);
+			emit_string(e, "#####\n");
 			pkb = pd->before.pkts[r].pkt;
-			pkb_print(e, pkb, "\t-", NULL, NULL);
+			pkb_print(e, pkb, "--", NULL, NULL);
 			r += 1;
 			break;
 
 		case INSERT:
-			emit_format(e,
-				    "INSERT packet %lu in the result "
-				    "stream\n", c+1);
+			emit_string(e, "#####\n");
+			emit_format(e, "# INSERT -> packet %lu\n", c+1);
+			emit_string(e, "#####\n");
 			pkb = pd->after.pkts[c].pkt;
-			pkb_print(e, pkb, "\t+", NULL, NULL);
+			pkb_print(e, pkb, "++", NULL, NULL);
 			c += 1;
 			break;
 
 		case MODIFY:
-			emit_format(e,
-				    "MODIFY packet %lu from the original "
-				    "stream to become packet %lu from the"
-				    " new stream\n", r+1, c+1);
-			pkb = pd->before.pkts[r].pkt;
-			pkb2 = pd->after.pkts[c].pkt;
-			fmod_report(pkb, r+1, pkb2, c+1, e);
+			emit_string(e, "#####\n");
+			emit_format(e, "# MODIFY packet %lu -> packet %lu\n",
+				    r+1, c+1);
+			emit_string(e, "#####\n");
+			mod_pkt_report(&pd->before.pkts[r], r+1, 
+				       &pd->after.pkts[c], c+1, e);
 			r += 1; 
 			c += 1;
 			break;
 
 		case SWAP:
-			emit_format(e,
-				    "SWAP packet %lu from the original "
-				    "stream with the packet %lu\n", r, r+1);
+			emit_string(e, "#####\n");
+			emit_format(e, "# SWAP packet %lu with packet %lu\n",
+				    r, r+1);
+			emit_string(e, "#####\n");
 			pkb = pd->before.pkts[r].pkt;
-			pkb_print(e, pkb, "\t<", NULL, NULL);
+			pkb_print(e, pkb, "<<", NULL, NULL);
 			pkb = pd->before.pkts[r-1].pkt;
-			pkb_print(e, pkb, "\t>", NULL, NULL);
+			pkb_print(e, pkb, ">>", NULL, NULL);
 			r += 1;
 			c += 1;
 			break;
@@ -795,6 +1188,7 @@ int main(int argc, char *argv[])
 		err("usage: %s FILE1 FILE2");
 
 	fdiff_init(&Fdiff);
+	hdiff_init(&Hdiff);
 	file_emitter_init(&fe, stdout);
 	register_std_proto();
 	pkb_init(128);

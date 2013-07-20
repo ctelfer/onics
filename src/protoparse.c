@@ -412,6 +412,14 @@ static void base_free(struct prparse *prp)
 
 
 /* -- Protocol Parse Functions -- */
+struct prparse *prp_find_list_head(struct prparse *prp)
+{
+	while (prp->region != NULL)
+		prp = prp->region;
+	return prp;
+}
+
+
 struct prparse *prp_next_in_region(struct prparse *from, struct prparse *reg)
 {
 	struct prparse *prp;

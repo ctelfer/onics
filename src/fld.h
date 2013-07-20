@@ -228,6 +228,7 @@ struct npf_list {
 	struct npfield 		list;	/* prp == NULL, nse == NULL */
 	struct prparse *	plist;
 	byte_t *		buf;
+	uint			nparse;
 	uint			ngaps;
 };
 
@@ -237,18 +238,23 @@ struct npf_list {
 #define npf_prev(npf)		l_to_npf(l_prev(&(npf)->le))
 #define npfl_first(npfl)	l_to_npf(l_head(&(npfl)->list.le))
 #define npfl_last(npfl)		l_to_npf(l_tail(&(npfl)->list.le))
+#define npfl_isempty(npfl)	l_isempty(&(npfl)->list.le)
 #define npf_is_end(npf)		((npf)->len == (ulong)-1l)
-#define npf_is_gap(npf)		((npf)->nse == NULL)
+#define npf_is_nonfld(npf)	((npf)->nse == NULL)
+#define npf_is_gap(npf)		((npf)->nse == NULL && (npf)->buf != NULL)
+#define npf_is_prp(npf)		((npf)->nse == NULL && (npf)->buf == NULL)
 #define npf_type_eq(n1, n2)	(((n1)->nse == (n2)->nse) && \
 				 (n1)->prp->prid == (n2)->prp->prid)
 
+/* returns 1 if the field should be filtered out and 0 otherwise */
+typedef int (*npfl_filter_f)(struct ns_elem *e);
 
-/* Initialize a named protocol field list and */
-int npfl_load(struct npf_list *npfl, struct prparse *plist, byte_t *buf,
-	      int loadns);
+/* initialize a named protocol field list for a given parse and buffer */
+void npfl_init(struct npf_list *npfl, struct prparse *plist, byte_t *buf);
 
-/* fill in gaps in a field list */
-int npfl_fill_gaps(struct npf_list *npfl);
+/* Initialize a named protocol field list from a parse */
+int npfl_load(struct npf_list *npfl, struct prparse *prp, int fill,
+	      npfl_filter_f filter);
 
 /* free the elements of a named protcol field list */
 void npfl_clear(struct npf_list *npfl);

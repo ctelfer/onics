@@ -32,7 +32,9 @@ then
 		{ drop; }
 	"
 else
-	pml -e "?- not ($LO) -? { drop; }"
+	pml -e "int P=0; 
+		{ P=P+1; } 
+		?- not ($LO) -? { drop; }"
 fi
 
 

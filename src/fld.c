@@ -612,7 +612,7 @@ static void npf_free(struct npfield *npf)
 
 static void npf_cache_node(struct npfield *npf)
 {
-	l_deq(&npf->le);
+	l_rem(&npf->le);
 	memset(npf, 0, sizeof(struct npfield));
 	l_enq(&npf_cache, &npf->le);
 }
@@ -641,7 +641,7 @@ static void insert_field(struct npf_list *npfl, struct npfield *npf)
 
 
 static int add_fields(struct npf_list *npfl, struct prparse *prp,
-		      struct ns_namespace *ns, int loadns)
+		      struct ns_namespace *ns, npfl_filter_f filter)
 {
 	int i;
 	int rv;
@@ -651,73 +651,249 @@ static int add_fields(struct npf_list *npfl, struct prparse *prp,
 	struct ns_namespace *subns;
 
 	if (ns == NULL) {
+		ns = ns_lookup_by_prid(prp->prid);
 
 		/* if we can't find the namespace we can't */
 		/* claim to have all the fields in the list. */
-		ns = ns_lookup_by_prid(prp->prid);
 		if (ns == NULL)
 			return 0;
 
-		npf = npf_new(prp, npfl->buf, (struct ns_elem *)ns);
-		if (npf == NULL)
-			return -1;
+		if (filter == NULL || !filter((struct ns_elem *)ns)) {
+			npf = npf_new(prp, npfl->buf, (struct ns_elem *)ns);
+			if (npf == NULL)
+				return -1;
 		
-		if (loadns)
 			insert_field(npfl, npf);
+		}
 	}
 
 	for (i = 0; i < ns->nelem; ++i) {
+		nse = ns->elems[i];
 
 		/* NULL terminates the array early */
-		nse = ns->elems[i];
 		if (nse == NULL)
 			break;
-
 
 		off = fld_get_off(prp, nse);
 		if (off == PRP_OFF_INVALID)
 			continue;
 
-		npf = npf_new(prp, npfl->buf, nse);
-		if (npf == NULL)
-			return -1;
-
+		if (filter == NULL || !filter(nse)) {
+			npf = npf_new(prp, npfl->buf, nse);
+			if (npf == NULL)
+				return -1;
+			insert_field(npfl, npf);
+		}
 
 		if (nse->type == NST_NAMESPACE) {
-			if (loadns)
-				insert_field(npfl, npf);
 			subns = (struct ns_namespace *)nse;
-			rv = add_fields(npfl, prp, subns, loadns);
+			rv = add_fields(npfl, prp, subns, filter);
 			if (rv < 0)
 				return rv;
-		} else {
-			insert_field(npfl, npf);
 		}
 	}
 
 	return 0;
 }
+
+
+void npfl_init(struct npf_list *npfl, struct prparse *plist,
+		      byte_t *buf)
+{
+	if (!npf_is_initialized)
+		_npf_init();
+	npfl_reset(npfl);
+	npfl->plist = prp_find_list_head(plist);
+	npfl->buf = buf;
+	npfl->nparse = 0;
+	npfl->ngaps = 0;
+}
 		      
 
-
-int npfl_load(struct npf_list *npfl, struct prparse *plist, byte_t *buf,
-	      int loadns)
+static void clear_nonflds(struct npf_list *npfl, ulong soff, ulong eoff)
 {
-	struct prparse *prp;
+	struct list *le, *xtra;
+	struct npfield *npf;
+
+	l_for_each_safe(le, xtra, &npfl->list.le) {
+		npf = l_to_npf(le);
+		if (npf_is_nonfld(npf) && npf->off >= soff && npf->off < eoff)
+			npf_cache_node(npf);
+	}
+}
+
+
+static int add_gap(struct npf_list *npfl, ulong soff, ulong eoff,
+		   struct prparse *prp, struct npfield *prev)
+{
+	struct npfield *gap;
+
+	gap = npf_new(prp, npfl->buf, NULL);
+	if (gap == NULL)
+		return -1;
+	gap->off = soff;
+	gap->len = eoff - soff;
+	gap->prp = prp;
+	gap->buf = npfl->buf;
+	l_ins(&prev->le, &gap->le);
+	++npfl->ngaps;
+
+	return 0;
+}
+
+
+static struct npfield *add_prp_npf(struct npf_list *npfl, struct prparse *prp)
+{
+	struct npfield *prpnpf;
+
+	prpnpf = npf_new(prp, NULL, NULL);
+	if (prpnpf == NULL)
+		return NULL;
+	prpnpf->off = prp_soff(prp) * 8;
+	prpnpf->len = prp_totlen(prp) * 8;
+	prpnpf->prp = prp;
+	insert_field(npfl, prpnpf);
+
+	return prpnpf;
+}
+
+
+static struct npfield *find_first_npf(struct npf_list *npfl,
+				      struct prparse *prp)
+{
+	struct npfield *prev, *trav;
+
+	prev = &npfl->list;
+	for (trav = npfl_first(npfl); trav->off < prp_soff(prp) * 8;
+	     prev = trav, trav = npf_next(prev))
+			;
+	return prev;
+}
+
+
+static struct npfield *next_npf_or_null(struct npfield *npf)
+{
+	if (npf == NULL)
+		return NULL;
+	npf = npf_next(npf);
+	if (npf_is_end(npf))
+		return NULL;
+	return npf;
+}
+
+
+static int fill_gaps(struct npf_list *npfl, struct prparse *oprp)
+{
+	struct npfield *before = NULL, *after;
+	struct npfield *lnpfprp, *trav;
+	struct prparse *iprp = NULL;
+	int rv;
+	ulong soff;
+	ulong ohi;
+	ulong onext;
+	ulong eoff;
+	uint nnpfprp = 0;
+
+	if (prp_is_base(oprp)) {
+		soff = prp_poff(oprp) * 8;
+		eoff = prp_toff(oprp) * 8;
+	} else {
+		soff = prp_soff(oprp) * 8;
+		eoff = prp_eoff(oprp) * 8;
+	}
+	ohi = soff;
+
+	/*
+	 * check for nice case: inner parse goes all the way to the end of the
+	 * outer parse.  If so, stop at the start of the inner parse.
+	 * Otherwise, there may be gaps between inner parses.
+	 */
+	iprp = prp_next_in_region(oprp, oprp);
+	if (iprp != NULL && prp_eoff(iprp) * 8 >= eoff) {
+		eoff = prp_soff(iprp) * 8;
+	} else {
+		/* 
+		 * add parse NPFs as placeholders to simplify gap 
+		 * insertion. We only insert gaps that are in the 
+		 * outer prp, but not enclosed in any of the inner prps.
+		 */
+		for ( ; iprp != NULL; iprp = prp_next_in_region(iprp, oprp)) {
+			lnpfprp = add_prp_npf(npfl, iprp);
+			if (lnpfprp == NULL)
+				goto err;
+			++nnpfprp;
+		}
+	}
+
+	before = find_first_npf(npfl, oprp);
+	after = next_npf_or_null(before);
+	while (ohi < eoff) {
+		onext = (after == NULL) ? eoff : after->off;
+		if (onext > ohi) {
+			rv = add_gap(npfl, ohi, onext, oprp, before);
+			if (rv < 0)
+				goto err;
+		}
+
+		/* Do NOT skip field offsets for namespace elements */
+		if (after != NULL && 
+		    (after->nse == NULL || after->nse->type == NST_PKTFLD)) {
+			onext = after->off + after->len;
+			if (onext > ohi)
+				ohi = onext;
+		} else {
+			ohi = onext;
+		}
+		before = after;
+		after = next_npf_or_null(after);
+	}
+
+	/* remove all the parse NPFs now */
+	while (nnpfprp > 0) {
+		/* save the previous parse NPF */
+		if (nnpfprp > 1) {
+			trav = lnpfprp;
+			do { 
+				trav = npf_prev(trav);
+				abort_unless(!npf_is_end(trav));
+			} while (!npf_is_prp(trav));
+		}
+		/* remove the current one */
+		npf_cache_node(lnpfprp);
+
+		/* set up to remove the next one */
+		lnpfprp = trav;
+		--nnpfprp;
+	}
+
+	return 0;
+
+err:
+	clear_nonflds(npfl, soff, eoff);
+	return rv;
+
+}
+
+
+int npfl_load(struct npf_list *npfl, struct prparse *prp, int fill,
+	      npfl_filter_f filter)
+{
 	int rv;
 
 	if (!npf_is_initialized)
 		_npf_init();
 
-	if (npfl == NULL || plist == NULL || buf == NULL)
+	if (npfl == NULL || prp == NULL)
 		return -1;
 
-	npfl_reset(npfl);
-	npfl->plist = plist;
-	npfl->buf = buf;
+	rv = add_fields(npfl, prp, NULL, filter);
+	if (rv < 0) {
+		npfl_cache(npfl);
+		return rv;
+	}
 
-	prp_for_each(prp, plist) {
-		rv = add_fields(npfl, prp, NULL, loadns);
+	if (fill) {
+		rv = fill_gaps(npfl, prp);
 		if (rv < 0) {
 			npfl_cache(npfl);
 			return rv;
@@ -725,126 +901,6 @@ int npfl_load(struct npf_list *npfl, struct prparse *plist, byte_t *buf,
 	}
 
 	return 0;
-}
-
-
-static void clear_gaps(struct npf_list *npfl)
-{
-	struct list *le, *xtra;
-	struct npfield *npf;
-
-	l_for_each_safe(le, xtra, &npfl->list.le) {
-		npf = l_to_npf(le);
-		if (npf_is_gap(npf))
-			npf_cache_node(npf);
-	}
-}
-
-
-static struct npfield *new_gap(struct npf_list *npfl, ulong off, ulong eoff, 
-		   	       struct npfield *before, struct npfield *after)
-{
-	struct npfield *gap;
-	struct prparse *prp = NULL;
-
-	/* TODO: what if the gap crosses boundaries? */
-	if ((after != NULL) && (off >= prp_soff(after->prp)) && 
-	    	 (off < prp_eoff(after->prp)))
-		prp = after->prp;
-	else if ((before != NULL) && (off >= prp_soff(before->prp)) && 
-	    (off < prp_eoff(before->prp)))
-		prp = before->prp;
-	else
-		prp = npfl->plist;
-
-	gap = npf_new(prp, npfl->buf, NULL);
-	if (gap == NULL)
-		return NULL;
-
-	gap->off = off;
-	gap->len = eoff - off;
-
-	return gap;
-}
-
-
-static int add_gaps(struct npf_list *npfl, ulong off, struct npfield *before,
-		    struct npfield *after)
-{
-	struct list *prev;
-	ulong eoff;
-	struct npfield *gap;
-
-	abort_unless(npfl);
-
-	if (before == NULL)
-		prev = &npfl->list.le;
-	else
-		prev = &before->le;
-
-	if (after == NULL)
-		eoff = prp_toff(npfl->plist) * 8;
-	else
-		eoff = after->off;
-
-	/* add the main gap */
-	gap = new_gap(npfl, off, eoff, before, after);
-	if (gap == NULL)
-		return -1;
-	l_ins(prev, &gap->le);
-	++npfl->ngaps;
-
-	return 0;
-}
-
-
-int npfl_fill_gaps(struct npf_list *npfl)
-{
-	struct npfield *before = NULL, *after;
-	int rv;
-	ulong ohi;
-	ulong onext;
-	ulong oend;
-
-	if (!npf_is_initialized)
-		_npf_init();
-
-	if (npfl == NULL || npfl->plist == NULL || npfl->buf == NULL)
-		return -1;
-
-	/* recall that prp offsets are in bytes */
-	ohi = prp_poff(npfl->plist) * 8;
-	oend = prp_toff(npfl->plist) * 8;
-
-	after = npfl_first(npfl);
-	while (!npf_is_end(after)) {
-		if (after->off > ohi) {
-			rv = add_gaps(npfl, ohi, before, after);
-			if (rv < 0)
-				goto err;
-		}
-		if (after->nse == NULL || after->nse->type != NST_NAMESPACE) {
-			onext = after->off + after->len;
-			if (onext > ohi)
-				ohi = onext;
-		}
-		before = after;
-		after = npf_next(after);
-	}
-	after = NULL;
-
-	if (ohi < oend) {
-		rv = add_gaps(npfl, ohi, before, after);
-		if (rv < 0)
-			goto err;
-	}
-
-	return 0;
-
-err:
-	clear_gaps(npfl);
-	return rv;
-
 }
 
 

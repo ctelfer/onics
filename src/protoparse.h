@@ -96,46 +96,46 @@ struct prparse_ops {
 
 
 /*
- Start of 
- Packet Buffer
-   |                    Encapsulating Protocol Parse
-   |     par.poff                                                par.toff
-   | ...----+-------------------------------------------------------+----...
-   |        |  prp.start   prp.poff             prp.toff  prp.end   |
-   | header |      +---------+---------------------+---------+      | trailer
-   |        |      | header  | payload             | trailer |      |
-   |        |      +---------+---------------------+---------+      |
-   |        |      A         B    ^                C         D      |  
-   | ...----+---------------------)---------------------------------+----...
-   |        \_____/               |                          \_____/
-               |                  |                             |
-         may be 0-length     possible encapsulated        may be 0-length
-                             packet contained here
+ * Start of 
+ * Packet Buffer
+ * |                    Encapsulating Protocol Parse
+ * |     par.poff                                                par.toff
+ * | ...----+-------------------------------------------------------+----...
+ * |        |  prp.soff    prp.poff             prp.toff  prp.end   |
+ * | header |      +---------+---------------------+---------+      | trailer
+ * |        |      | header  | payload             | trailer |      |
+ * |        |      +---------+---------------------+---------+      |
+ * |        |      A         B    ^                C         D      |  
+ * | ...----+---------------------)---------------------------------+----...
+ * |        \_____/               |                          \_____/
+ *             |                  |                             |
+ *       may be 0-length     possible encapsulated        may be 0-length
+ *                           packet contained here
  */
 
 /* 
-   A 'prparse' structure denotes a decode of the region of a protocol as well
-   as decode of its various fields.  All protocol parses at a minimum have a
-   starting offset, a header, payload and trailer fields.  All of these are
-   have a length in bytes, which can be 0.  The protocol parses associated
-   with a particular buffer are ordered by their start offsets.  So, if the 
-   header or trailer offset of a header parse change, the parse may have to be
-   moved in the list. 
-*/
+ * A 'prparse' structure denotes a decode of the region of a protocol as well
+ * as decode of its various fields.  All protocol parses at a minimum have a
+ * starting offset, a header, payload and trailer fields.  All of these are
+ * have a length in bytes, which can be 0.  The protocol parses associated
+ * with a particular buffer are ordered by their start offsets.  So, if the 
+ * header or trailer offset of a header parse change, the parse may have to be
+ * moved in the list. 
+ */
 
 /*
-   A note for IPv6 and IPsec.  When an IPv6 packet has an ESP or AH header,
-   that header is considered the start of the payload of the v6 packet.  It
-   This is a specific example where the abstraction of encapsulating protocol
-   parses breaks down.  IPsec is, in many ways, its own set of protocols that
-   encapuslate data.  It is convenient to treat them as such.  However, IPv6
-   destination options CAN come after the IPsec headers.  In the case of ESP
-   with encryption, this is not data that we can parse anyways.  Nevertheless
-   this won't always be the case.  Given this kind of "call" on how to
-   interpret the fields, the "payload offset" is, therefore, the first byte
-   of the protocol unit that isn't the purview of the encapsulating protocol.
-   This does NOT always mean that there can't be protocol relevant bytes
-   in the payload section.  But it won't typically be the case.
+ * A note for IPv6 and IPsec.  When an IPv6 packet has an ESP or AH header,
+ * that header is considered the start of the payload of the v6 packet.  It
+ * This is a specific example where the abstraction of encapsulating protocol
+ * parses breaks down.  IPsec is, in many ways, its own set of protocols that
+ * encapuslate data.  It is convenient to treat them as such.  However, IPv6
+ * destination options CAN come after the IPsec headers.  In the case of ESP
+ * with encryption, this is not data that we can parse anyways.  Nevertheless
+ * this won't always be the case.  Given this kind of "call" on how to
+ * interpret the fields, the "payload offset" is, therefore, the first byte
+ * of the protocol unit that isn't the purview of the encapsulating protocol.
+ * This does NOT always mean that there can't be protocol relevant bytes
+ * in the payload section.  But it won't typically be the case.
  */
 
 
@@ -192,52 +192,61 @@ struct prparse {
 	     !prp_list_head(_prp) ;				\
 	     (_prp) = (_x), (_x) = prp_next(_prp))
 
-/* Find the next parse in the specified region or return NULL if none */
-/* exists in the parse list.  use the region parse as the 'from' for */
-/* to start at the beginning of a region.  NOTE, that on its own, this */
-/* does not find subregions within the region.  One can use a recursive */
-/* or even iterative process with this function to walk all sub regions */
-/* as well.  Recursive is more elegant.  :) */
-/*
-   Recursive example:
-   walk(from, reg) {
-     next = prp_next_in_region(from, reg);
-     if (next != NULL) {
-       ** do X with prp **
-       walk(next, next);
-       walk(next, reg);
-     }
-   }
+/* 
+ * Find the head of the parse list which is also the root node 
+ * of the parse tree and the parent of all other parses for a given packet.
+ */
+struct prparse *prp_find_list_head(struct prparse *prp);
 
-   Iterative example: 
-   curreg = reg;
-   prp = prp_next_in_region(reg, reg);
-   while ( prp != NULL ) {
-     ** do whatever with prp **
-     prp2 = prp_next_in_region(prp, prp);
-     if ( prp2 != NULL ) { 
-       curreg = prp;
-       prp = prp2;
-     } else {
-       do { 
-         prp2 = prp_next_in_region(prp, curreg);
-         if (prp2 == NULL) {
-	   ** done with this region, go up one **
-	   curreg = prp->region;
-	 } else {
-	   prp = prp2;
-	 }
-       } while ( prp == NULL && curreg != reg->region );
-     }
-   }
+/*
+ * Find the next parse in the specified region or return NULL if none
+ * exists in the parse list.  use the region parse as the 'from' for
+ * to start at the beginning of a region.  NOTE, that on its own, this
+ * does not find subregions within the region.  One can use a recursive
+ * or even iterative process with this function to walk all sub regions
+ * as well.  Recursive is more elegant.  :)
+ *
+ * Recursive example:
+ * walk(from, reg) {
+ *   next = prp_next_in_region(from, reg);
+ *   if (next != NULL) {
+ *     ** do X with prp **
+ *     walk(next, next);
+ *     walk(next, reg);
+ *   }
+ * }
+ *
+ * Iterative example: 
+ * curreg = reg;
+ * prp = prp_next_in_region(reg, reg);
+ * while ( prp != NULL ) {
+ *   ** do whatever with prp **
+ *   prp2 = prp_next_in_region(prp, prp);
+ *   if ( prp2 != NULL ) { 
+ *     curreg = prp;
+ *     prp = prp2;
+ *   } else {
+ *     do { 
+ *       prp2 = prp_next_in_region(prp, curreg);
+ *       if (prp2 == NULL) {
+ *         ** done with this region, go up one **
+ *         curreg = prp->region;
+ *       } else {
+ *         prp = prp2;
+ *       }
+ *     } while ( prp == NULL && curreg != reg->region );
+ *   }
+ * }
  */
 struct prparse *prp_next_in_region(struct prparse *from, struct prparse *reg);
 
 /* returns 1 if a region contains no parses that refer to it */
 int prp_region_empty(struct prparse *reg);
 
-/* Initializes a fresh parse of PRID_NONE.  This can be used to create the */
-/* base for a full parse. */
+/*
+ * Initializes a fresh parse of PRID_NONE.  This can be used to create the
+ * base for a full parse. 
+ */
 void prp_init_parse(struct prparse *base, ulong len);
 
 /* Insert a parse into the parse list */
@@ -246,103 +255,128 @@ void prp_insert_parse(struct prparse *from, struct prparse *toins);
 /* remove a parse from a parse list */
 void prp_remove_parse(struct prparse *prp);
 
-/* Given an initialized protocol parse header for a buffer (PRID_NONE) and */
-/* an initial protocol id, parse the packet and add to the list */
-/* of PRPs.  Returns -1 on an allocation error.  Otherwise, parse errors */
-/* (which may be acceptable for certain applications) are stored in the */
-/* error fields of the generated parses. */
+/*
+ * Given an initialized protocol parse header for a buffer (PRID_NONE) and
+ * an initial protocol id, parse the packet and add to the list
+ * of PRPs.  Returns -1 on an allocation error.  Otherwise, parse errors
+ * (which may be acceptable for certain applications) are stored in the
+ * error fields of the generated parses.
+ */
 int prp_parse_packet(struct prparse *base, byte_t *buf, uint firstprid);
 
-/* Populate a default parse specification based on either enclosing */
-/* the given parse or inserting the spec within the payload of the */
-/* parse. The 'enclose' parameter.  If the function returns 0, then */
-/* the spec is poulated with values appropriate to pass to prp_add(). */
+/*
+ * Populate a default parse specification based on either enclosing
+ * the given parse or inserting the spec within the payload of the
+ * parse. The 'enclose' parameter.  If the function returns 0, then
+ * the spec is poulated with values appropriate to pass to prp_add().
+ */
 int prp_get_spec(uint prid, struct prparse *prp, int enclose,
 		 struct prpspec *ps);
 
-/* Create a new header in a parsed packet.  The prpspec specifies the */
-/* type and location of the header.  'reg' is the enclosing region for */
-/* the parse.  Note that means one can not use prp_add() to generate an */
-/* outermost parse. If the 'buf parameter is not NULL the operation */
-/* will also create a 'default' packet format in the buffer at the */
-/* offsets indicated by the prpspec.  If enclose is non-zero, then the */
-/* operation will search for outermost parses in 'reg' that fall within the */
-/* new parse's region and reassign them to refer to the new parse as their */
-/* region */
+/*
+ * Create a new header in a parsed packet.  The prpspec specifies the
+ * type and location of the header.  'reg' is the enclosing region for
+ * the parse.  Note that means one can not use prp_add() to generate an
+ * outermost parse. If the 'buf parameter is not NULL the operation
+ * will also create a 'default' packet format in the buffer at the
+ * offsets indicated by the prpspec.  If enclose is non-zero, then the
+ * operation will search for outermost parses in 'reg' that fall within the
+ * new parse's region and reassign them to refer to the new parse as their
+ * region.
+ */
 int prp_add(struct prparse *reg, byte_t *buf, struct prpspec *ps, int enclose);
 
-/* Free a complete parse tree.  prp->region == NULL  This does not free. */
-/* the base parse itself. (i.e. the root region) */
+/*
+ * Free a complete parse tree.  prp->region == NULL  This does not free.
+ * the base parse itself. (i.e. the root region)
+ */
 void prp_clear(struct prparse *prp);
 
-/* Free a single parse.  All sub regions of the parse are made part of prp's */
-/* parent region.  It is an error to call this on the root region. */
+/*
+ * Free a single parse.  All sub regions of the parse are made part of prp's
+ * parent region.  It is an error to call this on the root region.
+ */
 void prp_free_parse(struct prparse *prp);
 
-/* Free a header parse, and all child headers.  If called on the root */
-/* parse, then this is equivalent to prp_clear() */
+/*
+ * Free a header parse, and all child headers.  If called on the root
+ * parse, then this is equivalent to prp_clear()
+ */
 void prp_free_region(struct prparse *prp);
 
 /* copy a header parse (but not the packet buffer itself). */
 int prp_copy(struct prparse *nprp, struct prparse *oprp);
 
-/* re-parse and update the fields in 'prp'.  (but not its children) */
-/* returns error field as a matter of convenience */
+/*
+ * re-parse and update the fields in 'prp'.  (but not its children)
+ * returns error field as a matter of convenience
+ */
 uint prp_update(struct prparse *prp, byte_t *buf);
 
 /* fix up checksums in the 'prp' protocol header */
 int prp_fix_cksum(struct prparse *prp, byte_t *buf);
 
-/* fix up length fields in the 'prp' protocol header based on 'prp' */
-/* protocol metadata */
+/*
+ * fix up length fields in the 'prp' protocol header based on 'prp'
+ * protocol metadata 
+ */
 int prp_fix_len(struct prparse *prp, byte_t *buf);
 
-/* insert data into the the packet and adjust parses.  The starting byte */
-/* S = prp_soff(prp) + off.  That is, the 'off'th byte after the start of */
-/* the parse.  if moveup is nonzero, then the function shifts bytes [S,end] */
-/* 'len' bytes forward in the packet and fills them with dummy values.  If */
-/* 'moveup' is zero, then it shifts bytes [0,S-1] down 'len' bytes and */
-/* the new space is filled with dummy values.  When 'moveup' is nonzero, */
-/* all offsets >= S are increased by 'len'.  When 'moveup' is zero, all */
-/* offsets < S are decreased by 'len'.  This function does not change offsets */
-/* set to PRP_OFF_INVALID.  It is illegal to specify a starting offset */
-/* before the payload offset or after the trailer offset of the outermost */
-/* parse.  (i.e. the outer PRID_NONE start and end).  This function will */
-/* move those offsets, however depending on the value of 'moveup'. */
+/*
+ * insert data into the the packet and adjust parses.  The starting byte
+ * S = prp_soff(prp) + off.  That is, the 'off'th byte after the start of
+ * the parse.  if moveup is nonzero, then the function shifts bytes [S,end]
+ * 'len' bytes forward in the packet and fills them with dummy values.  If
+ * 'moveup' is zero, then it shifts bytes [0,S-1] down 'len' bytes and
+ * the new space is filled with dummy values.  When 'moveup' is nonzero,
+ * all offsets >= S are increased by 'len'.  When 'moveup' is zero, all
+ * offsets < S are decreased by 'len'.  This function does not change offsets
+ * set to PRP_OFF_INVALID.  It is illegal to specify a starting offset
+ * before the payload offset or after the trailer offset of the outermost
+ * parse.  (i.e. the outer PRID_NONE start and end).  This function will
+ * move those offsets, however depending on the value of 'moveup'.
+ */
 int prp_insert(struct prparse *prp, byte_t *buf, ulong off, ulong len, 
 	       int moveup);
 
-/* Remove data from a packet and adjust parses.  The starting byte is */
-/* S = prp_soff(prp) + off.  That is, the 'off'th byte after the start */
-/* of the parse.  if 'moveup' is non-zero then prp_cut() shfts bytes [0,S-1] */ 
-/* len bytes forward and increments all parse offsets less than S */
-/* by 'len'.  If 'moveup' is zero then prp_cut() shifts bytes [S+len,end] */
-/* down to byte position S, and decrements all offsets >= S+len by 'len'. */
-/* prp_cut() does not move PRP_OFF_INVALID offsets.  offsets falling within */
-/* range of removed bytes are set to S. It is illegal to cut bytes that are */
-/* outside of the region [poff,toff] of the outermost parse. (i.e. the */
-/* outer PRID_NONE start and end).  This function will move those offsets */
-/* however, depending on the value of 'moveup' */
+/*
+ * Remove data from a packet and adjust parses.  The starting byte is
+ * S = prp_soff(prp) + off.  That is, the 'off'th byte after the start
+ * of the parse.  if 'moveup' is non-zero then prp_cut() shfts bytes [0,S-1]
+ * len bytes forward and increments all parse offsets less than S
+ * by 'len'.  If 'moveup' is zero then prp_cut() shifts bytes [S+len,end]
+ * down to byte position S, and decrements all offsets >= S+len by 'len'.
+ * prp_cut() does not move PRP_OFF_INVALID offsets.  offsets falling within
+ * range of removed bytes are set to S. It is illegal to cut bytes that are
+ * outside of the region [poff,toff] of the outermost parse. (i.e. the
+ * outer PRID_NONE start and end).  This function will move those offsets
+ * however, depending on the value of 'moveup'.
+ */
 int prp_cut(struct prparse *prp, byte_t *buf, ulong off, ulong len, int moveup);
 
-/* expand or contract header/trailer within the encapsulating space */
-/* Note that the point adjustments can't overrun their adjacent boundaries. */
-/* prp_adj_plen() moves both the trailer offset and ending offset in unison. */
-/* It basically acts as shorthand for a common case of adding or chopping */
-/* payload to a particular packet. */
+/*
+ * expand or contract header/trailer within the encapsulating space
+ * Note that the point adjustments can't overrun their adjacent boundaries.
+ * prp_adj_plen() moves both the trailer offset and ending offset in unison.
+ * It basically acts as shorthand for a common case of adding or chopping
+ * payload to a particular packet. 
+ */
 int prp_adj_off(struct prparse *prp, uint oid, long amt);/* adjust an offset */
 int prp_adj_plen(struct prparse *prp, long amt);	/* adjust C+D */
 
-/* Adjust a region so that its payload starts on the first unused byte */
-/* at the beginning and it's trailer starts on unused byte at the end. */
-/* A byte is "used" if it falls within some parse within the region or */
-/* a dependent sub region. */
+/*
+ * Adjust a region so that its payload starts on the first unused byte
+ * at the beginning and it's trailer starts on unused byte at the end.
+ * A byte is "used" if it falls within some parse within the region or
+ * a dependent sub region.
+ */
 int prp_adj_unused(struct prparse *prp);
 
-
-/* Internal call for use by protocol parse libraries to insert a newly */
-/* created parse into a region and set it appropriately.  (for prp_add() */
-/* calls.) */
+/*
+ * Internal call for use by protocol parse libraries to insert a newly
+ * created parse into a region and set it appropriately.  (for prp_add()
+ * calls.)
+ */
 void prp_add_insert(struct prparse *reg, struct prparse *toadd, int enclose);
 
 #endif /* __protoparse_h */
