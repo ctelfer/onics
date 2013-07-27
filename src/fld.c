@@ -637,6 +637,7 @@ static void insert_field(struct npf_list *npfl, struct npfield *npf)
 		trav = npf_prev(trav);
 	}
 	l_ins(&trav->le, &npf->le);
+	++npfl->nfields;
 }
 
 
@@ -705,21 +706,30 @@ void npfl_init(struct npf_list *npfl, struct prparse *plist,
 	npfl_reset(npfl);
 	npfl->plist = prp_get_base(plist);
 	npfl->buf = buf;
-	npfl->nparse = 0;
+	npfl->nfields = 0;
 	npfl->ngaps = 0;
 }
 		      
 
-static void clear_nonflds(struct npf_list *npfl, ulong soff, ulong eoff)
+static void clear_nonflds(struct npf_list *npfl, ulong soff, ulong eoff,
+			  int prponly)
 {
 	struct list *le, *xtra;
 	struct npfield *npf;
+	ulong nr = 0;
 
 	l_for_each_safe(le, xtra, &npfl->list.le) {
 		npf = l_to_npf(le);
-		if (npf_is_nonfld(npf) && npf->off >= soff && npf->off < eoff)
-			npf_cache_node(npf);
+		if (npf_is_nonfld(npf) && npf->off >= soff && npf->off < eoff) {
+			if (!prponly || npf_is_prp(npf)) {
+				npf_cache_node(npf);
+				++nr;
+			}
+		}
 	}
+	npfl->nfields -= nr;
+	if (!prponly)
+		npfl->ngaps = 0;
 }
 
 
@@ -736,25 +746,26 @@ static int add_gap(struct npf_list *npfl, ulong soff, ulong eoff,
 	gap->prp = prp;
 	gap->buf = npfl->buf;
 	l_ins(&prev->le, &gap->le);
+	++npfl->nfields;
 	++npfl->ngaps;
 
 	return 0;
 }
 
 
-static struct npfield *add_prp_npf(struct npf_list *npfl, struct prparse *prp)
+static int add_prp_npf(struct npf_list *npfl, struct prparse *prp)
 {
 	struct npfield *prpnpf;
 
 	prpnpf = npf_new(prp, NULL, NULL);
 	if (prpnpf == NULL)
-		return NULL;
+		return -1;
 	prpnpf->off = prp_soff(prp) * 8;
 	prpnpf->len = prp_totlen(prp) * 8;
 	prpnpf->prp = prp;
 	insert_field(npfl, prpnpf);
 
-	return prpnpf;
+	return 0;
 }
 
 
@@ -785,14 +796,12 @@ static struct npfield *next_npf_or_null(struct npfield *npf)
 static int fill_gaps(struct npf_list *npfl, struct prparse *oprp)
 {
 	struct npfield *before = NULL, *after;
-	struct npfield *lnpfprp, *trav;
 	struct prparse *iprp = NULL;
 	int rv;
 	ulong soff;
 	ulong ohi;
 	ulong onext;
 	ulong eoff;
-	uint nnpfprp = 0;
 
 	if (prp_is_base(oprp)) {
 		soff = prp_poff(oprp) * 8;
@@ -818,10 +827,10 @@ static int fill_gaps(struct npf_list *npfl, struct prparse *oprp)
 		 * outer prp, but not enclosed in any of the inner prps.
 		 */
 		for ( ; iprp != NULL; iprp = prp_next_in_region(iprp, oprp)) {
-			lnpfprp = add_prp_npf(npfl, iprp);
-			if (lnpfprp == NULL)
+			if (add_prp_npf(npfl, iprp) < 0) {
+				rv = -1;
 				goto err;
-			++nnpfprp;
+			}
 		}
 	}
 
@@ -848,28 +857,13 @@ static int fill_gaps(struct npf_list *npfl, struct prparse *oprp)
 		after = next_npf_or_null(after);
 	}
 
-	/* remove all the parse NPFs now */
-	while (nnpfprp > 0) {
-		/* save the previous parse NPF */
-		if (nnpfprp > 1) {
-			trav = lnpfprp;
-			do { 
-				trav = npf_prev(trav);
-				abort_unless(!npf_is_end(trav));
-			} while (!npf_is_prp(trav));
-		}
-		/* remove the current one */
-		npf_cache_node(lnpfprp);
-
-		/* set up to remove the next one */
-		lnpfprp = trav;
-		--nnpfprp;
-	}
-
+	/* remove all the parse NPFs */
+	clear_nonflds(npfl, soff, eoff, 1);
 	return 0;
 
 err:
-	clear_nonflds(npfl, soff, eoff);
+	/* remove all gap and parse NPFs */
+	clear_nonflds(npfl, soff, eoff, 0);
 	return rv;
 
 }
@@ -937,12 +931,6 @@ void npfl_clear_cache(struct npf_list *npfl)
 		l_rem(le);
 		npf_free(l_to_npf(le));
 	}
-}
-
-
-int npfl_length(struct npf_list *npfl)
-{
-	return l_length(&npfl->list.le);
 }
 
 

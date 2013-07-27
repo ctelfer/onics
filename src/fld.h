@@ -228,7 +228,7 @@ struct npf_list {
 	struct npfield 		list;	/* prp == NULL, nse == NULL */
 	struct prparse *	plist;
 	byte_t *		buf;
-	uint			nparse;
+	uint			nfields;
 	uint			ngaps;
 };
 
@@ -239,6 +239,7 @@ struct npf_list {
 #define npfl_first(npfl)	l_to_npf(l_head(&(npfl)->list.le))
 #define npfl_last(npfl)		l_to_npf(l_tail(&(npfl)->list.le))
 #define npfl_isempty(npfl)	l_isempty(&(npfl)->list.le)
+#define npfl_get_len(npfl)	((npfl)->nfields)
 #define npf_is_end(npf)		((npf)->len == (ulong)-1l)
 #define npf_is_nonfld(npf)	((npf)->nse == NULL)
 #define npf_is_gap(npf)		((npf)->nse == NULL && (npf)->buf != NULL)
@@ -264,9 +265,6 @@ void npfl_cache(struct npf_list *npfl);
 
 /* release the elements in the field list cache */
 void npfl_clear_cache(struct npf_list *npfl);
-
-/* get the length of the list */
-int npfl_length(struct npf_list *npfl);
 
 /* return 1 if the two fields are essentially equal and 0 otherwise */
 int npf_eq(struct npfield *npf1, struct npfield *npf2);

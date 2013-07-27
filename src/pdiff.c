@@ -30,11 +30,13 @@
 #include <cat/stdclio.h>
 #include <cat/emit_format.h>
 #include <cat/str.h>
+#include <cat/sort.h>
 
 #include "ns.h"
 #include "pktbuf.h"
 #include "stdproto.h"
 #include "fld.h"
+#include "util.h"
 
 
 /* 
@@ -63,17 +65,6 @@
  * Field?  Header?
  */
 
-struct fdiff;
-struct hdiff;
-
-double Pkt_drop_cost = 2;
-double Pkt_ins_cost = 5;
-double Pkt_mod_cost = 7;
-double Infinity = 1e20;
-struct fdiff Fdiff;
-struct hdiff Hdiff;
-
-
 enum {
 	DONE,
 	PASS,
@@ -82,8 +73,6 @@ enum {
 	MODIFY,
 	SWAP,
 };
-
-#define MAXHDR		63
 
 
 struct prpent {
@@ -97,7 +86,7 @@ struct prpent {
 struct pktent {
 	struct pktbuf *		pkt;
 	struct prpent * 	prparr;
-	ulong			nprp;
+	int			nprp;
 	ulong			pasiz;
 	byte_t			hash[32];
 };
@@ -161,33 +150,15 @@ struct hdiff {
 };
 
 
-static void emit_hex(struct emitter *e, ulong base_off, ulong off, byte_t *bp,
-		     ulong len, const char *pfx)
-{
-	/* length in bits */
-	while (len > 16) {
-		emit_format(e, "%s%08x: %02x %02x %02x %02x"
-				      " %02x %02x %02x %02x"
-				      " %02x %02x %02x %02x"
-				      " %02x %02x %02x %02x\n",
-			    pfx, off - base_off, bp[off], bp[off+1],
-			    bp[off+2], bp[off+3], bp[off+4], bp[off+5],
-			    bp[off+6], bp[off+7], bp[off+8], bp[off+9],
-			    bp[off+10], bp[off+11], bp[off+12], 
-			    bp[off+13], bp[off+14], bp[off+15]);
-
-		off += 16;
-		len -= 16;
-	}
-
-	emit_format(e, "%s%08x:", pfx, off - base_off);
-	while (len > 0) {
-		emit_format(e, " %02x", bp[off]);
-		off += 1;
-		len -= 1;
-	}
-	emit_string(e, "\n");
-}
+/* Globals */
+double Pkt_drop_cost = 2;
+double Pkt_ins_cost = 5;
+double Pkt_mod_cost = 7;
+double Infinity = 1e20;
+struct fdiff Fdiff;
+struct hdiff Hdiff;
+static struct npfield **	Farr = NULL;
+static uint 			Fasiz = 0;
 
 
 static void hash_packet(struct pktent *pke)
@@ -283,7 +254,7 @@ static void pa_clear(struct pktarr *pa)
 {
 	struct pktent *pke;
 	ulong np;
-	ulong i;
+	int i;
 
 	if (pa == NULL)
 		return;
@@ -429,8 +400,8 @@ void fdiff_load(struct fdiff *fd, struct npf_list *fl1, struct npf_list *fl2)
 {
 	fd->before = fl1;
 	fd->after = fl2;
-	fd->nb = npfl_length(fd->before);
-	fd->na = npfl_length(fd->after);
+	fd->nb = npfl_get_len(fd->before);
+	fd->na = npfl_get_len(fd->after);
 
 	if (fd->nb+1 <= fd->cpm_maxr && fd->na+1 <= fd->cpm_maxc) {
 		fd->cpm.nrows = fd->nb + 1;
@@ -586,7 +557,7 @@ static void emit_field(struct emitter *e, struct npf_list *npfl,
 		prp_get_name(npf->prp, 0, line, sizeof(line));
 		sboff = off - base_off;
 		emit_format(e, "%s%s Data -- [%lu:%lu]\n", pfx, line, sboff, len);
-		emit_hex(e, base_off, off, npfl->buf, len, pfx);
+		emit_hex(e, pfx, sboff, npfl->buf + off, len);
 	}
 }
 
@@ -898,17 +869,6 @@ void pdiff_compare(struct pdiff *pd)
 }
 
 
-static void emit_fields(struct emitter *e, struct npf_list *npfl, char *pfx)
-{
-	struct npfield *npf;
-
-	for (npf = npfl_first(npfl) ; !npf_is_end(npf) ;
-	     npf = npf_next(npf)) {
-		emit_field(e, npfl, npf, pfx);
-	}
-}
-
-
 static void print_hdr_op(struct emitter *e, struct prpent *ppe, int isins)
 {
 	char name[256];
@@ -916,6 +876,7 @@ static void print_hdr_op(struct emitter *e, struct prpent *ppe, int isins)
 	char *pfx;
 	struct prparse *prp;
 	ulong psoff;
+	struct npfield *npf;
 
 	prp = ppe->prp;
 	psoff = prp_poff(ppe->npfl.plist);
@@ -930,8 +891,10 @@ static void print_hdr_op(struct emitter *e, struct prpent *ppe, int isins)
 		    prp_totlen(prp));
 	emit_format(e, "%s*****\n", pfx);
 
-	emit_fields(e, &ppe->npfl, pfx);
-
+	for (npf = npfl_first(&ppe->npfl) ; !npf_is_end(npf) ;
+	     npf = npf_next(npf)) {
+		emit_field(e, &ppe->npfl, npf, pfx);
+	}
 }
 
 
@@ -996,28 +959,81 @@ static void mod_pkt_report(struct pktent *pke1, ulong p1n, struct pktent *pke2,
 }
 
 
+static int fld_off_cmp(const void *f1p, const void *f2p)
+{
+	struct npfield *f1, *f2;
+	f1 = *(struct npfield **)f1p;
+	f2 = *(struct npfield **)f2p;
+	return (f1->off < f2->off) ? -1 : ((f1->off == f2->off) ? 0 : 1);
+}
+
+
+static struct prpent *find_prpe(struct pktent *pke, struct prparse *prp)
+{
+	int i;
+	struct prpent *ppe;
+	for (i = 0, ppe = pke->prparr; i < pke->nprp; ++i, ++ppe)
+		if (ppe->prp == prp)
+			return ppe;
+	abort_unless(0);
+	return NULL;
+}
+
+
 static void pke_print(struct emitter *e, struct pktent *pke, char *pfx)
 {
-	char name[64];
+	int i;
+	int j;
+	int n = 0;
 	struct prpent *ppe;
-	ulong i;
-	ulong psoff;
+	struct npfield *npf;
+	struct prparse *prp, *lastprp;
 	ulong soff;
-	struct prparse *prp;
+	ulong psoff;
+	char name[64];
 
+	/* count the # of fields */
+	for (i = 0, ppe = pke->prparr; i < pke->nprp; ++i, ++ppe)
+		n += npfl_get_len(&ppe->npfl);
+
+	/* resize the field array if necessary */
+	if (n > Fasiz) {
+		Farr = erealloc(Farr, n * sizeof(struct npfield *));
+		Fasiz = n;
+	}
+
+	/* copy the pointers to the field pointer array */
+	for (i = 0, j = 0, ppe = pke->prparr; i < pke->nprp; ++i, ++ppe)
+		for (npf = npfl_first(&ppe->npfl) ; !npf_is_end(npf) ;
+		     npf = npf_next(npf))
+			Farr[j++] = npf;
+
+	/* 
+	 * sort the array by offset: list should be nearly 
+	 * sorted so insertion sort should be very fast.
+	 */
+	isort_array(Farr, n, sizeof(Farr[0]), fld_off_cmp);
+
+	/* print the fields */
+	lastprp = NULL;
 	psoff = pkb_get_off(pke->pkt);
+	for (i = 0; i < n; ++i) {
+		npf = Farr[i];
 
-	for (i = 0, ppe = pke->prparr; i < pke->nprp; ++i, ++ppe) {
-		prp = ppe->prp;
+		/* check if field is in a new parse */
+		if (npf->prp != lastprp) {
+			prp = npf->prp;
+			ppe = find_prpe(pke, prp);
+			soff = prp_soff(prp) - psoff;
+			prp_get_name(prp, ppe->idx, name, sizeof(name));
+			emit_format(e, "%s*****\n", pfx);
+			emit_format(e, "%s* %s: [%lu:%lu]\n", pfx, name, soff, 
+				    prp_totlen(prp));
+			emit_format(e, "%s*****\n", pfx);
+			lastprp = prp;
+		}
 
-		soff = prp_soff(prp) - psoff;
-		prp_get_name(prp, ppe->idx, name, sizeof(name));
-		emit_format(e, "%s*****\n", pfx);
-		emit_format(e, "%s* %s: [%lu:%lu]\n", pfx, name, soff, 
-			    prp_totlen(prp));
-		emit_format(e, "%s*****\n", pfx);
-
-		emit_fields(e, &ppe->npfl, pfx);
+		emit_field(e, &ppe->npfl, npf, pfx);
 	}
 }
 
