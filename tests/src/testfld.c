@@ -50,12 +50,12 @@ int main(int argc, char *argv[])
 		if (fld_get_bn(p->buf, &p->prp, "eth.src", oeth, 6) < 0)
 			fprintf(stderr, "unable to read eth.src\n");
 		fprintf(stderr, "old eth src addr\n");
-		hexdump(stderr, 0, oeth, 6);
+		fhexdump(stderr, NULL, 0, oeth, 6);
 
 		if (fld_get_bn(p->buf, &p->prp, "ip.daddr", oip, 4) < 0)
 			fprintf(stderr, "unable to read ip.daddr\n");
 		fprintf(stderr, "old ip dest addr\n");
-		hexdump(stderr, 0, oip, 4);
+		fhexdump(stderr, NULL, 0, oip, 4);
 
 		if (fld_get_vn(p->buf, &p->prp, "tcp.ack", &osyn) < 0)
 			fprintf(stderr, "unable to read tcp.ack\n");

@@ -120,7 +120,8 @@ void hexdump_at(ulong soff, ulong eoff)
 	/* effective address == soff - (packet base + xpkt hdr off) */
 	/* pointer offset = g_p + soff */
 	/* length = end - start */
-	hexdump(stdout, soff - g_pbase + g_ioff, g_p + soff, eoff - soff);
+	fhexdump(stdout, NULL, soff - g_pbase + g_ioff, g_p + soff,
+		 eoff - soff);
 }
 
 
@@ -353,6 +354,8 @@ void dump_data(struct prparse *prp, ulong soff, ulong eoff, int prhdr)
 	char pfx[MAXPFX];
 	struct ns_namespace *ns;
 	ulong sbyte, ebyte;
+	ulong len;
+	ulong sboff;
 
 	if (soff >= eoff)
 		return;
@@ -369,10 +372,11 @@ void dump_data(struct prparse *prp, ulong soff, ulong eoff, int prhdr)
 	else
 		snprintf(pfx, MAXPFX, "# PRID-%u: ", prp->prid);
 
-	if (prhdr)
-		printf("%s Data -- %lu bytes [%lu, %lu]\n", pfx, 
-		       ebyte - sbyte, sbyte - g_pbase + g_ioff, 
-		       ebyte - g_pbase + g_ioff);
+	if (prhdr) {
+		len = ebyte - sbyte;
+		sboff = sbyte - g_pbase + g_ioff;
+		printf("%sData -- [%lu:%lu]\n", pfx, sboff, len);
+	}
 
 	hexdump_at(sbyte, ebyte);
 }
@@ -523,7 +527,7 @@ void dump_to_hex_packet(struct pktbuf *pkb)
 
 		if ((rv = pkb_pack(pkb)) < 0)
 			err("Error packing packet %lu: %d\n", g_pktnum, rv);
-		hexdump(stdout, 0, (byte_t *)xp, g_ioff);
+		fhexdump(stdout, NULL, 0, (byte_t *)xp, g_ioff);
 		pkb_unpack(pkb);
 	} else {
 		g_ioff = 0;

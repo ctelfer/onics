@@ -19,8 +19,11 @@
  *  You should have received a copy of the GNU General Public License
  *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-#include "util.h"
+
 #include <ctype.h>
+#include <cat/str.h>
+#include "util.h"
+
 
 /*
  * One should not call this function with a length value of
@@ -165,12 +168,14 @@ void setbit(byte_t *p, ulong n, int v)
 
 
 #define CHOF(x)	((isprint(x) && ((x) <= 127)) ? (x) : '.')
-void hexdump(FILE *out, ulong addr, byte_t *p, ulong len)
+void fhexdump(FILE *out, const char *pfx, ulong addr, byte_t *p, ulong len)
 {
 	int i;
 	ulong aoff = 0;
 
-	while (len > 16) { 
+	while (len > 16) {
+		if (pfx != NULL)
+			fputs(pfx, out);
 		fprintf(out, "    %06lx:  "
 			     "%02x %02x %02x %02x %02x %02x %02x %02x "
 			     "%02x %02x %02x %02x %02x %02x %02x %02x  "
@@ -187,6 +192,8 @@ void hexdump(FILE *out, ulong addr, byte_t *p, ulong len)
 	}
 
 	if (len > 0) {
+		if (pfx != NULL)
+			fputs(pfx, out);
 		fprintf(out, "    %06lx:  ", addr + aoff);
 		for (i = 0; i < len; ++i)
 			fprintf(out, "%02x ", p[i]);
@@ -196,6 +203,133 @@ void hexdump(FILE *out, ulong addr, byte_t *p, ulong len)
 		for (i = 0; i < len; ++i)
 			fprintf(out, "%c", CHOF(p[i]));
 		fprintf(out, "|\n");
+	}
+}
+
+
+void shexdump(char *s, size_t ssize, const char *pfx, ulong addr, byte_t *p,
+	      ulong len)
+{
+	int i;
+	int n;
+	size_t scl;
+	ulong aoff = 0;
+
+	while (len > 16) {
+		if (pfx != NULL) {
+			scl = str_copy(s, pfx, ssize);
+			if (scl >= ssize)
+				return;
+			ssize -= scl-1;
+			s += scl-1;
+		}
+
+		n = snprintf(s, ssize, 
+			     "    %06lx:  "
+			     "%02x %02x %02x %02x %02x %02x %02x %02x "
+			     "%02x %02x %02x %02x %02x %02x %02x %02x  "
+			     "|%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c|\n", addr+aoff,
+			p[0], p[1], p[2], p[3], p[4], p[5], p[6], p[7],
+			p[8], p[9], p[10], p[11], p[12], p[13], p[14], p[15],
+			CHOF(p[0]), CHOF(p[1]), CHOF(p[2]), CHOF(p[3]),
+			CHOF(p[4]), CHOF(p[5]), CHOF(p[6]), CHOF(p[7]),
+			CHOF(p[8]), CHOF(p[9]), CHOF(p[10]), CHOF(p[11]),
+			CHOF(p[12]), CHOF(p[13]), CHOF(p[14]), CHOF(p[15]));
+		p += 16;
+		len -= 16;
+		aoff += 16;
+
+		if (n < ssize)
+			return;
+		s += n;
+		ssize -= n;
+	}
+
+	if (len > 0) {
+		if (pfx != NULL) {
+			scl = str_copy(s, pfx, ssize);
+			if (scl >= ssize)
+				return;
+			s += scl-1;
+			ssize -= scl-1;
+		}
+
+		n = snprintf(s, ssize, "    %06lx:  ", addr + aoff);
+		if (n < ssize)
+			return;
+		s += n;
+		ssize -= n;
+
+		for (i = 0; i < len; ++i) {
+			n += snprintf(s, ssize, "%02x ", p[i]);
+			if (n < ssize)
+				return;
+			s += n;
+			ssize -= n;
+		}
+		for (; i < 16; ++i) {
+			n += snprintf(s, ssize, "   ");
+			if (n < ssize)
+				return;
+			s += n;
+			ssize -= n;
+		}
+
+		n = snprintf(s, ssize, " |");
+		if (n < ssize)
+			return;
+		s += n;
+		ssize -= n;
+
+		for (i = 0; i < len; ++i) {
+			n = snprintf(s, ssize, "%c", CHOF(p[i]));
+			if (n < ssize)
+				return;
+			s += n;
+			ssize -= n;
+		}
+		snprintf(s, ssize, "|\n");
+	}
+}
+
+
+void emit_hex(struct emitter *e, const char *pfx, ulong addr, byte_t *p,
+	      ulong len)
+{
+	int i;
+	ulong aoff = 0;
+
+	while (len > 16) { 
+		if (pfx != NULL)
+			emit_string(e, pfx);
+		emit_format(e, 
+			    "    %06lx:  "
+			    "%02x %02x %02x %02x %02x %02x %02x %02x "
+			    "%02x %02x %02x %02x %02x %02x %02x %02x  "
+			    "|%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c|\n", addr+aoff,
+			p[0], p[1], p[2], p[3], p[4], p[5], p[6], p[7],
+			p[8], p[9], p[10], p[11], p[12], p[13], p[14], p[15],
+			CHOF(p[0]), CHOF(p[1]), CHOF(p[2]), CHOF(p[3]),
+			CHOF(p[4]), CHOF(p[5]), CHOF(p[6]), CHOF(p[7]),
+			CHOF(p[8]), CHOF(p[9]), CHOF(p[10]), CHOF(p[11]),
+			CHOF(p[12]), CHOF(p[13]), CHOF(p[14]), CHOF(p[15]));
+		p += 16;
+		len -= 16;
+		aoff += 16;
+	}
+
+	if (len > 0) {
+		if (pfx != NULL)
+			emit_string(e, pfx);
+		emit_format(e, "    %06lx:  ", addr + aoff);
+		for (i = 0; i < len; ++i)
+			emit_format(e, "%02x ", p[i]);
+		for (; i < 16; ++i)
+			emit_format(e, "   ");
+		emit_format(e, " |");
+		for (i = 0; i < len; ++i)
+			emit_format(e, "%c", CHOF(p[i]));
+		emit_format(e, "|\n");
 	}
 }
 

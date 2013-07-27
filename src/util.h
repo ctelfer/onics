@@ -22,6 +22,7 @@
 #ifndef __util_h
 #define __util_h
 #include <cat/cattypes.h>
+#include <cat/emit_format.h>
 #include <stdio.h>
 
 /* 
@@ -63,9 +64,16 @@ int getbit(const byte_t * p, ulong n);
 void setbit(byte_t * p, ulong n, int v);
 
 
-/* Dump a hex representation of the given data to out */
-void hexdump(FILE *out, ulong addr, byte_t *p, ulong len);
+/* Dump a hex representation of the given data to a file */
+void fhexdump(FILE *out, const char *pfx, ulong addr, byte_t *p, ulong len);
 
+/* Dump a hex representation of the given data to string 's' of size 'slen' */
+void shexdump(char *s, size_t slen, const char *pfx, ulong addr, byte_t *p,
+	      ulong len);
+
+/* Dump a hex representation of the given data to 'e' */
+void emit_hex(struct emitter *e, const char *pfx, ulong addr, byte_t *p,
+	      ulong len);
 
 #undef swap16
 #undef swap32

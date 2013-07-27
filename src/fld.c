@@ -703,7 +703,7 @@ void npfl_init(struct npf_list *npfl, struct prparse *plist,
 	if (!npf_is_initialized)
 		_npf_init();
 	npfl_reset(npfl);
-	npfl->plist = prp_find_list_head(plist);
+	npfl->plist = prp_get_base(plist);
 	npfl->buf = buf;
 	npfl->nparse = 0;
 	npfl->ngaps = 0;

@@ -193,10 +193,11 @@ struct prparse {
 	     (_prp) = (_x), (_x) = prp_next(_prp))
 
 /* 
- * Find the head of the parse list which is also the root node 
- * of the parse tree and the parent of all other parses for a given packet.
+ * Find the base region for this parse.  This is the root node of the 
+ * of the parse tree and the parent of all other parses for a given
+ * block of data (usually the whole packet in a buffer).
  */
-struct prparse *prp_find_list_head(struct prparse *prp);
+struct prparse *prp_get_base(struct prparse *prp);
 
 /*
  * Find the next parse in the specified region or return NULL if none

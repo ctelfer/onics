@@ -161,14 +161,6 @@ struct hdiff {
 };
 
 
-enum {
-	PPF_PROTO,
-	PPF_FIELD,
-};
-
-typedef int (*pkbpr_filter_f)(int type, void *unit, void *ctx);
-
-
 static void emit_hex(struct emitter *e, ulong base_off, ulong off, byte_t *bp,
 		     ulong len, const char *pfx)
 {
@@ -195,122 +187,6 @@ static void emit_hex(struct emitter *e, ulong base_off, ulong off, byte_t *bp,
 		len -= 1;
 	}
 	emit_string(e, "\n");
-}
-
-
-static int femit(struct emitter *e, struct ns_elem *elem, struct pktbuf *pkb,
-		 struct prparse *prp)
-{
-	int rv;
-	char line[256];
-	struct raw lr = { sizeof(line), (void *)line };
-
-	rv = ns_tostr(elem, pkb->buf, prp, &lr);
-	if (rv < 0)
-		return -1;
-
-	/* sanity */
-	line[sizeof(line)-1] = '\0';
-
-	if (emit_string(e, line) < 0)
-		return -1;
-
-	if (emit_char(e, '\n') < 0)
-		return -1;
-
-	return 0;
-}
-
-
-static int off_is_valid(struct ns_elem *elem, struct prparse *prp)
-{
-	int oi;
-	if (elem->type == NST_NAMESPACE) {
-		oi = ((struct ns_namespace *)elem)->oidx;
-	} else if (elem->type == NST_PKTFLD) {
-		oi = ((struct ns_pktfld*)elem)->oidx;
-	} else {
-		return 0;
-	}
-	return prp_off_valid(prp, oi);
-}
-
-
-static int print_fields(struct emitter *e, const char *pfx, struct pktbuf *pkb,
-			struct prparse *prp, struct ns_namespace *ns,
-			pkbpr_filter_f *f, void *fctx)
-{
-	int i;
-	struct ns_elem *elem;
-	struct ns_namespace *subns;
-
-	abort_unless(e && pkb && prp);
-	if (ns == NULL) {
-		ns = ns_lookup_by_prid(prp->prid);
-		if (ns == NULL)
-			return 0;
-	} else {
-		if (!off_is_valid((struct ns_elem *)ns, prp))
-			return 0;
-	}
-	
-	if (pfx == NULL)
-		pfx = "";
-
-	if (emit_format(e, "%s*****\n", pfx) < 0)
-		return -1;
-	if (emit_format(e, "%s* ", pfx) < 0)
-		return -1;
-	if (femit(e, (struct ns_elem *)ns, pkb, prp) < 0)
-		return -1;
-	if (emit_format(e, "%s*****\n", pfx) < 0)
-		return -1;
-
-	for (i = 0; i < ns->nelem; ++i) {
-		elem = ns->elems[i];
-
-		if (elem == NULL)
-			break;
-
-		if (!off_is_valid(elem, prp))
-			continue;
-
-		if ((f != NULL) && (*f)(PPF_FIELD, elem, fctx))
-			continue;
-
-		if (emit_string(e, pfx) < 0)
-			return -1;
-
-		if (femit(e, elem, pkb, prp) < 0)
-			return -1;
-
-		if (elem->type == NST_NAMESPACE) {
-			subns = (struct ns_namespace *)elem;
-			if (print_fields(e, pfx, pkb, prp, subns, f, fctx) < 0)
-				return -1;
-		}
-	}
-
-	return 0;
-}
-
-
-int pkb_print(struct emitter *e, struct pktbuf *pkb, const char *pfx,
-	      pkbpr_filter_f *f, void *fctx)
-{
-	struct prparse *prp;
-
-	if (e == NULL || pkb == NULL)
-		return -1;
-
-	prp_for_each(prp, &pkb->prp) {
-		if ((f != NULL) && (*f)(PPF_PROTO, prp, fctx))
-			continue;
-		if (print_fields(e, pfx, pkb, prp, NULL, f, fctx) < 0)
-			return -1;
-	}
-
-	return 0;
 }
 
 
@@ -664,45 +540,69 @@ void fdiff_compare(struct fdiff *fd, double drop_bit_cost, double ins_bit_cost)
 }
 
 
-static void print_mod(struct npf_list *npfl, struct npfield *npf,
-		      const char *pfx, struct emitter *e)
+static void prp_get_name(struct prparse *prp, int idx, char *str, size_t smax)
+{
+	struct ns_namespace *ns;
+	char istr[32];
+
+	if (idx == 0)
+		istr[0] = '\0';
+	else
+		str_fmt(istr, sizeof(istr), " -- %d", idx);
+
+	ns = ns_lookup_by_prid(prp->prid);
+	if (ns != NULL)
+		str_fmt(str, smax, "%s%s", ns->fullname, istr);
+	else
+		str_fmt(str, smax, "PRID-%d%s", prp->prid, istr);
+
+}
+
+
+static void emit_field(struct emitter *e, struct npf_list *npfl,
+		       struct npfield *npf, const char *pfx)
 {
 	char line[256];
 	struct raw rl;
 	ulong base_off;
 	ulong off;
 	ulong len;
+	ulong sboff;
 
 	rl.data = line;
 	rl.len = sizeof(line);
+	base_off = prp_poff(npfl->plist);
 
 	if (!npf_is_gap(npf)) {
 		ns_tostr(npf->nse, npf->buf, npf->prp, &rl);
 		emit_format(e, "%s%s\n", pfx, line);
 	} else {
-		base_off = prp_poff(npfl->plist);
 		off = npf->off / 8;
 		len = npf->len;
-		len += 8 - (npf->off % 8);
-		len += 8 - ((npf->off + npf->len) % 8);
-		len /= 8;
+		if (npf->off % 8 != 0)
+			len += 8 - (npf->off % 8);
+		len = (len + 7) / 8;
+
+		prp_get_name(npf->prp, 0, line, sizeof(line));
+		sboff = off - base_off;
+		emit_format(e, "%s%s Data -- [%lu:%lu]\n", pfx, line, sboff, len);
 		emit_hex(e, base_off, off, npfl->buf, len, pfx);
 	}
 }
 
 
-static void field_mod_report(struct npf_list *npfl1, struct npfield *npf1,
-			     struct npf_list *npfl2, struct npfield *npf2,
-			     struct emitter *e)
+static void field_mod_report(struct emitter *e, struct npf_list *npfl1,
+			     struct npfield *npf1, struct npf_list *npfl2,
+			     struct npfield *npf2)
 {
-	print_mod(npfl1, npf1, "@-", e);
-	print_mod(npfl2, npf2, "@+", e);
+	emit_field(e, npfl1, npf1, "%-");
+	emit_field(e, npfl2, npf2, "%+");
 }
 
 
-static void hdr_mod_report(struct prpent *ppe1, ulong p1n, struct prpent *ppe2,
-			   ulong p2n, double drop_bit_cost, double ins_bit_cost,
-			   struct emitter *e)
+static void hdr_mod_report(struct emitter *e, struct prpent *ppe1, ulong p1n,
+			   struct prpent *ppe2, ulong p2n, 
+			   double drop_bit_cost, double ins_bit_cost)
 {
 	ulong r = 0;
 	ulong c = 0;
@@ -711,19 +611,22 @@ static void hdr_mod_report(struct prpent *ppe1, ulong p1n, struct prpent *ppe2,
 	struct npfield *rnpf, *cnpf;
 	struct raw rl;
 	char line[256];
+	struct npf_list *bnpfl, *anpfl;
 
 	rl.data = line;
 	rl.len = sizeof(line);
 
-	fdiff_load(&Fdiff, &ppe1->npfl, &ppe2->npfl);
+	bnpfl = &ppe1->npfl;
+	anpfl = &ppe2->npfl;
+
+	fdiff_load(&Fdiff, bnpfl, anpfl);
 	fdiff_compare(&Fdiff, drop_bit_cost, ins_bit_cost);
 	cpm = &Fdiff.cpm;
 	cpm_backtrace(cpm);
 
-
 	elem = cpm_elem(cpm, 0, 0);
-	rnpf = npfl_first(Fdiff.before);
-	cnpf = npfl_first(Fdiff.after);
+	rnpf = npfl_first(bnpfl);
+	cnpf = npfl_first(anpfl);
 
 	while (elem->next != NULL) {
 		next = elem->next;
@@ -746,8 +649,7 @@ static void hdr_mod_report(struct prpent *ppe1, ulong p1n, struct prpent *ppe2,
 			break;
 
 		case MODIFY:
-			field_mod_report(Fdiff.before, rnpf, Fdiff.after, cnpf,
-					 e);
+			field_mod_report(e, bnpfl, rnpf, anpfl, cnpf);
 			r += 1; rnpf = npf_next(rnpf);
 			c += 1; cnpf = npf_next(cnpf);
 			break;
@@ -758,7 +660,6 @@ static void hdr_mod_report(struct prpent *ppe1, ulong p1n, struct prpent *ppe2,
 
 		elem = next;
 	}
-
 
 	fdiff_clear(&Fdiff);
 }
@@ -997,39 +898,40 @@ void pdiff_compare(struct pdiff *pd)
 }
 
 
-static void print_hdr_op(struct prpent *ppe, ulong psoff, 
-			 struct emitter *e, int isins)
+static void emit_fields(struct emitter *e, struct npf_list *npfl, char *pfx)
 {
-	char line[256];
-	struct raw rl;
-	const char *name;
-	char *op;
-	struct ns_namespace *ns;
-	struct prparse *prp;
 	struct npfield *npf;
 
-	rl.data = line;
-	rl.len = sizeof(line);
-	prp = ppe->prp;
-	op = isins ? "Insert" : "Drop";
-
-	ns = ns_lookup_by_prid(prp->prid);
-	if (ns != NULL) {
-		name = ns->name;
-	} else {
-		str_fmt(line, sizeof(line), "PRID-%d-", prp->prid);
-		name = line;
-	}
-
-	emit_format(e, "%s header %s%d at %lu which is %lu bytes long\n", op,
-		    name, ppe->idx, prp_soff(prp) - psoff, prp_totlen(prp));
-
-	op = isins ? "+" : "-";
-	for (npf = npfl_first(&ppe->npfl) ; !npf_is_end(npf) ;
+	for (npf = npfl_first(npfl) ; !npf_is_end(npf) ;
 	     npf = npf_next(npf)) {
-		ns_tostr(npf->nse, npf->buf, prp, &rl);
-		emit_format(e, "\t%s%s\n", op, line);
+		emit_field(e, npfl, npf, pfx);
 	}
+}
+
+
+static void print_hdr_op(struct emitter *e, struct prpent *ppe, int isins)
+{
+	char name[256];
+	char *op;
+	char *pfx;
+	struct prparse *prp;
+	ulong psoff;
+
+	prp = ppe->prp;
+	psoff = prp_poff(ppe->npfl.plist);
+
+	op = isins ? "INSERT" : "DROP";
+	pfx = isins ? "H+" : "H-";
+
+	prp_get_name(prp, ppe->idx, name, sizeof(name));
+	emit_format(e, "%s*****\n* ", pfx);
+	emit_format(e, "%s* %s header %s -- [%lu:%lu]\n", 
+		    pfx, op, name, prp_soff(prp) - psoff,
+		    prp_totlen(prp));
+	emit_format(e, "%s*****\n", pfx);
+
+	emit_fields(e, &ppe->npfl, pfx);
+
 }
 
 
@@ -1068,19 +970,18 @@ static void mod_pkt_report(struct pktent *pke1, ulong p1n, struct pktent *pke2,
 			break;
 
 		case DROP:
-			print_hdr_op(rppe, pkb_get_off(pke1->pkt), e, 0);
+			print_hdr_op(e, rppe, 0);
 			r += 1;
 			break;
 
 		case INSERT:
-			print_hdr_op(cppe, pkb_get_off(pke2->pkt), e, 1);
+			print_hdr_op(e, cppe, 1);
 			c += 1;
 			break;
 
-
 		case MODIFY:
-			hdr_mod_report(rppe, r+1, cppe, c+1, drop_bit_cost,
-				       ins_bit_cost, e);
+			hdr_mod_report(e, rppe, r+1, cppe, c+1, drop_bit_cost,
+				       ins_bit_cost);
 			r += 1;
 			c += 1;
 			break;
@@ -1095,13 +996,39 @@ static void mod_pkt_report(struct pktent *pke1, ulong p1n, struct pktent *pke2,
 }
 
 
+static void pke_print(struct emitter *e, struct pktent *pke, char *pfx)
+{
+	char name[64];
+	struct prpent *ppe;
+	ulong i;
+	ulong psoff;
+	ulong soff;
+	struct prparse *prp;
+
+	psoff = pkb_get_off(pke->pkt);
+
+	for (i = 0, ppe = pke->prparr; i < pke->nprp; ++i, ++ppe) {
+		prp = ppe->prp;
+
+		soff = prp_soff(prp) - psoff;
+		prp_get_name(prp, ppe->idx, name, sizeof(name));
+		emit_format(e, "%s*****\n", pfx);
+		emit_format(e, "%s* %s: [%lu:%lu]\n", pfx, name, soff, 
+			    prp_totlen(prp));
+		emit_format(e, "%s*****\n", pfx);
+
+		emit_fields(e, &ppe->npfl, pfx);
+	}
+}
+
+
 void pdiff_report(struct pdiff *pd, struct emitter *e)
 {
 	ulong r = 0;
 	ulong c = 0;
 	struct cpmatrix *cpm = &pd->cpm;
 	struct chgpath *elem, *next;
-	struct pktbuf *pkb;
+	struct pktent *pke;
 
 	elem = cpm_elem(cpm, 0, 0);
 	while (elem->next != NULL) {
@@ -1116,17 +1043,19 @@ void pdiff_report(struct pdiff *pd, struct emitter *e)
 			emit_string(e, "#####\n");
 			emit_format(e, "# DROP packet %lu\n", r+1);
 			emit_string(e, "#####\n");
-			pkb = pd->before.pkts[r].pkt;
-			pkb_print(e, pkb, "--", NULL, NULL);
+			pke = &pd->before.pkts[r];
+			pke_print(e, pke, "--");
+			emit_string(e, "\n");
 			r += 1;
 			break;
 
 		case INSERT:
 			emit_string(e, "#####\n");
-			emit_format(e, "# INSERT -> packet %lu\n", c+1);
+			emit_format(e, "# INSERT packet %lu\n", c+1);
 			emit_string(e, "#####\n");
-			pkb = pd->after.pkts[c].pkt;
-			pkb_print(e, pkb, "++", NULL, NULL);
+			pke = &pd->after.pkts[c];
+			pke_print(e, pke, "++");
+			emit_string(e, "\n");
 			c += 1;
 			break;
 
@@ -1137,6 +1066,7 @@ void pdiff_report(struct pdiff *pd, struct emitter *e)
 			emit_string(e, "#####\n");
 			mod_pkt_report(&pd->before.pkts[r], r+1, 
 				       &pd->after.pkts[c], c+1, e);
+			emit_string(e, "\n");
 			r += 1; 
 			c += 1;
 			break;
@@ -1146,10 +1076,11 @@ void pdiff_report(struct pdiff *pd, struct emitter *e)
 			emit_format(e, "# SWAP packet %lu with packet %lu\n",
 				    r, r+1);
 			emit_string(e, "#####\n");
-			pkb = pd->before.pkts[r].pkt;
-			pkb_print(e, pkb, "<<", NULL, NULL);
-			pkb = pd->before.pkts[r-1].pkt;
-			pkb_print(e, pkb, ">>", NULL, NULL);
+			pke = &pd->before.pkts[r];
+			pke_print(e, pke, "<<");
+			pke = &pd->before.pkts[r-1];
+			pke_print(e, pke, ">>");
+			emit_string(e, "\n");
 			r += 1;
 			c += 1;
 			break;

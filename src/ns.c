@@ -229,6 +229,7 @@ int ns_fmt_raw(struct ns_elem *elem, byte_t *pkt, struct prparse *prp,
 	struct ns_pktfld *pf;
 	size_t nlen;
 	ulong off, len;
+	struct prparse *head;
 
 	abort_unless(elem != NULL && pkt != NULL && prp != NULL && out != NULL);
 
@@ -254,10 +255,12 @@ int ns_fmt_raw(struct ns_elem *elem, byte_t *pkt, struct prparse *prp,
 		abort_unless(0);
 	}
 
+	head = prp_get_base(prp);
+	off -= prp_poff(head);
 	r = 0;
 	if (nlen < out->len)
 		r = snprintf(out->data + nlen - 1, out->len - nlen + 1,
-			     " -- Offset %lu, Length %lu", off, len);
+			     " -- [%lu:%lu]", off, len);
 
 	return r;
 }
