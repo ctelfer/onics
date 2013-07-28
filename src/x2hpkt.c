@@ -298,13 +298,12 @@ int add_fields(struct prparse *prp, struct ns_namespace *ns)
 /* print all the fields in the array up through eoff */
 void print_fields(ulong eoff)
 {
+	char pfx[MAXPFX];
 	char line[MAXLINE];
-	struct raw r;
 	struct ns_elem *e;
 	struct ns_namespace *lastns = NULL;
 	struct field *f;
 	int rv;
-	int i;
 
 
 	while (next_field != l_end(&packet_fields)) {
@@ -317,27 +316,23 @@ void print_fields(ulong eoff)
 		e = f->elem;
 		/* check for change of prefix */
 		if (f->ns != lastns) {
-			i = getpfx(line, f->ns->name, MAXPFX);
-			r.data = line + i;
-			r.len = MAXLINE - i;
+			getpfx(pfx, f->ns->name, MAXPFX);
+			lastns = f->ns;
 		}
+
 
 		if (e->type == NST_NAMESPACE) {
 			printsep();
-			rv = ns_tostr(e, g_p, f->prp, &r);
-			if (rv >= 0) {
+			rv = ns_tostr(e, g_p, f->prp, line, sizeof(line), pfx);
+			if (rv >= 0)
 				fputs(line, stdout);
-				fputc('\n', stdout);
-			}
 			if (f->ishdr)
 				printerr(f->prp->error);
 			printsep();
 		} else {
-			rv = ns_tostr(e, g_p, f->prp, &r);
-			if (rv >= 0) {
+			rv = ns_tostr(e, g_p, f->prp, line, sizeof(line), pfx);
+			if (rv >= 0)
 				fputs(line, stdout);
-				fputc('\n', stdout);
-			}
 		}
 
 		next_field = l_next(next_field);

@@ -22,6 +22,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <limits.h>
 
 #include <cat/str.h>
 
@@ -221,48 +222,143 @@ static int ns_get_offlen(struct ns_namespace *ns, struct prparse *prp,
 }
 
 
-int ns_fmt_raw(struct ns_elem *elem, byte_t *pkt, struct prparse *prp,
-	       struct raw *out)
+int ns_fmt_summary(struct ns_elem *elem, byte_t *pkt, struct prparse *prp,
+		   char *s, size_t ssize, const char *pfx)
 {
 	int r;
 	struct ns_namespace *ns;
 	struct ns_pktfld *pf;
 	size_t nlen;
 	ulong off, len;
+	size_t soff;
 	struct prparse *head;
 
-	abort_unless(elem != NULL && pkt != NULL && prp != NULL && out != NULL);
+	abort_unless(elem != NULL && pkt != NULL && prp != NULL && s != NULL &&
+	    	     ssize != 0);
 
-	if (out->len == 0)
-		return 0;
-
-	abort_unless(out->data != NULL);
+	soff = 0;
+	if (pfx != NULL) {
+		soff = str_copy(s, pfx, ssize);
+		if (soff >= ssize)
+			return -1;
+		--soff;
+	}
 
 	if (elem->type == NST_NAMESPACE) {
 		ns = (struct ns_namespace *)elem;
 		r = ns_get_offlen(ns, prp, &off, &len);
 		if (r < 0)
 			return r;
-		nlen = str_copy(out->data, ns->fullname, out->len);
+		nlen = str_copy(s + soff, ns->fullname, ssize - soff);
 	} else if (elem->type == NST_PKTFLD) {
 		pf = (struct ns_pktfld *)elem;
 		r = pf_get_offlen(pf, prp, &off, &len);
 		if (r < 0)
 			return r;
-		nlen = str_copy(out->data, pf->fmtstr, out->len);
+		nlen = str_copy(s + soff, pf->fullname, ssize - soff);
 	} else {
 		nlen = 0;
 		abort_unless(0);
 	}
 
+	if (nlen >= ssize - soff)
+		return -1;
+	soff += nlen - 1;
+
+	head = prp_get_base(prp);
+	off -= prp_poff(head);
+
+	r = str_fmt(s + soff, ssize - soff, " -- [%lu:%lu]\n", off, len);
+	if (r < 0)
+		return -1;
+
+	return 0;
+}
+
+
+int ns_fmt_raw(struct ns_elem *elem, byte_t *pkt, struct prparse *prp,
+	       char *s, size_t ssize, const char *pfx)
+{
+	int r;
+	struct ns_namespace *ns;
+	struct ns_pktfld *pf;
+	size_t nlen;
+	ulong off, len;
+	size_t soff;
+	struct prparse *head;
+
+	abort_unless(elem != NULL && pkt != NULL && prp != NULL && s != NULL &&
+	    	     ssize != 0);
+
+	soff = 0;
+	if (pfx != NULL) {
+		soff = str_copy(s, pfx, ssize);
+		if (soff >= ssize)
+			return -1;
+		--soff;
+	}
+
+	if (elem->type == NST_NAMESPACE) {
+		ns = (struct ns_namespace *)elem;
+		r = ns_get_offlen(ns, prp, &off, &len);
+		if (r < 0)
+			return r;
+		nlen = str_copy(s + soff, ns->fullname, ssize - soff);
+	} else if (elem->type == NST_PKTFLD) {
+		pf = (struct ns_pktfld *)elem;
+		r = pf_get_offlen(pf, prp, &off, &len);
+		if (r < 0)
+			return r;
+		nlen = str_copy(s + soff, pf->fullname, ssize - soff);
+	} else {
+		nlen = 0;
+		abort_unless(0);
+	}
+
+	if (nlen >= ssize - soff)
+		return -1;
+	soff += nlen - 1;
+
 	head = prp_get_base(prp);
 	off -= prp_poff(head);
 	r = 0;
-	if (nlen < out->len)
-		r = snprintf(out->data + nlen - 1, out->len - nlen + 1,
-			     " -- [%lu:%lu]", off, len);
 
-	return r;
+	r = str_fmt(s + soff, ssize - soff, " -- [%lu:%lu]\n", off, len);
+	if (r < 0)
+		return -1;
+
+	/* TODO add hex dump */
+
+	return 0;
+}
+
+
+
+/* 
+ * pad the string out to a specified width (sizeof(padding)) with
+ * ":    .....   ".    return the number of non-null bytes
+ * added or -1 if an error.  If the offset is already greater
+ * than the padding length just add ": ".
+ */
+static int align(char *s, size_t ssize, size_t soff)
+{
+	static char padding[] = "                              ";
+
+	/* must at least have space for ": " (including null terminator) */
+	if (ssize < 3)
+		return -1;
+
+	if (soff >= sizeof(padding) - 2) {
+		*s++ = ':';
+		*s++ = ' ';
+		return 2;
+	} else {
+		if (sizeof(padding) - soff + 1 >= ssize)
+			return -1;
+		*s++ = ':';
+		str_copy(s, padding + soff, ssize-1);
+		return sizeof(padding) - soff;
+	}
 }
 
 
@@ -295,11 +391,50 @@ static int getnum(struct ns_pktfld *pf, byte_t *pkt, struct prparse *prp,
 }
 
 
+static int fmt_name(char *s, size_t ssize, const char *pfx,
+		    const char *name)
+{
+	size_t soff;
+	size_t noff;
+	int r;
+
+	soff = 0;
+	if (pfx != NULL) {
+		soff = str_copy(s, pfx, ssize);
+		if (soff >= ssize)
+			return -1;
+		--soff;
+	}
+
+	noff = str_copy(s + soff, name, ssize - soff);
+	if (noff > ssize - soff)
+		return -1;
+	soff += noff - 1;
+
+	r = align(s + soff, ssize - soff, soff);
+	if (r < 0)
+		return -1;
+	soff += r;
+
+	if (soff > INT_MAX)
+		return -1;
+
+	return (int)soff;
+}
+
+
 int ns_fmt_num(struct ns_elem *elem, byte_t *pkt, struct prparse *prp,
-	       struct raw *out)
+	       char *s, size_t ssize, const char *pfx, int base)
 {
 	ulong v;
 	struct ns_pktfld *pf;
+	int r;
+	size_t soff;
+	ulong poff, plen;
+	char fmt[16];
+
+	abort_unless(elem != NULL && pkt != NULL && prp != NULL && s != NULL &&
+	    	     ssize != 0);
 
 	if (elem->type != NST_PKTFLD)
 		return -1;
@@ -307,34 +442,189 @@ int ns_fmt_num(struct ns_elem *elem, byte_t *pkt, struct prparse *prp,
 	if (getnum(pf, pkt, prp, &v) < 0)
 		return -1;
 
-	return snprintf(out->data, out->len, pf->fmtstr, v);
+	r = fmt_name(s, ssize, pfx, pf->fullname);
+	if (r < 0)
+		return -1;
+	soff = r;
+
+	if (base == 10) {
+		r = str_fmt(s + soff, ssize - soff, "%lu\n", v);
+	} else if (base == 16) {
+		if (pf_get_offlen(pf, prp, &poff, &plen) < 0)
+			return -1;
+		if (!NSF_IS_INBITS(pf->flags))
+			plen *= 8;
+		str_fmt(fmt, sizeof(fmt), "0x%%0%ux\n", (plen + 3) / 4);
+		r = str_fmt(s + soff, ssize - soff, fmt, v);
+	}
+	if (r < 0)
+		return -1;
+
+	return 0;
+}
+
+
+int ns_fmt_dec(struct ns_elem *elem, byte_t *pkt, struct prparse *prp,
+	       char *s, size_t ssize, const char *pfx)
+{
+	return ns_fmt_num(elem, pkt, prp, s, ssize, pfx, 10);
+}
+
+
+
+int ns_fmt_hex(struct ns_elem *elem, byte_t *pkt, struct prparse *prp,
+	       char *s, size_t ssize, const char *pfx)
+{
+	return ns_fmt_num(elem, pkt, prp, s, ssize, pfx, 16);
+}
+
+
+
+int ns_fmt_nwlen(struct ns_elem *elem, byte_t *pkt, struct prparse *prp,
+	         char *s, size_t ssize, const char *pfx, int nw)
+{
+	ulong v;
+	struct ns_pktfld *pf;
+	size_t off;
+	int r;
+	int mul;
+
+	abort_unless(elem != NULL && pkt != NULL && prp != NULL && s != NULL &&
+	    	     ssize != 0);
+
+	if (elem->type != NST_PKTFLD)
+		return -1;
+	pf = (struct ns_pktfld *)elem;
+	if (getnum(pf, pkt, prp, &v) < 0)
+		return -1;
+
+	r = fmt_name(s, ssize, pfx, pf->fullname);
+	if (r < 0)
+		return -1;
+	off = r;
+
+	mul = 4 * nw;
+
+	r = str_fmt(s + off, ssize - off, "%lu (%lu bytes)\n", v, v*mul);
+	if (r < 0)
+		return -1;
+
+	return 0;
 }
 
 
 int ns_fmt_wlen(struct ns_elem *elem, byte_t *pkt, struct prparse *prp,
-	        struct raw *out)
+	        char *s, size_t ssize, const char *pfx)
+{
+	return ns_fmt_nwlen(elem, pkt, prp, s, ssize, pfx, 1);
+}
+
+
+int ns_fmt_qlen(struct ns_elem *elem, byte_t *pkt, struct prparse *prp,
+	        char *s, size_t ssize, const char *pfx)
+{
+	return ns_fmt_nwlen(elem, pkt, prp, s, ssize, pfx, 2);
+}
+
+
+int ns_fmt_fbf(struct ns_elem *elem, byte_t *pkt, struct prparse *prp,
+	       char *s, size_t ssize, const char *pfx)
 {
 	ulong v;
 	struct ns_pktfld *pf;
+	size_t soff;
+	int r;
+	int foff;
+	int fwidth;
+	char fmt[16];
+
+	abort_unless(elem != NULL && pkt != NULL && prp != NULL && s != NULL &&
+	    	     ssize != 0);
 
 	if (elem->type != NST_PKTFLD)
 		return -1;
 	pf = (struct ns_pktfld *)elem;
+	if (!NSPF_IS_FBF(pf))
+		return -1;
 	if (getnum(pf, pkt, prp, &v) < 0)
 		return -1;
 
-	return snprintf(out->data, out->len, pf->fmtstr, v, v*4);
+	r = fmt_name(s, ssize, pfx, pf->fullname);
+	if (r < 0)
+		return -1;
+	soff = r;
+
+	foff = NSPF_FBF_FOFF(pf);
+	fwidth = NSPF_FBF_FWIDTH(pf);
+
+	/* account for \n\0 */
+	if (ssize - soff < fwidth + 2)
+		return -1;
+
+	for (r = 0; r < foff; ++r)
+		s[soff + r] = '.';
+	soff += foff;
+	str_fmt(fmt, sizeof(fmt), "%%0%db", pf->len);
+
+	r = str_fmt(s + soff, ssize - soff, fmt, v);
+	if (r < 0)
+		return -1;
+	while (r + foff < fwidth) {
+		abort_unless(ssize - soff > r);
+		s[soff + r] = '.';
+		++r;
+	}
+	soff += r;
+	abort_unless(ssize - soff >= 2);
+	s[soff] = '\n';
+	s[soff+1] = '\0';
+
+	return 0;
+}
+
+
+static int buildstr(char *s, size_t ssize, const char *pfx, const char *name,
+		    const char *data)
+{
+	size_t soff;
+	size_t noff;
+	int r;
+
+	soff = 0;
+	if (pfx != NULL) {
+		soff = str_copy(s, pfx, ssize);
+		if (soff >= ssize)
+			return -1;
+		--soff;
+	}
+
+	noff = str_copy(s + soff, name, ssize - soff);
+	if (noff >= ssize - soff)
+		return -1;
+	soff += noff - 1;
+
+	r = align(s + soff, ssize - soff, soff);
+	if (r < 0)
+		return -1;
+	soff += r;
+
+	r = str_fmt(s + soff, ssize - soff, "%s\n", data);
+	if (r < 0)
+		return -1;
+
+	return 0;
 }
 
 
 int ns_fmt_ipv4a(struct ns_elem *elem, byte_t *pkt, struct prparse *prp,
-	         struct raw *out)
+	         char *s, size_t ssize, const char *pfx)
 {
 	struct ns_pktfld *pf;
 	ulong off, len, val;
 	char buf[20];
 
-	abort_unless(elem != NULL && pkt != NULL && prp != NULL && out != NULL);
+	abort_unless(elem != NULL && pkt != NULL && prp != NULL && s != NULL &&
+	    	     ssize != 0);
 
 	if (elem->type != NST_PKTFLD)
 		return -1;
@@ -350,30 +640,30 @@ int ns_fmt_ipv4a(struct ns_elem *elem, byte_t *pkt, struct prparse *prp,
 		if (len != 32)
 			return -1;
 		val = getbits(pkt, NSF_BITOFF(pf->flags), 32);
-		snprintf(buf, sizeof(buf), "%u.%u.%u.%u", 
+		str_fmt(buf, sizeof(buf), "%u.%u.%u.%u", 
 			 (uint)(val >> 24) & 0xFF, (uint)(val >> 16) & 0xFF, 
 			 (uint)(val >> 8) & 0xFF, (uint)val & 0xFF);
 
 	} else {
 		if (len != 4)
 			return -1;
-		snprintf(buf, sizeof(buf), "%u.%u.%u.%u",
+		str_fmt(buf, sizeof(buf), "%u.%u.%u.%u",
 			 pkt[0], pkt[1], pkt[2], pkt[3]);
 	}
 
-	/* TODO: check format string for single %s */
-	return snprintf(out->data, out->len, pf->fmtstr, buf);
+	return buildstr(s, ssize, pfx, pf->fullname, buf);
 }
 
 
 int ns_fmt_ipv6a(struct ns_elem *elem, byte_t *pkt, struct prparse *prp,
-	         struct raw *out)
+	         char *s, size_t ssize, const char *pfx)
 {
 	struct ns_pktfld *pf;
 	ulong off, len;
 	char buf[52];
 
-	abort_unless(elem != NULL && pkt != NULL && prp != NULL && out != NULL);
+	abort_unless(elem != NULL && pkt != NULL && prp != NULL && s != NULL &&
+	    	     ssize != 0);
 
 	if (elem->type != NST_PKTFLD)
 		return -1;
@@ -389,7 +679,7 @@ int ns_fmt_ipv6a(struct ns_elem *elem, byte_t *pkt, struct prparse *prp,
 	if (len != 16)
 		return -1;
 
-	snprintf(buf, sizeof(buf), 
+	str_fmt(buf, sizeof(buf), 
 		 "%x:%x:%x:%x:%x:%x:%x:%x",
 		 pkt[0] << 8 | pkt[1], 
 		 pkt[2] << 8 | pkt[3], 
@@ -400,19 +690,19 @@ int ns_fmt_ipv6a(struct ns_elem *elem, byte_t *pkt, struct prparse *prp,
 		 pkt[12] << 8 | pkt[13], 
 		 pkt[14] << 8 | pkt[15]);
 
-	/* TODO: check format string for single %s */
-	return snprintf(out->data, out->len, pf->fmtstr, buf);
+	return buildstr(s, ssize, pfx,pf->fullname, buf);
 }
 
 
 int ns_fmt_etha(struct ns_elem *elem, byte_t *pkt, struct prparse *prp,
-	        struct raw *out)
+	        char *s, size_t ssize, const char *pfx)
 {
 	struct ns_pktfld *pf;
 	ulong off, len;
 	char buf[20];
 
-	abort_unless(elem != NULL && pkt != NULL && prp != NULL && out != NULL);
+	abort_unless(elem != NULL && pkt != NULL && prp != NULL && s != NULL &&
+	    	     ssize != 0);
 
 	if (elem->type != NST_PKTFLD)
 		return -1;
@@ -428,40 +718,39 @@ int ns_fmt_etha(struct ns_elem *elem, byte_t *pkt, struct prparse *prp,
 	if (len != 6)
 		return -1;
 
-	snprintf(buf, sizeof(buf), "%02x:%02x:%02x:%02x:%02x:%02x",
-		 pkt[0], pkt[1], pkt[2], pkt[3], pkt[4], pkt[5]);
+	str_fmt(buf, sizeof(buf), "%02x:%02x:%02x:%02x:%02x:%02x",
+		pkt[0], pkt[1], pkt[2], pkt[3], pkt[4], pkt[5]);
 
-	/* TODO: check format string for single %s */
-	return snprintf(out->data, out->len, pf->fmtstr, buf);
+	return buildstr(s, ssize, pfx, pf->fullname, buf);
 }
 
 
 int ns_tostr(struct ns_elem *elem, byte_t *pkt, struct prparse *prp,
-	     struct raw *out)
+	     char *s, size_t ssize, const char *pfx)
 {
 	struct ns_namespace *ns;
 	struct ns_pktfld *pf;
 	ns_format_f fmt;
 
-	if (elem == NULL || pkt == NULL || prp == NULL || out == NULL ||
-	    out->data == NULL)
+	if (elem == NULL || pkt == NULL || prp == NULL || s == NULL ||
+	    ssize == 0)
 		return -1;
 
 	if (elem->type == NST_NAMESPACE) {
 		ns = (struct ns_namespace *)elem;
 		fmt = ns->fmt;
 		if (fmt == NULL)
-			fmt = ns_fmt_raw;
+			fmt = ns_fmt_summary;
 	} else if (elem->type == NST_PKTFLD) {
 		pf = (struct ns_pktfld *)elem;
 		fmt = pf->fmt;
 		if (fmt == NULL)
-			fmt = ns_fmt_num;
+			fmt = ns_fmt_dec;
 	} else {
 		return -1;
 	}
 
-	return (*fmt)(elem, pkt, prp, out);
+	return (*fmt)(elem, pkt, prp, s, ssize, pfx);
 }
 
 

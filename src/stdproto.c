@@ -1830,14 +1830,14 @@ static struct ns_namespace eth2_ns =
 
 static struct ns_pktfld eth2_ns_dst =
 	NS_BYTEFIELD_I("dst", &eth2_ns, PRID_ETHERNET2, 0, 6,
-		       "Destination Address: %s", &ns_fmt_etha);
+		       "Destination Address", &ns_fmt_etha);
 static struct ns_pktfld eth2_ns_src =
 	NS_BYTEFIELD_I("src", &eth2_ns, PRID_ETHERNET2, 6, 6,
-		       "Source Address:      %s", &ns_fmt_etha);
+		       "Source Address", &ns_fmt_etha);
 static struct ns_pktfld eth2_ns_ethtype =
 	NS_BYTEFIELD_IDX_I("ethtype", &eth2_ns, PRID_ETHERNET2, 
 			PRP_ETHFLD_ETYPE, 0, 2,
-		       "Ethernet Type:       %04x", &ns_fmt_num);
+		       "Ethernet Type", &ns_fmt_hex);
 
 extern struct ns_elem *stdproto_eth2_vlan0_ns_elems[STDPROTO_NS_SUB_ELEN];
 extern struct ns_elem *stdproto_eth2_vlan1_ns_elems[STDPROTO_NS_SUB_ELEN];
@@ -1851,19 +1851,19 @@ static struct ns_namespace eth2_vlan0_ns =
 static struct ns_pktfld eth2_vlan0_tpid =
 	NS_BYTEFIELD_IDX_I("tpid", &eth2_vlan0_ns, PRID_ETHERNET2,
 		PRP_ETHFLD_VLAN0, 0, 2,
-	       "Tag Proto ID:        %04x", &ns_fmt_num);
+	       "Tag Proto ID", &ns_fmt_hex);
 static struct ns_pktfld eth2_vlan0_pcp =
 	NS_BITFIELD_IDX_I("pcp", &eth2_vlan0_ns, PRID_ETHERNET2,
 		PRP_ETHFLD_VLAN0, 2, 0, 3,
-	       "Priority Code Point: %u", &ns_fmt_num);
+	       "Priority Code Point", &ns_fmt_dec);
 static struct ns_pktfld eth2_vlan0_cfi =
 	NS_BITFIELD_IDX_I("cfi", &eth2_vlan0_ns, PRID_ETHERNET2,
 		PRP_ETHFLD_VLAN0, 2, 3, 1,
-	       "Canonical Field Ind: %u", &ns_fmt_num);
+	       "Canonical Field Ind", &ns_fmt_dec);
 static struct ns_pktfld eth2_vlan0_vid =
 	NS_BITFIELD_IDX_I("vid", &eth2_vlan0_ns, PRID_ETHERNET2,
 		PRP_ETHFLD_VLAN0, 2, 4, 12,
-	       "VLAN ID:             %u", &ns_fmt_num);
+	       "VLAN ID", &ns_fmt_dec);
 struct ns_elem *stdproto_eth2_vlan0_ns_elems[STDPROTO_NS_SUB_ELEN] = {
 	(struct ns_elem *)&eth2_vlan0_tpid, (struct ns_elem *)&eth2_vlan0_pcp, 
 	(struct ns_elem *)&eth2_vlan0_cfi, (struct ns_elem *)&eth2_vlan0_vid, 
@@ -1878,19 +1878,19 @@ static struct ns_namespace eth2_vlan1_ns =
 static struct ns_pktfld eth2_vlan1_tpid =
 	NS_BYTEFIELD_IDX_I("tpid", &eth2_vlan1_ns, PRID_ETHERNET2,
 		PRP_ETHFLD_VLAN1, 0, 2,
-	       "Tag Proto ID:        %04x", &ns_fmt_num);
+	       "Tag Proto ID", &ns_fmt_hex);
 static struct ns_pktfld eth2_vlan1_pcp =
 	NS_BITFIELD_IDX_I("pcp", &eth2_vlan1_ns, PRID_ETHERNET2,
 		PRP_ETHFLD_VLAN1, 2, 0, 3,
-	       "Priority Code Point: %u", &ns_fmt_num);
+	       "Priority Code Point", &ns_fmt_dec);
 static struct ns_pktfld eth2_vlan1_cfi =
 	NS_BITFIELD_IDX_I("cfi", &eth2_vlan1_ns, PRID_ETHERNET2,
 		PRP_ETHFLD_VLAN1, 2, 3, 1,
-	       "Canonical Field Ind: %u", &ns_fmt_num);
+	       "Canonical Field Ind", &ns_fmt_dec);
 static struct ns_pktfld eth2_vlan1_vid =
 	NS_BITFIELD_IDX_I("vid", &eth2_vlan1_ns, PRID_ETHERNET2,
 		PRP_ETHFLD_VLAN1, 2, 4, 12,
-	       "VLAN ID:             %u", &ns_fmt_num);
+	       "VLAN ID", &ns_fmt_dec);
 struct ns_elem *stdproto_eth2_vlan1_ns_elems[STDPROTO_NS_SUB_ELEN] = {
 	(struct ns_elem *)&eth2_vlan1_tpid, (struct ns_elem *)&eth2_vlan1_pcp, 
 	(struct ns_elem *)&eth2_vlan1_cfi, (struct ns_elem *)&eth2_vlan1_vid, 
@@ -1912,35 +1912,35 @@ static struct ns_namespace arp_ns =
 
 static struct ns_pktfld arp_ns_hwfmt =
 	NS_BYTEFIELD_I("hwfmt", &arp_ns, PRID_ARP, 0, 2,
-		"HW Address Format:    %lx", &ns_fmt_num);
+		"HW Address Format", &ns_fmt_hex);
 static struct ns_pktfld arp_ns_prfmt =
 	NS_BYTEFIELD_I("prfmt", &arp_ns, PRID_ARP, 2, 2,
-		"Proto Address Format: %lx", &ns_fmt_num);
+		"Proto Address Format", &ns_fmt_hex);
 static struct ns_pktfld arp_ns_hwlen =
 	NS_BYTEFIELD_I("hwlen", &arp_ns, PRID_ARP, 4, 1,
-		"HW Address length:    %lu", &ns_fmt_num);
+		"HW Address length", &ns_fmt_dec);
 static struct ns_pktfld arp_ns_prlen =
 	NS_BYTEFIELD_I("prlen", &arp_ns, PRID_ARP, 5, 1,
-		"Proto Address length: %lu", &ns_fmt_num);
+		"Proto Address length", &ns_fmt_dec);
 static struct ns_pktfld arp_ns_op =
 	NS_BYTEFIELD_I("op", &arp_ns, PRID_ARP, 6, 2,
-		"Operation:            %lu", &ns_fmt_num);
+		"Operation", &ns_fmt_dec);
 static struct ns_pktfld arp_ns_sndhwaddr =
 	NS_BYTEFIELD_IDX_I("sndhwaddr", &arp_ns, PRID_ARP,
 		PRP_ARPFLD_ETHARP, 8, 6, 
-		"Sender HW Address:    %s", &ns_fmt_etha);
+		"Sender HW Address", &ns_fmt_etha);
 static struct ns_pktfld arp_ns_sndpraddr =
 	NS_BYTEFIELD_IDX_I("sndpraddr", &arp_ns, PRID_ARP,
 		PRP_ARPFLD_ETHARP, 14, 4, 
-		"Sender IP Address:    %s", &ns_fmt_ipv4a);
+		"Sender IP Address", &ns_fmt_ipv4a);
 static struct ns_pktfld arp_ns_trghwaddr =
 	NS_BYTEFIELD_IDX_I("trghwaddr", &arp_ns, PRID_ARP,
 		PRP_ARPFLD_ETHARP, 18, 6, 
-		"Target HW Address:    %s", &ns_fmt_etha);
+		"Target HW Address", &ns_fmt_etha);
 static struct ns_pktfld arp_ns_trgpraddr =
 	NS_BYTEFIELD_IDX_I("trgpraddr", &arp_ns, PRID_ARP,
 		PRP_ARPFLD_ETHARP, 24, 4, 
-		"Target IP Address:    %s", &ns_fmt_ipv4a);
+		"Target IP Address", &ns_fmt_ipv4a);
 
 struct ns_elem *stdproto_arp_ns_elems[STDPROTO_NS_ELEN] = {
 	(struct ns_elem *)&arp_ns_hwfmt, (struct ns_elem *)&arp_ns_prfmt, 
@@ -1961,49 +1961,49 @@ static struct ns_namespace ipv4_ns =
 
 static struct ns_pktfld ipv4_ns_vers =
 	NS_BITFIELD_I("vers", &ipv4_ns, PRID_IPV4, 0, 0, 4,
-		"Version:              %lu", &ns_fmt_num);
+		"Version", &ns_fmt_dec);
 static struct ns_pktfld ipv4_ns_ihl =
 	NS_BITFIELD_I("ihl", &ipv4_ns, PRID_IPV4, 0, 4, 4,
-		"Header Length:        %lu (%lu bytes)", &ns_fmt_wlen);
+		"Header Length", &ns_fmt_wlen);
 static struct ns_pktfld ipv4_ns_diffsrv =
 	NS_BITFIELD_I("diffsrv", &ipv4_ns, PRID_IPV4, 1, 0, 6,
-		"Diffserv:             %02lx", &ns_fmt_num);
+		"Diffserv", &ns_fmt_hex);
 static struct ns_pktfld ipv4_ns_ecn =
 	NS_BITFIELD_I("ecn", &ipv4_ns, PRID_IPV4, 1, 6, 2,
-		"ECN:                  %lx", &ns_fmt_num);
+		"ECN", &ns_fmt_hex);
 static struct ns_pktfld ipv4_ns_len =
 	NS_BYTEFIELD_I("len", &ipv4_ns, PRID_IPV4, 2, 2,
-		"Total Length:         %lu bytes", &ns_fmt_num);
+		"Total Length", &ns_fmt_dec);
 static struct ns_pktfld ipv4_ns_id =
 	NS_BYTEFIELD_I("id", &ipv4_ns, PRID_IPV4, 4, 2,
-		"Identifier:           %lx", &ns_fmt_num);
+		"Identifier", &ns_fmt_hex);
 static struct ns_pktfld ipv4_ns_rf =
-	NS_BITFIELD_I("rf", &ipv4_ns, PRID_IPV4, 6, 0, 1,
-		"Reserved Frag Bit:    %lu..", &ns_fmt_num);
+	NS_FBITFIELD_I("rf", &ipv4_ns, PRID_IPV4, 6, 0, 1,
+		"Reserved Frag Bit", &ns_fmt_fbf, 0, 3);
 static struct ns_pktfld ipv4_ns_df =
-	NS_BITFIELD_I("df", &ipv4_ns, PRID_IPV4, 6, 1, 1,
-		"Don't Fragment Bit:   .%lu.", &ns_fmt_num);
+	NS_FBITFIELD_I("df", &ipv4_ns, PRID_IPV4, 6, 1, 1,
+		"Don't Fragment Bit", &ns_fmt_fbf, 1, 3);
 static struct ns_pktfld ipv4_ns_mf =
-	NS_BITFIELD_I("mf", &ipv4_ns, PRID_IPV4, 6, 2, 1,
-		"More Fragments Bit:   ..%lu", &ns_fmt_num);
+	NS_FBITFIELD_I("mf", &ipv4_ns, PRID_IPV4, 6, 2, 1,
+		"More Fragments Bit", &ns_fmt_fbf, 2, 3);
 static struct ns_pktfld ipv4_ns_fragoff =
 	NS_BITFIELD_I("fragoff", &ipv4_ns, PRID_IPV4, 6, 3, 13,
-		"Fragment Offset:      %lu quadwords", &ns_fmt_num);
+		"Fragment Offset", &ns_fmt_qlen);
 static struct ns_pktfld ipv4_ns_ttl =
 	NS_BYTEFIELD_I("ttl", &ipv4_ns, PRID_IPV4, 8, 1,
-		"Time to Live:         %lu", &ns_fmt_num);
+		"Time to Live", &ns_fmt_dec);
 static struct ns_pktfld ipv4_ns_proto =
 	NS_BYTEFIELD_I("proto", &ipv4_ns, PRID_IPV4, 9, 1,
-		"IP Protocol:          %lu", &ns_fmt_num);
+		"IP Protocol", &ns_fmt_dec);
 static struct ns_pktfld ipv4_ns_cksum =
 	NS_BYTEFIELD_I("cksum", &ipv4_ns, PRID_IPV4, 10, 2,
-		"Header Checksum:      %lx", &ns_fmt_num);
+		"Header Checksum", &ns_fmt_hex);
 static struct ns_pktfld ipv4_ns_saddr =
 	NS_BYTEFIELD_I("saddr", &ipv4_ns, PRID_IPV4, 12, 4,
-		"Source Address:       %s", &ns_fmt_ipv4a);
+		"Source Address", &ns_fmt_ipv4a);
 static struct ns_pktfld ipv4_ns_daddr =
 	NS_BYTEFIELD_I("daddr", &ipv4_ns, PRID_IPV4, 16, 4,
-		"Destination Address:  %s", &ns_fmt_ipv4a);
+		"Destination Address", &ns_fmt_ipv4a);
 static struct ns_pktfld ipv4_ns_opt =
 	NS_BYTEFIELD_VARLEN_I("opt", &ipv4_ns, PRID_IPV4, PRP_IPFLD_OPT, 0,
 		PRP_OI_POFF, "IP Options", &ns_fmt_raw);
@@ -2058,28 +2058,28 @@ static struct ns_namespace ipv6_ns =
 
 static struct ns_pktfld ipv6_ns_vers =
 	NS_BITFIELD_I("vers", &ipv6_ns, PRID_IPV6, 0, 0, 4,
-		"Version:              %lu", &ns_fmt_num);
+		"Version", &ns_fmt_dec);
 static struct ns_pktfld ipv6_ns_class =
 	NS_BITFIELD_I("class", &ipv6_ns, PRID_IPV6, 0, 4, 8,
-		"Traffic Class:        %lu", &ns_fmt_num);
+		"Traffic Class", &ns_fmt_dec);
 static struct ns_pktfld ipv6_ns_flowid =
 	NS_BITFIELD_I("flowid", &ipv6_ns, PRID_IPV6, 0, 12, 20,
-		"Flow ID:              %lu", &ns_fmt_num);
+		"Flow ID", &ns_fmt_dec);
 static struct ns_pktfld ipv6_ns_len =
 	NS_BYTEFIELD_I("len", &ipv6_ns, PRID_IPV6, 4, 2,
-		"Total Length:         %lu", &ns_fmt_num);
+		"Total Length", &ns_fmt_dec);
 static struct ns_pktfld ipv6_ns_nxthdr =
 	NS_BYTEFIELD_I("nxthdr", &ipv6_ns, PRID_IPV6, 6, 1,
-		"Next Header:          %lu", &ns_fmt_num);
+		"Next Header", &ns_fmt_dec);
 static struct ns_pktfld ipv6_ns_hoplim =
 	NS_BYTEFIELD_I("hoplim", &ipv6_ns, PRID_IPV6, 7, 1,
-		"Hop Limit:            %lu", &ns_fmt_num);
+		"Hop Limit", &ns_fmt_dec);
 static struct ns_pktfld ipv6_ns_saddr =
 	NS_BYTEFIELD_I("saddr", &ipv6_ns, PRID_IPV6, 8, 16,
-		"Source Address:       %s", &ns_fmt_ipv6a);
+		"Source Address", &ns_fmt_ipv6a);
 static struct ns_pktfld ipv6_ns_daddr =
 	NS_BYTEFIELD_I("daddr", &ipv6_ns, PRID_IPV6, 24, 16,
-		"Destination Address:  %s", &ns_fmt_ipv6a);
+		"Destination Address", &ns_fmt_ipv6a);
 static struct ns_pktfld ipv6_ns_exth =
 	NS_BYTEFIELD_VARLEN_I("exth", &ipv6_ns, PRID_IPV6, PRP_OI_SOFF, 40,
 		PRP_OI_POFF,
@@ -2102,31 +2102,31 @@ static struct ns_namespace icmp_ns =
 
 static struct ns_pktfld icmp_ns_type =
 	NS_BYTEFIELD_I("type", &icmp_ns, PRID_ICMP, 0, 1,
-		"Type:                 %lu", &ns_fmt_num);
+		"Type", &ns_fmt_dec);
 static struct ns_pktfld icmp_ns_code =
 	NS_BYTEFIELD_I("code", &icmp_ns, PRID_ICMP, 1, 1,
-		"Code:                 %lu", &ns_fmt_num);
+		"Code", &ns_fmt_dec);
 static struct ns_pktfld icmp_ns_cksum =
 	NS_BYTEFIELD_I("cksum", &icmp_ns, PRID_ICMP, 2, 2,
-		"Checksum:             %lx", &ns_fmt_num);
+		"Checksum", &ns_fmt_hex);
 static struct ns_pktfld icmp_ns_id =
 	NS_BYTEFIELD_I("id", &icmp_ns, PRID_ICMP, 4, 2,
-		"Identifier:           %lu", &ns_fmt_num);
+		"Identifier", &ns_fmt_dec);
 static struct ns_pktfld icmp_ns_seq =
 	NS_BYTEFIELD_I("seq", &icmp_ns, PRID_ICMP, 6, 2,
-		"Sequence Number:      %lu", &ns_fmt_num);
+		"Sequence Number", &ns_fmt_dec);
 static struct ns_pktfld icmp_ns_mtu =
 	NS_BYTEFIELD_I("mtu", &icmp_ns, PRID_ICMP, 6, 2,
-		"MTU:                  %lu", &ns_fmt_num);
+		"MTU", &ns_fmt_dec);
 static struct ns_pktfld icmp_ns_ptr =
 	NS_BYTEFIELD_I("ptr", &icmp_ns, PRID_ICMP, 4, 1,
-		"Pointer:              %lu", &ns_fmt_num);
+		"Pointer", &ns_fmt_dec);
 static struct ns_pktfld icmp_ns_gateway =
 	NS_BYTEFIELD_I("gw", &icmp_ns, PRID_ICMP, 4, 4,
-		"Gateway:              %s", &ns_fmt_ipv4a);
+		"Gateway", &ns_fmt_ipv4a);
 static struct ns_pktfld icmp_ns_unused =
 	NS_BYTEFIELD_I("unused", &icmp_ns, PRID_ICMP, 4, 4,
-		"Unused data:          %lx", &ns_fmt_num);
+		"Unused data", &ns_fmt_hex);
 
 struct ns_elem *stdproto_icmp_ns_elems[STDPROTO_NS_ELEN] = {
 	(struct ns_elem *)&icmp_ns_type, (struct ns_elem *)&icmp_ns_code,
@@ -2145,16 +2145,16 @@ static struct ns_namespace icmp6_ns =
 
 static struct ns_pktfld icmp6_ns_type =
 	NS_BYTEFIELD_I("type", &icmp6_ns, PRID_ICMP6, 0, 1,
-		"Type:                 %lu", &ns_fmt_num);
+		"Type", &ns_fmt_dec);
 static struct ns_pktfld icmp6_ns_code =
 	NS_BYTEFIELD_I("code", &icmp6_ns, PRID_ICMP6, 1, 1,
-		"Code:                 %lu", &ns_fmt_num);
+		"Code", &ns_fmt_dec);
 static struct ns_pktfld icmp6_ns_cksum =
 	NS_BYTEFIELD_I("cksum", &icmp6_ns, PRID_ICMP6, 2, 2,
-		"Checksum:             %lx", &ns_fmt_num);
+		"Checksum", &ns_fmt_hex);
 static struct ns_pktfld icmp6_ns_hdata =
 	NS_BYTEFIELD_I("hdata", &icmp6_ns, PRID_ICMP6, 4, 4,
-		"Header Data:          %lx", &ns_fmt_num);
+		"Header Data", &ns_fmt_hex);
 
 struct ns_elem *stdproto_icmp6_ns_elems[STDPROTO_NS_ELEN] = {
 	(struct ns_elem *)&icmp6_ns_type, (struct ns_elem *)&icmp6_ns_code, 
@@ -2170,16 +2170,16 @@ static struct ns_namespace udp_ns =
 
 static struct ns_pktfld udp_ns_sport =
 	NS_BYTEFIELD_I("sport", &udp_ns, PRID_UDP, 0, 2,
-		"Source Port:          %lu", &ns_fmt_num);
+		"Source Port", &ns_fmt_dec);
 static struct ns_pktfld udp_ns_dport =
 	NS_BYTEFIELD_I("dport", &udp_ns, PRID_UDP, 2, 2,
-		"Destination Port:     %lu", &ns_fmt_num);
+		"Destination Port", &ns_fmt_dec);
 static struct ns_pktfld udp_ns_len =
 	NS_BYTEFIELD_I("len", &udp_ns, PRID_UDP, 4, 2,
-		"Length:               %lu", &ns_fmt_num);
+		"Length", &ns_fmt_dec);
 static struct ns_pktfld udp_ns_cksum =
 	NS_BYTEFIELD_I("cksum", &udp_ns, PRID_UDP, 6, 2,
-		"Checksum:             %lx", &ns_fmt_num);
+		"Checksum", &ns_fmt_hex);
 
 struct ns_elem *stdproto_udp_ns_elems[STDPROTO_NS_ELEN] = {
 	(struct ns_elem *)&udp_ns_sport, (struct ns_elem *)&udp_ns_dport, 
@@ -2195,60 +2195,59 @@ static struct ns_namespace tcp_ns =
 
 static struct ns_pktfld tcp_ns_sport =
 	NS_BYTEFIELD_I("sport", &tcp_ns, PRID_TCP, 0, 2,
-		"Source Port:          %lu", &ns_fmt_num);
+		"Source Port", &ns_fmt_dec);
 static struct ns_pktfld tcp_ns_dport =
 	NS_BYTEFIELD_I("dport", &tcp_ns, PRID_TCP, 2, 2,
-		"Destination Port:     %lu", &ns_fmt_num);
+		"Destination Port", &ns_fmt_dec);
 static struct ns_pktfld tcp_ns_seqn =
 	NS_BYTEFIELD_I("seqn", &tcp_ns, PRID_TCP, 4, 4,
-		"Sequence Number:      %lu", &ns_fmt_num);
+		"Sequence Number", &ns_fmt_dec);
 static struct ns_pktfld tcp_ns_ackn =
 	NS_BYTEFIELD_I("ackn", &tcp_ns, PRID_TCP, 8, 4,
-		"Acknowlege Number:    %lu", &ns_fmt_num);
+		"Acknowlege Number", &ns_fmt_dec);
 static struct ns_pktfld tcp_ns_doff =
 	NS_BITFIELD_I("doff", &tcp_ns, PRID_TCP, 12, 0, 4,
-		"Data Offset:          %lu (%lu bytes)", 
-		&ns_fmt_wlen);
+		"Data Offset", &ns_fmt_wlen);
 static struct ns_pktfld tcp_ns_resv =
 	NS_BITFIELD_I("resv", &tcp_ns, PRID_TCP, 12, 4, 4,
-		"Reserved Bits:        %lx", &ns_fmt_num);
+		"Reserved Bits", &ns_fmt_hex);
 static struct ns_pktfld tcp_ns_cwr =
-	NS_BITFIELD_I("cwr", &tcp_ns, PRID_TCP, 13, 0, 1,
-		"Congest Win Reduced:  %lu.......", &ns_fmt_num);
+	NS_FBITFIELD_I("cwr", &tcp_ns, PRID_TCP, 13, 0, 1,
+		"Congest Win Reduced", &ns_fmt_fbf, 0, 8);
 static struct ns_pktfld tcp_ns_ece =
-	NS_BITFIELD_I("ece", &tcp_ns, PRID_TCP, 13, 1, 1,
-		"ECN Enabled:          .%lu......", &ns_fmt_num);
+	NS_FBITFIELD_I("ece", &tcp_ns, PRID_TCP, 13, 1, 1,
+		"ECN Enabled", &ns_fmt_fbf, 1, 8);
 static struct ns_pktfld tcp_ns_urg =
-	NS_BITFIELD_I("urg", &tcp_ns, PRID_TCP, 13, 2, 1,
-		"Urgent:               ..%lu.....", &ns_fmt_num);
+	NS_FBITFIELD_I("urg", &tcp_ns, PRID_TCP, 13, 2, 1,
+		"Urgent", &ns_fmt_fbf, 2, 8);
 static struct ns_pktfld tcp_ns_ack =
-	NS_BITFIELD_I("ack", &tcp_ns, PRID_TCP, 13, 3, 1,
-		"Acknowledgement:      ...%lu....", &ns_fmt_num);
+	NS_FBITFIELD_I("ack", &tcp_ns, PRID_TCP, 13, 3, 1,
+		"Acknowledgement", &ns_fmt_fbf, 3, 8);
 static struct ns_pktfld tcp_ns_psh =
-	NS_BITFIELD_I("psh", &tcp_ns, PRID_TCP, 13, 4, 1,
-		"Push:                 ....%lu...", &ns_fmt_num);
+	NS_FBITFIELD_I("psh", &tcp_ns, PRID_TCP, 13, 4, 1,
+		"Push", &ns_fmt_fbf, 4, 8);
 static struct ns_pktfld tcp_ns_rst =
-	NS_BITFIELD_I("rst", &tcp_ns, PRID_TCP, 13, 5, 1,
-		"Reset:                .....%lu..", &ns_fmt_num);
+	NS_FBITFIELD_I("rst", &tcp_ns, PRID_TCP, 13, 5, 1,
+		"Reset", &ns_fmt_fbf, 5, 8);
 static struct ns_pktfld tcp_ns_syn =
-	NS_BITFIELD_I("syn", &tcp_ns, PRID_TCP, 13, 6, 1,
-		"Synchronize:          ......%lu.", &ns_fmt_num);
+	NS_FBITFIELD_I("syn", &tcp_ns, PRID_TCP, 13, 6, 1,
+		"Synchronize", &ns_fmt_fbf, 6, 8);
 static struct ns_pktfld tcp_ns_fin =
-	NS_BITFIELD_I("fin", &tcp_ns, PRID_TCP, 13, 7, 1,
-		"Finalize:             .......%lu", &ns_fmt_num);
+	NS_FBITFIELD_I("fin", &tcp_ns, PRID_TCP, 13, 7, 1,
+		"Finalize", &ns_fmt_fbf, 7, 8);
 static struct ns_pktfld tcp_ns_win =
 	NS_BYTEFIELD_I("win", &tcp_ns, PRID_TCP, 14, 2,
-		"Window:               %lu", &ns_fmt_num);
+		"Window", &ns_fmt_dec);
 static struct ns_pktfld tcp_ns_cksum =
 	NS_BYTEFIELD_I("cksum", &tcp_ns, PRID_TCP, 16, 2,
-		"Checksum:             %lx", &ns_fmt_num);
+		"Checksum", &ns_fmt_hex);
 static struct ns_pktfld tcp_ns_urgp =
 	NS_BYTEFIELD_I("urgp", &tcp_ns, PRID_TCP, 18, 2,
-		"Urgent Pointer:       %lu", &ns_fmt_num);
+		"Urgent Pointer", &ns_fmt_dec);
 static struct ns_pktfld tcp_ns_opt =
 	NS_BYTEFIELD_VARLEN_I("opt", &tcp_ns, PRID_TCP, PRP_TCPFLD_OPT, 0,
 		PRP_OI_POFF,
-		"TCP Options", &ns_fmt_raw);
+		"TCP Options", &ns_fmt_summary);
 
 /* option forward declarations */
 extern struct ns_elem *stdproto_tcp_mss_ns_elems[STDPROTO_NS_SUB_ELEN];
@@ -2266,13 +2265,13 @@ static struct ns_namespace tcp_mss_ns =
 		array_length(stdproto_tcp_mss_ns_elems));
 static struct ns_pktfld tcp_mss_kind =
 	NS_BYTEFIELD_IDX_I("kind", &tcp_mss_ns, PRID_TCP, PRP_TCPFLD_MSS, 0, 1,
-		"Kind:                 %lu", &ns_fmt_num);
+		"Kind", &ns_fmt_dec);
 static struct ns_pktfld tcp_mss_len =
 	NS_BYTEFIELD_IDX_I("len", &tcp_mss_ns, PRID_TCP, PRP_TCPFLD_MSS, 1, 1,
-		"Length:               %lu", &ns_fmt_num);
+		"Length", &ns_fmt_dec);
 static struct ns_pktfld tcp_mss_mss =
 	NS_BYTEFIELD_IDX_I("mss", &tcp_mss_ns, PRID_TCP, PRP_TCPFLD_MSS, 2, 2,
-		"Max Segment Size:     %lu", &ns_fmt_num);
+		"Max Segment Size", &ns_fmt_dec);
 struct ns_elem *stdproto_tcp_mss_ns_elems[STDPROTO_NS_SUB_ELEN] = {
 	(struct ns_elem *)&tcp_mss_kind, (struct ns_elem *)&tcp_mss_len,
 	(struct ns_elem *)&tcp_mss_mss,
@@ -2287,16 +2286,13 @@ static struct ns_namespace tcp_wscale_ns =
 		array_length(stdproto_tcp_wscale_ns_elems));
 static struct ns_pktfld tcp_wscale_kind =
 	NS_BYTEFIELD_IDX_I("kind", &tcp_wscale_ns, PRID_TCP, PRP_TCPFLD_WSCALE,
-		0, 1, 
-		"Kind:                 %lu", &ns_fmt_num);
+		0, 1, "Kind", &ns_fmt_dec);
 static struct ns_pktfld tcp_wscale_len =
 	NS_BYTEFIELD_IDX_I("len", &tcp_wscale_ns, PRID_TCP, PRP_TCPFLD_WSCALE,
-		1, 1, 
-		"Length:               %lu", &ns_fmt_num);
+		1, 1, "Length", &ns_fmt_dec);
 static struct ns_pktfld tcp_wscale_scale =
 	NS_BYTEFIELD_IDX_I("scale", &tcp_wscale_ns, PRID_TCP, PRP_TCPFLD_WSCALE,
-		2, 1,
-		"Window Scale:         %lu", &ns_fmt_num);
+		2, 1, "Window Scale", &ns_fmt_dec);
 struct ns_elem *stdproto_tcp_wscale_ns_elems[STDPROTO_NS_SUB_ELEN] = {
 	(struct ns_elem *)&tcp_wscale_kind, (struct ns_elem *)&tcp_wscale_len,
 	(struct ns_elem *)&tcp_wscale_scale,
@@ -2311,12 +2307,10 @@ static struct ns_namespace tcp_sackok_ns =
 		array_length(stdproto_tcp_sackok_ns_elems));
 static struct ns_pktfld tcp_sackok_kind =
 	NS_BYTEFIELD_IDX_I("kind", &tcp_sackok_ns, PRID_TCP, PRP_TCPFLD_SACKOK,
-		0, 1, 
-		"Kind:                 %lu", &ns_fmt_num);
+		0, 1, "Kind", &ns_fmt_dec);
 static struct ns_pktfld tcp_sackok_len =
 	NS_BYTEFIELD_IDX_I("len", &tcp_sackok_ns, PRID_TCP, PRP_TCPFLD_SACKOK,
-		1, 1, 
-		"Length:               %lu", &ns_fmt_num);
+		1, 1, "Length", &ns_fmt_dec);
 struct ns_elem *stdproto_tcp_sackok_ns_elems[STDPROTO_NS_SUB_ELEN] = {
 	(struct ns_elem *)&tcp_sackok_kind, (struct ns_elem *)&tcp_sackok_len,
 };
@@ -2331,12 +2325,10 @@ static struct ns_namespace tcp_sack_ns =
 		array_length(stdproto_tcp_sack_ns_elems));
 static struct ns_pktfld tcp_sack_kind =
 	NS_BYTEFIELD_IDX_I("kind", &tcp_sack_ns, PRID_TCP, PRP_TCPFLD_SACK, 
-		0, 1, 
-		"Kind:                 %lu", &ns_fmt_num);
+		0, 1, "Kind", &ns_fmt_dec);
 static struct ns_pktfld tcp_sack_len =
 	NS_BYTEFIELD_IDX_I("len", &tcp_sack_ns, PRID_TCP, PRP_TCPFLD_SACK,
-		1, 1, 
-		"Length:               %lu", &ns_fmt_num);
+		1, 1, "Length", &ns_fmt_dec);
 static struct ns_pktfld tcp_sack_blocks =
 	NS_BYTEFIELD_VARLEN_I("blocks", &tcp_sack_ns, PRID_TCP, PRP_TCPFLD_SACK,
 		2, PRP_TCPFLD_SACK_END, 
@@ -2356,20 +2348,16 @@ static struct ns_namespace tcp_ts_ns =
 		array_length(stdproto_tcp_ts_ns_elems));
 static struct ns_pktfld tcp_ts_kind =
 	NS_BYTEFIELD_IDX_I("kind", &tcp_ts_ns, PRID_TCP, PRP_TCPFLD_TSTAMP,
-		0, 1, 
-		"Kind:                 %lu", &ns_fmt_num);
+		0, 1, "Kind", &ns_fmt_dec);
 static struct ns_pktfld tcp_ts_len =
 	NS_BYTEFIELD_IDX_I("len", &tcp_ts_ns, PRID_TCP, PRP_TCPFLD_TSTAMP,
-		1, 1, 
-		"Length:               %lu", &ns_fmt_num);
+		1, 1, "Length", &ns_fmt_dec);
 static struct ns_pktfld tcp_ts_val =
 	NS_BYTEFIELD_IDX_I("val", &tcp_ts_ns, PRID_TCP, PRP_TCPFLD_TSTAMP, 
-		2, 4, 
-		"Value:                %lu", &ns_fmt_num);
+		2, 4, "Value", &ns_fmt_dec);
 static struct ns_pktfld tcp_ts_echo =
 	NS_BYTEFIELD_IDX_I("echo", &tcp_ts_ns, PRID_TCP, PRP_TCPFLD_TSTAMP,
-		6, 4, 
-		"Echoed Value:         %lu", &ns_fmt_num);
+		6, 4, "Echoed Value", &ns_fmt_dec);
 struct ns_elem *stdproto_tcp_ts_ns_elems[STDPROTO_NS_SUB_ELEN] = {
 	(struct ns_elem *)&tcp_ts_kind, (struct ns_elem *)&tcp_ts_len,
 	(struct ns_elem *)&tcp_ts_val, (struct ns_elem *)&tcp_ts_echo,
@@ -2385,16 +2373,13 @@ static struct ns_namespace tcp_md5_ns =
 		array_length(stdproto_tcp_md5_ns_elems));
 static struct ns_pktfld tcp_md5_kind =
 	NS_BYTEFIELD_IDX_I("kind", &tcp_md5_ns, PRID_TCP, PRP_TCPFLD_MD5,
-		0, 1, 
-		"Kind:                 %lu", &ns_fmt_num);
+		0, 1, "Kind", &ns_fmt_dec);
 static struct ns_pktfld tcp_md5_len =
 	NS_BYTEFIELD_IDX_I("len", &tcp_md5_ns, PRID_TCP, PRP_TCPFLD_MD5,
-		1, 1, 
-		"Length:               %lu", &ns_fmt_num);
+		1, 1, "Length", &ns_fmt_dec);
 static struct ns_pktfld tcp_md5_sig =
 	NS_BYTEFIELD_IDX_I("sig", &tcp_md5_ns, PRID_TCP, PRP_TCPFLD_MD5,
-		2, 16, 
-		"Signature", &ns_fmt_raw);
+		2, 16, "Signature", &ns_fmt_raw);
 struct ns_elem *stdproto_tcp_md5_ns_elems[STDPROTO_NS_SUB_ELEN] = {
 	(struct ns_elem *)&tcp_md5_kind, (struct ns_elem *)&tcp_md5_len,
 	(struct ns_elem *)&tcp_md5_sig,

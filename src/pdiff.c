@@ -534,19 +534,16 @@ static void emit_field(struct emitter *e, struct npf_list *npfl,
 		       struct npfield *npf, const char *pfx)
 {
 	char line[256];
-	struct raw rl;
 	ulong base_off;
 	ulong off;
 	ulong len;
 	ulong sboff;
 
-	rl.data = line;
-	rl.len = sizeof(line);
 	base_off = prp_poff(npfl->plist);
 
 	if (!npf_is_gap(npf)) {
-		ns_tostr(npf->nse, npf->buf, npf->prp, &rl);
-		emit_format(e, "%s%s\n", pfx, line);
+		ns_tostr(npf->nse, npf->buf, npf->prp, line, sizeof(line), pfx);
+		emit_string(e, line);
 	} else {
 		off = npf->off / 8;
 		len = npf->len;
@@ -580,12 +577,8 @@ static void hdr_mod_report(struct emitter *e, struct prpent *ppe1, ulong p1n,
 	struct cpmatrix *cpm;
 	struct chgpath *elem, *next;
 	struct npfield *rnpf, *cnpf;
-	struct raw rl;
 	char line[256];
 	struct npf_list *bnpfl, *anpfl;
-
-	rl.data = line;
-	rl.len = sizeof(line);
 
 	bnpfl = &ppe1->npfl;
 	anpfl = &ppe2->npfl;
@@ -608,14 +601,16 @@ static void hdr_mod_report(struct emitter *e, struct prpent *ppe1, ulong p1n,
 			break;
 
 		case DROP:
-			ns_tostr(rnpf->nse, rnpf->buf, rnpf->prp, &rl);
-			emit_format(e, "--%s\n", line);
+			ns_tostr(rnpf->nse, rnpf->buf, rnpf->prp, line, 
+				 sizeof(line), "--");
+			emit_string(e, line);
 			r += 1; rnpf = npf_next(rnpf);
 			break;
 
 		case INSERT:
-			ns_tostr(cnpf->nse, cnpf->buf, cnpf->prp, &rl);
-			emit_format(e, "++%s\n", line);
+			ns_tostr(cnpf->nse, cnpf->buf, cnpf->prp, line,
+				 sizeof(line), "++");
+			emit_string(e, line);
 			c += 1; cnpf = npf_next(cnpf);
 			break;
 

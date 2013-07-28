@@ -4,37 +4,37 @@
 #####
 # ETH: Ethernet II -- [0:220]
 #####
-# ETH: Destination Address: ff:ff:ff:ff:ff:ff
-# ETH: Source Address:      00:30:65:c1:b3:a8
-# ETH: Ethernet Type:       0800
+# ETH: Destination Address:    ff:ff:ff:ff:ff:ff
+# ETH: Source Address:         00:30:65:c1:b3:a8
+# ETH: Ethernet Type:          0x0800
     000000:  ff ff ff ff ff ff 00 30 65 c1 b3 a8 08 00        |.......0e.....|
 #####
 # IP: Internet Protocol Version 4 -- [14:206]
 #####
-# IP: Version:              4
-# IP: Header Length:        5 (20 bytes)
-# IP: Diffserv:             00
-# IP: ECN:                  0
-# IP: Total Length:         206 bytes
-# IP: Identifier:           0
-# IP: Reserved Frag Bit:    0..
-# IP: Don't Fragment Bit:   .1.
-# IP: More Fragments Bit:   ..0
-# IP: Fragment Offset:      0 quadwords
-# IP: Time to Live:         64
-# IP: IP Protocol:          17
-# IP: Header Checksum:      b7c8
-# IP: Source Address:       192.168.0.7
-# IP: Destination Address:  192.168.0.255
+# IP: Version:                 4
+# IP: Header Length:           5 (20 bytes)
+# IP: Diffserv:                0x00
+# IP: ECN:                     0x0
+# IP: Total Length:            206
+# IP: Identifier:              0x0000
+# IP: Reserved Frag Bit:       0..
+# IP: Don't Fragment Bit:      .1.
+# IP: More Fragments Bit:      ..0
+# IP: Fragment Offset:         0 (0 bytes)
+# IP: Time to Live:            64
+# IP: IP Protocol:             17
+# IP: Header Checksum:         0xb7c8
+# IP: Source Address:          192.168.0.7
+# IP: Destination Address:     192.168.0.255
     00000e:  45 00 00 ce 00 00 40 00 40 11 b7 c8 c0 a8 00 07  |E.....@.@.......|
     00001e:  c0 a8 00 ff                                      |....|
 #####
 # UDP: User Datagram Protocol -- [34:186]
 #####
-# UDP: Source Port:          631
-# UDP: Destination Port:     631
-# UDP: Length:               186
-# UDP: Checksum:             dc9c
+# UDP: Source Port:            631
+# UDP: Destination Port:       631
+# UDP: Length:                 186
+# UDP: Checksum:               0xdc9c
     000022:  02 77 02 77 00 ba dc 9c                          |.w.w....|
 # UDP: Data -- [42:178]
     00002a:  32 31 30 30 36 20 33 20 69 70 70 3a 2f 2f 31 39  |21006 3 ipp://19|
@@ -57,37 +57,37 @@
 #####
 # ETH: Ethernet II -- [0:220]
 #####
-# ETH: Destination Address: ff:ff:ff:ff:ff:ff
-# ETH: Source Address:      00:30:65:c1:b3:a8
-# ETH: Ethernet Type:       0800
+# ETH: Destination Address:    ff:ff:ff:ff:ff:ff
+# ETH: Source Address:         00:30:65:c1:b3:a8
+# ETH: Ethernet Type:          0x0800
     000000:  ff ff ff ff ff ff 00 30 65 c1 b3 a8 08 00        |.......0e.....|
 #####
 # IP: Internet Protocol Version 4 -- [14:206]
 #####
-# IP: Version:              4
-# IP: Header Length:        5 (20 bytes)
-# IP: Diffserv:             00
-# IP: ECN:                  0
-# IP: Total Length:         206 bytes
-# IP: Identifier:           0
-# IP: Reserved Frag Bit:    0..
-# IP: Don't Fragment Bit:   .1.
-# IP: More Fragments Bit:   ..0
-# IP: Fragment Offset:      0 quadwords
-# IP: Time to Live:         64
-# IP: IP Protocol:          17
-# IP: Header Checksum:      b7c8
-# IP: Source Address:       192.168.0.7
-# IP: Destination Address:  192.168.0.255
+# IP: Version:                 4
+# IP: Header Length:           5 (20 bytes)
+# IP: Diffserv:                0x00
+# IP: ECN:                     0x0
+# IP: Total Length:            206
+# IP: Identifier:              0x0000
+# IP: Reserved Frag Bit:       0..
+# IP: Don't Fragment Bit:      .1.
+# IP: More Fragments Bit:      ..0
+# IP: Fragment Offset:         0 (0 bytes)
+# IP: Time to Live:            64
+# IP: IP Protocol:             17
+# IP: Header Checksum:         0xb7c8
+# IP: Source Address:          192.168.0.7
+# IP: Destination Address:     192.168.0.255
     00000e:  45 00 00 ce 00 00 40 00 40 11 b7 c8 c0 a8 00 07  |E.....@.@.......|
     00001e:  c0 a8 00 ff                                      |....|
 #####
 # UDP: User Datagram Protocol -- [34:186]
 #####
-# UDP: Source Port:          631
-# UDP: Destination Port:     631
-# UDP: Length:               186
-# UDP: Checksum:             dc9c
+# UDP: Source Port:            631
+# UDP: Destination Port:       631
+# UDP: Length:                 186
+# UDP: Checksum:               0xdc9c
     000022:  02 77 02 77 00 ba dc 9c                          |.w.w....|
 # UDP: Data -- [42:178]
     00002a:  32 31 30 30 36 20 33 20 69 70 70 3a 2f 2f 31 39  |21006 3 ipp://19|

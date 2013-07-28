@@ -58,7 +58,7 @@ struct ns_elem {
 
 
 typedef int (*ns_format_f)(struct ns_elem *, byte_t *pkt, struct prparse *, 
-		           struct raw *);
+		           char *s, size_t ssize, const char *pfx); 
 
 struct ns_namespace {
 	ushort			type;
@@ -107,29 +107,62 @@ struct ns_pktfld {
 	uint			oidx;		/* offset index */
 	ulong			off;		/* in bytes */
 	ulong			len;		/* len in bits or bytes/oidx */
-	const char *		fmtstr;
+	const char *		fullname;
 	ns_format_f		fmt;
+	ulong			xtra;
 };
 
-#define NS_BITFIELD_I(name, par, prid, off, bitoff, len, desc, fmt_f)	\
+/* Formatted bitfield extra information */
+#define NSPF_FBF_FWIDTH_SHF	0
+#define NSPF_FBF_FWIDTH_MSK	0xFF
+#define NSPF_FBF_FOFF_SHF	8
+#define NSPF_FBF_FOFF_MSK	0xFF
+#define NSPF_FBF_FWIDTH(pf)	\
+	(((pf)->xtra >> NSPF_FBF_FWIDTH_SHF) & NSPF_FBF_FWIDTH_MSK)
+#define NSPF_FBF_FOFF(pf)	\
+	(((pf)->xtra >> NSPF_FBF_FOFF_SHF) & NSPF_FBF_FOFF_MSK)
+#define NSPF_IS_FBF(pf)		\
+	(NSF_IS_INBITS((pf)->flags) && NSPF_FBF_FWIDTH(pf) > 0)
+
+#define NS_BITFIELD_I(name, par, prid, off, bitoff, len, fname, fmt_f)	\
 	{ NST_PKTFLD, (NSF_INBITS | ((bitoff) << NSF_BITOFF_SHF)),	\
-	  (par), (name), (prid), PRP_OI_SOFF, (off), (len), (desc), (fmt_f) }
+	  (par), (name), (prid), PRP_OI_SOFF, (off), (len), (fname),	\
+	  (fmt_f), 0 }
 
-#define NS_BYTEFIELD_I(name, par, prid, off, len, desc, fmt_f)		\
+#define NS_FBITFIELD_I(name, par, prid, off, bitoff, len, fname, fmt_f,\
+			foff, fwidth)					\
+	{ NST_PKTFLD, (NSF_INBITS | ((bitoff) << NSF_BITOFF_SHF)),	\
+	  (par), (name), (prid), PRP_OI_SOFF, (off), (len), (fname),	\
+	  (fmt_f), 							\
+	  ((((foff) & NSPF_FBF_FOFF_MSK) << NSPF_FBF_FOFF_SHF) |  	\
+	   (((fwidth) & NSPF_FBF_FWIDTH_MSK) << NSPF_FBF_FWIDTH_SHF)) }
+
+#define NS_BYTEFIELD_I(name, par, prid, off, len, fname, fmt_f)		\
 	{ NST_PKTFLD, 0,						\
-	  (par), (name), (prid), PRP_OI_SOFF, (off), (len), (desc), (fmt_f) }
+	  (par), (name), (prid), PRP_OI_SOFF, (off), (len), (fname),	\
+	  (fmt_f), 0 }
 
-#define NS_BITFIELD_IDX_I(name, par, prid, oidx, off, bitoff, len, desc, fmt_f)\
-	{ NST_PKTFLD, (NSF_INBITS | ((bitoff) << NSF_BITOFF_SHF)),	       \
-	  (par), (name), (prid), (oidx), (off), (len), (desc), (fmt_f) }
+#define NS_BITFIELD_IDX_I(name, par, prid, oidx, off, bitoff, len, 	\
+			  fname, fmt_f)					\
+	{ NST_PKTFLD, (NSF_INBITS | ((bitoff) << NSF_BITOFF_SHF)),	\
+	  (par), (name), (prid), (oidx), (off), (len), (fname), (fmt_f), 0 }
 
-#define NS_BYTEFIELD_IDX_I(name, par, prid, oidx, off, len, desc, fmt_f)	\
+#define NS_FBITFIELD_IDX_I(name, par, prid, oidx, off, bitoff, len, 	\
+			   fname, fmt_f, foff, fwidth)			\
+	{ NST_PKTFLD, (NSF_INBITS | ((bitoff) << NSF_BITOFF_SHF)),	\
+	  (par), (name), (prid), (oidx), (off), (len), (fname), (fmt_f),\
+	  ((((foff) & NSPF_FBF_FOFF_MSK) << NSPF_FBF_FOFF_SHF) |  	\
+	   (((fwidth) & NSPF_FBF_FWIDTH_MSK) << NSPF_FBF_FWIDTH_SHF)) }
+
+#define NS_BYTEFIELD_IDX_I(name, par, prid, oidx, off, len, fname, 	\
+			   fmt_f)					\
 	{ NST_PKTFLD, 0,						\
-	  (par), (name), (prid), (oidx), (off), (len), (desc), (fmt_f) }
+	  (par), (name), (prid), (oidx), (off), (len), (fname), (fmt_f), 0 }
 
-#define NS_BYTEFIELD_VARLEN_I(name, par, prid, oidx, off, eidx, desc, fmt_f)   \
-	{ NST_PKTFLD, (NSF_VARLEN),					       \
-	  (par), (name), (prid), (oidx), (off), (eidx), (desc), (fmt_f) }
+#define NS_BYTEFIELD_VARLEN_I(name, par, prid, oidx, off, eidx, fname, 	\
+			     fmt_f)					\
+	{ NST_PKTFLD, (NSF_VARLEN),					\
+	  (par), (name), (prid), (oidx), (off), (eidx), (fname), (fmt_f), 0 }
 
 struct ns_scalar {
 	ushort			type;
@@ -205,33 +238,51 @@ struct ns_namespace *ns_lookup_by_prid(uint prid);
 
 /* Field format functions */
 
-/* element format must take no parameters */
+/* Format by just printing a summary of the range of the field */
+int ns_fmt_summary(struct ns_elem *elem, byte_t *pkt, struct prparse *prp,
+	           char *s, size_t ssize, const char *pfx);
+
+/* Format with raw hexadecimal dump of data */
 int ns_fmt_raw(struct ns_elem *elem, byte_t *pkt, struct prparse *prp,
-	       struct raw *str);
+	       char *s, size_t ssize, const char *pfx);
 
-/* element format must take a single unsigned long */
-int ns_fmt_num(struct ns_elem *elem, byte_t *pkt, struct prparse *prp,
-	       struct raw *str);
+/* Format as a decimal number */
+int ns_fmt_dec(struct ns_elem *elem, byte_t *pkt, struct prparse *prp,
+	       char *s, size_t ssize, const char *pfx);
 
-/* element format must contain a two unsigned long parameters*/
+/* Format as a hexadecimal number */
+int ns_fmt_hex(struct ns_elem *elem, byte_t *pkt, struct prparse *prp,
+	       char *s, size_t ssize, const char *pfx);
+
+/* Format as a length in words */
 int ns_fmt_wlen(struct ns_elem *elem, byte_t *pkt, struct prparse *prp,
-	        struct raw *str);
+	        char *s, size_t ssize, const char *pfx);
 
-/* element format must contain a single %s */
+/* Format as a length in quadwords */
+int ns_fmt_qlen(struct ns_elem *elem, byte_t *pkt, struct prparse *prp,
+	        char *s, size_t ssize, const char *pfx);
+
+/* Format as a hexadecimal number */
+int ns_fmt_fbf(struct ns_elem *elem, byte_t *pkt, struct prparse *prp,
+	       char *s, size_t ssize, const char *pfx);
+
+/* Format as an IP address */
 int ns_fmt_ipv4a(struct ns_elem *elem, byte_t *pkt, struct prparse *prp,
-	         struct raw *str);
+	         char *s, size_t ssize, const char *pfx);
 
-/* element format must contain a single %s */
+/* Format as an IPv6 address */
 int ns_fmt_ipv6a(struct ns_elem *elem, byte_t *pkt, struct prparse *prp,
-	         struct raw *str);
+	         char *s, size_t ssize, const char *pfx);
 
-/* element format must contain a single %s */
+/* Format as an 802 MAC address */
 int ns_fmt_etha(struct ns_elem *elem, byte_t *pkt, struct prparse *prp,
-	        struct raw *str);
+	        char *s, size_t ssize, const char *pfx);
 
-/* Given an element, protocol parse, and packet body generate a string */
-/* representation of the field. */
+/*
+ * Given an element, protocol parse, packet body and possibly a prefix,
+ * generate a string representation of the field. 
+ */
 int ns_tostr(struct ns_elem *elem, byte_t *pkt, struct prparse *prp,
-	     struct raw *str);
+	     char *s, size_t ssize, const char *pfx);
 
 #endif /* __NS_H */
