@@ -177,7 +177,7 @@ static int nsfilter(struct ns_elem *elem)
 
 ulong npfl_nbits(struct npf_list *npfl)
 {
-	ulong nbits;
+	ulong nbits = 0;
 	struct npfield *npf;
 	for (npf = npfl_first(npfl); !npf_is_end(npf); npf = npf_next(npf))
 		nbits += npf->len;
@@ -200,8 +200,9 @@ void pktent_init(struct pktent *pke, ulong pn, const char *sname)
 	prp_for_each(prp, &pke->pkt->prp) {
 		if (pke->nprp == pke->pasiz) {
 			pke->pasiz *= 2;
-			pke->prparr = erealloc(pke->prparr, sizeof(struct prpent) * 
-							    pke->pasiz);
+			pke->prparr = erealloc(pke->prparr,
+					       sizeof(struct prpent) * 
+							pke->pasiz);
 			ppe = &pke->prparr[pke->nprp];
 		}
 		pke->nprp += 1;
@@ -538,12 +539,15 @@ static void emit_field(struct emitter *e, struct npf_list *npfl,
 	ulong off;
 	ulong len;
 	ulong sboff;
+	int rv;
 
 	base_off = prp_poff(npfl->plist);
 
 	if (!npf_is_gap(npf)) {
-		ns_tostr(npf->nse, npf->buf, npf->prp, line, sizeof(line), pfx);
-		emit_string(e, line);
+		rv = ns_tostr(npf->nse, npf->buf, npf->prp, line, sizeof(line),
+			      pfx);
+		if (rv >= 0)
+			emit_string(e, line);
 	} else {
 		off = npf->off / 8;
 		len = npf->len;
@@ -754,9 +758,9 @@ void hdiff_compare(struct hdiff *hd)
 	}
 
 	for (i = 1; i < cpm->ncols; ++i) {
-		dpos = cpm_elem(cpm, 0, i);
-		dpos->action = INSERT;
-		dpos->cost = cpm_elem(cpm, 0, i-1)->cost +
+		ipos = cpm_elem(cpm, 0, i);
+		ipos->action = INSERT;
+		ipos->cost = cpm_elem(cpm, 0, i-1)->cost +
 			     hd->apke->prparr[i-1].nbits * adj_ins_bit_cost;
 	}
 
@@ -880,7 +884,7 @@ static void print_hdr_op(struct emitter *e, struct prpent *ppe, int isins)
 	pfx = isins ? "H+" : "H-";
 
 	prp_get_name(prp, ppe->idx, name, sizeof(name));
-	emit_format(e, "%s*****\n* ", pfx);
+	emit_format(e, "%s*****\n", pfx);
 	emit_format(e, "%s* %s header %s -- [%lu:%lu]\n", 
 		    pfx, op, name, prp_soff(prp) - psoff,
 		    prp_totlen(prp));
