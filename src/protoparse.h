@@ -35,7 +35,7 @@
 
 #define PRP_ERR_TOOSMALL        0x0001
 #define PRP_ERR_HLEN            0x0002
-#define PRP_ERR_LENGTH          0x0004
+#define PRP_ERR_TRUNC           0x0004
 #define PRP_ERR_CKSUM           0x0008
 #define PRP_ERR_OPTLEN          0x0010
 #define PRP_ERR_OPTERR          0x0020

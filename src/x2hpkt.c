@@ -142,7 +142,7 @@ int getpfx(char *pfx, const char *in, uint plen)
 static const char *errstrs[7] = {
 	"runt", 
 	"header length", 
-	"length field",
+	"truncated",
 	"checksum",
 	"option length",
 	"option field",

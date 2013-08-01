@@ -240,7 +240,7 @@ int eth_nxtcld(struct prparse *reg, byte_t *buf, struct prparse *cld,
 	byte_t *p;
 	uint16_t etype;
 
-	if (cld != NULL || reg->error != 0)
+	if (cld != NULL)
 		return 0;
 
 	abort_unless(buf);
@@ -399,7 +399,7 @@ static void arp_update(struct prparse *prp, byte_t *buf)
 	resetxfields(prp);
 	arp = prp_header(prp, buf, struct arph);
 	if (arp->hwlen * 2 + arp->prlen * 2 > prp_plen(prp)) {
-		prp->error |= PRP_ERR_LENGTH;
+		prp->error |= PRP_ERR_TOOSMALL;
 		return;
 	} 
 	prp_eoff(prp) = prp_toff(prp) = 
@@ -469,7 +469,7 @@ static int arp_fixlen(struct prparse *prp, byte_t *buf)
 	arp = prp_header(prp, buf, struct arph);
 	if (arp->hwlen * 2 + arp->prlen * 2 > prp_plen(prp))
 		return -1;
-	prp->error &= ~(PRP_ERR_LENGTH | PRP_ERR_HLEN | PRP_ERR_TOOSMALL);
+	prp->error &= ~(PRP_ERR_TRUNC | PRP_ERR_HLEN | PRP_ERR_TOOSMALL);
 	return 0;
 }
 
@@ -586,12 +586,15 @@ int ipv4_nxtcld(struct prparse *reg, byte_t *buf, struct prparse *cld,
 {
 	struct ipv4h *ip;
 
-	if (cld != NULL || reg->error != 0)
+	if (cld != NULL)
 		return 0;
 
 	abort_unless(buf);
 	ip = prp_header(reg, buf, struct ipv4h);
-	*prid = PRID_BUILD(PRID_PF_INET, ip->proto);
+	if (ip->proto == IPPROT_V6V4)
+		*prid = PRID_IPV6;
+	else
+		*prid = PRID_BUILD(PRID_PF_INET, ip->proto);
 	*off = prp_poff(reg);
 	*maxlen = prp_plen(reg);
 	return 1;
@@ -674,20 +677,16 @@ static void ipv4_update(struct prparse *prp, byte_t *buf)
 		prp->error |= PRP_ERR_INVALID;
 
 	sum = ~ones_sum(ip, hlen, 0) & 0xFFFF;
-	if (sum != 0) {
+	if (sum != 0)
 		prp->error |= PRP_ERR_CKSUM;
-		return;
-	}
-
-	iplen = ntoh16x(&ip->len);
-	if (len < iplen) {
-		prp->error |= PRP_ERR_LENGTH;
-		return;
-	}
 
 	/* check whether datagram is smaller than enclosing packet */
-	if (iplen < len)
+	iplen = ntoh16x(&ip->len);
+	if (len < iplen) {
+		prp->error |= PRP_ERR_TRUNC;
+	} else if (iplen < len) {
 		prp_eoff(prp) = prp_toff(prp) = prp_soff(prp) + iplen;
+	}
 
 	fragoff = ntoh32(ip->fragoff);
 	if (fragoff != 0) {
@@ -719,7 +718,7 @@ static int ipv4_fixlen(struct prparse *prp, byte_t *buf)
 		return -1;
 	tlen = prp_totlen(prp);
 	hton16i(tlen, &ip->len);
-	prp->error &= ~(PRP_ERR_LENGTH | PRP_ERR_HLEN | PRP_ERR_TOOSMALL);
+	prp->error &= ~(PRP_ERR_TRUNC | PRP_ERR_HLEN | PRP_ERR_TOOSMALL);
 
 	return 0;
 }
@@ -777,9 +776,10 @@ static uint16_t pseudo_cksum(struct prparse *prp, struct prparse *ipprp,
 		ph.daddr = ip6->daddr;
 		ph.proto = proto;
 		ph.totlen = hton32(prp_totlen(prp));
-		sum = ones_sum(&ph, IPV6H_LEN, 0);
+		sum = ones_sum(&ph, 40, 0);
 	}
-	return ~ones_sum(prp_header(prp, buf, void), prp_totlen(prp), sum);
+	sum = ones_sum(prp_header(prp, buf, void), prp_totlen(prp), sum);
+	return ~sum;
 }
 
 
@@ -824,7 +824,7 @@ static int udp_add(struct prparse *reg, byte_t *buf, struct prpspec *ps,
 	struct udph *udp;
 
 	(void)enclose;
-	if (ps->hlen != 8) {
+	if (ps->hlen != UDPH_LEN) {
 		errno = EINVAL;
 		return -1;
 	}
@@ -851,27 +851,22 @@ static void udp_update(struct prparse *prp, byte_t *buf)
 	struct udph *udp;
 	struct prparse *ipprp;
 
-	if (prp_totlen(prp) < 8) {
+	if (prp_totlen(prp) < UDPH_LEN) {
 		prp->error = PRP_ERR_TOOSMALL;
 		return;
 	}
 
-	prp_poff(prp) = prp_soff(prp) + 8;
+	prp_poff(prp) = prp_soff(prp) + UDPH_LEN;
 
 	udp = prp_header(prp, buf, struct udph);
 	ulen = ntoh16x(&udp->len);
-	if (prp_totlen(prp) < ulen) {
-		prp->error |= PRP_ERR_LENGTH;
-		return;
-	}
 
-	if (udp->cksum != 0) {
+	if (prp_totlen(prp) < ulen) {
+		prp->error |= PRP_ERR_TRUNC | PRP_ERR_CKSUM;
+	} else if (udp->cksum != 0) {
 		ipprp = find_ipprp(prp->region);
-		if ((ipprp == NULL) || (ipprp->error & PRP_ERR_LENGTH)) {
-			prp->error |= PRP_ERR_CKSUM;
-			return;
-		} 
-		if ((pseudo_cksum(prp, ipprp, buf, IPPROT_UDP) & 0xFFFF) != 0)
+		if ((ipprp == NULL) || 
+		    (pseudo_cksum(prp, ipprp, buf, IPPROT_UDP) & 0xFFFF) != 0)
 			prp->error |= PRP_ERR_CKSUM;
 	}
 }
@@ -879,12 +874,12 @@ static void udp_update(struct prparse *prp, byte_t *buf)
 
 static int udp_fixlen(struct prparse *prp, byte_t *buf)
 {
-	if (prp_hlen(prp) != 8)
+	if (prp_hlen(prp) != UDPH_LEN)
 		return -1;
 	if (prp_plen(prp) > 65527)
 		return -1;
 	hton16i(prp_totlen(prp), &prp_header(prp, buf, struct udph)->len);
-	prp->error &= ~(PRP_ERR_LENGTH | PRP_ERR_HLEN | PRP_ERR_TOOSMALL);
+	prp->error &= ~(PRP_ERR_TRUNC | PRP_ERR_HLEN | PRP_ERR_TOOSMALL);
 	return 0;
 }
 
@@ -894,7 +889,7 @@ static int udp_fixcksum(struct prparse *prp, byte_t *buf)
 	struct udph *udp = prp_header(prp, buf, struct udph);
 	struct prparse *ipprp = find_ipprp(prp->region);
 
-	if ((prp_hlen(prp) != 8) || (ipprp == NULL))
+	if ((prp_hlen(prp) != UDPH_LEN) || (ipprp == NULL))
 		return -1;
 	udp->cksum = 0;
 	udp->cksum = pseudo_cksum(prp, ipprp, buf, IPPROT_UDP);
@@ -1036,9 +1031,10 @@ static int tcp_add(struct prparse *reg, byte_t *buf, struct prpspec *ps,
 				*p++ = TCPOPT_NOP;
 		}
 		ipprp = find_ipprp(reg);
-		if ((ipprp == NULL) || (ipprp->error & PRP_ERR_LENGTH)) {
+		if (ipprp == NULL) {
 			prp->error |= PRP_ERR_CKSUM;
 		} else {
+			tcp->cksum = 0;
 			tcp->cksum = pseudo_cksum(prp, ipprp, buf, IPPROT_TCP);
 		}
 	}
@@ -1072,11 +1068,9 @@ static void tcp_update(struct prparse *prp, byte_t *buf)
 	prp_poff(prp) = prp_soff(prp) + hlen;
 
 	ipprp = find_ipprp(prp);
-	if ((ipprp == NULL) || (ipprp->error & PRP_ERR_LENGTH)) {
+	if ((ipprp == NULL) ||
+	    (pseudo_cksum(prp, ipprp, buf, IPPROT_TCP) & 0xFFFF) != 0) {
 		prp->error |= PRP_ERR_CKSUM;
-	} else {
-		if ((pseudo_cksum(prp, ipprp, buf, IPPROT_TCP) & 0xFFFF) != 0)
-			prp->error |= PRP_ERR_CKSUM;
 	}
 
 	if (hlen > TCPH_MINLEN)
@@ -1096,7 +1090,7 @@ static int tcp_fixlen(struct prparse *prp, byte_t *buf)
 	    (hlen > prp_totlen(prp)))
 		return -1;
 	tcp->doff = hlen << 2;
-	prp->error &= ~(PRP_ERR_LENGTH | PRP_ERR_HLEN | PRP_ERR_TOOSMALL);
+	prp->error &= ~(PRP_ERR_TRUNC | PRP_ERR_HLEN | PRP_ERR_TOOSMALL);
 
 	return 0;
 }
@@ -1109,7 +1103,7 @@ static int tcp_fixcksum(struct prparse *prp, byte_t *buf)
 
 	abort_unless(prp);
 	tcp = prp_header(prp, buf, struct tcph);
-	if (ipprp == NULL)
+	if (prp_hlen(prp) < TCPH_MINLEN || ipprp == NULL)
 		return -1;
 	tcp->cksum = 0;
 	tcp->cksum = pseudo_cksum(prp, ipprp, buf, IPPROT_TCP);
@@ -1156,7 +1150,7 @@ static int icmp_nxtcld(struct prparse *reg, byte_t *buf, struct prparse *cld,
 {
 	struct icmph *icmp;
 
-	if (cld != NULL || reg->error != 0)
+	if (cld != NULL)
 		return 0;
 
 	icmp = prp_header(reg, buf, struct icmph);
@@ -1383,7 +1377,7 @@ int ipv6_nxtcld(struct prparse *reg, byte_t *buf, struct prparse *cld,
 	ushort foff;
 	uint8_t nexth;
 
-	if (cld != NULL || reg->error != 0)
+	if (cld != NULL)
 		return 0;
 
 	abort_unless(buf);
@@ -1468,6 +1462,7 @@ static void ipv6_update(struct prparse *prp, byte_t *buf)
 	ushort paylen;
 	ulong len, jlen, extra, hbhlen;
 	byte_t *p;
+	int rv;
 
 	prp->error = 0;
 	resetxfields(prp);
@@ -1484,34 +1479,31 @@ static void ipv6_update(struct prparse *prp, byte_t *buf)
 		prp->error |= PRP_ERR_INVALID;
 
 	paylen = ntoh16x(&ip6->len);
-	if (paylen > len - IPV6H_LEN) {
-		prp->error |= PRP_ERR_LENGTH;
-		return;
-	}
+	if (paylen > len - IPV6H_LEN)
+		prp->error |= PRP_ERR_TRUNC;
 
 	prp_poff(prp) = prp_soff(prp) + IPV6H_LEN;
 	if (paylen == 0 && ip6->nxthdr == IPPROT_V6_HOPOPT) {
-		int rv;
 		if (len < 48) {
 			prp->error |= PRP_ERR_OPTERR | PRP_ERR_HLEN |
-				      PRP_ERR_LENGTH;
+				      PRP_ERR_TRUNC;
 			return;
 		}
 		p = buf + prp_poff(prp);
 		hbhlen = p[1] * 8;
 		if (hbhlen > prp_plen(prp)) {
 			prp->error |= PRP_ERR_OPTERR | PRP_ERR_HLEN |
-				      PRP_ERR_LENGTH;
+				      PRP_ERR_TRUNC;
 			return;
 		}
 		rv = parse_ipv6_hopopt(prp, ip6, (byte_t *)(ip6+1), hbhlen);
 		if (rv < 0 || !prp_off_valid(prp, PRP_IPV6FLD_JLEN)) {
-			prp->error |= PRP_ERR_LENGTH;
+			prp->error |= PRP_ERR_TRUNC;
 			return;
 		}
 		jlen = ntoh32x(buf + prp->offs[PRP_IPV6FLD_JLEN]);
 		if (jlen > len - IPV6H_LEN) {
-			prp->error |= PRP_ERR_OPTERR | PRP_ERR_LENGTH;
+			prp->error |= PRP_ERR_OPTERR | PRP_ERR_TRUNC;
 			return;
 		}
 		if (jlen < len - IPV6H_LEN) {
@@ -1551,7 +1543,7 @@ static int ipv6_fixlen(struct prparse *prp, byte_t *buf)
 		hton16i(0, &ip6->len);
 		hton32i(prp_plen(prp), buf + prp->offs[PRP_IPV6FLD_JLEN]);
 	}
-	prp->error &= ~(PRP_ERR_LENGTH | PRP_ERR_HLEN | PRP_ERR_TOOSMALL);
+	prp->error &= ~(PRP_ERR_TRUNC | PRP_ERR_HLEN | PRP_ERR_TOOSMALL);
 
 	return 0;
 }
@@ -1593,7 +1585,7 @@ static int icmp6_nxtcld(struct prparse *reg, byte_t *buf, struct prparse *cld,
 {
 	struct icmp6h *icmp6;
 
-	if (cld != NULL || reg->error != 0)
+	if (cld != NULL)
 		return 0;
 
 	icmp6 = prp_header(reg, buf, struct icmp6h);
@@ -1631,7 +1623,7 @@ static int icmp6_add(struct prparse *reg, byte_t *buf, struct prpspec *ps,
 		memset(icmp6, 0, sizeof(*icmp6));
 		icmp6->type = ICMP6T_ECHO_REQUEST;
 		ipprp = find_ipprp(reg);
-		if ((ipprp == NULL) || (ipprp->error & PRP_ERR_LENGTH)) {
+		if (ipprp == NULL)  {
 			prp->error |= PRP_ERR_CKSUM;
 		} else {
 			icmp6->cksum = pseudo_cksum(prp, ipprp, buf, 
@@ -1656,16 +1648,10 @@ static void icmp6_update(struct prparse *prp, byte_t *buf)
 	prp_poff(prp) = prp_soff(prp) + 8;
 	
 	ipprp = find_ipprp(prp->region);
-	if ((ipprp == NULL) || (ipprp->error & PRP_ERR_LENGTH) ||
-	    (ipprp->prid != PRID_IPV6)) {
+	if ((ipprp == NULL) ||
+	    ((pseudo_cksum(prp, ipprp, buf, IPPROT_ICMPV6) & 0xFFFF) != 0)) {
 		prp->error |= PRP_ERR_CKSUM;
-	} else {
-		if (ipprp->prid != PRID_IPV6)
-			prp->error |= PRP_ERR_INVALID;
-		if ((pseudo_cksum(prp, ipprp, buf, IPPROT_ICMPV6) & 0xFFFF) != 0)
-			prp->error |= PRP_ERR_CKSUM;
 	}
-
 	/* TODO: check by type? */
 }
 
@@ -1675,8 +1661,7 @@ static int icmp6_fixcksum(struct prparse *prp, byte_t *buf)
 	struct prparse *ipprp;
 	struct icmp6h *icmp6 = prp_header(prp, buf, struct icmp6h);
 	ipprp = find_ipprp(prp->region);
-	if ((ipprp == NULL) || (ipprp->error & PRP_ERR_LENGTH) || 
-	    (ipprp->prid != PRID_IPV6))
+	if (ipprp == NULL) 
 		return -1;
 	icmp6->cksum = 0;
 	icmp6->cksum = pseudo_cksum(prp, ipprp, buf, IPPROT_ICMPV6);

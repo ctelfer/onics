@@ -89,10 +89,8 @@ int main(int argc, char *argv[])
 					printf("\t\tHeader length error\n");
 					continue;
 				}
-				if ((t->error & PRP_ERR_LENGTH)) {
-					printf("\t\tLength field error\n");
-					continue;
-				}
+				if ((t->error & PRP_ERR_TRUNC))
+					printf("\t\tPacket truncated\n");
 				if ((t->error & PRP_ERR_CKSUM))
 					printf("\t\tChecksum error\n");
 				if ((t->error & PRP_ERR_OPTLEN))
