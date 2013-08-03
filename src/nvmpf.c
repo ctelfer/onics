@@ -53,11 +53,13 @@ int verbosity = 0;
 int ignore_errors = 0;
 int single_step = 0;
 char *progname;
+FILE *infile;
+FILE *outfile;
 
 void usage()
 {
 	char buf[4096];
-	fprintf(stderr, "usage: nvmpf [options] progfile\n");
+	fprintf(stderr, "usage: nvmpf [options] progfile [INFILE [OUTFILE]]\n");
 	optparse_print(&optparser, buf, sizeof(buf));
 	str_cat(buf, "\n", sizeof(buf));
 	fprintf(stderr, "%s\n", buf);
@@ -69,6 +71,8 @@ void parse_options(int argc, char *argv[])
 {
 	struct clopt *opt;
 	int rv;
+	infile = stdin;
+	outfile = stdout;
 	optparse_reset(&optparser, argc, argv);
 	while (!(rv = optparse_next(&optparser, &opt))) {
 		if (opt->ch == 'h')
@@ -82,9 +86,21 @@ void parse_options(int argc, char *argv[])
 		else if (opt->ch == 's')
 			single_step = 1;
 	}
-	if (rv != argc - 1)
+	if (rv < 0 || rv >= argc || rv < argc - 3)
 		usage();
+
 	progname = argv[rv];
+	if (rv < argc - 1) {
+		infile = fopen(argv[rv+1], "r");
+		if (infile == NULL)
+			errsys("fopen: ");
+	}
+	if (rv < argc - 2) {
+		outfile = fopen(argv[rv+2], "w");
+		if (outfile == NULL)
+			errsys("fopen: ");
+	}
+
 }
 
 
@@ -149,5 +165,5 @@ int main(int argc, char *argv[])
 	if (verbosity > 1)
 		flags |= NVMP_RUN_PRSTK;
 
-	return nvmp_run_all(&vm, &prog, stdin, stdout, stderr, flags);
+	return nvmp_run_all(&vm, &prog, infile, outfile, stderr, flags);
 }

@@ -29,6 +29,8 @@
 #include <sys/ioctl.h>
 #include <net/if.h>
 #include <sys/time.h>
+#include <arpa/inet.h>
+#include <unistd.h>
 #include <cat/err.h>
 #include <cat/optparse.h>
 #include <cat/str.h>

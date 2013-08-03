@@ -36,7 +36,6 @@
 struct clopt g_options[] = {
 	CLOPT_INIT(CLOPT_STRING, 'i', "--iface", 
 		"interface to sniff from (UNSUPPORTED)"),
-	CLOPT_INIT(CLOPT_STRING, 'f', "--file", "file to read from"),
 	CLOPT_INIT(CLOPT_UINT,   'n', "--iface-num",
 		   "interface number to tag packets with"),
 	CLOPT_INIT(CLOPT_NOARG,  'p', "--promisc",
@@ -53,7 +52,8 @@ void usage(const char *estr)
 	if (estr)
 		fprintf(stderr, "%s\n", estr);
 	optparse_print(&g_oparser, str, sizeof(str));
-	fprintf(stderr, "usage: %s [options]\n%s\n", g_oparser.argv[0], str);
+	fprintf(stderr, "usage: %s [options] [INFILE [OUTFILE]]\n%s\n",
+		g_oparser.argv[0], str);
 	exit(1);
 }
 
@@ -71,16 +71,14 @@ int main(int argc, char *argv[])
 	struct xpkt_tag_ts ts, *tsp;
 	struct xpkt_tag_snapinfo si;
 	struct opc_phdr ph;
-	const char *pktsrc = NULL;
+	FILE *infile = stdin;
+	FILE *outfile = stdout;
 
 	optparse_reset(&g_oparser, argc, argv);
 	while (!(rv = optparse_next(&g_oparser, &opt))) {
 		switch (opt->ch) {
 		case 'i':
 			usage("option '-i' is unsupported");
-			break;
-		case 'f':
-			pktsrc = opt->val.str_val;
 			break;
 		case 'n':
 			ifnum = opt->val.uint_val;
@@ -94,16 +92,26 @@ int main(int argc, char *argv[])
 		}
 	}
 
-	if (rv < argc)
-		usage((rv < 0) ? g_oparser.errbuf : NULL);
+	if (rv < 0)
+		usage(g_oparser.errbuf);
 
-	if (pktsrc != NULL) {
-		if (opc_open_file_rd(pktsrc, &pch) < 0)
-			errsys("Error opening file %s: ", argv[1]);
-	} else {
-		if (opc_open_stream_rd(stdin, &pch) < 0)
-			errsys("Error reading pcap form standard input");
+	if (rv < argc - 2)
+		usage(NULL);
+
+	if (rv < argc) {
+		infile = fopen(argv[rv], "r");
+		if (infile == NULL)
+			errsys("opening '%s' to read from", argv[rv]);
 	}
+
+	if (rv < argc - 1) {
+		outfile = fopen(argv[rv+1], "w");
+		if (outfile == NULL)
+			errsys("opening '%s' to write to", argv[rv+1]);
+	}
+
+	if (opc_open_stream_rd(infile, &pch) < 0)
+		errsys("Error reading pcap form standard input");
 
 	pcdlt = opc_get_dltype(pch);
 	switch (pcdlt) {
@@ -133,7 +141,7 @@ int main(int argc, char *argv[])
 			pkb_add_tag(pkb, (struct xpkt_tag_hdr *)&si);
 		}
 		pkb_pack(pkb);
-		if (pkb_file_write(pkb, stdout) < 0)
+		if (pkb_file_write(pkb, outfile) < 0)
 			errsys("pkb_file_write: ");
 		pkb_unpack(pkb);
 		if (ph.len != ph.caplen)
@@ -145,6 +153,7 @@ int main(int argc, char *argv[])
 
 	pkb_free(pkb);
 	opc_close(pch);
+	fclose(outfile);
 
 	return 0;
 }

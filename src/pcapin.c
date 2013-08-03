@@ -32,14 +32,15 @@
 #define PKTMAX  (1024 * 64 + 64)
 
 pcap_t *g_pcap;
-FILE *g_infile = NULL;
 uint g_ifnum = 0;
 struct pktbuf *g_pkb;
 struct xpkt_tag_ts *g_ts;
+const char *progname;
+FILE *infile;
+FILE *outfile;
 
 struct clopt g_options[] = {
 	CLOPT_INIT(CLOPT_STRING, 'i', "--iface", "interface to sniff from"),
-	CLOPT_INIT(CLOPT_STRING, 'f', "--file", "file to read from"),
 	CLOPT_INIT(CLOPT_UINT,   'n', "--iface-num",
 		   "interface number to tag packets with"),
 	CLOPT_INIT(CLOPT_NOARG,  'p', "--promisc",
@@ -51,13 +52,15 @@ struct clopt_parser g_oparse =
 CLOPTPARSER_INIT(g_options, array_length(g_options));
 
 
-void usage(const char *prog, const char *estr)
+void usage(const char *estr)
 {
 	char str[4096];
 	if (estr)
 		fprintf(stderr, "%s\n", estr);
+	fprintf(stderr, "usage: %s [options] [INFILE [OUTFILE]]\n", progname);
+	fprintf(stderr, "       %s -i IFACE [options] [OUTFILE]\n", progname);
 	optparse_print(&g_oparse, str, sizeof(str));
-	fprintf(stderr, "usage: %s [options]\n%s\n", prog, str);
+	fprintf(stderr, "%s\n", str);
 	exit(1);
 }
 
@@ -69,16 +72,15 @@ void parse_args(int argc, char *argv[])
 	const char *pktsrc = NULL;
 	struct clopt *opt;
 
+	infile = stdin;
+	outfile = stdout;
+	progname = argv[0];
 	optparse_reset(&g_oparse, argc, argv);
 	while (!(rv = optparse_next(&g_oparse, &opt))) {
 		switch (opt->ch) {
 		case 'i':
 			pktsrc = opt->val.str_val;
 			usefile = 0;
-			break;
-		case 'f':
-			pktsrc = opt->val.str_val;
-			usefile = 1;
 			break;
 		case 'n':
 			g_ifnum = opt->val.uint_val;
@@ -87,26 +89,32 @@ void parse_args(int argc, char *argv[])
 			promisc = 1;
 			break;
 		case 'h':
-			usage(argv[0], NULL);
+			usage(NULL);
 			break;
 		}
 	}
-	if (rv < argc)
-		usage(argv[0], g_oparse.errbuf);
+	if (rv < 0)
+		usage(g_oparse.errbuf);
 
 	if (usefile) {
-		if (pktsrc != NULL) {
-			if ((g_infile = fopen(pktsrc, "r")) == NULL)
+		if (rv < argc) {
+			if ((infile = fopen(argv[rv], "r")) == NULL)
 				errsys("fopen: ");
-		} else {
-			g_infile = stdin;
 		}
-		if ((g_pcap = pcap_fopen_offline(g_infile, ebuf)) == NULL)
+		if ((g_pcap = pcap_fopen_offline(infile, ebuf)) == NULL)
 			err("Error opening pcap: %s\n", ebuf);
+
+		if (rv < argc-1)
+			if ((outfile = fopen(argv[rv+1], "w")) == NULL)
+				errsys("fopen: ");
+
 	} else {
 		g_pcap = pcap_open_live(pktsrc, 65535, promisc, 0, ebuf);
 		if (g_pcap == NULL)
 			err("Error opening interface %s: %s\n", pktsrc, ebuf);
+		if (rv < argc)
+			if ((outfile = fopen(argv[rv], "w")) == NULL)
+				errsys("fopen: ");
 	}
 }
 
@@ -146,8 +154,8 @@ void get_packet(uchar *unused, const struct pcap_pkthdr *ph, const uchar *buf)
 	memcpy(g_pkb->buf, buf, ph->caplen);
 	rv = pkb_pack(g_pkb);
 	abort_unless(rv == 0);
-	if (pkb_fd_write(g_pkb, 1) < 0)
-		errsys("pkb_fd_write: ");
+	if (pkb_file_write(g_pkb, outfile) < 0)
+		errsys("pkb_file_write: ");
 	pkb_unpack(g_pkb);
 
 	if (ph->len != ph->caplen)
@@ -159,7 +167,6 @@ int main(int argc, char *argv[])
 {
 	int dlt;
 	uint16_t dltype;
-	int rv;
 
 	parse_args(argc, argv);
 	switch ((dlt = pcap_datalink(g_pcap))) {

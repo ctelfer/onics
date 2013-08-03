@@ -33,7 +33,6 @@
 #include "stdproto.h"
 #include "fld.h"
 
-FILE *g_file = NULL;
 int g_keep_xhdr = 0;
 ulong g_pktnum;
 ulong g_ioff;
@@ -41,6 +40,8 @@ ulong g_pbase;
 ulong g_len;
 byte_t *g_p;
 int g_do_flush = 0;
+FILE *infile;
+FILE *outfile;
 
 struct field {
 	struct list		le;
@@ -78,7 +79,9 @@ void usage(const char *estr)
 	if (estr != NULL)
 		fprintf(stderr, "Error -- %s\n", estr);
 	optparse_print(&g_oparser, ubuf, sizeof(ubuf));
-	err("usage: %s [options]\n%s\n", g_oparser.argv[0], ubuf);
+	fprintf(stderr, "usage: %s [options] [INFILE [OUTFILE]]\n", g_oparser.argv[0]);
+	fprintf(stderr, "%s\n", ubuf);
+	exit(1);
 }
 
 
@@ -86,6 +89,8 @@ void parse_options()
 {
 	int rv;
 	struct clopt *opt;
+	infile = stdin;
+	outfile = stdout;
 	while (!(rv = optparse_next(&g_oparser, &opt))) {
 		switch (opt->ch) {
 		case 'x':
@@ -100,18 +105,23 @@ void parse_options()
 	}
 	if (rv < 0)
 		usage(g_oparser.errbuf);
+	if (rv < g_oparser.argc - 2)
+		usage(NULL);
+
 	if (rv < g_oparser.argc) {
-		if ((g_file = fopen(g_oparser.argv[rv], "r")) == NULL)
+		if ((infile = fopen(g_oparser.argv[rv], "r")) == NULL)
 			errsys("fopen: ");
-	} else {
-		g_file = stdin;
+	}
+	if (rv < g_oparser.argc-1) {
+		if ((outfile = fopen(g_oparser.argv[rv+1], "w")) == NULL)
+			errsys("fopen: ");
 	}
 }
 
 
 void printsep()
 {
-	printf("#####\n");
+	fprintf(outfile, "#####\n");
 }
 
 
@@ -120,7 +130,7 @@ void hexdump_at(ulong soff, ulong eoff)
 	/* effective address == soff - (packet base + xpkt hdr off) */
 	/* pointer offset = g_p + soff */
 	/* length = end - start */
-	fhexdump(stdout, NULL, soff - g_pbase + g_ioff, g_p + soff,
+	fhexdump(outfile, NULL, soff - g_pbase + g_ioff, g_p + soff,
 		 eoff - soff);
 }
 
@@ -155,17 +165,17 @@ void printerr(uint err)
 	int first = 1;
 	int i;
 	if (err) {
-		printf("#    Errors [0x%0x]: ", err);
+		fprintf(outfile, "#    Errors [0x%0x]: ", err);
 		for (i = 0; i <= PRP_ERR_MAXBIT; ++i) {
 			if (err & (1 << i)) {
 				if (!first)
-					fputs(", ", stdout);
+					fputs(", ", outfile);
 				else
 					first = 0;
-				fputs(errstrs[i], stdout);
+				fputs(errstrs[i], outfile);
 			}
 		}
-		fputc('\n', stdout);
+		fputc('\n', outfile);
 	}
 }
 
@@ -325,14 +335,14 @@ void print_fields(ulong eoff)
 			printsep();
 			rv = ns_tostr(e, g_p, f->prp, line, sizeof(line), pfx);
 			if (rv >= 0)
-				fputs(line, stdout);
+				fputs(line, outfile);
 			if (f->ishdr)
 				printerr(f->prp->error);
 			printsep();
 		} else {
 			rv = ns_tostr(e, g_p, f->prp, line, sizeof(line), pfx);
 			if (rv >= 0)
-				fputs(line, stdout);
+				fputs(line, outfile);
 		}
 
 		next_field = l_next(next_field);
@@ -370,7 +380,7 @@ void dump_data(struct prparse *prp, ulong soff, ulong eoff, int prhdr)
 	if (prhdr) {
 		len = ebyte - sbyte;
 		sboff = sbyte - g_pbase + g_ioff;
-		printf("%sData -- [%lu:%lu]\n", pfx, sboff, len);
+		fprintf(outfile, "%sData -- [%lu:%lu]\n", pfx, sboff, len);
 	}
 
 	hexdump_at(sbyte, ebyte);
@@ -450,49 +460,58 @@ void dump_xpkt_meta(struct pktbuf *pkb)
 
 		case XPKT_TAG_TIMESTAMP: 
 			ts = (struct xpkt_tag_ts *)t;
-			printf("# XPKT: Timestamp = %lu sec and %lu nsec\n",
+			fprintf(outfile,
+			       "# XPKT: Timestamp = %lu sec and %lu nsec\n",
 			       (ulong)ts->sec, (ulong)ts->nsec);
 			break;
 
 		case XPKT_TAG_SNAPINFO: 
 			si = (struct xpkt_tag_snapinfo *)t;
-			printf("# XPKT: Packet snapped: wire length = %lu\n",
+			fprintf(outfile,
+				"# XPKT: Packet snapped: wire length = %lu\n",
 			       (ulong)si->wirelen);
 			break;
 
 		case XPKT_TAG_INIFACE:
 			ifa = (struct xpkt_tag_iface *)t;
-			printf("# XPKT: Incoming interface = %u\n",
+			fprintf(outfile,
+				"# XPKT: Incoming interface = %u\n",
 			       (uint)ifa->iface);
 			break;
 
 		case XPKT_TAG_OUTIFACE:
 			ifa = (struct xpkt_tag_iface *)t;
-			printf("# XPKT: Outgoing interface = %u\n",
+			fprintf(outfile,
+				"# XPKT: Outgoing interface = %u\n",
 			       (uint)ifa->iface);
 			break;
 
 		case XPKT_TAG_FLOW:
 			f = (struct xpkt_tag_flowid *)t;
-			printf("# XPKT: Flow id = %llu\n", (ullong)f->flowid);
+			fprintf(outfile, "# XPKT: Flow id = %llu\n",
+				(ullong)f->flowid);
 			break;
 
 		case XPKT_TAG_CLASS:
 			c = (struct xpkt_tag_class *)t;
-			printf("# XPKT: Packet class = %llu\n", (ullong)c->tag);
+			fprintf(outfile, "# XPKT: Packet class = %llu\n",
+				(ullong)c->tag);
 			break;
 
 		case XPKT_TAG_SEQ:
 			seq = (struct xpkt_tag_seq *)t;
-			printf("# XPKT: Packet sequence number = %llu\n",
+			fprintf(outfile,
+				"# XPKT: Packet sequence number = %llu\n",
 			       (ullong)seq->seq);
 			break;
 
 		case XPKT_TAG_PARSEINFO:
 			pi = (struct xpkt_tag_parseinfo *)t;
-			printf("# XPKT: Parse info for proto %04x: "
+			fprintf(outfile,
+				"# XPKT: Parse info for proto %04x: "
 			       "off = %llu, length = %llu\n",
-			       (uint)pi->proto, (ullong)pi->off, (ullong)pi->len);
+			       (uint)pi->proto, (ullong)pi->off,
+			       (ullong)pi->len);
 			break;
 		}
 	}
@@ -514,20 +533,23 @@ void dump_to_hex_packet(struct pktbuf *pkb)
 		g_ioff = xpkt_doff(xp);
 		abort_unless(prp_toff(prp) + g_ioff > g_ioff);
 		printsep();
-		printf("# Packet %lu -- %lu bytes\n", g_pktnum, g_len + g_ioff);
+		fprintf(outfile, "# Packet %lu -- %lu bytes\n", g_pktnum,
+			g_len + g_ioff);
 		printsep();
-		printf("# XPKT: eX-PacKeT Header %lu bytes\n", g_ioff);
+		fprintf(outfile, "# XPKT: eX-PacKeT Header %lu bytes\n",
+			g_ioff);
 		printsep();
 		dump_xpkt_meta(pkb);
 
 		if ((rv = pkb_pack(pkb)) < 0)
 			err("Error packing packet %lu: %d\n", g_pktnum, rv);
-		fhexdump(stdout, NULL, 0, (byte_t *)xp, g_ioff);
+		fhexdump(outfile, NULL, 0, (byte_t *)xp, g_ioff);
 		pkb_unpack(pkb);
 	} else {
 		g_ioff = 0;
 		printsep();
-		printf("# Packet %lu -- %lu bytes\n", g_pktnum, g_len);
+		fprintf(outfile, "# Packet %lu -- %lu bytes\n", g_pktnum,
+			g_len);
 		printsep();
 	}
 
@@ -536,9 +558,9 @@ void dump_to_hex_packet(struct pktbuf *pkb)
 
 	walk_and_print_parse(prp, prp, prp_poff(prp) * 8);
 
-	printf("\n\n");
+	fprintf(outfile, "\n\n");
 	if (g_do_flush)
-		fflush(stdout);
+		fflush(outfile);
 
 	release_fields();
 }
@@ -558,7 +580,7 @@ int main(int argc, char *argv[])
 
 	pkb_init(1);
 
-	while ((rv = pkb_file_read(&pkb, g_file)) > 0) {
+	while ((rv = pkb_file_read(&pkb, infile)) > 0) {
 		++g_pktnum;
 		pkb_parse(pkb);
 		dump_to_hex_packet(pkb);

@@ -2,23 +2,33 @@
 
 DROP=" drop; "
 
+usage() {
+	echo "usage: $0 [INFILE]" >&2
+	echo "       $0 [-p|--pass] [INFILE [OUTFILE]]" >&2
+	exit 1
+}
+
 if [ $# -gt 0 ]
 then
-	if [ "$1" != "-p" -a "$1" != "--pass" ]
+	[ "$1" = "-h" -o "$1" = "--help" ] && usage
+
+	if [ "$1" = "-p" -o "$1" = "--pass" ]
 	then
-		echo usage: $0 "[-p|--pass]" >&2
-		exit 1
+		DROP=""
+		shift
+		[ $# -gt 2 ] && usage
+	else
+		[ $# -gt 1 ] && usage
 	fi
-	DROP=""
 fi
 
 SCRIPT="int C = 0;
 	{ C = C + 1; $DROP }
 	END { print C, \" total packets seen.\n\"; }"
 
-if [ $# -gt 0 ]
+if [ -z "$DROP" ]
 then
-	exec pml -e "$SCRIPT"
+	exec pml -e "$SCRIPT" $* 
 else
-	exec pml -e "$SCRIPT" 2>&1 >/dev/null
+	exec pml -e "$SCRIPT" $* 2>&1 >/dev/null
 fi

@@ -35,12 +35,15 @@
 uint g_dlt = PRID_INVALID;
 ulong g_lineno = 0;
 ulong g_pktno = 1;
-FILE *g_file = NULL;
 int g_toolong = 0;
+int g_do_flush = 0;
+FILE *infile;
+FILE *outfile;
 
 struct clopt g_optarr[] = {
 	CLOPT_INIT(CLOPT_UINT, 'l', "--link-hdr-type", 
 		   "no xpkt header: each packet starts with type <x>"),
+	CLOPT_INIT(CLOPT_NOARG, 'f', "--flush-out", "Flush output per packet"),
 	CLOPT_INIT(CLOPT_NOARG, 'h', "--help", "print help")
 };
 
@@ -55,7 +58,10 @@ void usage(const char *estr)
 	if (estr != NULL)
 		fprintf(stderr, "Error -- %s\n", estr);
 	optparse_print(&g_oparser, ubuf, sizeof(ubuf));
-	err("usage: %s [options]\n%s\n", g_oparser.argv[0], ubuf);
+	fprintf(stderr, "usage: %s [options] [INFILE [OUTFILE]]\n",
+		g_oparser.argv[0]);
+	fprintf(stderr, "%s\n", ubuf);
+	exit(1);
 }
 
 
@@ -63,10 +69,15 @@ void parse_options()
 {
 	int rv;
 	struct clopt *opt;
+	infile = stdin;
+	outfile = stdout;
 	while (!(rv = optparse_next(&g_oparser, &opt))) {
 		switch (opt->ch) {
 		case 'l':
 			g_dlt = opt->val.uint_val;
+			break;
+		case 'f':
+			g_do_flush = 1;
 			break;
 		case 'h':
 			usage(NULL);
@@ -74,12 +85,17 @@ void parse_options()
 	}
 	if (rv < 0)
 		usage(g_oparser.errbuf);
+	if (rv < g_oparser.argc - 2)
+		usage(NULL);
+
 	if (rv < g_oparser.argc) {
-		if ((g_file = fopen(g_oparser.argv[rv], "r")) == NULL)
+		if ((infile = fopen(g_oparser.argv[rv], "r")) == NULL)
 			errsys("fopen: ");
-	} else {
-		g_file = stdin;
-	}
+	} 
+	if (rv < g_oparser.argc-1) {
+		if ((outfile = fopen(g_oparser.argv[rv+1], "w")) == NULL)
+			errsys("fopen: ");
+	} 
 }
 
 
@@ -92,7 +108,7 @@ int readline(char *cp, size_t len)
 	g_toolong = 0;
 
 	while (len > 1) {
-		ch = fgetc(g_file);
+		ch = fgetc(infile);
 		if (ch == EOF)
 			break;
 		if (!isprint(ch) && (ch != '\n'))
@@ -122,7 +138,7 @@ void clearline()
 {
 	int v;
 	do {
-		v = fgetc(g_file);
+		v = fgetc(infile);
 	} while ((v != EOF) && (v != '\n'));
 }
 
@@ -173,8 +189,10 @@ void write_packet(struct pktbuf *pkb)
 
 	if (pkb_pack(pkb) < 0)
 		err("Error packing packet\n");
-	if (pkb_fd_write(pkb, 1))
+	if (pkb_file_write(pkb, outfile))
 		errsys("Error sending packet\n");
+	if (g_do_flush)
+		fflush(outfile);
 
 	pkb_reset(pkb);
 	pkb_set_len(pkb, 0);

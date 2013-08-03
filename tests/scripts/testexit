@@ -1,0 +1,4 @@
+#!/bin/sh
+
+pml -e 'BEGIN { print "start\n"; exit(1); }' -e 'END { print "hi there\n"; }'
+

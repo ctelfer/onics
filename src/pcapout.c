@@ -23,19 +23,20 @@
 #include "pktbuf.h"
 #include <stdio.h>
 #include <limits.h>
+#include <stdlib.h>
 #include <pcap.h>
 #include <cat/err.h>
 #include <cat/pack.h>
 #include <cat/optparse.h>
 
-FILE *g_file = NULL;
 struct pcap *g_pcap = NULL;
 pcap_dumper_t *g_dumper = NULL;
 const char *g_outiface = NULL;
+FILE *infile;
+FILE *outfile;
 
 struct clopt g_optarr[] = {
 	CLOPT_INIT(CLOPT_STRING, 'i', "--iface", "interface to send out on"),
-	CLOPT_INIT(CLOPT_STRING, 'f', "--file", "file to read from"),
 	CLOPT_INIT(CLOPT_NOARG, 'h', "--help", "print help")
 };
 
@@ -48,23 +49,26 @@ void usage(const char *estr)
 	char ubuf[4096];
 	if (estr != NULL)
 		fprintf(stderr, "Error -- %s\n", estr);
+	err("usage: %s [options] [INFILE [OUTFILE]]\n", g_oparser.argv[0]);
+	err("       %s [-i IFACE] [options] [INFILE]\n", g_oparser.argv[0]);
 	optparse_print(&g_oparser, ubuf, sizeof(ubuf));
-	err("usage: %s [options]\n%s\n", g_oparser.argv[0], ubuf);
+	fprintf(stderr, "%s\n", ubuf);
+	exit(1);
 }
 
 
-void parse_options()
+void parse_args(int argc, char *argv[])
 {
 	int rv;
 	struct clopt *opt;
-	const char *pktfile = NULL;
+	infile = stdin;
+	outfile = stdout;
+	optparse_reset(&g_oparser, argc, argv);
 	while (!(rv = optparse_next(&g_oparser, &opt))) {
 		switch (opt->ch) {
 		case 'i':
 			g_outiface = opt->val.str_val;
-			break;
-		case 'f':
-			pktfile = opt->val.str_val;
+			outfile = NULL;
 			break;
 		case 'h':
 			usage(NULL);
@@ -72,13 +76,19 @@ void parse_options()
 	}
 	if (rv < 0)
 		usage(g_oparser.errbuf);
-	if (rv < g_oparser.argc)
-		usage("Extra arguments present");
-	if (pktfile != NULL) {
-		if ((g_file = fopen(pktfile, "r")) == NULL)
+	if (rv < argc - 2)
+		usage(NULL);
+
+	if (rv < argc) {
+		if ((infile = fopen(argv[rv], "r")) == NULL)
 			errsys("fopen: ");
-	} else {
-		g_file = stdin;
+	}
+
+	if (g_outiface == NULL) {
+		if (rv < argc-1) {
+			if ((outfile = fopen(argv[rv+1], "w")) == NULL)
+				errsys("fopen: ");
+		}
 	}
 }
 
@@ -113,13 +123,13 @@ int main(int argc, char *argv[])
 	struct pktbuf *p;
 	int first_dltype;
 	unsigned pktnum = 1;
+	char errbuf[PCAP_ERRBUF_SIZE];
 
-	optparse_reset(&g_oparser, argc, argv);
-	parse_options();
+	parse_args(argc, argv);
 
 	pkb_init(1);
 
-	if ((rv = pkb_file_read(&p, g_file)) <= 0) {
+	if ((rv = pkb_file_read(&p, infile)) <= 0) {
 		if (rv == 0)
 			return 0;
 		if (rv < 0)
@@ -134,13 +144,12 @@ int main(int argc, char *argv[])
 		err("Data link type not supported in pcap");
 	}
 
-	if (g_outiface == NULL) {
+	if (outfile != NULL) {
 		if ((g_pcap = pcap_open_dead(pcap_dlt, INT_MAX)) == NULL)
 			errsys("Error opening pcap: ");
-		if ((g_dumper = pcap_dump_fopen(g_pcap, stdout)) == NULL)
+		if ((g_dumper = pcap_dump_fopen(g_pcap, outfile)) == NULL)
 			errsys("Error opening dumper to standard output: ");
 	} else {
-		char errbuf[PCAP_ERRBUF_SIZE];
 		g_pcap = pcap_open_live(g_outiface, 0, 0, 0, errbuf);
 		if (g_pcap == NULL)
 			err("pcap_open_live: %s\n", errbuf);
@@ -166,7 +175,7 @@ int main(int argc, char *argv[])
 		}
 		pkb_free(p);
 		++pktnum;
-	} while ((rv = pkb_file_read(&p, g_file)) > 0);
+	} while ((rv = pkb_file_read(&p, infile)) > 0);
 
 	if (rv < 0)
 		errsys("pkb_file_read: ");

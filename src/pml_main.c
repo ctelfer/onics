@@ -84,7 +84,7 @@ int insnum = 0;
 void usage()
 {
 	char buf[4096];
-	fprintf(stderr, "usage: pml [options]\n");
+	fprintf(stderr, "usage: pml [options] [INFILE [OUTFILE]]\n");
 	optparse_print(&optparser, buf, sizeof(buf));
 	str_cat(buf, "\n", sizeof(buf));
 	fprintf(stderr, "%s\n", buf);
@@ -129,7 +129,7 @@ void add_isrc(const char *s, int type)
 }
 
 
-void parse_options(int argc, char *argv[])
+void parse_options(int argc, char *argv[], FILE **fin, FILE **fout)
 {
 	struct clopt *opt;
 	int rv;
@@ -153,8 +153,21 @@ void parse_options(int argc, char *argv[])
 			single_step = 1;
 		}
 	}
-	if (rv != argc)
+
+	if (rv < argc - 2)
 		usage();
+
+	if (rv < argc) {
+		*fin = fopen(argv[rv], "r");
+		if (*fin == NULL)
+			errsys("fopen(\"%s\", \"r\")", argv[rv]);
+	}
+
+	if (rv + 1 < argc) {
+		*fout = fopen(argv[rv+1], "w");
+		if (*fout == NULL)
+			errsys("fopen(\"%s\", \"w\")", argv[rv+1]);
+	}
 }
 
 
@@ -250,10 +263,11 @@ int main(int argc, char *argv[])
 	struct netvm_std_coproc cproc;
 	struct file_emitter fe;
 	struct netvm_program prog;
-	FILE *fout;
+	FILE *fout = stdout;
+	FILE *fin = stdin;
 	int flags = 0;
 
-	parse_options(argc, argv);
+	parse_options(argc, argv, &fin, &fout);
 
 	if (nisrc == 0)
 		err("No program sources provided: use -f or -e\n");
@@ -285,7 +299,7 @@ int main(int argc, char *argv[])
 		if (verbosity > 1)
 			flags |= NVMP_RUN_PRSTK;
 
-		if (nvmp_run_all(&vm, &prog, stdin, stdout, stderr, flags) < 0)
+		if (nvmp_run_all(&vm, &prog, fin, fout, stderr, flags) < 0)
 			err("error running netvm program: %s\n",
 			    netvm_estr(vm.status));
 
