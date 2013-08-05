@@ -7,7 +7,7 @@ Key:
 
 PML
  + More test cases (control flow especially)
- + String references to arbitrary 'str' values
+ + String references to arbitrary 'str' values (constants)
  ? proper 'global' variable resolutions in functions and rules
  ? Add "standard include path/files"
  * command line arguments to programs (requires number parsing to be useful)
@@ -17,19 +17,18 @@ PML
 
 Protocol parsing & Namespace
  * Check restrictions on parsing to ensure termination.
- > Allow extensible aspects of a namespace element and make the 
-   parsing formats one of those aspects.
  > Add short-form parsing for protocols using the above.
  > More checking of ICMP/ICMPv6 packets by type.
  > MPLS
  > PPP
  > GRE
  > GTP
- > v4inv6 and other tunnel formats
+ > other tunnel formats
 
 
 x2hpkt:
- * Add field printing for xpkt header
+ * Revise/simplify to use regular field printing
+ * Handle raw unformatted fields.
 
 
 netvm_prog API:
@@ -38,6 +37,7 @@ netvm_prog API:
 
 NetVM Coprocessors
  + Fix up / test regex compilation on error patterns (catlib).
+ * Timer interrupt
  * DNS Resolver coprocessor
  * Generic C library netvm coprocessor
  > Hash table coprocessor
@@ -50,6 +50,8 @@ pktmux/pktdemux:
    operations and conventions.  These are a bit too cumbersome. 
 
 
-pktdiff:
- + everything
+pdiff:
+ + Better payload comparison
+ * Two-column output format
+ * pml edit script output format
 

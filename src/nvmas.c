@@ -52,7 +52,7 @@
 .define CPT_XPKT	1
 .coproc 0 CPT_XPKT
 .mem name segnum addr nbytes [init]
-.entry (start|packet|end) @label
+.entry (start|packet|tick|end) @label
 
 label:	add 
 	jmpi, @label
@@ -261,7 +261,7 @@ struct asmctx {
 
 
 const char *epnames[NVMP_EP_NUMEP] = {
-	"start", "packet", "end"
+	"start", "packet", "tick", "end"
 };
 
 

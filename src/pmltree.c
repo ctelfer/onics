@@ -281,6 +281,7 @@ int pml_ast_init(struct pml_ast *ast)
 		return -1;
 	ast->b_rule = NULL;
 	l_init(&ast->p_rules);
+	ast->t_rule = NULL;
 	ast->e_rule = NULL;
 	for (i = PML_SEG_MIN; i <= PML_SEG_MAX; ++i)
 		dyb_init(&ast->mi_bufs[i], NULL);
@@ -487,6 +488,9 @@ void pml_ast_clear(struct pml_ast *ast)
 	for_each_prule_safe(n, x, ast)
 		pmln_free(l_to_node(n));
 	abort_unless(l_isempty(&ast->p_rules));
+
+	pmln_free(ast->t_rule);
+	ast->t_rule = NULL;
 
 	pmln_free(ast->e_rule);
 	ast->e_rule = NULL;
@@ -706,6 +710,17 @@ int pml_ast_add_rule(struct pml_ast *ast, struct pml_rule *rule)
 		break;
 	case PML_RULE_PACKET:
 		l_enq(&ast->p_rules, &rule->ln);
+		break;
+	case PML_RULE_TICK:
+		if (ast->t_rule == NULL) {
+			ast->t_rule = rule;
+		} else {
+			olist = ast->t_rule->stmts;
+			nlist = rule->stmts;
+			l_append(&olist->list, &nlist->list);
+			pmln_free(rule);
+			rule = ast->t_rule;
+		}
 		break;
 	case PML_RULE_END:
 		if (ast->e_rule == NULL) {
@@ -1451,7 +1466,7 @@ static const char *rts(struct pml_locator *l)
 
 
 static const char *rule_trigger_strs[] = {
-	"begin", "packet", "end"
+	"begin", "packet", "tick", "end"
 };
 const char *rulestr(struct pml_rule *r)
 {
@@ -1850,6 +1865,11 @@ void pml_ast_print(struct pml_ast *ast)
 	for_each_prule(n, ast)
 		pmlt_print(ast, l_to_node(n), 1);
 	printf("-----------\n");
+	printf("Tick Rule\n");
+	printf("-----------\n");
+	pmlt_print(ast, (union pml_node *)ast->t_rule, 1);
+	printf("-----------\n");
+	printf("-----------\n");
 	printf("End Rule\n");
 	printf("-----------\n");
 	pmlt_print(ast, (union pml_node *)ast->e_rule, 1);
@@ -2196,6 +2216,9 @@ int pml_ast_walk(struct pml_ast *ast, void *ctx, pml_walk_f pre,
 		if (rv < 0)
 			goto out;
 	}
+	rv = pmln_walk((union pml_node *)ast->t_rule, ctx, pre, in, post);
+	if (rv < 0)
+		goto out;
 	rv = pmln_walk((union pml_node *)ast->e_rule, ctx, pre, in, post);
 	if (rv < 0)
 		goto out;

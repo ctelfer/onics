@@ -69,6 +69,7 @@ struct pml_ast {
 	struct pml_symtab	funcs;
 	struct pml_rule *	b_rule;
 	struct list		p_rules;
+	struct pml_rule *	t_rule;
 	struct pml_rule *	e_rule;
 	struct dynbuf		mi_bufs[2];
 	struct dynbuf		regexes;
@@ -512,6 +513,7 @@ struct pml_function {
 enum {
 	PML_RULE_BEGIN,
 	PML_RULE_PACKET,
+	PML_RULE_TICK,
 	PML_RULE_END,
 };
 

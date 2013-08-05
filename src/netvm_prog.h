@@ -48,8 +48,8 @@
  *
  *  - DONE expects a single boolean value on the stack.  It
  *    indicates that the program should halt the current processing
- *    (BEGIN block, END block or rules for this packet).  If the
- *    boolean stack value is 'true' all remaining packets should be
+ *    (BEGIN block, TICK block, END block or rules for this packet).
+ *    If the boolean stack value is 'true' all remaining packets should be
  *    sent.  Otherwise they should be discarded.
  *
  *  - SENDALL expects nothing on the stack but is equivalent to DONE
@@ -95,6 +95,7 @@ struct netvm_meminit {
 enum {
 	NVMP_EP_START,
 	NVMP_EP_PACKET,
+	NVMP_EP_TICK,
 	NVMP_EP_END,
 	NVMP_EP_NUMEP,
 };
@@ -143,7 +144,8 @@ int nvmp_exec(struct netvm *vm, struct netvm_program *prog, int ep, int maxcycle
  *  -- 6 -- mem initialization length 
  *  -- 7 -- initialization entry point
  *  -- 8 -- packet entry point
- *  -- 9 -- finalization entry point
+ *  -- 9 -- tick entry point
+ *  -- 10 -- finalization entry point
  *  -- <# instr> * 8 bytes --  instructions
  *  -- <# cpreqs> * 8 bytes --  coprocessor requirements
  *  -- <# segs> * 12 bytes -- segment sections
@@ -171,7 +173,7 @@ int nvmp_exec(struct netvm *vm, struct netvm_program *prog, int ep, int maxcycle
 #define NVMP_MAGIC	0x4E564D50
 #define NVMP_V1		1
 #define NVMP_V2		2
-#define NVMP_HLEN	40
+#define NVMP_HLEN	44
 #define NVMP_INSTLEN	8
 #define NVMP_NUMEPS	3
 #define NVMP_CPLEN	8

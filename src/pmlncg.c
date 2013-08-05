@@ -3318,7 +3318,7 @@ static int add_regexes(struct pmlncg *cg, struct pml_literal **rexarr,
 }
 
 
-static int cg_begin_end(struct pmlncg *cg)
+static int cg_begin_tick_end(struct pmlncg *cg)
 {
 	struct pml_rule *r;
 	ulong nvars;
@@ -3343,6 +3343,17 @@ static int cg_begin_end(struct pmlncg *cg)
 				return -1;
 		}
 
+		EMIT_W(cg, HALT, NVMP_STATUS_DONE);
+	}
+
+	if (cg->ast->t_rule != NULL) {
+		cg->prog->eps[NVMP_EP_TICK] = nexti(&cg->ibuf);
+		r = cg->ast->t_rule;
+		nvars = r->vars.addr_rw2;
+		if (nvars > 0)
+			EMIT_W(cg, ZPUSH, nvars);
+		if (cg_stmt(cg, (union pml_node *)r->stmts) < 0)
+			return -1;
 		EMIT_W(cg, HALT, NVMP_STATUS_DONE);
 	}
 
@@ -3470,6 +3481,7 @@ int pml_to_nvmp(struct pml_ast *ast, struct netvm_program *prog, int copy,
 	prog->matchonly = 0;
 	prog->eps[NVMP_EP_START] = NVMP_EP_INVALID;
 	prog->eps[NVMP_EP_PACKET] = NVMP_EP_INVALID;
+	prog->eps[NVMP_EP_TICK] = NVMP_EP_INVALID;
 	prog->eps[NVMP_EP_END] = NVMP_EP_INVALID;
 
 	if (copy_meminits(ast, prog, copy) < 0) {
@@ -3484,7 +3496,7 @@ int pml_to_nvmp(struct pml_ast *ast, struct netvm_program *prog, int copy,
 	if (cg_funcs(&cg) < 0)
 		goto err;
 
-	if (cg_begin_end(&cg) < 0)
+	if (cg_begin_tick_end(&cg) < 0)
 		goto err;
 
 	if (cg_rules(&cg) < 0)

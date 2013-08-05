@@ -1,6 +1,6 @@
 /*
  * ONICS
- * Copyright 2012 
+ * Copyright 2012-2013
  * Christopher Adam Telfer
  *
  * netvm_prog.c -- A library for manipulating NetVM programs including
@@ -26,7 +26,13 @@
 #include <string.h>
 #include <limits.h>
 
+/* for select() */
+#include <sys/types.h>
+#include <sys/time.h>
+#include <unistd.h>
+
 #include <cat/pack.h>
+#include <cat/time.h>
 
 #include "netvm_prog.h"
 #include "netvm_op_macros.h"
@@ -209,7 +215,7 @@ int nvmp_read(struct netvm_program *prog, FILE *infile, int *eret)
 	uint i;
 	byte_t version, matchonly, p1, p2;
 	ulong magic, ninst, ncp, nseg, nmi, milen;
-	ulong sep, pep, eep;
+	ulong sep, pep, tep, eep;
 	ulong cpi;
 	ulong cpt;
 	ulong segnum, off, len, perms;
@@ -225,13 +231,16 @@ int nvmp_read(struct netvm_program *prog, FILE *infile, int *eret)
 	}
 
 	/* Read header */
-	unpack(buf, sizeof(buf), "wbbbbwwwwwwww", &magic, &version, &matchonly, 
-	       &p1, &p2, &ninst, &ncp, &nseg, &nmi, &milen, &sep, &pep, &eep);
+	unpack(buf, sizeof(buf), "wbbbbwwwwwwwww", &magic, &version, &matchonly,
+	       &p1, &p2, &ninst, &ncp, &nseg, &nmi, &milen, &sep, &pep, &tep,
+	       &eep);
 
 	if (sep == NETVM_PROG_EXT_EP_INVALID)
 		sep = NVMP_EP_INVALID;
 	if (pep == NETVM_PROG_EXT_EP_INVALID)
 		pep = NVMP_EP_INVALID;
+	if (tep == NETVM_PROG_EXT_EP_INVALID)
+		tep = NVMP_EP_INVALID;
 	if (eep == NETVM_PROG_EXT_EP_INVALID)
 		eep = NVMP_EP_INVALID;
 
@@ -245,6 +254,7 @@ int nvmp_read(struct netvm_program *prog, FILE *infile, int *eret)
 	}
 	if (((sep != NVMP_EP_INVALID) && (sep >= ninst)) || 
 	    ((pep != NVMP_EP_INVALID) && (pep >= ninst)) || 
+	    ((tep != NVMP_EP_INVALID) && (tep >= ninst)) || 
 	    ((eep != NVMP_EP_INVALID) && (eep >= ninst))) {
 		e = NVMP_RDE_BADEP;
 		goto err;
@@ -273,6 +283,7 @@ int nvmp_read(struct netvm_program *prog, FILE *infile, int *eret)
 	prog->ninst = ninst;
 	prog->eps[NVMP_EP_START] = sep;
 	prog->eps[NVMP_EP_PACKET] = pep;
+	prog->eps[NVMP_EP_TICK] = tep;
 	prog->eps[NVMP_EP_END] = eep;
 	for (i = 0, ni = prog->inst; i < ninst; ++i, ++ni) {
 		uchar op, x, y, z;
@@ -444,10 +455,10 @@ int nvmp_write(struct netvm_program *prog, FILE *outfile)
 	}
 
 	/* write header */
-	pack(buf, sizeof(buf), "wbbbbwwwwwwww",
+	pack(buf, sizeof(buf), "wbbbbwwwwwwwww",
 	     (ulong)NVMP_MAGIC, NVMP_V2, prog->matchonly, 0, 0, 
 	     (ulong)prog->ninst, ncp, nseg,
-	     (ulong)prog->ninits, milen, eps[0], eps[1], eps[2]);
+	     (ulong)prog->ninits, milen, eps[0], eps[1], eps[2], eps[3]);
 
 	/* write instructions */
 	if (fwrite(buf, 1, NVMP_HLEN, outfile) < NVMP_HLEN)
@@ -662,6 +673,7 @@ static int flushpkts(struct netvm *vm, int send, FILE *f, FILE *dout, int flags)
 static const char *epstr[] = {
 	"START",
 	"PACKET",
+	"TICK",
 	"END",
 };
 
@@ -816,6 +828,48 @@ restart:
 }
 
 
+static int wait_run_ticks(struct netvm *vm, struct netvm_program *prog,
+			  int ifd, fd_set *rset, FILE *pout, FILE *dout,
+			  int flags, cat_time_t *ntick)
+{
+	int rv;
+	cat_time_t now, delta;
+	struct timeval timeout;
+	static const cat_time_t tm_1ms = TM_LONG_INITIALIZER(0, 1000000);
+
+	/* Figure out how long to wait for */
+	/* the next tick. */
+	now = tm_uget();
+	if (tm_cmp(*ntick, now) <= 0) {
+		timeout.tv_sec = 0;
+		timeout.tv_usec = 0;
+	} else {
+		delta = tm_sub(*ntick, now);
+		timeout.tv_sec = delta.sec;
+		timeout.tv_usec = delta.nsec / 1000;
+	}
+
+	/* wait for the next packet or next tick */
+	rv = select(ifd+1, rset, NULL, NULL, &timeout);
+	if (rv < 0)
+		return -1;
+
+	/* issue a 'TICK' until the next tick */
+	/* that should occur is in the future */
+	now = tm_uget();
+	while (tm_cmp(*ntick, now) <= 0) {
+		rv = _nvmp_run(vm, prog, NVMP_EP_TICK,
+			       pout, dout, flags);
+		if (rv < 0)
+			return -1;
+		/* add 1 millisecond */
+		*ntick = tm_add(*ntick, tm_1ms);
+	}
+
+	return 0;
+}
+
+
 int nvmp_run_all(struct netvm *vm, struct netvm_program *prog, FILE *pin,
 		 FILE *pout, FILE *dout, int flags)
 {
@@ -824,7 +878,10 @@ int nvmp_run_all(struct netvm *vm, struct netvm_program *prog, FILE *pin,
 	int debug = flags & NVMP_RUN_DEBUG;
 	int rv;
 	int esave;
+	int pinfd;
 	struct pktbuf *p;
+	cat_time_t ntick;
+	fd_set rset, rset_save;
 
 	if (debug && dout == NULL) {
 		errno = EINVAL;
@@ -832,6 +889,14 @@ int nvmp_run_all(struct netvm *vm, struct netvm_program *prog, FILE *pin,
 	}
 
 	nvmp_init_mem(vm, prog);
+
+	/* record start time */
+	if (prog->eps[NVMP_EP_TICK] != NVMP_EP_INVALID) {
+		pinfd = fileno(pin);
+		ntick = tm_add(tm_uget(), tm_lset(0, 1000000));
+		FD_ZERO(&rset_save);
+		FD_SET(pinfd, &rset_save);
+	}
 
 	rv = _nvmp_run(vm, prog, NVMP_EP_START, pout, dout, flags);
 	if (rv < 0)
@@ -843,7 +908,23 @@ int nvmp_run_all(struct netvm *vm, struct netvm_program *prog, FILE *pin,
 			fprintf(dout, "Processing packets in '%s' mode.\n",
 				(vm->matchonly ? "match only" : "standard"));
 
-		while (pkb_file_read(&p, pin) > 0) {
+		while (1) {
+
+			/* if the TICK entry point is defined, then we */
+			/* must check for both packets and time ticks */
+			if (prog->eps[NVMP_EP_TICK] != NVMP_EP_INVALID) {
+				rset = rset_save;
+				rv = wait_run_ticks(vm, prog, pinfd, &rset,
+						    pout, dout, flags, &ntick);
+				if (rv < 0)
+					return -1;
+				if (!FD_ISSET(pinfd, &rset))
+					continue;
+			}
+			
+			rv = pkb_file_read(&p, pin);
+			if (rv <= 0)
+				break;
 
 			if (pkb_parse(p) < 0) {
 				if (dout != NULL) {
@@ -879,6 +960,24 @@ int nvmp_run_all(struct netvm *vm, struct netvm_program *prog, FILE *pin,
 			fprintf(dout, "%lu packets processed and %lu passed\n",
 				npkt, npass);
 		
+	} else if (prog->eps[NVMP_EP_TICK] != NVMP_EP_INVALID) {
+
+		/* no packet but tick entry point */
+		if (debug) {
+			fprintf(dout,
+				"%s entry point but no %s entry point "
+				" defined.\n",  nvmp_epstr(NVMP_EP_TICK),
+				nvmp_epstr(NVMP_EP_PACKET));
+			fprintf(dout, "Running until %s indicates to stop\n",
+				nvmp_epstr(NVMP_EP_TICK));
+		}
+
+		rv = 0;
+		while (rv == 0) {
+			rv = wait_run_ticks(vm, prog, -1, NULL, pout, dout,
+					    flags, &ntick);
+		}
+
 	} else {
 
 		if (debug)
@@ -887,7 +986,6 @@ int nvmp_run_all(struct netvm *vm, struct netvm_program *prog, FILE *pin,
 				nvmp_epstr(NVMP_EP_PACKET));
 
 	}
-
 
 	rv = _nvmp_run(vm, prog, NVMP_EP_END, pout, dout, flags);
 	if (rv < 0)

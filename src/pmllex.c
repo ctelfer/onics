@@ -87,6 +87,7 @@ struct kwtok {
 	int		tok;
 } keywords[] = { 
 	{ "BEGIN",	PMLTOK_BEGIN },
+	{ "TICK",	PMLTOK_TICK },
 	{ "END",	PMLTOK_END },
 	{ "int",	PMLTOK_INT },
 	{ "str",	PMLTOK_STR },

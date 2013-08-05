@@ -163,6 +163,7 @@ int Count;
    - ?- <pat> -? { <action> }
    - { <action> }
    - BEGIN { <action> }
+   - TICK { <action> }
    - END { <action> }
 */
 
@@ -615,6 +616,13 @@ rstart(R) ::= BEGIN. {
 	R = pmln_alloc(ast, PMLTT_RULE);
 	if (R != NULL) {
 		R->trigger = PML_RULE_BEGIN;
+		ast->ltab = &R->vars;
+	}
+}
+rstart(R) ::= TICK. {
+	R = pmln_alloc(ast, PMLTT_RULE);
+	if (R != NULL) {
+		R->trigger = PML_RULE_TICK;
 		ast->ltab = &R->vars;
 	}
 }

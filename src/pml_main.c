@@ -47,7 +47,7 @@ struct clopt options[] = {
 	CLOPT_INIT(CLOPT_NOARG, 'v', "--verbose", "increase verbosity"),
 	CLOPT_INIT(CLOPT_NOARG, 'q', "--quiet", "decrease verbosity"),
 	CLOPT_INIT(CLOPT_NOARG, 's', "--step", "single step the program"),
-	CLOPT_INIT(CLOPT_STRING, 'f', "--infile", "input file"),
+	CLOPT_INIT(CLOPT_STRING, 'f', "--infile", "input PML program"),
 	CLOPT_INIT(CLOPT_STRING, 'e', "--expr", "input expression"),
 	CLOPT_INIT(CLOPT_STRING, 'c', "--compile", 
 		   "compile to netvm program file"),
@@ -85,6 +85,7 @@ void usage()
 {
 	char buf[4096];
 	fprintf(stderr, "usage: pml [options] [INFILE [OUTFILE]]\n");
+	fprintf(stderr, "       pml [-c NVMPFILE] [options] [INFILE]\n");
 	optparse_print(&optparser, buf, sizeof(buf));
 	str_cat(buf, "\n", sizeof(buf));
 	fprintf(stderr, "%s\n", buf);
@@ -164,6 +165,8 @@ void parse_options(int argc, char *argv[], FILE **fin, FILE **fout)
 	}
 
 	if (rv + 1 < argc) {
+		if (ofname != NULL)
+			usage();
 		*fout = fopen(argv[rv+1], "w");
 		if (*fout == NULL)
 			errsys("fopen(\"%s\", \"w\")", argv[rv+1]);
@@ -263,11 +266,12 @@ int main(int argc, char *argv[])
 	struct netvm_std_coproc cproc;
 	struct file_emitter fe;
 	struct netvm_program prog;
-	FILE *fout = stdout;
-	FILE *fin = stdin;
+	FILE *infile = stdin;
+	FILE *outfile = stdout;
 	int flags = 0;
+	int rv;
 
-	parse_options(argc, argv, &fin, &fout);
+	parse_options(argc, argv, &infile, &outfile);
 
 	if (nisrc == 0)
 		err("No program sources provided: use -f or -e\n");
@@ -279,11 +283,11 @@ int main(int argc, char *argv[])
 
 	if (ofname != NULL) {
 
-		if ((fout = fopen(ofname, "w")) == NULL)
+		if ((outfile = fopen(ofname, "w")) == NULL)
 			errsys("error opening output file '%s': ", ofname);
-		if (nvmp_write(&prog, fout) < 0)
+		if (nvmp_write(&prog, outfile) < 0)
 			errsys("error writing out program: ");
-		fclose(fout);
+		fclose(outfile);
 		nvmp_clear(&prog);
 
 	} else {
@@ -299,7 +303,8 @@ int main(int argc, char *argv[])
 		if (verbosity > 1)
 			flags |= NVMP_RUN_PRSTK;
 
-		if (nvmp_run_all(&vm, &prog, fin, fout, stderr, flags) < 0)
+		rv = nvmp_run_all(&vm, &prog, infile, outfile, stderr, flags);
+		if (rv < 0)
 			err("error running netvm program: %s\n",
 			    netvm_estr(vm.status));
 

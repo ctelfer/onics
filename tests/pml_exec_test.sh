@@ -6,7 +6,10 @@ TOUT=tmp
 PDIR=data/packets
 
 
-# $1 - test number, $2 - infile|NONE $3 - flags, $4 - expected return (optional)
+# $1 - test number 
+# $2 - infile|NONE|PROG_some_expression_here
+# $3 - flags
+# $4 - expected return (optional)
 pml_test() { 
 	FAIL=0
 	if [ $# -gt 3 ]
@@ -24,6 +27,10 @@ pml_test() {
 	then
 		$OBIN/pml -f data/pml/pml_test$1.pml $3 > $TOUT/pml_test$1.out \
 			2>$TOUT/pml_test$1.err
+	elif echo $2 | grep '^PROG_' >/dev/null 2>&1
+	then
+		INPUT=`echo $2 | sed -e 's/^PROG_//'`
+		eval "$INPUT | $OBIN/pml -f data/pml/pml_test$1.pml $3 > $TOUT/pml_test$1.out 2>$TOUT/pml_test$1.err"
 	else
 		$OBIN/pml -f data/pml/pml_test$1.pml $3 < $2 \
 			> $TOUT/pml_test$1.out \
@@ -101,5 +108,7 @@ pml_test 36 $PDIR/onepkt.xpkt
 pml_test 37 $PDIR/onepkt.xpkt
 pml_test 38 $PDIR/raw.xpkt
 pml_test 39 NONE
+pml_test 40 NONE
+pml_test 41 PROG_"(cat $PDIR/onepkt.xpkt ; sleep 1 ; cat $PDIR/onev4onev6.xpkt)"
 
 exit $ERR

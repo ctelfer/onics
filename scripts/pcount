@@ -1,16 +1,29 @@
 #!/bin/sh
 
 DROP=" drop; "
+STATUS=""
 
 usage() {
-	echo "usage: $0 [INFILE]" >&2
-	echo "       $0 [-p|--pass] [INFILE [OUTFILE]]" >&2
+	echo "usage: $0 [-s|--status] [INFILE]" >&2
+	echo "       $0 [-s|--status] [-p|--pass] [INFILE [OUTFILE]]" >&2
 	exit 1
 }
 
 if [ $# -gt 0 ]
 then
 	[ "$1" = "-h" -o "$1" = "--help" ] && usage
+
+	if [ "$1" = "-s" -o "$1" = "--status" ]
+	then
+		STATUS="int T = 0; 
+			TICK { 
+				T = T + 1;
+				if (T % 5000 == 0) {
+					print C, \" packets seen so far.\n\";
+				}
+			}"
+		shift
+	fi
 
 	if [ "$1" = "-p" -o "$1" = "--pass" ]
 	then
@@ -24,6 +37,7 @@ fi
 
 SCRIPT="int C = 0;
 	{ C = C + 1; $DROP }
+	$STATUS
 	END { print C, \" total packets seen.\n\"; }"
 
 if [ -z "$DROP" ]
