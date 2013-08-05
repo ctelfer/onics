@@ -8,7 +8,8 @@ NetVM virtual machine.  Like AWK, PML programs consist of three
 sections, the 'BEGIN segment' that executes at program start, the
 'packet segment' that executes on once on every packet and the 'END
 segment' that executes after the program receives notification that no
-further packets will arrive.
+further packets will arrive.  Unlike AWK, PML programs can also contain a 'TICK
+segment' that executes once per millisecond to handle simple timing events.
 
 The packet segment consists of a series of rules each with a pattern and
 an action.  Each packet gets compared against the rules sequentially.
@@ -101,15 +102,18 @@ A rule definition take the form:
 
   RULE ::= PATTERN '{' [LOCAL_VAR_DECL]* [STATEMENT_LIST]* '}'
 
-A PATTERN must be one of 'BEGIN', 'END' or a PML expression enclosed by
-'?-' and '-?'.  The order of rule declaration matters because the PML
-program executes rules in their declaration order.  There can be
-multiple rules with the 'BEGIN' and 'END' pattern.  PML executes rules
-with the 'BEGIN' pattern at startup before any packets are read in the
-system.  It exectues rules with the 'END' pattern after it determines
+A PATTERN must be one of 'BEGIN', 'TICK', 'END' or a PML expression 
+enclosed by '?-' and '-?'.  The order of rule declaration matters because
+the PML program executes rules in their declaration order.  There can be 
+multiple rules with the 'BEGIN', 'TICK' and 'END' pattern.  PML executes 
+rules with the 'BEGIN' pattern at startup before any packets are read in
+the system.  PML executes the 'TICK' segment, if present, once every
+millisecond.  It exectues rules with the 'END' pattern after it determines
 that there are no further packets to process.  Note that the exit()
 intrinsic will abort execution immediately and the program will not
 execute rules in the 'END' pattern that it has not already executed.
+If the program contains a 'TICK' segment, but no packet rules, then the
+program runs until the 'TICK' segment invokes the exit() intrinsic.
 
 PML evaluates a rule with an expression pattern once for every packet
 that it receives.  The PML program evaluates the PATTERN exression (the
@@ -446,8 +450,8 @@ PML has the following types of statements:
 
    Immediately jump to the end of the current rule.  If this occurs
    within a BEGIN rule then this statement will end processing in
-   all BEGIN rules.  The same behavior holds for END rules.  For packet
-   rules, this statement directs execution to the test for the next
+   all BEGIN rules.  The same behavior holds for TICK and END rules.  For
+   packet rules, this statement directs execution to the test for the next
    rule (or to transmit all remaining packets if no further rules are
    present.)
 
@@ -468,8 +472,8 @@ PACKET WORKING SET
 
 PML keeps a small, fixed size working set of packet buffers during
 execution.  The packets are indexed numerically from 0 to 15.
-During BEGIN and END rules the working set start out empty;  none of the
-packet indices refer to live packet buffers.  During packet rules,
+During BEGIN, TICK and END rules the working set start out empty;  none 
+of the packet indices refer to live packet buffers.  During packet rules,
 PML sets packet index 0 to refer to the next packet that it pulls from
 ingress.  The remaining packet indices still refer to nothing.
 
