@@ -40,31 +40,62 @@
 
 
 /* 
- * Lets start with the simple version first
+ * This program computes the edit distance between two packet streams by
+ * looking at the data stream at increasing levels of granularity.  It 
+ * computes damerau-levenshtein distance between the packets themselves.
+ * This means it uses dynamic programming to determine the minimum cost
+ * of insertions, deletions, modifications and swaps to transform the
+ * first packet stream into the second.  The cost of inserting or deleting
+ * a packet is fixed cost heuristically chosen.  The cost for modifying
+ * a packet to produce another packet takes the packet scrutiny to 
+ * the next layer of examination.
  *
- * We're going to use damerau-levenshtein distance because packet reordering
- * is definitely cheaper than packet modifications in a network.  This is
- * actually harder than it sounds since the "alphabet" (unique packets) while
- * not technically infinte might as well be for our purposes. 
- * (2**2**16 effectively)
+ * Determining packet modification cost occurs by computing edit distance
+ * first among the parsed headers in the packet.  The cost of inserting
+ * a header is equal to the total cost of inserting a packet times the
+ * fraction of the bits in the final packet that were inserted.  For 
+ * example, if the target packet was 256 bits long and the cost of inserting
+ * a packet were 8, then the cost of inserting a 64-bit header would be 
+ * equal to 8 * 64 / 256 or 2.0.  Similarly, the cost of deleting a header is
+ * equal to the cost of deleting an entire packet multiplied by the fraction
+ * of bits from the original packet that were removed.  Computing the cost
+ * of modifying a header takes the computation to a 3rd level of edit distance
+ * calculation.
  *
- * For now, lets use the full NxM matrix to do the computation.  I can use a
- * more memory efficient data structure when I've fully internalized the 
- * algorithm and its implications.  Also, even if we don't keep the full
- * NxM matrix, we can still have NxM space in the form of backtraces and that's
- * what we are really after anyways.
- * 
- * The cost of a substitution is going to be proportional to the amount of 
- * change in the packet.  We might differentiate in reporting the difference
- * between virtually complete substitution and simple editing.
+ * The program only considers it possible to modify one protocol unit into 
+ * another if they are have the exact same PRID.  The modification cost
+ * of, say an IPv6 header into an IPv4 header would be infinity.  It will
+ * be cheaper to delete the IPv6 header and insert the IPv4 header.  When
+ * computing the edit distance between two protocol parses, the program
+ * computes edit distance again this time against fields within the
+ * protocol.  These include both named fields and unparsed data gaps.
+ * This allows the program to detect not only that, say, the difference
+ * between two packets was decrement of the TTL field, but also that,
+ * say, a timestamp option was inserted into the packet.  (or removed).
+ * The cost of inserting or removing a field is, again, the packet
+ * insertion or removal cost weighted by the fraction of bits being
+ * removed multiplied by a small constant > 1 to ensure that the program
+ * considers modification of the same field always preferable to the sequence
+ * of deletion and insertion.  The cost of field modification is equal to
+ * the sum of the packet insertion and deletion cost with that sum multiplied
+ * by the fraction of bits being modified.
  *
- * Comparison of two packets is nuanced and we need to treat it so.  We may
- * want to not treat certain packet headers (e.g. L2) or fields (e.g. ttl)
- * as significant when comparing packets depending on what we are trying
- * to accomplish.  How fine a granularity is appropriate?  Bit?  Byte?
- * Field?  Header?
+ *
+ * TODO:
+ *  + Enable ability to report changes as a PML edit script from the 
+ *    original packet stream.
+ *  + Perhaps operate on a _window_ of the packerts at a time to
+ *    support larger streams more scalaby.  (memory usage is proportional
+ *    to N*M where N is the size of stream 1 and M is the size of stream 2).
+ *  + Add support for arbitrary transpositions of the position of packets.
+ *    This is trickier than it looks since the problem is only generally 
+ *    solved for a finite alphabet.  Making that algorithm work in this case
+ *    means making each packet its own 'character' in that alphabet.  This
+ *    would have a large memory usage and performance impact.
  */
 
+
+/* potential edit operations: done indicates that the edit is complete */
 enum {
 	DONE,
 	PASS,
@@ -75,6 +106,7 @@ enum {
 };
 
 
+/* an entry in a list of data about the prparses in a packet */
 struct prpent {
 	struct prparse *	prp;
 	struct npf_list		npfl;
@@ -83,6 +115,7 @@ struct prpent {
 };
 
 
+/* an entry with the comparison data for a given packet */
 struct pktent {
 	struct pktbuf *		pkt;
 	struct prpent * 	prparr;
@@ -92,6 +125,7 @@ struct pktent {
 };
 
 
+/* an array of packets */
 struct pktarr {
 	struct pktent *		pkts;
 	ulong			npkts;
@@ -99,6 +133,7 @@ struct pktarr {
 };
 
 
+/* An entry in the edit-distance calculation matrix */
 struct chgpath {
 	int			action;
 	double			cost;
@@ -106,6 +141,11 @@ struct chgpath {
 };
 
 
+/*
+ * An NxM array of chgpath used to calculate edit distance.
+ * The program uses this structure for computations at all levels
+ * of abstraction.
+ */
 struct cpmatrix {
 	struct chgpath **	elems;
 	ulong			nrows;
@@ -114,16 +154,6 @@ struct cpmatrix {
 
 #define cpm_elem(cpm, r, c) (&(cpm)->elems[r][c])
 
-
-
-/* packet difference comparitor */
-struct pdiff {
-	struct pktarr 		before;
-	struct pktarr 		after;
-	ulong			nb;
-	ulong			na;
-	struct cpmatrix		cpm;
-};
 
 
 /* field difference comparitor */
@@ -150,13 +180,37 @@ struct hdiff {
 };
 
 
+/* packet difference comparitor */
+struct pdiff {
+	struct pktarr 		before;
+	struct pktarr 		after;
+	ulong			nb;
+	ulong			na;
+	struct cpmatrix		cpm;
+};
+
+
 /* Globals */
+
+/*
+ * Basic cost constants.  Dropping is less than half as costly as insertion.
+ * Modification cost equals drop plus insertion cost.  The algorithm should
+ * only choose an operation with a cost of Infinity if operatins needed
+ * to edit successfully had a cost of Infinity.  But this should almost never
+ * be the case for our selection.  At the very least dropping one packet
+ * and inserting another will be cheaper.
+ */
 double Pkt_drop_cost = 2;
 double Pkt_ins_cost = 5;
 double Pkt_mod_cost = 7;
 double Infinity = 1e20;
-struct fdiff Fdiff;
+
+/* we really just need one hdiff and fdiff comparitor each */
+/* We can reuse them easily from one packet/header to the next. */
 struct hdiff Hdiff;
+struct fdiff Fdiff;
+
+/* used to help enumerate the fields in a packet for nice printing */
 static struct npfield **	Farr = NULL;
 static uint 			Fasiz = 0;
 
@@ -418,6 +472,51 @@ void fdiff_load(struct fdiff *fd, struct npf_list *fl1, struct npf_list *fl2)
 		fd->cpm_maxc = fd->cpm.ncols;
 	}
 }
+
+
+static double calc_fmod_cost(struct npfield *f1, double f1cost, 
+			     struct npfield *f2, double f2cost)
+{
+	double cost;
+	double bytecost;
+	byte_t *p1;
+	byte_t *p2;
+	ulong i;
+	ulong n;
+	ulong l;
+
+	if (!npf_is_gap(f1)) {
+		return f1->len * f1cost + f2->len * f2cost;
+	} else {
+		abort_unless((f1->len & 7) == 0);
+		abort_unless((f2->len & 7) == 0);
+
+		cost = 0.0;
+		bytecost = (f1cost + f2cost) * 8;
+		l = ((f1->len < f2->len) ? f1->len : f2->len) / 8;
+		p1 = f1->buf + f1->off / 8;
+		p2 = f2->buf + f2->off / 8;
+		i = 0;
+
+		while (i < l) {
+			while (i < l && *p1 == *p2) {
+				++i; ++p1; ++p2;
+			}
+			n = 0;
+			while (i < l && *p1 != *p2) {
+				++i; ++p1; ++p2; ++n;
+			}
+			cost += n * bytecost;
+		}
+
+		if (i > f1->len / 8)
+			cost += (f1->len - (i * 8)) * f1cost;
+		else if (i < f2->len / 8)
+			cost += (f2->len - (i * 8)) * f2cost;
+
+		return cost;
+	}
+}
 		  
 		  
 void fdiff_clear(struct fdiff *fd)
@@ -456,10 +555,8 @@ void fdiff_compare(struct fdiff *fd, double drop_bit_cost, double ins_bit_cost)
 	struct npf_list *cnpfl = fd->after;
 	struct npfield *rnpf;
 	struct npfield *cnpf;
-	double mod_bit_cost = drop_bit_cost + ins_bit_cost;
-
-	drop_bit_cost *= 1.05;
-	ins_bit_cost *= 1.05;
+	double adj_drop_bit_cost = drop_bit_cost * 1.05;
+	double adj_ins_bit_cost = ins_bit_cost * 1.05;
 
 	cpm_elem(cpm, 0, 0)->action = DONE;
 	cpm_elem(cpm, 0, 0)->cost = 0.0;
@@ -468,7 +565,7 @@ void fdiff_compare(struct fdiff *fd, double drop_bit_cost, double ins_bit_cost)
 		dpos = cpm_elem(cpm, i, 0);
 		dpos->action = DROP;
 		dpos->cost = cpm_elem(cpm, i-1, 0)->cost + 
-			     rnpf->len * drop_bit_cost;
+			     rnpf->len * adj_drop_bit_cost;
 		rnpf = npf_next(rnpf);
 	}
 
@@ -477,7 +574,7 @@ void fdiff_compare(struct fdiff *fd, double drop_bit_cost, double ins_bit_cost)
 		ipos = cpm_elem(cpm, 0, i);
 		ipos->action = INSERT;
 		ipos->cost = cpm_elem(cpm, 0, i-1)->cost + 
-			     cnpf->len * ins_bit_cost;
+			     cnpf->len * adj_ins_bit_cost;
 		cnpf = npf_next(cnpf);
 	}
 
@@ -493,15 +590,17 @@ void fdiff_compare(struct fdiff *fd, double drop_bit_cost, double ins_bit_cost)
 				mcost = mpos->cost;
 				maction = PASS;
 			} else if (npf_type_eq(rnpf, cnpf)) {
-				mcost = mpos->cost + mod_bit_cost * rnpf->len;
+				mcost = mpos->cost + 
+					calc_fmod_cost(rnpf, drop_bit_cost,
+						       cnpf, ins_bit_cost);
 				maction = MODIFY;
 			} else {
 				mcost = Infinity;
 				maction = MODIFY;
 			}
 
-			icost = ipos->cost + ins_bit_cost * cnpf->len;
-			dcost = dpos->cost + drop_bit_cost * rnpf->len;
+			dcost = dpos->cost + adj_drop_bit_cost * rnpf->len;
+			icost = ipos->cost + adj_ins_bit_cost * cnpf->len;
 
 			getmincost(cpm_elem(cpm, i, j), icost, dcost, mcost,
 				   maction);
@@ -558,7 +657,44 @@ static void emit_field(struct emitter *e, struct npf_list *npfl,
 		prp_get_name(npf->prp, 0, line, sizeof(line));
 		sboff = off - base_off;
 		emit_format(e, "%s%s Data -- [%lu:%lu]\n", pfx, line, sboff, len);
-		emit_hex(e, pfx, sboff, npfl->buf + off, len);
+		emit_hex(e, pfx, sboff, npf->buf + off, len);
+	}
+}
+
+
+static void emit_fmod_gap(struct emitter *e, struct npf_list *npfl1,
+			  struct npfield *f1, struct npf_list *npfl2,
+			  struct npfield *f2)
+{
+	char name[64];
+	byte_t *p1 = f1->buf + f1->off / 8;
+	byte_t *p2 = f2->buf + f2->off / 8;
+	ulong l = ((f1->len < f2->len) ? f1->len : f2->len) / 8;
+	ulong i = 0;
+	ulong n;
+	ulong sboff1 = f1->off / 8 - prp_poff(npfl1->plist);
+	ulong sboff2 = f2->off / 8 - prp_poff(npfl2->plist);
+
+	prp_get_name(f1->prp, 0, name, sizeof(name));
+
+	while (i < l) {
+		while (i < l && *p1 == *p2) {
+			++i; ++p1; ++p2;
+		}
+		n = 0;
+		while (i+n < l && p1[n] != p2[n])
+			++n;
+		if (n > 0) {
+			emit_format(e, "%%-%s Data -- [%lu:%lu]\n", name, 
+				    sboff1 + i, n);
+			emit_hex(e, "%-", sboff1 + i, p1, n);
+			emit_format(e, "%%+%s Data -- [%lu:%lu]\n", name, 
+				    sboff2 + i, n);
+			emit_hex(e, "%+", sboff2 + i, p2, n);
+			p1 += n;
+			p2 += n;
+			i += n;
+		}
 	}
 }
 
@@ -567,8 +703,13 @@ static void field_mod_report(struct emitter *e, struct npf_list *npfl1,
 			     struct npfield *npf1, struct npf_list *npfl2,
 			     struct npfield *npf2)
 {
-	emit_field(e, npfl1, npf1, "%-");
-	emit_field(e, npfl2, npf2, "%+");
+
+	if (!npf_is_gap(npf1)) {
+		emit_field(e, npfl1, npf1, "%-");
+		emit_field(e, npfl2, npf2, "%+");
+	} else {
+		emit_fmod_gap(e, npfl1, npf1, npfl2, npf2);
+	}
 }
 
 
