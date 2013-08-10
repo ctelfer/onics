@@ -3851,6 +3851,7 @@ void pml_ast_mem_init(struct pml_ast *ast)
 			cp = pml_bytestr_ptr(ast, &r.bytes);
 			len = (r.bytes.len > v->width ? v->width : r.bytes.len);
 			memmove(vp, cp, len);
+			memset(vp + len, 0, v->width - len);
 		} else {
 			abort_unless(0);
 		}

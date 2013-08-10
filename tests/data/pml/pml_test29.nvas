@@ -45,7 +45,7 @@
 .mem mi_0_36 0 1087 31 "Packet' of string = \x00\x0a\x00Segment "
 .mem mi_0_37 0 1118 31 "of string = \x00\x0a\x00'Is null' of str"
 .mem mi_0_38 0 1149 9 "ing = \x00\x0a\x00"
-.mem mi_1_0 1 0 20 "\x00\x00\x00\x05foo bar baz ook "
+.mem mi_1_0 1 0 20 "\x00\x00\x00\x05foo bar baz ook\x00"
 .mem init-2 1 20 16
 
 # Instructions (363 total)

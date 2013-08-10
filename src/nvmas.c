@@ -1287,7 +1287,7 @@ static void write_meminit(FILE *f, struct netvm_meminit *mi, uint idx)
 			lp = init;
 			for (ilen = 0, llen = 0; llen < 40 && nc > 0; 
 			     --nc, ++cp) {
-				if (isprint(*cp)) {
+				if (((*cp & 0x80) == 0) && isprint(*cp)) {
 					if (*cp == '"' || *cp == '\\') {
 						*lp++ = '\\';
 						++llen;
