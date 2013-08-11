@@ -1278,7 +1278,7 @@ int main(int argc, char *argv[])
 	hdiff_init(&Hdiff);
 	file_emitter_init(&fe, stdout);
 	register_std_proto();
-	pkb_init(128);
+	pkb_init_pools(128);
 
 	openfile(argv[1], &f1, &f1n);
 	openfile(argv[2], &f2, &f2n);

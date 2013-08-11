@@ -118,7 +118,7 @@ static void init_pkb()
 	struct xpkt_tag_ts ts;
 	int rv;
 
-	pkb_init(1);
+	pkb_init_pools(1);
 
 	if (!(g_pkb = pkb_create(PKTMAX)))
 		errsys("ptk_create: ");

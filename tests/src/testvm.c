@@ -547,7 +547,7 @@ int main(int argc, char *argv[])
 	parse_options(argc, argv);
 
 	register_std_proto();
-	pkb_init(1);
+	pkb_init_pools(1);
 
 	prog = &vm_progs[prognum];
 	file_emitter_init(&fe, (prog->filter ? stderr : stdout));

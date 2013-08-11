@@ -96,7 +96,7 @@ int main(int argc, char *argv[])
 			       argv[rv+1]);
 	}
 
-	pkb_init(1);
+	pkb_init_pools(1);
 
 	if ((rv = pkb_file_read(&pkb, infile)) <= 0) {
 		if (rv == 0)

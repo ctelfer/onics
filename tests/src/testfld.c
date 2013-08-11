@@ -41,7 +41,7 @@ int main(int argc, char *argv[])
 	void *pld;
 	
 	register_std_proto();
-	pkb_init(1);
+	pkb_init_pools(1);
 
 	while (pkb_file_read(&p, stdin) > 0) {
 		if (pkb_parse(p) < 0)

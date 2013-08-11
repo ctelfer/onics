@@ -111,7 +111,7 @@ int main(int argc, char *argv[])
 	struct xpkt_tag_ts *ts;
 	int infd = 0;
 
-	pkb_init(1);
+	pkb_init_pools(1);
 
 	parse_args(argc, argv, &infd);
 

@@ -40,6 +40,8 @@ enum {
 #define PKB_MAX_PKTLEN  (65536 + 256)
 #define PKB_F_PACKED	0x1
 #define PKB_F_PARSED	0x2
+#define PKB_F_ALLOCED	0x4
+#define PKB_F_RESET_MASK	((ushort)~(PKB_F_PACKED|PKB_F_PARSED))
 
 struct pktbuf {
 	struct list 	entry;
@@ -54,7 +56,11 @@ struct pktbuf {
 };
 
 /* initialize the packet buffer subsystem */
-void pkb_init(uint num_expected);
+void pkb_init_pools(uint num_expected);
+
+/* Initializes a packet */
+void pkb_init(struct pktbuf *pkb, void *buf, ulong bsize,
+	      void *xbuf, ulong xbsize);
 
 /* Creates a new packet */
 struct pktbuf *pkb_create(ulong bsize);

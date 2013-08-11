@@ -578,7 +578,7 @@ int main(int argc, char *argv[])
 
 	init_fields();
 
-	pkb_init(1);
+	pkb_init_pools(1);
 
 	while ((rv = pkb_file_read(&pkb, infile)) > 0) {
 		++g_pktnum;

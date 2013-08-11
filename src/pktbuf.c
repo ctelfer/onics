@@ -64,7 +64,7 @@ static int dlt_offset(uint16_t prid)
 }
 
 
-void pkb_init(uint num_buf_expected)
+void pkb_init_pools(uint num_buf_expected)
 {
 	int i;
 	pc_init(&pkb_buf_pool, sizeof(struct pktbuf), 65536,
@@ -76,6 +76,23 @@ void pkb_init(uint num_buf_expected)
 			pkb_data_pool_sizes[i] * 32,
 			num_buf_expected, 0, &stdmm);
 	}
+}
+
+
+void pkb_init(struct pktbuf *pkb, void *buf, ulong bsize, void *xbuf,
+	      ulong xbsize)
+{
+	abort_unless(pkb != NULL);
+	abort_unless(buf != NULL);
+	abort_unless(xbuf != NULL);
+	abort_unless(xbsize >= XPKT_HLEN);
+
+	pkb->buf = buf;
+	pkb->bufsize = bsize;
+	pkb->xpkt = xbuf;
+	pkb->xsize = xbsize;
+	pkb->flags = 0;
+	pkb_reset(pkb);
 }
 
 
@@ -117,6 +134,7 @@ struct pktbuf *pkb_create(ulong bufsize)
 	pkb->bufsize = bufsize;
 	pkb->xpkt = xmp;
 	pkb->xsize = pkb_xpkt_pool_size;
+	pkb->flags |= PKB_F_ALLOCED;
 	pkb_reset(pkb);
 
 	return pkb;
@@ -131,7 +149,7 @@ void pkb_reset(struct pktbuf *pkb)
 	abort_unless(pkb);
 
 	pkb->xhlen = 0;
-	pkb->flags = 0;
+	pkb->flags &= PKB_F_RESET_MASK;
 
 	prp_init_parse(&pkb->prp, pkb->bufsize);
 	for (i = 0; i < PKB_LAYER_NUM; ++i)
@@ -192,7 +210,7 @@ struct pktbuf *pkb_copy(struct pktbuf *opkb)
 
 void pkb_free(struct pktbuf *pkb)
 {
-	if (pkb) {
+	if (pkb && (pkb->flags & PKB_F_ALLOCED)) {
 		prp_clear(&pkb->prp);
 		pc_free(pkb->xpkt);
 		pc_free(pkb->buf);

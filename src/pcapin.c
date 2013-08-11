@@ -177,7 +177,7 @@ int main(int argc, char *argv[])
 		err("unsupported datalink type: %d", dlt);
 	}
 
-	pkb_init(1);
+	pkb_init_pools(1);
 
 	if (!(g_pkb = pkb_create(PKTMAX)))
 		errsys("pkb_create: ");

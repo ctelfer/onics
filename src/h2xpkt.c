@@ -234,7 +234,7 @@ int main(int argc, char *argv[])
 
 	optparse_reset(&g_oparser, argc, argv);
 	parse_options();
-	pkb_init(1);
+	pkb_init_pools(1);
 	if ((pkb = pkb_create(PKB_MAX_PKTLEN)) == NULL)
 		errsys("unable to create packet: ");
 	pkb_set_off(pkb, 0);

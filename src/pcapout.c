@@ -127,7 +127,7 @@ int main(int argc, char *argv[])
 
 	parse_args(argc, argv);
 
-	pkb_init(1);
+	pkb_init_pools(1);
 
 	if ((rv = pkb_file_read(&p, infile)) <= 0) {
 		if (rv == 0)

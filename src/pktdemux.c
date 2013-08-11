@@ -100,7 +100,7 @@ int main(int argc, char *argv[])
 	bset_set_to(g_fdok, 1, 1);
 	bset_set(g_fdseen, 2);
 
-	pkb_init(1);
+	pkb_init_pools(1);
 
 	while ((rv = pkb_fd_read(&p, 0)) > 0) {
 		++g_npkts;

@@ -143,7 +143,7 @@ void packet_loop()
 int main(int argc, char *argv[])
 {
 	parse_args(argc, argv);
-	pkb_init(1);
+	pkb_init_pools(1);
 	init_ifsock();
 	packet_loop();
 	fclose(g_infile);

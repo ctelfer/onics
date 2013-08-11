@@ -40,7 +40,7 @@ int main(int argc, char *argv[])
 			errsys("error opening input file");
 	}
 
-	pkb_init(1);
+	pkb_init_pools(1);
 	pkb = pkb_create(PKB_MAX_PKTLEN);
 	if (pkb == NULL)
 		errsys("error allocating packet buffer");

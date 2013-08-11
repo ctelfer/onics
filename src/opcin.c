@@ -122,7 +122,7 @@ int main(int argc, char *argv[])
 		err("unsupported datalink type: %lu", pcdlt);
 	}
 
-	pkb_init(1);
+	pkb_init_pools(1);
 	if ((pkb = pkb_create(PKTMAX)) == NULL)
 		errsys("pkb_create: ");
 	xpkt_tag_iif_init(&ti, ifnum);

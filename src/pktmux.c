@@ -149,7 +149,7 @@ int main(int argc, char *argv[])
 	parse_options();
 	fclose(stdin);
 
-	pkb_init(1);
+	pkb_init_pools(1);
 
 	ue_init(&mux, &estdmm);
 	for (i = 3; i < 3 + g_nfd; ++i) {
