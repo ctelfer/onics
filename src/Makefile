@@ -56,6 +56,10 @@ cfglinux: pktin-linux.c pktout-linux.c
 	[ -h pktin.c ] || ln -s pktin-linux.c pktin.c
 	[ -h pktout.c ] || ln -s pktout-linux.c pktout.c
 
+cfgbsd: pktin-bsd.c pktout-bsd.c
+	[ -h pktin.c ] || ln -s pktin-bsd.c pktin.c
+	[ -h pktout.c ] || ln -s pktout-bsd.c pktout.c
+
 
 ${BINDIR}/pktin: pktin.o ${PKTOBJ} ${PKTHDR}
 	${CC} -o ${BINDIR}/pktin pktin.o ${PKTOBJ} \

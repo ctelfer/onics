@@ -464,7 +464,7 @@ int pkb_pack(struct pktbuf *pkb)
 	pkb->xhlen = xpkt_doff(x);
 
 	len = pkb->xhlen + prp_plen(&pkb->prp);
-	if (len < pkb->xhlen || len > pkb->bufsize)
+	if (len < pkb->xhlen)
 		return -1;
 	if (xpkt_validate_tags(x->tags, x->hdr.tlen) < 0)
 		return -2;

@@ -1427,8 +1427,7 @@ static const char *etype_strs[] = {
 static const char *ets(void *p) {
 	struct pml_expr_base *e = p;
 	abort_unless(p);
-	abort_unless(e->etype >= PML_ETYPE_UNKNOWN && 
-		     e->etype <= PML_ETYPE_LAST);
+	abort_unless(e->etype <= PML_ETYPE_LAST);
 	return etype_strs[e->etype];
 }
 
@@ -1436,8 +1435,7 @@ static const char *ets(void *p) {
 static const char *rtstr(void *p) {
 	struct pml_function *f = p;
 	abort_unless(p);
-	abort_unless(f->rtype >= PML_ETYPE_UNKNOWN && 
-		     f->rtype <= PML_ETYPE_LAST);
+	abort_unless(f->rtype <= PML_ETYPE_LAST);
 	return etype_strs[f->rtype];
 }
 
@@ -1447,8 +1445,7 @@ static const char *vtype_strs[] = {
 };
 static const char *vts(struct pml_variable *v)
 {
-	abort_unless(v && v->vtype >= PML_VTYPE_UNKNOWN &&
-		     v->vtype <= PML_VTYPE_LOCAL);
+	abort_unless(v && v->vtype <= PML_VTYPE_LOCAL);
 	return vtype_strs[v->vtype];
 }
 
