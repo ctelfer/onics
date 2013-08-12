@@ -43,7 +43,6 @@ const char *g_ifn;
 FILE *g_infile;
 
 struct clopt g_options[] = {
-	CLOPT_INIT(CLOPT_STRING, 'f', "--infile", "input file to read from"),
 	CLOPT_INIT(CLOPT_NOARG, 'h', "--help", "print help")
 };
 
@@ -57,7 +56,7 @@ void usage(const char *prog, const char *estr)
 	if (estr)
 		fprintf(stderr, "%s\n", estr);
 	optparse_print(&g_oparse, str, sizeof(str));
-	fprintf(stderr, "usage: %s [options] IFNAME\n%s\n", prog, str);
+	fprintf(stderr, "usage: %s [options] [INFILE] IFNAME\n%s\n", prog, str);
 	exit(1);
 }
 
@@ -72,20 +71,21 @@ void parse_args(int argc, char *argv[])
 	optparse_reset(&g_oparse, argc, argv);
 	while (!(rv = optparse_next(&g_oparse, &opt))) {
 		switch (opt->ch) {
-		case 'f':
-			g_ifn = opt->val.str_val;
-			g_infile = fopen(g_ifn, "r");
-			if (g_infile == NULL)
-				errsys("error opening input file %s: ", g_ifn);
-			break;
 		case 'h':
 			usage(argv[0], NULL);
 			break;
 		}
 	}
 
-	if (rv < 0 || rv > argc - 1)
+	if (rv < 0 || rv >= argc)
 		usage(argv[0], NULL);
+
+	if (rv < argc - 1) {
+		g_ifn = argv[rv++];
+		g_infile = fopen(g_ifn, "r");
+		if (g_infile == NULL)
+			errsys("error opening input file %s: ", g_ifn);
+	}
 
 	g_oifn = argv[rv];
 }

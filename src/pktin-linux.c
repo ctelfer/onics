@@ -50,8 +50,6 @@ struct xpkt_tag_ts *g_ts;
 struct xpkt_tag_iface *g_tiif;
 
 struct clopt g_options[] = {
-	CLOPT_INIT(CLOPT_STRING, 'i', "--iface", "interface to sniff from"),
-	CLOPT_INIT(CLOPT_STRING, 'o', "--outfile", "output file to write to"),
 	CLOPT_INIT(CLOPT_UINT,   'n', "--iface-num",
 		"interface number to tag packets with"),
 	CLOPT_INIT(CLOPT_NOARG, 'p', "--promisc",
@@ -69,7 +67,7 @@ void usage(const char *prog, const char *estr)
 	if (estr)
 		fprintf(stderr, "%s\n", estr);
 	optparse_print(&g_oparse, str, sizeof(str));
-	fprintf(stderr, "usage: %s [options]\n%s\n", prog, str);
+	fprintf(stderr, "usage: %s [options] IFACE [OUTFILE]\n%s\n", prog, str);
 	exit(1);
 }
 
@@ -79,15 +77,11 @@ void parse_args(int argc, char *argv[])
 	int rv;
 	struct clopt *opt;
 
+	g_outfile = stdout;
+
 	optparse_reset(&g_oparse, argc, argv);
 	while (!(rv = optparse_next(&g_oparse, &opt))) {
 		switch (opt->ch) {
-		case 'i':
-			g_iifname = opt->val.str_val;
-			break;
-		case 'o':
-			g_ofname = opt->val.str_val;
-			break;
 		case 'n':
 			g_ifnum = opt->val.uint_val;
 			break;
@@ -99,12 +93,13 @@ void parse_args(int argc, char *argv[])
 			break;
 		}
 	}
-	if (rv < argc)
+	if (rv < 0 || rv >= argc)
 		usage(argv[0], g_oparse.errbuf);
 
-	if (g_ofname == NULL) {
-		g_outfile = stdout;
-	} else {
+	g_iifname = argv[rv++];
+
+	if (rv < argc) {
+		g_ofname = argv[rv++];
 		g_outfile = fopen(g_ofname, "w");
 		if (g_outfile == NULL)
 			errsys("Error opening file %s: ", g_ofname);
