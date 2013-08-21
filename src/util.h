@@ -96,4 +96,17 @@ ulong be32val(void *p, size_t len);
 /* modulo 2^(min(4, len) * 8) */
 void wrbe32(void *p, size_t len, ulong val);
 
+
+/* returns the number of characters written or short count on error.  */
+/* should always return 17 characters and slen should always be 18. */
+int ethtostr(char *s, void *ea, size_t slen);
+
+/* returns the number of characters written or short count on error.  */
+/* should always 16 or less characters and slen should always be >= 16. */
+int iptostr(char *s, void *ipa, size_t slen);
+
+/* returns the number of characters written or short count on error.  */
+/* should always return 40 characters and slen should always be >= 40. */
+int ip6tostr(char *s, void *ip6a, size_t slen);
+
 #endif /* __util_h */

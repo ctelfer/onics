@@ -432,6 +432,11 @@ struct icmph {
 #define ICMPT_INFO_REP          16
 #define ICMPT_TRACEROUTE        30
 
+#define ICMPT_IS_ERR(_t)			\
+	(((_t) == ICMPT_DEST_UNREACH)  ||	\
+	 ((_t) == ICMPT_TIME_EXCEEDED) ||	\
+	 ((_t) == ICMPT_PARAM_PROB))
+
 /* ICMP_DEST_UNREACH codes */
 #define ICMPC_NET_UNREACH       0
 #define ICMPC_HOST_UNREACH      1

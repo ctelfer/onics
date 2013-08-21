@@ -51,6 +51,8 @@ void unregister_std_proto();
 #define PRP_IPV6FLD_JLEN	(PRP_OI_EXTRA + 1)
 #define PRP_IPV6FLD_AHH		(PRP_OI_EXTRA + 2)
 #define PRP_IPV6FLD_FRAGH	(PRP_OI_EXTRA + 3)
+#define PRP_IPV6_NXDHDR(_ip6prp, _buf) \
+	(*(((byte_t *)_buf) + (_ip6prp)->offs[PRP_IPV6FLD_NXTHDR]))
 
 #define PRP_TCP_NXFIELDS	8
 #define PRP_TCPFLD_OPT		(PRP_OI_EXTRA + 0)

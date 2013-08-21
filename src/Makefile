@@ -32,7 +32,8 @@ COMMON_TARGETS= \
 	${BINDIR}/pml \
 	${BINDIR}/opcin \
 	${BINDIR}/opcout \
-	${BINDIR}/pdiff
+	${BINDIR}/pdiff \
+	${BINDIR}/nft
 
 
 PCAP_TARGETS= \
@@ -133,6 +134,11 @@ ${BINDIR}/opcout: opcout.o opcap.o ${PKTOBJ} ${PKTHDR}
 ${BINDIR}/pdiff: pdiff.o stdproto.o fld.o ${PKTOBJ} ${PKTHDR}
 	${CC} -o ${BINDIR}/pdiff pdiff.o stdproto.o fld.o ${PKTOBJ} \
 		${DEFS} ${OPTS} ${INCS} ${LIBS}
+
+${BINDIR}/nft: nft.o stdproto.o ${PKTOBJ} ${PKTHDR}
+	${CC} -o ${BINDIR}/nft nft.o stdproto.o ${PKTOBJ} \
+		${DEFS} ${OPTS} ${INCS} ${LIBS}
+
 
 .c.o:
 	${CC} -c $< -o $@ ${DEFS} ${INCS} ${OPTS}

@@ -362,3 +362,36 @@ void wrbe32(void *dp, size_t len, ulong x)
 	case 1: *p++ = x & 0xFF;
 	}
 }
+
+
+int ethtostr(char *s, void *ea, size_t slen)
+{
+	byte_t *p = ea;
+	if (slen < 18)
+		return -1;
+	return snprintf(s, slen, "%02x:%02x:%02x:%02x:%02x:%02x",
+			p[0], p[1], p[2], p[3], p[4], p[5]);
+
+}
+
+
+int iptostr(char *s, void *ipa, size_t slen)
+{
+	byte_t *p = ipa;
+	if (slen < 16)
+		return -1;
+	return snprintf(s, slen, "%u.%u.%u.%u", p[0], p[1], p[2], p[3]);
+}
+
+
+int ip6tostr(char *s, void *ip6a, size_t slen)
+{
+	byte_t *p = ip6a;
+	if (slen < 40)
+		return -1;
+	return snprintf(s, slen,
+		        "%02x%02x:%02x%02x:%02x%02x:%02x%02x:"
+		        "%02x%02x:%02x%02x:%02x%02x:%02x%02x",
+		        p[0], p[1], p[2], p[3], p[4], p[5], p[6], p[7], 
+		        p[8], p[9], p[10], p[11], p[12], p[13], p[14], p[15]);
+}
