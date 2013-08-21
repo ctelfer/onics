@@ -379,8 +379,7 @@ static void nci_prip(struct netvm *vm, struct netvm_coproc *ncp, int cpi)
 	S_POP(vm, addr);
 	netvm_get_uaddr_ptr(vm, addr, 0, 4, &p);
 	VMCKRET(vm);
-
-	len = snprintf(str, sizeof(str), "%u.%u.%u.%u", p[0], p[1], p[2], p[3]);
+	len = iptostr(str, p, sizeof(str));
 	outstr(cp->outport, str, len, inst->w, inst->z);
 }
 
@@ -399,8 +398,7 @@ static void nci_preth(struct netvm *vm, struct netvm_coproc *ncp, int cpi)
 	S_POP(vm, addr);
 	netvm_get_uaddr_ptr(vm, addr, 0, 6, &p);
 	VMCKRET(vm);
-	len = snprintf(str, sizeof(str), "%02x:%02x:%02x:%02x:%02x:%02x",
-		       p[0], p[1], p[2], p[3], p[4], p[5]);
+	len = ethtostr(str, p, sizeof(str));
 	outstr(cp->outport, str, len, inst->w, inst->z);
 }
 
@@ -419,11 +417,7 @@ static void nci_pripv6(struct netvm *vm, struct netvm_coproc *ncp, int cpi)
 	S_POP(vm, addr);
 	netvm_get_uaddr_ptr(vm, addr, 0, 16, &p);
 	VMCKRET(vm);
-	len = snprintf(str, sizeof(str), 
-		       "%02x%02x:%02x%02x:%02x%02x:%02x%02x:"
-		       "%02x%02x:%02x%02x:%02x%02x:%02x%02x",
-		       p[0], p[1], p[2], p[3], p[4], p[5], p[6], p[7],
-		       p[8], p[9], p[10], p[11], p[12], p[13], p[14], p[15]);
+	len = ip6tostr(str, p, sizeof(str));
 	outstr(cp->outport, str, len, inst->w, inst->z);
 }
 

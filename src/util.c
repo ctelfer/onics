@@ -386,12 +386,43 @@ int iptostr(char *s, void *ipa, size_t slen)
 
 int ip6tostr(char *s, void *ip6a, size_t slen)
 {
+	int zs = 0, ze = 0;
+	int ls = -1, le = -1;
+	int i, n, si;
 	byte_t *p = ip6a;
 	if (slen < 40)
 		return -1;
-	return snprintf(s, slen,
-		        "%02x%02x:%02x%02x:%02x%02x:%02x%02x:"
-		        "%02x%02x:%02x%02x:%02x%02x:%02x%02x",
-		        p[0], p[1], p[2], p[3], p[4], p[5], p[6], p[7], 
-		        p[8], p[9], p[10], p[11], p[12], p[13], p[14], p[15]);
+
+	/* find the longest set of contiguous zero half-words */
+	for (i = 0; i < 16; i += 2) {
+		if (p[i] != 0 || p[i+1] != 0) {
+			if (ze - zs > le - ls) {
+				ls = zs;
+				le = ze;
+			}
+			zs = i + 2;
+			ze = i + 2;
+		} else {
+			ze += 2;
+		}
+	}
+
+	si = 0;
+	for (i = 0; i < 16; i += 2) {
+		if (i == ls) {
+			s[si] = ':';
+			s[si+1] = ':';
+			s[si+2] = '\0';
+			si += 2;
+		} else if (i < ls || i >= le) {
+			if (i != 0 && i != le)
+				n = snprintf(s + si, slen - si, ":%02x%02x",
+					     p[i], p[i+1]);
+			else
+				n = snprintf(s + si, slen - si, "%02x%02x",
+					     p[i], p[i+1]);
+			si += n;
+		}	
+	}
+	return si;
 }

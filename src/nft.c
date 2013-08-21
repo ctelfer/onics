@@ -27,6 +27,7 @@
 #include <sys/time.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <signal.h>
 
 #include <cat/err.h>
 #include <cat/optparse.h>
@@ -94,10 +95,12 @@ uint64_t next_flowid = 1;
 
 
 static const cat_time_t tm_interval = TM_LONG_INITIALIZER(0, 200000000);
-static const cat_time_t tm_flow_timeout = TM_LONG_INITIALIZER(60, 0);
-static const cat_time_t tm_update = TM_LONG_INITIALIZER(10, 0);
+static cat_time_t tm_flow_timeout = TM_LONG_INITIALIZER(60, 0);
+static cat_time_t tm_update = TM_LONG_INITIALIZER(10, 0);
+static cat_time_t tm_base = TM_LONG_INITIALIZER(0, 0);
 struct dlist update_event;
-FILE *efile;
+int realtime = 1;
+FILE *evtfile;
 
 void build_key_ipv4(struct pktbuf *pkb, struct prparse *dlprp, 
 		    struct flow_key *key, struct flow_key *rkey);
@@ -109,14 +112,21 @@ void build_key_eth(struct pktbuf *pkb, struct prparse *dlprp,
 		   struct flow_key *key, struct flow_key *rkey);
 
 struct clopt g_optarr[] = {
-	CLOPT_INIT(CLOPT_NOARG, 'r', "--realtime", 
+	CLOPT_INIT(CLOPT_NOARG, 'r', "--realtime",
 		   "run in realtime mode (default)"),
+	CLOPT_INIT(CLOPT_NOARG, 'R', "--relative", 
+		   "report timestamps relative to program start "
+		   "(realtime mode only)"),
 	CLOPT_INIT(CLOPT_NOARG, 't', "--timestamp", "run in timestamp mode"),
+	CLOPT_INIT(CLOPT_STRING, 'f', "--flowfile", 
+		   "file to output flow info to"),
+	CLOPT_INIT(CLOPT_DOUBLE, 'u', "--update-interval",
+		   "set the interval at which to generate updates"),
 	CLOPT_INIT(CLOPT_NOARG, 'h', "--help", "print help"),
 };
 
 struct clopt_parser g_oparser =
-CLOPTPARSER_INIT(g_optarr, array_length(g_optarr));
+			CLOPTPARSER_INIT(g_optarr, array_length(g_optarr));
 
 
 void usage(const char *estr)
@@ -125,24 +135,38 @@ void usage(const char *estr)
 	if (estr != NULL)
 		fprintf(stderr, "Error -- %s\n", estr);
 	optparse_print(&g_oparser, ubuf, sizeof(ubuf));
-	err("usage: %s [options] [INFILE [OUTFILE]]\n" "%s", g_oparser.argv[0], ubuf);
+	fprintf(stderr, "usage: %s [options] [INFILE [OUTFILE]]\n%s", 
+		g_oparser.argv[0], ubuf);
+	exit(1);
 }
 
 
-void parse_args(int argc, char *argv[], int *realtime, int *ifd, int *ofd)
+void parse_args(int argc, char *argv[], int *ifd, int *ofd)
 {
 	int rv;
 	struct clopt *opt;
 	const char *fn;
 
+	evtfile = stderr;
 	optparse_reset(&g_oparser, argc, argv);
 	while (!(rv = optparse_next(&g_oparser, &opt))) {
 		switch (opt->ch) {
 		case 'r':
-			*realtime = 1;
+			realtime = 1;
+			break;
+		case 'R':
+			tm_base = tm_uget();
 			break;
 		case 't':
-			*realtime = 0;
+			realtime = 0;
+			break;
+		case 'f':
+			evtfile = fopen(opt->val.str_val, "w");
+			if (evtfile == NULL)
+				errsys("fopen(%s): ", opt->val.str_val);
+			break;
+		case 'u':
+			tm_update = tm_dset(opt->val.dbl_val);
 			break;
 		case 'h':
 			usage(NULL);
@@ -194,7 +218,7 @@ void build_key_udp(struct pktbuf *pkb, struct prparse *udpprp,
 	key->sport  = ntoh16(udp->sport);
 	key->dport  = ntoh16(udp->dport);
 	rkey->sport = ntoh16(udp->dport);
-	rkey->sport = ntoh16(udp->sport);
+	rkey->dport = ntoh16(udp->sport);
 }
 
 
@@ -391,6 +415,14 @@ void flow_key_to_str(struct flow_key *key, char *ks, size_t kslen)
 }
 
 
+double dbtime(cat_time_t t)
+{
+	if (realtime)
+		t = tm_sub(t, tm_base);
+	return tm_2dbl(t);
+}
+
+
 void gen_flow_event(struct flow *f, int evtype)
 {
 	char keystr[256];
@@ -399,19 +431,19 @@ void gen_flow_event(struct flow *f, int evtype)
 
 	flow_key_to_str(&f->key, keystr, sizeof(keystr));
 	if (evtype == FEVT_START) {
-		snprintf(tstr, sizeof(tstr), "Start = %.3lf", 
-			 tm_2dbl(f->start));
+		snprintf(tstr, sizeof(tstr), "Start=%.3lf", 
+			 dbtime(f->start));
 	} else if (evtype == FEVT_UPDATE) {
 		dur = tm_sub(tm_uget(), f->start);
-		snprintf(tstr, sizeof(tstr), "Start = %.3lf, Dur = %.3lf", 
-			 tm_2dbl(f->start), tm_2dbl(dur));
+		snprintf(tstr, sizeof(tstr), "Start=%.3lf,Dur=%.3lf", 
+			 dbtime(f->start), dbtime(dur));
 	} else if (evtype == FEVT_END) {
 		dur = tm_sub(f->end, f->start);
 		snprintf(tstr, sizeof(tstr), 
-			 "Start = %.3lf, End = %.3lf, Dur = %.3lf", 
-			 tm_2dbl(f->start), tm_2dbl(f->end), tm_2dbl(dur));
+			 "Start=%.3lf,End=%.3lf,Dur=%.3lf", 
+			 dbtime(f->start), dbtime(f->end), dbtime(dur));
 	}
-	fprintf(efile, "|FLOW %s|%s|%s|C2S:%lu,%lu|S2C:%lu,%lu|\n", 
+	fprintf(evtfile, "|FLOW %s|%s|%s|C2S:%lu,%lu|S2C:%lu,%lu|\n", 
 		fevt_strs[evtype], keystr, tstr, 
 		f->cnpkts, f->cnbytes, f->snpkts, f->snbytes);
 }
@@ -470,8 +502,10 @@ void track_flows(struct flowtab *ft, struct pktbuf *pkb)
 		pkb_add_tag(pkb, (struct xpkt_tag_hdr *)&xf);
 	}
 
-	if (create)
+	if (create) {
 		gen_flow_event(f, FEVT_START);
+		fflush(evtfile);
+	}
 }
 
 
@@ -484,6 +518,7 @@ static void gen_flow_updates(struct flowtab *ft)
 		f = container(l_to_dl(le), struct flow, toevt);
 		gen_flow_event(f, FEVT_UPDATE);
 	}
+	fflush(evtfile);
 
 	dl_init(&update_event, tm_update);
 	dl_ins(&ft->events, &update_event);
@@ -495,6 +530,7 @@ static void timeout_flow(struct flowtab *ft, struct flow *f)
 	st_clr(ft->flows, &f->key);
 	f->end = tm_uget();
 	gen_flow_event(f, FEVT_END);
+	fflush(evtfile);
 	free(f);
 }
 
@@ -591,7 +627,6 @@ int main(int argc, char *argv[])
 {
 	int rv;
 	struct pktbuf *pkb;
-	int realtime = 1;
 	int ifd = 0;
 	int ofd = 1;
 	ulong npkts = 0;
@@ -599,10 +634,9 @@ int main(int argc, char *argv[])
 	fd_set rset, rset_save;
 	cat_time_t ntick;
 
-	parse_args(argc, argv, &realtime, &ifd, &ofd);
+	parse_args(argc, argv, &ifd, &ofd);
 	pkb_init_pools(1);
 	register_std_proto();
-	efile = stderr;
 	ft_init(&ft);
 
 	if (realtime) {
