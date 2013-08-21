@@ -99,6 +99,14 @@ static const cat_time_t tm_update = TM_LONG_INITIALIZER(10, 0);
 struct dlist update_event;
 FILE *efile;
 
+void build_key_ipv4(struct pktbuf *pkb, struct prparse *dlprp, 
+		    struct flow_key *key, struct flow_key *rkey);
+void build_key_ipv6(struct pktbuf *pkb, struct prparse *dlprp, 
+		    struct flow_key *key, struct flow_key *rkey);
+void build_key_arp(struct pktbuf *pkb, struct prparse *dlprp, 
+		   struct flow_key *key, struct flow_key *rkey);
+void build_key_eth(struct pktbuf *pkb, struct prparse *dlprp, 
+		   struct flow_key *key, struct flow_key *rkey);
 
 struct clopt g_optarr[] = {
 	CLOPT_INIT(CLOPT_NOARG, 'r', "--realtime", 
@@ -273,6 +281,32 @@ void build_key_ipv6(struct pktbuf *pkb, struct prparse *ip6prp,
 }
 
 
+void build_key_arp(struct pktbuf *pkb, struct prparse *arpprp, 
+		   struct flow_key *key, struct flow_key *rkey)
+{
+	struct arph *arp;
+	struct eth_arph *earp;
+
+	arp = prp_header(arpprp, pkb->buf, struct arph);
+	if ((ntoh16(arp->hwfmt) != ARPT_ETHERNET) || 
+	    (ntoh16(arp->prfmt) != ETHTYPE_IP) || 
+	    (arp->hwlen != 6) || (arp->prlen != 4)) {
+		build_key_eth(pkb, prp_prev(arpprp), key, rkey);
+		return;
+	}
+
+	earp = (struct eth_arph *)arp;
+
+	key->etype = ETHTYPE_ARP;
+	memmove(&key->saddr.ip, earp->sndpraddr, 4);
+	memmove(&key->daddr.ip, earp->trgpraddr, 4);
+
+	rkey->etype = ETHTYPE_ARP;
+	memmove(&rkey->saddr.ip, earp->trgpraddr, 4);
+	memmove(&rkey->daddr.ip, earp->sndpraddr, 4);
+}
+
+
 void build_key_eth(struct pktbuf *pkb, struct prparse *dlprp, 
 		   struct flow_key *key, struct flow_key *rkey)
 {
@@ -308,6 +342,8 @@ int build_flow_key(struct pktbuf *pkb, struct flow_key *key,
 		build_key_ipv4(pkb, netprp, key, rkey);
 	} else if (netprp->prid == PRID_IPV6) {
 		build_key_ipv6(pkb, netprp, key, rkey);
+	} else if (netprp->prid == PRID_ARP) {
+		build_key_arp(pkb, netprp, key, rkey);
 	} else {
 		build_key_eth(pkb, dlprp, key, rkey);
 	}
@@ -332,6 +368,11 @@ void flow_key_to_str(struct flow_key *key, char *ks, size_t kslen)
 		ip6tostr(da, &key->daddr.ip6, sizeof(da));
 		n = snprintf(ks, kslen, "IP6:ca=%s,sa=%s,proto=%u", sa, da,
 			     key->netproto);
+	} else if (key->etype == ETHTYPE_ARP) {
+		iptostr(sa, &key->saddr.ip, sizeof(sa));
+		iptostr(da, &key->daddr.ip, sizeof(da));
+		n = snprintf(ks, kslen, "ARP:ca=%s,sa=%s", sa, da);
+		return;
 	} else {
 		ethtostr(sa, &key->saddr.eth, sizeof(sa));
 		ethtostr(da, &key->daddr.eth, sizeof(da));
