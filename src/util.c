@@ -416,11 +416,11 @@ int ip6tostr(char *s, void *ip6a, size_t slen)
 			si += 2;
 		} else if (i < ls || i >= le) {
 			if (i != 0 && i != le)
-				n = snprintf(s + si, slen - si, ":%02x%02x",
-					     p[i], p[i+1]);
+				n = snprintf(s + si, slen - si, ":%0x",
+					     (p[i] << 8 | p[i+1]));
 			else
-				n = snprintf(s + si, slen - si, "%02x%02x",
-					     p[i], p[i+1]);
+				n = snprintf(s + si, slen - si, "%0x",
+					     (p[i] << 8 | p[i+1]));
 			si += n;
 		}	
 	}

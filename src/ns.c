@@ -622,6 +622,7 @@ int ns_fmt_ipv4a(struct ns_elem *elem, byte_t *pkt, struct prparse *prp,
 	struct ns_pktfld *pf;
 	ulong off, len, val;
 	char buf[20];
+	byte_t ipa[4];
 
 	abort_unless(elem != NULL && pkt != NULL && prp != NULL && s != NULL &&
 	    	     ssize != 0);
@@ -640,15 +641,15 @@ int ns_fmt_ipv4a(struct ns_elem *elem, byte_t *pkt, struct prparse *prp,
 		if (len != 32)
 			return -1;
 		val = getbits(pkt, NSF_BITOFF(pf->flags), 32);
-		str_fmt(buf, sizeof(buf), "%u.%u.%u.%u", 
-			 (uint)(val >> 24) & 0xFF, (uint)(val >> 16) & 0xFF, 
-			 (uint)(val >> 8) & 0xFF, (uint)val & 0xFF);
-
+		ipa[0] = (uint)(val >> 24) & 0xFF;
+		ipa[1] = (uint)(val >> 16) & 0xFF;
+		ipa[2] = (uint)(val >> 8)  & 0xFF;
+		ipa[3] = (uint)(val >> 0)  & 0xFF;
+		iptostr(buf, ipa, sizeof(buf));
 	} else {
 		if (len != 4)
 			return -1;
-		str_fmt(buf, sizeof(buf), "%u.%u.%u.%u",
-			 pkt[0], pkt[1], pkt[2], pkt[3]);
+		iptostr(buf, pkt, sizeof(buf));
 	}
 
 	return buildstr(s, ssize, pfx, pf->fullname, buf);
@@ -679,16 +680,7 @@ int ns_fmt_ipv6a(struct ns_elem *elem, byte_t *pkt, struct prparse *prp,
 	if (len != 16)
 		return -1;
 
-	str_fmt(buf, sizeof(buf), 
-		 "%x:%x:%x:%x:%x:%x:%x:%x",
-		 pkt[0] << 8 | pkt[1], 
-		 pkt[2] << 8 | pkt[3], 
-		 pkt[4] << 8 | pkt[5], 
-		 pkt[6] << 8 | pkt[7], 
-		 pkt[8] << 8 | pkt[9], 
-		 pkt[10] << 8 | pkt[11], 
-		 pkt[12] << 8 | pkt[13], 
-		 pkt[14] << 8 | pkt[15]);
+	ip6tostr(buf, pkt, sizeof(buf));
 
 	return buildstr(s, ssize, pfx,pf->fullname, buf);
 }
@@ -718,8 +710,7 @@ int ns_fmt_etha(struct ns_elem *elem, byte_t *pkt, struct prparse *prp,
 	if (len != 6)
 		return -1;
 
-	str_fmt(buf, sizeof(buf), "%02x:%02x:%02x:%02x:%02x:%02x",
-		pkt[0], pkt[1], pkt[2], pkt[3], pkt[4], pkt[5]);
+	ethtostr(buf, pkt, sizeof(buf));
 
 	return buildstr(s, ssize, pfx, pf->fullname, buf);
 }

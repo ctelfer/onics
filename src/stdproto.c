@@ -71,6 +71,12 @@ struct tcp_parse {
 };
 
 
+struct icmp6_parse {
+	struct prparse prp;
+	ulong xfields[PRP_ICMP6_NXFIELDS];
+};
+
+
 static void resetxfields(struct prparse *prp)
 {
 	uint i;
@@ -1187,7 +1193,7 @@ static int icmp_add(struct prparse *reg, byte_t *buf, struct prpspec *ps,
 		return -1;
 	}
 
-	prp = crtprp(sizeof(struct prparse), PRID_ICMP, ps->off, ps->hlen,
+	prp = crtprp(sizeof(*prp), PRID_ICMP, ps->off, ps->hlen,
 		     ps->plen, ps->tlen, &icmp_prparse_ops, 0);
 	if (!prp)
 		return -1;
@@ -1569,8 +1575,8 @@ static struct prparse *icmp6_parse(struct prparse *reg, byte_t *buf,
 {
 	struct prparse *prp;
 
-	prp = crtprp(sizeof(*prp), PRID_ICMP6, off, 0, maxlen, 0, 
-		     &icmpv6_prparse_ops, 0);
+	prp = crtprp(sizeof(struct icmp6_parse), PRID_ICMP6, off, 0, maxlen, 0,
+		     &icmpv6_prparse_ops, PRP_ICMP6_NXFIELDS);
 	if (!prp)
 		return NULL;
 	prp->region = reg;
@@ -1594,6 +1600,11 @@ static int icmp6_nxtcld(struct prparse *reg, byte_t *buf, struct prparse *cld,
 		*off = prp_poff(reg);
 		*maxlen = prp_plen(reg);
 		return 1;
+	} else if (prp_off_valid(reg, PRP_ICMP6FLD_RDRHDR)) { 
+		*prid = PRID_IPV6;
+		*off = reg->offs[PRP_ICMP6FLD_RDRHDR] + 8;
+		*maxlen = reg->offs[PRP_ICMP6FLD_RDRHDR_EOFF] - *off;
+		return 1;
 	} else {
 		return 0;
 	}
@@ -1612,8 +1623,8 @@ static int icmp6_add(struct prparse *reg, byte_t *buf, struct prpspec *ps,
 	struct prparse *prp, *ipprp;
 	struct icmp6h *icmp6;
 
-	prp = crtprp(sizeof(struct prparse), PRID_ICMP6, ps->off, ps->hlen,
-		     ps->plen, ps->tlen, &icmp_prparse_ops, 0);
+	prp = crtprp(sizeof(struct icmp6_parse), PRID_ICMP6, ps->off, ps->hlen,
+		     ps->plen, ps->tlen, &icmp_prparse_ops, PRP_ICMP6_NXFIELDS);
 	if (!prp)
 		return -1;
 
@@ -1635,24 +1646,106 @@ static int icmp6_add(struct prparse *reg, byte_t *buf, struct prpspec *ps,
 }
 
 
+static void parse_icmp6_nd_opt(struct prparse *prp, byte_t *buf)
+{
+	struct icmp6_nd_opt *opt;
+	ulong off;
+
+	off = prp_soff(prp) + ICMP6_ND_HLEN;
+	if (prp_eoff(prp) - off >= ICMP6_ND_OPT_MINLEN)
+		prp->offs[PRP_ICMP6FLD_NDOPT] = off;
+
+	while (off < prp_eoff(prp)) {
+		if (prp_eoff(prp) - off < ICMP6_ND_OPT_MINLEN) {
+			prp->error |= PRP_ERR_OPTLEN | PRP_ERR_OPTERR;
+			break;
+		}
+		opt = (struct icmp6_nd_opt *)(buf + off);
+		/* check for malformed length */
+		if ((opt->len == 0) || (opt->len * 8 > prp_eoff(prp) - off)) {
+			prp->error |= PRP_ERR_OPTLEN;
+			return;
+		}
+		switch (opt->type) {
+		case ICMP6_ND_OPT_SRCLLA:
+			prp->offs[PRP_ICMP6FLD_SRCLLA] = off;
+			prp->offs[PRP_ICMP6FLD_SRCLLA_EOFF] = off + opt->len*8;
+			break;
+                case ICMP6_ND_OPT_TGTLLA:
+			prp->offs[PRP_ICMP6FLD_TGTLLA] = off;
+			prp->offs[PRP_ICMP6FLD_TGTLLA_EOFF] = off + opt->len*8;
+			break;
+		case ICMP6_ND_OPT_PFXINFO:
+			prp->offs[PRP_ICMP6FLD_PFXINFO] = off;
+			if ((prp_eoff(prp) - off < ICMP6_ND_PFXINFO_OLEN) ||
+			    (opt->len != ICMP6_ND_PFXINFO_OLEN / 8))
+				prp->error |= PRP_ERR_OPTLEN;
+			break;
+                case ICMP6_ND_OPT_RDRHDR:
+			prp->offs[PRP_ICMP6FLD_RDRHDR] = off;
+			prp->offs[PRP_ICMP6FLD_RDRHDR_EOFF] = off + opt->len*8;
+			break;
+		case ICMP6_ND_OPT_MTU:
+			prp->offs[PRP_ICMP6FLD_MTU] = off;
+			if (opt->len != ICMP6_ND_MTU_OLEN / 8)
+				prp->error |= PRP_ERR_OPTLEN;
+			break;
+		case ICMP6_ND_OPT_RADVIVL:
+			prp->offs[PRP_ICMP6FLD_RADVIVL] = off;
+			if (opt->len != ICMP6_ND_RADVIVL_OLEN / 8)
+				prp->error |= PRP_ERR_OPTLEN;
+			break;
+		case ICMP6_ND_OPT_AGTINFO:
+			prp->offs[PRP_ICMP6FLD_AGTINFO] = off;
+			if (opt->len != ICMP6_ND_AGTINFO_OLEN / 8)
+				prp->error |= PRP_ERR_OPTLEN;
+			break;
+		default:
+			prp->error |= PRP_ERR_OPTERR;
+			break;
+		}
+
+		off += opt->len * 8;
+	}
+
+	prp_poff(prp) = off;
+}
+
+
 static void icmp6_update(struct prparse *prp, byte_t *buf)
 {
-	struct prparse *ipprp;
+	struct prparse *ip6prp;
+	struct icmp6h *icmp6;
 	prp->error = 0;
 	resetxfields(prp);
 
-	if (prp_totlen(prp) < 8) {
+	if (prp_totlen(prp) < ICMP6H_LEN) {
 		prp->error = PRP_ERR_TOOSMALL;
 		return;
 	}
-	prp_poff(prp) = prp_soff(prp) + 8;
 	
-	ipprp = find_ipprp(prp->region);
-	if ((ipprp == NULL) ||
-	    ((pseudo_cksum(prp, ipprp, buf, IPPROT_ICMPV6) & 0xFFFF) != 0)) {
+	ip6prp = find_ipprp(prp->region);
+	if ((ip6prp == NULL) ||
+	    ((pseudo_cksum(prp, ip6prp, buf, IPPROT_ICMPV6) & 0xFFFF) != 0)) {
 		prp->error |= PRP_ERR_CKSUM;
 	}
-	/* TODO: check by type? */
+
+	icmp6 = prp_header(prp, buf, struct icmp6h);
+	if (ICMP6T_IS_ECHO(icmp6->type)) {
+		prp_poff(prp) = prp_soff(prp) + ICMP6H_LEN;
+		prp->offs[PRP_ICMP6FLD_ECHO] = prp_soff(prp) + 4;
+	} else if (ICMP6T_IS_ND(icmp6->type)) {
+		if (prp_totlen(prp) < ICMP6_ND_HLEN) {
+			prp_poff(prp) = prp_soff(prp) + ICMP6H_LEN;
+			prp->error = PRP_ERR_TOOSMALL;
+		} else {
+			prp->offs[PRP_ICMP6FLD_ND] = prp_soff(prp) + 4;
+			parse_icmp6_nd_opt(prp, buf);
+		}
+	} else {
+		prp_poff(prp) = prp_soff(prp) + ICMP6H_LEN;
+
+	}
 }
 
 
@@ -2122,11 +2215,295 @@ struct ns_elem *stdproto_icmp_ns_elems[STDPROTO_NS_ELEN] = {
 };
 
 
+/* ICMPv6 */
 extern struct ns_elem *stdproto_icmp6_ns_elems[STDPROTO_NS_ELEN];
 static struct ns_namespace icmp6_ns = 
 	NS_NAMESPACE_I("icmp6", NULL, PRID_ICMP6, PRID_PCLASS_XPORT,
 		"Internet Control Message Protocol v6", NULL,
 		stdproto_icmp6_ns_elems, array_length(stdproto_icmp6_ns_elems));
+
+extern struct ns_elem *stdproto_icmp6_echo_ns_elems[STDPROTO_NS_SUB_ELEN];
+extern struct ns_elem *stdproto_icmp6_nd_ns_elems[STDPROTO_NS_SUB_ELEN];
+extern struct ns_elem *stdproto_icmp6_ndo_srclla_ns_elems[STDPROTO_NS_SUB_ELEN];
+extern struct ns_elem *stdproto_icmp6_ndo_tgtlla_ns_elems[STDPROTO_NS_SUB_ELEN];
+extern struct ns_elem *
+	stdproto_icmp6_ndo_pfxinfo_ns_elems[STDPROTO_NS_SUB_ELEN];
+extern struct ns_elem *stdproto_icmp6_ndo_rdrhdr_ns_elems[STDPROTO_NS_SUB_ELEN];
+extern struct ns_elem *stdproto_icmp6_ndo_mtu_ns_elems[STDPROTO_NS_SUB_ELEN];
+extern struct ns_elem *
+	stdproto_icmp6_ndo_radvivl_ns_elems[STDPROTO_NS_SUB_ELEN];
+extern struct ns_elem *
+	stdproto_icmp6_ndo_agtinfo_ns_elems[STDPROTO_NS_SUB_ELEN];
+
+
+/* ICMPv6 echo request/reply packet fields */
+struct ns_namespace icmp6_echo_ns =
+	NS_NAMESPACE_IDX_I("echo", &icmp6_ns, PRID_ICMP6, PRID_NONE, 
+			   PRP_ICMP6FLD_ECHO, 4, "ICMPv6 Echo Info", NULL,
+			   stdproto_icmp6_echo_ns_elems,
+			   array_length(stdproto_icmp6_echo_ns_elems));
+static struct ns_pktfld icmp6_echo_id =
+	NS_BYTEFIELD_IDX_I("id", &icmp6_echo_ns, PRID_ICMP6, PRP_ICMP6FLD_ECHO,
+			   0, 2, "Identifier", &ns_fmt_dec);
+static struct ns_pktfld icmp6_echo_seq =
+	NS_BYTEFIELD_IDX_I("seq", &icmp6_echo_ns, PRID_ICMP6, PRP_ICMP6FLD_ECHO,
+			   2, 2, "Sequence Number", &ns_fmt_dec);
+struct ns_elem *stdproto_icmp6_echo_ns_elems[STDPROTO_NS_SUB_ELEN] = {
+	(struct ns_elem *)&icmp6_echo_id, (struct ns_elem *)&icmp6_echo_seq, 
+};
+
+/* ICMPv6 NDP packet fields */
+struct ns_namespace icmp6_nd_ns =
+	NS_NAMESPACE_IDX_I("nd", &icmp6_ns, PRID_ICMP6, PRID_NONE, 
+			   PRP_ICMP6FLD_ND, 20, "ICMPv6 NDP", NULL,
+			   stdproto_icmp6_nd_ns_elems,
+			   array_length(stdproto_icmp6_nd_ns_elems));
+static struct ns_pktfld icmp6_nd_rtr =
+	NS_BITFIELD_IDX_I("rtr", &icmp6_nd_ns, PRID_ICMP6, PRP_ICMP6FLD_ND,
+			  0, 0, 1, "Router flag", &ns_fmt_dec);
+static struct ns_pktfld icmp6_nd_sol =
+	NS_BITFIELD_IDX_I("sol", &icmp6_nd_ns, PRID_ICMP6, PRP_ICMP6FLD_ND,
+			  0, 1, 1, "Solicited flag", &ns_fmt_dec);
+static struct ns_pktfld icmp6_nd_ovd =
+	NS_BITFIELD_IDX_I("ovd", &icmp6_nd_ns, PRID_ICMP6, PRP_ICMP6FLD_ND,
+			  0, 2, 1, "Override flag", &ns_fmt_dec);
+static struct ns_pktfld icmp6_nd_resv =
+	NS_BITFIELD_IDX_I("resv", &icmp6_nd_ns, PRID_ICMP6, PRP_ICMP6FLD_ND,
+			  0, 3, 29, "Reserved", &ns_fmt_dec);
+static struct ns_pktfld icmp6_nd_ip6a =
+	NS_BYTEFIELD_IDX_I("ip6a", &icmp6_nd_ns, PRID_ICMP6, PRP_ICMP6FLD_ND,
+			   4, 16, "IPv6 Address", &ns_fmt_ipv6a);
+static struct ns_pktfld icmp6_nd_opts =
+	NS_BYTEFIELD_VARLEN_I("opts", &icmp6_nd_ns, PRID_ICMP6,
+			      PRP_ICMP6FLD_NDOPT, 0, PRP_OI_POFF,
+			      "NDP Options", &ns_fmt_summary);
+
+/* ICMPv6 NDP Source Link Level Address Option fields */
+struct ns_namespace icmp6_ndo_srclla_ns =
+	NS_NAMESPACE_VARLEN_I("srclla", &icmp6_nd_ns, PRID_ICMP6, PRID_NONE, 
+			      PRP_ICMP6FLD_SRCLLA, PRP_ICMP6FLD_SRCLLA_EOFF,
+			      "Source Link Layer Address",
+			      NULL, stdproto_icmp6_ndo_srclla_ns_elems,
+			      array_length(stdproto_icmp6_ndo_srclla_ns_elems));
+static struct ns_pktfld icmp6_ndo_srclla_type =
+	NS_BYTEFIELD_IDX_I("type", &icmp6_ndo_srclla_ns, PRID_ICMP6,
+			   PRP_ICMP6FLD_SRCLLA, 0, 1, "Type", &ns_fmt_dec);
+static struct ns_pktfld icmp6_ndo_srclla_len =
+	NS_BYTEFIELD_IDX_I("len", &icmp6_ndo_srclla_ns, PRID_ICMP6,
+			   PRP_ICMP6FLD_SRCLLA, 1, 1, "Length", &ns_fmt_dec);
+static struct ns_pktfld icmp6_ndo_srclla_addr =
+	NS_BYTEFIELD_VARLEN_I("addr", &icmp6_ndo_srclla_ns, PRID_ICMP6, 
+			      PRP_ICMP6FLD_SRCLLA, 2, PRP_ICMP6FLD_SRCLLA_EOFF,
+			      "Link Layer Address", &ns_fmt_etha);
+struct ns_elem *stdproto_icmp6_ndo_srclla_ns_elems[STDPROTO_NS_SUB_ELEN] = {
+	(struct ns_elem *)&icmp6_ndo_srclla_type,
+	(struct ns_elem *)&icmp6_ndo_srclla_len,
+	(struct ns_elem *)&icmp6_ndo_srclla_addr,
+};
+
+/* ICMPv6 NDP Target Link Level Address Option fields */
+struct ns_namespace icmp6_ndo_tgtlla_ns =
+	NS_NAMESPACE_VARLEN_I("tgtlla", &icmp6_nd_ns, PRID_ICMP6, PRID_NONE, 
+			      PRP_ICMP6FLD_TGTLLA, PRP_ICMP6FLD_TGTLLA_EOFF,
+			      "Dest Link Layer Address",
+			      NULL, stdproto_icmp6_ndo_tgtlla_ns_elems,
+			      array_length(stdproto_icmp6_ndo_tgtlla_ns_elems));
+static struct ns_pktfld icmp6_ndo_tgtlla_type =
+	NS_BYTEFIELD_IDX_I("type", &icmp6_ndo_tgtlla_ns, PRID_ICMP6,
+			   PRP_ICMP6FLD_TGTLLA, 0, 1, "Type", &ns_fmt_dec);
+static struct ns_pktfld icmp6_ndo_tgtlla_len =
+	NS_BYTEFIELD_IDX_I("len", &icmp6_ndo_tgtlla_ns, PRID_ICMP6,
+			   PRP_ICMP6FLD_TGTLLA, 1, 1, "Length", &ns_fmt_dec);
+static struct ns_pktfld icmp6_ndo_tgtlla_addr =
+	NS_BYTEFIELD_VARLEN_I("addr", &icmp6_ndo_tgtlla_ns, PRID_ICMP6,
+			      PRP_ICMP6FLD_TGTLLA, 2, PRP_ICMP6FLD_TGTLLA_EOFF,
+			      "Link Layer Address", &ns_fmt_etha);
+struct ns_elem *stdproto_icmp6_ndo_tgtlla_ns_elems[STDPROTO_NS_SUB_ELEN] = {
+	(struct ns_elem *)&icmp6_ndo_tgtlla_type,
+	(struct ns_elem *)&icmp6_ndo_tgtlla_len,
+	(struct ns_elem *)&icmp6_ndo_tgtlla_addr,
+};
+
+/* ICMPv6 NDP Prefix Information Option fields */
+struct ns_namespace icmp6_ndo_pfxinfo_ns =
+	NS_NAMESPACE_IDX_I("pfxinfo", &icmp6_nd_ns, PRID_ICMP6, PRID_NONE, 
+			   PRP_ICMP6FLD_PFXINFO, ICMP6_ND_PFXINFO_OLEN, 
+			   "Dest Link Layer Address",
+			   NULL, stdproto_icmp6_ndo_pfxinfo_ns_elems,
+			   array_length(stdproto_icmp6_ndo_pfxinfo_ns_elems));
+static struct ns_pktfld icmp6_ndo_pfxinfo_type =
+	NS_BYTEFIELD_IDX_I("type", &icmp6_ndo_pfxinfo_ns, PRID_ICMP6,
+			   PRP_ICMP6FLD_PFXINFO, 0, 1, "Type", &ns_fmt_dec);
+static struct ns_pktfld icmp6_ndo_pfxinfo_len =
+	NS_BYTEFIELD_IDX_I("len", &icmp6_ndo_pfxinfo_ns, PRID_ICMP6,
+			   PRP_ICMP6FLD_PFXINFO, 1, 1, "Length", &ns_fmt_dec);
+static struct ns_pktfld icmp6_ndo_pfxinfo_pfxlen =
+	NS_BYTEFIELD_IDX_I("pfxlen", &icmp6_ndo_pfxinfo_ns, PRID_ICMP6,
+			   PRP_ICMP6FLD_PFXINFO, 2, 1, "Prefix Length",
+			   &ns_fmt_dec);
+static struct ns_pktfld icmp6_ndo_pfxinfo_onlink =
+	NS_BITFIELD_IDX_I("onlink", &icmp6_ndo_pfxinfo_ns, PRID_ICMP6,
+			  PRP_ICMP6FLD_ND, 3, 0, 1, "On-link Flag",
+			  &ns_fmt_dec);
+static struct ns_pktfld icmp6_ndo_pfxinfo_auto =
+	NS_BITFIELD_IDX_I("auto", &icmp6_ndo_pfxinfo_ns, PRID_ICMP6,
+			  PRP_ICMP6FLD_ND, 3, 1, 1, "Auto Config Flag",
+			  &ns_fmt_dec);
+static struct ns_pktfld icmp6_ndo_pfxinfo_resv =
+	NS_BITFIELD_IDX_I("resv", &icmp6_ndo_pfxinfo_ns, PRID_ICMP6,
+			  PRP_ICMP6FLD_ND, 3, 2, 6, "Reserved", &ns_fmt_hex);
+static struct ns_pktfld icmp6_ndo_pfxinfo_vlife =
+	NS_BYTEFIELD_IDX_I("vlife", &icmp6_ndo_pfxinfo_ns, PRID_ICMP6,
+			   PRP_ICMP6FLD_PFXINFO, 4, 4, "Valid Lifetime",
+			   &ns_fmt_dec);
+static struct ns_pktfld icmp6_ndo_pfxinfo_plife =
+	NS_BYTEFIELD_IDX_I("plife", &icmp6_ndo_pfxinfo_ns, PRID_ICMP6,
+			   PRP_ICMP6FLD_PFXINFO, 8, 4, "Preferred Lifetime",
+			   &ns_fmt_dec);
+static struct ns_pktfld icmp6_ndo_pfxinfo_resv2 =
+	NS_BYTEFIELD_IDX_I("resv2", &icmp6_ndo_pfxinfo_ns, PRID_ICMP6,
+			   PRP_ICMP6FLD_PFXINFO, 12, 4, "Reserved2",
+			   &ns_fmt_hex);
+static struct ns_pktfld icmp6_ndo_pfxinfo_pfx =
+	NS_BYTEFIELD_IDX_I("pfx", &icmp6_ndo_pfxinfo_ns, PRID_ICMP6,
+			   PRP_ICMP6FLD_PFXINFO,
+			   16, 16, "Prefix", &ns_fmt_ipv6a);
+struct ns_elem *stdproto_icmp6_ndo_pfxinfo_ns_elems[STDPROTO_NS_SUB_ELEN] = {
+	(struct ns_elem *)&icmp6_ndo_pfxinfo_type,
+	(struct ns_elem *)&icmp6_ndo_pfxinfo_len,
+	(struct ns_elem *)&icmp6_ndo_pfxinfo_pfxlen,
+	(struct ns_elem *)&icmp6_ndo_pfxinfo_onlink,
+	(struct ns_elem *)&icmp6_ndo_pfxinfo_auto,
+	(struct ns_elem *)&icmp6_ndo_pfxinfo_resv,
+	(struct ns_elem *)&icmp6_ndo_pfxinfo_vlife,
+	(struct ns_elem *)&icmp6_ndo_pfxinfo_plife,
+	(struct ns_elem *)&icmp6_ndo_pfxinfo_resv2,
+	(struct ns_elem *)&icmp6_ndo_pfxinfo_pfx,
+};
+
+/* ICMPv6 NDP Redirect Option fields */
+struct ns_namespace icmp6_ndo_rdrhdr_ns =
+	NS_NAMESPACE_VARLEN_I("rdrhdr", &icmp6_nd_ns, PRID_ICMP6, PRID_NONE, 
+			      PRP_ICMP6FLD_RDRHDR, PRP_ICMP6FLD_RDRHDR_EOFF,
+			      "Redirect Header",
+			      NULL, stdproto_icmp6_ndo_rdrhdr_ns_elems,
+			      array_length(stdproto_icmp6_ndo_rdrhdr_ns_elems));
+static struct ns_pktfld icmp6_ndo_rdrhdr_type =
+	NS_BYTEFIELD_IDX_I("type", &icmp6_ndo_rdrhdr_ns, PRID_ICMP6,
+			   PRP_ICMP6FLD_RDRHDR, 0, 1, "Type", &ns_fmt_dec);
+static struct ns_pktfld icmp6_ndo_rdrhdr_len =
+	NS_BYTEFIELD_IDX_I("len", &icmp6_ndo_rdrhdr_ns, PRID_ICMP6,
+			   PRP_ICMP6FLD_RDRHDR, 1, 1, "Length", &ns_fmt_dec);
+static struct ns_pktfld icmp6_ndo_rdrhdr_resv =
+	NS_BYTEFIELD_IDX_I("resv", &icmp6_ndo_rdrhdr_ns, PRID_ICMP6,
+			   PRP_ICMP6FLD_RDRHDR, 2, 6, "Reserved", &ns_fmt_hex);
+static struct ns_pktfld icmp6_ndo_rdrhdr_opkt =
+	NS_BYTEFIELD_VARLEN_I("opkt", &icmp6_ndo_rdrhdr_ns, PRID_ICMP6,
+			      PRP_ICMP6FLD_RDRHDR, 8, PRP_ICMP6FLD_RDRHDR_EOFF,
+			      "Original Packet", &ns_fmt_summary);
+struct ns_elem *stdproto_icmp6_ndo_rdrhdr_ns_elems[STDPROTO_NS_SUB_ELEN] = {
+	(struct ns_elem *)&icmp6_ndo_rdrhdr_type,
+	(struct ns_elem *)&icmp6_ndo_rdrhdr_len,
+	(struct ns_elem *)&icmp6_ndo_rdrhdr_resv,
+	(struct ns_elem *)&icmp6_ndo_rdrhdr_opkt,
+};
+
+/* ICMPv6 NDP MTU Option fields */
+struct ns_namespace icmp6_ndo_mtu_ns =
+	NS_NAMESPACE_IDX_I("omtu", &icmp6_nd_ns, PRID_ICMP6, PRID_NONE, 
+			   PRP_ICMP6FLD_MTU, ICMP6_ND_MTU_OLEN, 
+			   "Maximum Transmission Unit Option",
+			   NULL, stdproto_icmp6_ndo_mtu_ns_elems,
+			   array_length(stdproto_icmp6_ndo_mtu_ns_elems));
+static struct ns_pktfld icmp6_ndo_mtu_type =
+	NS_BYTEFIELD_IDX_I("type", &icmp6_ndo_mtu_ns, PRID_ICMP6,
+			   PRP_ICMP6FLD_MTU, 0, 1, "Type", &ns_fmt_dec);
+static struct ns_pktfld icmp6_ndo_mtu_len =
+	NS_BYTEFIELD_IDX_I("len", &icmp6_ndo_mtu_ns, PRID_ICMP6,
+			   PRP_ICMP6FLD_MTU, 1, 1, "Length", &ns_fmt_dec);
+static struct ns_pktfld icmp6_ndo_mtu_resv =
+	NS_BYTEFIELD_IDX_I("resv", &icmp6_ndo_mtu_ns, PRID_ICMP6,
+			   PRP_ICMP6FLD_MTU, 2, 2, "Reserved", &ns_fmt_dec);
+static struct ns_pktfld icmp6_ndo_mtu_mtu =
+	NS_BYTEFIELD_IDX_I("mtu", &icmp6_ndo_mtu_ns, PRID_ICMP6,
+			   PRP_ICMP6FLD_MTU, 4, 4, "Reserved", &ns_fmt_dec);
+struct ns_elem *stdproto_icmp6_ndo_mtu_ns_elems[STDPROTO_NS_SUB_ELEN] = {
+	(struct ns_elem *)&icmp6_ndo_mtu_type,
+	(struct ns_elem *)&icmp6_ndo_mtu_len,
+	(struct ns_elem *)&icmp6_ndo_mtu_resv,
+	(struct ns_elem *)&icmp6_ndo_mtu_mtu,
+};
+
+/* ICMPv6 NDP Router Advertisement Interval Option fields */
+struct ns_namespace icmp6_ndo_radvivl_ns =
+	NS_NAMESPACE_IDX_I("radvivl", &icmp6_nd_ns, PRID_ICMP6, PRID_NONE, 
+			   PRP_ICMP6FLD_MTU, ICMP6_ND_RADVIVL_OLEN, 
+			   "Router Advertisement Interval Option",
+			   NULL, stdproto_icmp6_ndo_radvivl_ns_elems,
+			   array_length(stdproto_icmp6_ndo_radvivl_ns_elems));
+static struct ns_pktfld icmp6_ndo_radvivl_type =
+	NS_BYTEFIELD_IDX_I("type", &icmp6_ndo_radvivl_ns, PRID_ICMP6,
+			   PRP_ICMP6FLD_RADVIVL, 0, 1, "Type", &ns_fmt_dec);
+static struct ns_pktfld icmp6_ndo_radvivl_len =
+	NS_BYTEFIELD_IDX_I("len", &icmp6_ndo_radvivl_ns, PRID_ICMP6,
+			   PRP_ICMP6FLD_RADVIVL, 1, 1, "Length", &ns_fmt_dec);
+static struct ns_pktfld icmp6_ndo_radvivl_resv =
+	NS_BYTEFIELD_IDX_I("resv", &icmp6_ndo_radvivl_ns, PRID_ICMP6,
+			   PRP_ICMP6FLD_RADVIVL, 2, 2, "Reserved", &ns_fmt_dec);
+static struct ns_pktfld icmp6_ndo_radvivl_interval =
+	NS_BYTEFIELD_IDX_I("ival", &icmp6_ndo_radvivl_ns, PRID_ICMP6,
+			   PRP_ICMP6FLD_RADVIVL, 4, 4, "Interval", &ns_fmt_dec);
+struct ns_elem *stdproto_icmp6_ndo_radvivl_ns_elems[STDPROTO_NS_SUB_ELEN] = {
+	(struct ns_elem *)&icmp6_ndo_radvivl_type,
+	(struct ns_elem *)&icmp6_ndo_radvivl_len,
+	(struct ns_elem *)&icmp6_ndo_radvivl_resv,
+	(struct ns_elem *)&icmp6_ndo_radvivl_interval,
+};
+
+/* ICMPv6 NDP Home Agent Info Option fields */
+struct ns_namespace icmp6_ndo_agtinfo_ns =
+	NS_NAMESPACE_IDX_I("agtinfo", &icmp6_nd_ns, PRID_ICMP6, PRID_NONE, 
+			   PRP_ICMP6FLD_AGTINFO, ICMP6_ND_AGTINFO_OLEN, 
+			   "Home Agent Information Option",
+			   NULL, stdproto_icmp6_ndo_agtinfo_ns_elems,
+			   array_length(stdproto_icmp6_ndo_agtinfo_ns_elems));
+static struct ns_pktfld icmp6_ndo_agtinfo_type =
+	NS_BYTEFIELD_IDX_I("type", &icmp6_ndo_agtinfo_ns, PRID_ICMP6,
+			   PRP_ICMP6FLD_AGTINFO, 0, 1, "Type", &ns_fmt_dec);
+static struct ns_pktfld icmp6_ndo_agtinfo_len =
+	NS_BYTEFIELD_IDX_I("len", &icmp6_ndo_agtinfo_ns, PRID_ICMP6,
+			   PRP_ICMP6FLD_AGTINFO, 1, 1, "Length", &ns_fmt_dec);
+static struct ns_pktfld icmp6_ndo_agtinfo_resv =
+	NS_BYTEFIELD_IDX_I("resv", &icmp6_ndo_agtinfo_ns, PRID_ICMP6,
+			   PRP_ICMP6FLD_AGTINFO, 2, 2, "Reserved", &ns_fmt_dec);
+static struct ns_pktfld icmp6_ndo_agtinfo_hapref =
+	NS_BYTEFIELD_IDX_I("pref", &icmp6_ndo_agtinfo_ns, PRID_ICMP6,
+			   PRP_ICMP6FLD_AGTINFO, 4, 2, "Preference",
+			   &ns_fmt_dec);
+static struct ns_pktfld icmp6_ndo_agtinfo_halife =
+	NS_BYTEFIELD_IDX_I("life", &icmp6_ndo_agtinfo_ns, PRID_ICMP6,
+			   PRP_ICMP6FLD_AGTINFO, 6, 2, "Lifetime", &ns_fmt_dec);
+struct ns_elem *stdproto_icmp6_ndo_agtinfo_ns_elems[STDPROTO_NS_SUB_ELEN] = {
+	(struct ns_elem *)&icmp6_ndo_agtinfo_type,
+	(struct ns_elem *)&icmp6_ndo_agtinfo_len,
+	(struct ns_elem *)&icmp6_ndo_agtinfo_resv,
+	(struct ns_elem *)&icmp6_ndo_agtinfo_hapref,
+	(struct ns_elem *)&icmp6_ndo_agtinfo_halife,
+};
+
+/* ICMP6 Neighbor Discovery options */
+struct ns_elem *stdproto_icmp6_nd_ns_elems[STDPROTO_NS_SUB_ELEN] = {
+	(struct ns_elem *)&icmp6_nd_rtr, (struct ns_elem *)&icmp6_nd_sol, 
+	(struct ns_elem *)&icmp6_nd_ovd, (struct ns_elem *)&icmp6_nd_resv, 
+	(struct ns_elem *)&icmp6_nd_ip6a, (struct ns_elem *)&icmp6_nd_opts, 
+	(struct ns_elem *)&icmp6_ndo_srclla_ns,
+	(struct ns_elem *)&icmp6_ndo_tgtlla_ns,
+	(struct ns_elem *)&icmp6_ndo_pfxinfo_ns,
+	(struct ns_elem *)&icmp6_ndo_rdrhdr_ns,
+	(struct ns_elem *)&icmp6_ndo_mtu_ns,
+	(struct ns_elem *)&icmp6_ndo_radvivl_ns,
+	(struct ns_elem *)&icmp6_ndo_agtinfo_ns,
+};
 
 static struct ns_pktfld icmp6_ns_type =
 	NS_BYTEFIELD_I("type", &icmp6_ns, PRID_ICMP6, 0, 1,
@@ -2137,13 +2514,11 @@ static struct ns_pktfld icmp6_ns_code =
 static struct ns_pktfld icmp6_ns_cksum =
 	NS_BYTEFIELD_I("cksum", &icmp6_ns, PRID_ICMP6, 2, 2,
 		"Checksum", &ns_fmt_hex);
-static struct ns_pktfld icmp6_ns_hdata =
-	NS_BYTEFIELD_I("hdata", &icmp6_ns, PRID_ICMP6, 4, 4,
-		"Header Data", &ns_fmt_hex);
 
 struct ns_elem *stdproto_icmp6_ns_elems[STDPROTO_NS_ELEN] = {
 	(struct ns_elem *)&icmp6_ns_type, (struct ns_elem *)&icmp6_ns_code, 
-	(struct ns_elem *)&icmp6_ns_cksum, (struct ns_elem *)&icmp6_ns_hdata
+	(struct ns_elem *)&icmp6_ns_cksum, (struct ns_elem *)&icmp6_echo_ns,
+	(struct ns_elem *)&icmp6_nd_ns,
 };
 
 

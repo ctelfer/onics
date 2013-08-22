@@ -488,12 +488,6 @@ struct ipv6h {
 #define IPV6H_FLOWID(prtcfl)    ((prtcfl) & 0xFFFFF)
 
 /* -- ICMPv6 definitions -- */
-struct icmp6_nd_opt {
-	uint8_t			type;
-	uint8_t			len;
-	uint8_t			data[6];	/* may be longer */
-};
-
 struct icmp6h {
 	uint8_t			type;
 	uint8_t			code;
@@ -507,7 +501,6 @@ struct icmp6h {
 		struct {
 			uint32_t	flags;
 			struct ipv6addr	ip6a;
-			struct icmp6_nd_opt lla;
 		} nd;
 
 		uint8_t			data[4];
@@ -515,8 +508,7 @@ struct icmp6h {
 };
 
 #define ICMP6H_LEN		8	/* minimum */
-#define ICMP6_ND_SOL_MIN_LEN	24
-#define ICMP6_ND_ADV_MIN_LEN	32
+#define ICMP6_ND_HLEN		24
 
 #define ICMP6T_DEST_UNREACH     1
 #define ICMP6T_PKT_TOO_BIG      2
@@ -534,7 +526,6 @@ struct icmp6h {
 #define ICMP6T_NREDIR           137
 
 #define ICMP6T_IS_ERR(_t)	(((_t) & 0x80) == 0)
-#define ICMP6T_IS_QUERY(_t)	(((_t) & 0x80) == 0x80)
 #define ICMP6T_IS_ECHO(_t)	\
 	(((_t) == ICMP6T_ECHO_REQUEST) || ((_t) == ICMP6T_ECHO_REPLY))
 #define ICMP6T_IS_ND(_t)	\
@@ -543,5 +534,80 @@ struct icmp6h {
 #define ICMP6_ND_ADV_RTR	0x80000000
 #define ICMP6_ND_ADV_SOL	0x40000000
 #define ICMP6_ND_ADV_OVD	0x20000000
+
+struct icmp6_nd_opt {
+	uint8_t			type;
+	uint8_t			len;
+	uint8_t			data[6];	/* may be longer */
+};
+
+#define ICMP6_ND_OPT_MINLEN	8
+
+#define ICMP6_ND_OPT_SRCLLA	1
+#define ICMP6_ND_OPT_TGTLLA	2
+#define ICMP6_ND_OPT_PFXINFO	3
+#define ICMP6_ND_OPT_RDRHDR	4
+#define ICMP6_ND_OPT_MTU	5
+#define ICMP6_ND_OPT_RADVIVL	7
+#define ICMP6_ND_OPT_AGTINFO	8
+
+struct icmp6_nd_opt_lla {
+	uint8_t			type;
+	uint8_t			len;
+	uint8_t			lla[6];
+};
+#define ICMP6_ND_LLA_OLEN	8	/* min */
+
+struct icmp6_nd_opt_pfxinfo {
+	uint8_t			type;
+	uint8_t			len;		/* must be 4 */
+	uint8_t			pfxlen;
+	uint8_t			flags;
+	uint32_t		valid_life;
+	uint32_t		pref_life;
+	uint32_t		reserved;
+	struct ipv6addr		prefix;
+};
+
+#define ICMP6_ND_PFXINFO_OLEN	32
+#define ICMP6_NF_PFXINFO_ONLINK 0x80
+#define ICMP6_NF_PFXINFO_AUTO	0x40
+
+
+/* followed by the original header */
+struct icmp6_nd_opt_rdrhdr {
+	uint8_t			type;
+	uint8_t			len;
+	uint16_t		rsv1;
+	uint32_t		rsv2;
+};
+#define ICMP6_ND_RDRHDR_OLEN	8	/* minimum */
+
+
+struct icmp6_nd_opt_mtu {
+	uint8_t			type;
+	uint8_t			len;
+	uint16_t		reserved;
+	uint32_t		mtu;
+};
+#define ICMP6_ND_MTU_OLEN	8
+
+
+struct icmp6_nd_opt_radvivl {
+	uint8_t			type;
+	uint8_t			len;
+	uint16_t		reserved;
+	uint32_t		interval;
+};
+#define ICMP6_ND_RADVIVL_OLEN	8
+
+struct icmp6_nd_opt_agtinfo {
+	uint8_t			type;
+	uint8_t			len;
+	uint16_t		reserved;
+	uint16_t		hapref;
+	uint16_t		halife;
+};
+#define ICMP6_ND_AGTINFO_OLEN	8
 
 #endif /* __tcpip_hdrs_h */
