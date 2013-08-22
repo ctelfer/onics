@@ -394,7 +394,7 @@ struct icmph {
 		struct {
 			uint16_t id;
 			uint16_t seq;
-		} echo;
+		} query;
 
 		/* ICMPT_DEST_UNREAD:4 */
 		struct {
@@ -437,6 +437,21 @@ struct icmph {
 	 ((_t) == ICMPT_TIME_EXCEEDED) ||	\
 	 ((_t) == ICMPT_PARAM_PROB))
 
+#define ICMPT_IS_ECHO(_t)			\
+	(((_t) == ICMPT_ECHO_REPLY)  ||		\
+	 ((_t) == ICMPT_ECHO_REQUEST))
+
+#define ICMPT_IS_TSTAMP(_t)			\
+	(((_t) == ICMPT_TS_REQ)  ||		\
+	 ((_t) == ICMPT_TS_REP))
+
+#define ICMPT_IS_INFO(_t)			\
+	(((_t) == ICMPT_INFO_REQ)  ||		\
+	 ((_t) == ICMPT_INFO_REP))
+
+#define ICMPT_IS_QUERY(_t)			\
+	(ICMPT_IS_ECHO(_t) || ICMPT_IS_TSTAMP(_t) || ICMPT_IS_INFO(_t))
+
 /* ICMP_DEST_UNREACH codes */
 #define ICMPC_NET_UNREACH       0
 #define ICMPC_HOST_UNREACH      1
@@ -473,19 +488,40 @@ struct ipv6h {
 #define IPV6H_FLOWID(prtcfl)    ((prtcfl) & 0xFFFFF)
 
 /* -- ICMPv6 definitions -- */
+struct icmp6_nd_opt {
+	uint8_t			type;
+	uint8_t			len;
+	uint8_t			data[6];	/* may be longer */
+};
+
 struct icmp6h {
 	uint8_t			type;
 	uint8_t			code;
 	uint16_t		cksum;
-	uint8_t			data[4];
+	union {
+		struct {
+			uint16_t	id;
+			uint16_t	seq;
+		} query;
+
+		struct {
+			uint32_t	flags;
+			struct ipv6addr	ip6a;
+			struct icmp6_nd_opt lla;
+		} nd;
+
+		uint8_t			data[4];
+	} u;
 };
-#define ICMP6H_LEN		8
+
+#define ICMP6H_LEN		8	/* minimum */
+#define ICMP6_ND_SOL_MIN_LEN	24
+#define ICMP6_ND_ADV_MIN_LEN	32
 
 #define ICMP6T_DEST_UNREACH     1
 #define ICMP6T_PKT_TOO_BIG      2
 #define ICMP6T_TIME_EXCEEDED    3
 #define ICMP6T_PARAM_PROB       4
-#define ICMP6T_IS_ERR(t)	(((t) & 0x80) == 0)
 #define ICMP6T_ECHO_REQUEST     128
 #define ICMP6T_ECHO_REPLY       129
 #define ICMP6T_LQUERY           130
@@ -496,5 +532,16 @@ struct icmp6h {
 #define ICMP6T_NSOLICIT         135
 #define ICMP6T_NADVERT          136
 #define ICMP6T_NREDIR           137
+
+#define ICMP6T_IS_ERR(_t)	(((_t) & 0x80) == 0)
+#define ICMP6T_IS_QUERY(_t)	(((_t) & 0x80) == 0x80)
+#define ICMP6T_IS_ECHO(_t)	\
+	(((_t) == ICMP6T_ECHO_REQUEST) || ((_t) == ICMP6T_ECHO_REPLY))
+#define ICMP6T_IS_ND(_t)	\
+	(((_t) == ICMP6T_NSOLICIT) || ((_t) == ICMP6T_NADVERT))
+
+#define ICMP6_ND_ADV_RTR	0x80000000
+#define ICMP6_ND_ADV_SOL	0x40000000
+#define ICMP6_ND_ADV_OVD	0x20000000
 
 #endif /* __tcpip_hdrs_h */

@@ -256,8 +256,9 @@ void build_key_ipv4(struct pktbuf *pkb, struct prparse *ipprp,
 			reset_flow_key(key);
 			reset_flow_key(rkey);
 			build_key_ipv4(pkb, eipprp, key, rkey);
-		} else {
-			/* TODO:  ping extraction? */
+		} else if (ICMPT_IS_QUERY(icmp->type)) {
+			key->sport = ntoh16(icmp->u.query.id);
+			rkey->sport = ntoh16(icmp->u.query.id);
 		}
 	} 
 }
@@ -298,8 +299,9 @@ void build_key_ipv6(struct pktbuf *pkb, struct prparse *ip6prp,
 			reset_flow_key(key);
 			reset_flow_key(rkey);
 			build_key_ipv6(pkb, eip6prp, key, rkey);
-		} else {
-			/* TODO:  ping extraction? */
+		} else if (ICMP6T_IS_ECHO(icmp6->type)) {
+			key->sport = ntoh16(icmp6->u.query.id);
+			rkey->sport = ntoh16(icmp6->u.query.id);
 		}
 	} 
 }
