@@ -1,6 +1,6 @@
 /*
  * ONICS
- * Copyright 2013 
+ * Copyright 2012-2013 
  * Christopher Adam Telfer
  *
  * stdproto.c -- Standard library of Internet protocol parsers.

@@ -1,6 +1,6 @@
 /*
  * ONICS
- * Copyright 2012 
+ * Copyright 2012-2013
  * Christopher Adam Telfer
  *
  * x2hpkt.c -- Program to convert from xkpt format to hexpkt format.

@@ -1,6 +1,6 @@
 /*
  * ONICS
- * Copyright 2012 
+ * Copyright 2012-2013
  * Christopher Adam Telfer
  *
  * nvmas.c -- NetVM assembler/disassembler.  Assembles to netvm_prog file
