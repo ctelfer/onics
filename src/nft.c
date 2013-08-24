@@ -270,6 +270,7 @@ void build_key_ipv6(struct pktbuf *pkb, struct prparse *ip6prp,
 {
 	struct ipv6h *ip6;
 	struct icmp6h *icmp6;
+	struct icmp6_echo *i6echo;
 	struct prparse *xpprp;
 	struct prparse *eip6prp;
 
@@ -300,8 +301,9 @@ void build_key_ipv6(struct pktbuf *pkb, struct prparse *ip6prp,
 			reset_flow_key(rkey);
 			build_key_ipv6(pkb, eip6prp, key, rkey);
 		} else if (ICMP6T_IS_ECHO(icmp6->type)) {
-			key->sport = ntoh16(icmp6->u.query.id);
-			rkey->sport = ntoh16(icmp6->u.query.id);
+			i6echo = (struct icmp6_echo *)icmp6;
+			key->sport = ntoh16(i6echo->id);
+			rkey->sport = ntoh16(i6echo->id);
 		}
 	} 
 }

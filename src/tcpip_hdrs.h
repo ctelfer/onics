@@ -492,23 +492,10 @@ struct icmp6h {
 	uint8_t			type;
 	uint8_t			code;
 	uint16_t		cksum;
-	union {
-		struct {
-			uint16_t	id;
-			uint16_t	seq;
-		} query;
-
-		struct {
-			uint32_t	flags;
-			struct ipv6addr	ip6a;
-		} nd;
-
-		uint8_t			data[4];
-	} u;
+	uint32_t		xtra;
 };
 
 #define ICMP6H_LEN		8	/* minimum */
-#define ICMP6_ND_HLEN		24
 
 #define ICMP6T_DEST_UNREACH     1
 #define ICMP6T_PKT_TOO_BIG      2
@@ -528,19 +515,76 @@ struct icmp6h {
 #define ICMP6T_IS_ERR(_t)	(((_t) & 0x80) == 0)
 #define ICMP6T_IS_ECHO(_t)	\
 	(((_t) == ICMP6T_ECHO_REQUEST) || ((_t) == ICMP6T_ECHO_REPLY))
-#define ICMP6T_IS_ND(_t)	\
+#define ICMP6T_IS_NDP(_t)	\
+	(((_t) >= ICMP6T_RSOLICIT) || ((_t) == ICMP6T_NREDIR))
+#define ICMP6T_IS_NEIGH(_t)	\
 	(((_t) == ICMP6T_NSOLICIT) || ((_t) == ICMP6T_NADVERT))
 
-#define ICMP6_ND_ADV_RTR	0x80000000
-#define ICMP6_ND_ADV_SOL	0x40000000
-#define ICMP6_ND_ADV_OVD	0x20000000
+
+
+struct icmp6_echo {
+	uint8_t		type;
+	uint8_t		code;
+	uint16_t	cksum;
+	uint16_t	id;
+	uint16_t	seq;
+};
+#define ICMP6_ND_ECHO_HLEN	8
+
+
+struct icmp6_nd_rsol {
+	uint8_t		type;
+	uint8_t		code;
+	uint16_t	cksum;
+	uint32_t	resv;
+};
+#define ICMP6_ND_RSOL_HLEN	8
+
+
+struct icmp6_nd_radv {
+	uint8_t		type;
+	uint8_t		code;
+	uint16_t	cksum;
+	uint8_t		hoplim;
+	uint8_t		flags;
+	uint16_t	tlife;
+	uint32_t	treach;
+	uint32_t	tretry;
+};
+#define ICMP6_ND_RADV_HLEN	16
+#define ICMP6_RADV_MACFG	0x80
+#define ICMP6_RADV_OCFG		0x40
+
+
+struct icmp6_nd_neigh {
+	uint8_t		type;
+	uint8_t		code;
+	uint16_t	cksum;
+	uint32_t	flags;
+	struct ipv6addr	ip6a;
+};
+
+#define ICMP6_ND_NEIGH_HLEN	24
+#define ICMP6_NADV_RTR		0x80000000
+#define ICMP6_NADV_SOL		0x40000000
+#define ICMP6_NADV_OVD		0x20000000
+
+
+struct icmp6_nd_rdr {
+	uint8_t		type;
+	uint8_t		code;
+	uint16_t	cksum;
+	struct ipv6addr	tgtaddr;
+	struct ipv6addr	dstaddr;
+};
+#define ICMP6_ND_RDR_HLEN	40
+
 
 struct icmp6_nd_opt {
 	uint8_t			type;
 	uint8_t			len;
 	uint8_t			data[6];	/* may be longer */
 };
-
 #define ICMP6_ND_OPT_MINLEN	8
 
 #define ICMP6_ND_OPT_SRCLLA	1
