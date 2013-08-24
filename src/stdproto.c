@@ -59,6 +59,12 @@ struct ip_parse {
 };
 
 
+struct icmp_parse {
+	struct prparse prp;
+	ulong xfields[PRP_ICMP_NXFIELDS];
+};
+
+
 struct ipv6_parse {
 	struct prparse prp;
 	ulong xfields[PRP_IPV6_NXFIELDS];
@@ -1139,8 +1145,8 @@ static struct prparse *icmp_parse(struct prparse *reg, byte_t *buf,
 {
 	struct prparse *prp;
 
-	prp = crtprp(sizeof(*prp), PRID_ICMP, off, 0, maxlen, 0, 
-		     &icmp_prparse_ops, 0);
+	prp = crtprp(sizeof(struct icmp_parse), PRID_ICMP, off, 0, maxlen, 0,
+		     &icmp_prparse_ops, PRP_ICMP_NXFIELDS);
 	if (!prp)
 		return NULL;
 
@@ -1189,8 +1195,8 @@ static int icmp_add(struct prparse *reg, byte_t *buf, struct prpspec *ps,
 		return -1;
 	}
 
-	prp = crtprp(sizeof(*prp), PRID_ICMP, ps->off, ps->hlen,
-		     ps->plen, ps->tlen, &icmp_prparse_ops, 0);
+	prp = crtprp(sizeof(struct icmp_parse), PRID_ICMP, ps->off, ps->hlen,
+		     ps->plen, ps->tlen, &icmp_prparse_ops, PRP_ICMP_NXFIELDS);
 	if (!prp)
 		return -1;
 
@@ -1223,7 +1229,23 @@ static void icmp_update(struct prparse *prp, byte_t *buf)
 	if ((~ones_sum(icmp, prp_totlen(prp), 0) & 0xFFFF) != 0)
 		prp->error |= PRP_ERR_CKSUM;
 
-	/* TODO: check by type? */
+	/* set offsets for the subfields that may or may not be present */
+	if (ICMPT_IS_QUERY(icmp->type)) {
+		prp->offs[PRP_ICMPFLD_QUERY] = prp_soff(prp) + 4;
+		if (ICMPT_IS_TSTAMP(icmp->type))
+			prp->offs[PRP_ICMPFLD_TS] = prp_soff(prp) + 8;
+	} else if (icmp->type == ICMPT_PARAM_PROB) {
+		prp->offs[PRP_ICMPFLD_PPTR] = prp_soff(prp) + 4;
+	} else if (icmp->type == ICMPT_DEST_UNREACH) {
+		if (icmp->code == ICMPC_TTL_EXCEEDED)
+			prp->offs[PRP_ICMPFLD_MTU] = prp_soff(prp) + 4;
+		else
+			prp->offs[PRP_ICMPFLD_RESERVED] = prp_soff(prp) + 4;
+	} else if (icmp->type == ICMPT_REDIRECT) {
+		prp->offs[PRP_ICMPFLD_GW] = prp_soff(prp) + 4;
+	} else {
+		prp->offs[PRP_ICMPFLD_RESERVED] = prp_soff(prp) + 4;
+	}
 }
 
 
@@ -2223,30 +2245,47 @@ static struct ns_pktfld icmp_ns_cksum =
 	NS_BYTEFIELD_I("cksum", &icmp_ns, PRID_ICMP, 2, 2,
 		"Checksum", &ns_fmt_hex);
 static struct ns_pktfld icmp_ns_id =
-	NS_BYTEFIELD_I("id", &icmp_ns, PRID_ICMP, 4, 2,
-		"Identifier", &ns_fmt_dec);
+	NS_BYTEFIELD_IDX_I("id", &icmp_ns, PRID_ICMP, 
+		PRP_ICMPFLD_QUERY, 0, 2, "Identifier", &ns_fmt_dec);
 static struct ns_pktfld icmp_ns_seq =
-	NS_BYTEFIELD_I("seq", &icmp_ns, PRID_ICMP, 6, 2,
-		"Sequence Number", &ns_fmt_dec);
+	NS_BYTEFIELD_IDX_I("seq", &icmp_ns, PRID_ICMP, 
+		PRP_ICMPFLD_QUERY, 2, 2, "Sequence Number", &ns_fmt_dec);
+static struct ns_pktfld icmp_ns_mtu_resv =
+	NS_BYTEFIELD_IDX_I("mtu_resv", &icmp_ns, PRID_ICMP, 
+		PRP_ICMPFLD_MTU, 0, 2, "MTU Reserved", &ns_fmt_dec);
 static struct ns_pktfld icmp_ns_mtu =
-	NS_BYTEFIELD_I("mtu", &icmp_ns, PRID_ICMP, 6, 2,
-		"MTU", &ns_fmt_dec);
+	NS_BYTEFIELD_IDX_I("mtu", &icmp_ns, PRID_ICMP, 
+		PRP_ICMPFLD_MTU, 2, 2, "MTU", &ns_fmt_dec);
 static struct ns_pktfld icmp_ns_ptr =
-	NS_BYTEFIELD_I("ptr", &icmp_ns, PRID_ICMP, 4, 1,
-		"Pointer", &ns_fmt_dec);
-static struct ns_pktfld icmp_ns_gateway =
-	NS_BYTEFIELD_I("gw", &icmp_ns, PRID_ICMP, 4, 4,
-		"Gateway", &ns_fmt_ipv4a);
-static struct ns_pktfld icmp_ns_unused =
-	NS_BYTEFIELD_I("unused", &icmp_ns, PRID_ICMP, 4, 4,
-		"Unused data", &ns_fmt_hex);
+	NS_BYTEFIELD_IDX_I("ptr", &icmp_ns, PRID_ICMP, 
+		PRP_ICMPFLD_PPTR, 0, 1, "Pointer", &ns_fmt_dec);
+static struct ns_pktfld icmp_ns_ptr_resv =
+	NS_BYTEFIELD_IDX_I("ptr_resv", &icmp_ns, PRID_ICMP, 
+		PRP_ICMPFLD_PPTR, 1, 3, "Param Prob Reserved", &ns_fmt_dec);
+static struct ns_pktfld icmp_ns_ots =
+	NS_BYTEFIELD_IDX_I("ots", &icmp_ns, PRID_ICMP, 
+		PRP_ICMPFLD_TS, 0, 4, "Originate Timestamp", &ns_fmt_dec);
+static struct ns_pktfld icmp_ns_rts =
+	NS_BYTEFIELD_IDX_I("rts", &icmp_ns, PRID_ICMP, 
+		PRP_ICMPFLD_TS, 4, 4, "Receive Timestamp", &ns_fmt_dec);
+static struct ns_pktfld icmp_ns_tts =
+	NS_BYTEFIELD_IDX_I("tts", &icmp_ns, PRID_ICMP, 
+		PRP_ICMPFLD_TS, 8, 4, "Transmit Timestamp", &ns_fmt_dec);
+static struct ns_pktfld icmp_ns_gw =
+	NS_BYTEFIELD_IDX_I("gw", &icmp_ns, PRID_ICMP, 
+		PRP_ICMPFLD_GW, 0, 4, "Gateway", &ns_fmt_ipv4a);
+static struct ns_pktfld icmp_ns_reserved =
+	NS_BYTEFIELD_IDX_I("resv", &icmp_ns, PRID_ICMP, 
+		PRP_ICMPFLD_RESERVED, 0, 4, "Reserved", &ns_fmt_hex);
 
 struct ns_elem *stdproto_icmp_ns_elems[STDPROTO_NS_ELEN] = {
 	(struct ns_elem *)&icmp_ns_type, (struct ns_elem *)&icmp_ns_code,
 	(struct ns_elem *)&icmp_ns_cksum, (struct ns_elem *)&icmp_ns_id,
-	(struct ns_elem *)&icmp_ns_seq, (struct ns_elem *)&icmp_ns_mtu,
-	(struct ns_elem *)&icmp_ns_ptr, (struct ns_elem *)&icmp_ns_gateway,
-	(struct ns_elem *)&icmp_ns_unused,
+	(struct ns_elem *)&icmp_ns_seq, (struct ns_elem *)&icmp_ns_mtu_resv,
+	(struct ns_elem *)&icmp_ns_mtu, (struct ns_elem *)&icmp_ns_ptr,
+	(struct ns_elem *)&icmp_ns_ptr_resv, (struct ns_elem *)&icmp_ns_ots,
+	(struct ns_elem *)&icmp_ns_rts, (struct ns_elem *)&icmp_ns_tts,
+	(struct ns_elem *)&icmp_ns_gw, (struct ns_elem *)&icmp_ns_reserved,
 };
 
 

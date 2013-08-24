@@ -193,11 +193,7 @@
 # ICMP: Code:                  0
 # ICMP: Checksum:              0x99b2
 # ICMP: Identifier:            33867
-# ICMP: Pointer:               132
-# ICMP: Gateway:               132.75.0.1
-# ICMP: Unused data:           0x844b0001
 # ICMP: Sequence Number:       1
-# ICMP: MTU:                   1
     000022:  08 00 99 b2 84 4b 00 01                          |.....K..|
 # ICMP: Data -- [42:56]
     00002a:  92 30 2e 4b 00 00 00 00 57 b2 03 00 00 00 00 00  |.0.K....W.......|
@@ -243,11 +239,7 @@
 # ICMP: Code:                  0
 # ICMP: Checksum:              0xa1b2
 # ICMP: Identifier:            33867
-# ICMP: Pointer:               132
-# ICMP: Gateway:               132.75.0.1
-# ICMP: Unused data:           0x844b0001
 # ICMP: Sequence Number:       1
-# ICMP: MTU:                   1
     000022:  00 00 a1 b2 84 4b 00 01                          |.....K..|
 # ICMP: Data -- [42:56]
     00002a:  92 30 2e 4b 00 00 00 00 57 b2 03 00 00 00 00 00  |.0.K....W.......|
@@ -293,11 +285,7 @@
 # ICMP: Code:                  0
 # ICMP: Checksum:              0x79aa
 # ICMP: Identifier:            33867
-# ICMP: Pointer:               132
-# ICMP: Gateway:               132.75.0.2
-# ICMP: Unused data:           0x844b0002
 # ICMP: Sequence Number:       2
-# ICMP: MTU:                   2
     000022:  08 00 79 aa 84 4b 00 02                          |..y..K..|
 # ICMP: Data -- [42:56]
     00002a:  93 30 2e 4b 00 00 00 00 76 b9 03 00 00 00 00 00  |.0.K....v.......|
@@ -343,11 +331,7 @@
 # ICMP: Code:                  0
 # ICMP: Checksum:              0x81aa
 # ICMP: Identifier:            33867
-# ICMP: Pointer:               132
-# ICMP: Gateway:               132.75.0.2
-# ICMP: Unused data:           0x844b0002
 # ICMP: Sequence Number:       2
-# ICMP: MTU:                   2
     000022:  00 00 81 aa 84 4b 00 02                          |.....K..|
 # ICMP: Data -- [42:56]
     00002a:  93 30 2e 4b 00 00 00 00 76 b9 03 00 00 00 00 00  |.0.K....v.......|

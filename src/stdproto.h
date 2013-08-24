@@ -46,6 +46,14 @@ void unregister_std_proto();
 #define PRP_IPFLD_SRR		(PRP_OI_EXTRA + 4)
 #define PRP_IPFLD_RA		(PRP_OI_EXTRA + 5)
 
+#define PRP_ICMP_NXFIELDS	6
+#define PRP_ICMPFLD_QUERY	(PRP_OI_EXTRA + 0)	/* ID, timestamp */
+#define PRP_ICMPFLD_PPTR	(PRP_OI_EXTRA + 1)	/* Param prob ptr */
+#define PRP_ICMPFLD_MTU		(PRP_OI_EXTRA + 2)	/* Unreach code 4 */
+#define PRP_ICMPFLD_TS		(PRP_OI_EXTRA + 3)	/* Timestamp fields */
+#define PRP_ICMPFLD_GW		(PRP_OI_EXTRA + 4)	/* Redirect */
+#define PRP_ICMPFLD_RESERVED	(PRP_OI_EXTRA + 5)	/* Various */
+
 #define PRP_IPV6_NXFIELDS	4
 #define PRP_IPV6FLD_NXTHDR	(PRP_OI_EXTRA + 0)
 #define PRP_IPV6FLD_JLEN	(PRP_OI_EXTRA + 1)

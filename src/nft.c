@@ -257,8 +257,8 @@ void build_key_ipv4(struct pktbuf *pkb, struct prparse *ipprp,
 			reset_flow_key(rkey);
 			build_key_ipv4(pkb, eipprp, key, rkey);
 		} else if (ICMPT_IS_QUERY(icmp->type)) {
-			key->sport = ntoh16(icmp->u.query.id);
-			rkey->sport = ntoh16(icmp->u.query.id);
+			key->sport = ntoh16(icmp->u.echo.id);
+			rkey->sport = ntoh16(icmp->u.echo.id);
 		}
 	} 
 }

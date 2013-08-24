@@ -390,13 +390,13 @@ struct icmph {
 	uint8_t			code;
 	uint16_t		cksum;
 	union {
-		/* ICMPT_ECHO_*, ICMPT_TS_*, ICMPT_INFO_* */
+		/* ICMPT_ECHO_* */
 		struct {
 			uint16_t id;
 			uint16_t seq;
-		} query;
+		} echo;
 
-		/* ICMPT_DEST_UNREAD:4 */
+		/* ICMPT_DEST_UNREACH:4 */
 		struct {
 			uint16_t unused;
 			uint16_t mtu;
@@ -408,6 +408,21 @@ struct icmph {
 			uint8_t unused1;
 			uint16_t unused2;
 		} pprob;
+
+		/* ICMPT_TS_* */
+		struct {
+			uint16_t id;
+			uint16_t seq;
+			uint32_t ots;
+			uint32_t rts;
+			uint32_t tts;
+		} ts;
+
+		/*  ICMPT_INFO_* */
+		struct {
+			uint16_t id;
+			uint16_t seq;
+		} info;
 
 		/* ICMPT_REDIRECT */
 		uint32_t gateway;
