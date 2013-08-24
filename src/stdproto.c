@@ -1161,11 +1161,7 @@ static int icmp_nxtcld(struct prparse *reg, byte_t *buf, struct prparse *cld,
 
 	icmp = prp_header(reg, buf, struct icmph);
 	/* types which can have a returned IP header in them */
-	if ((icmp->type == ICMPT_DEST_UNREACH) ||
-	    (icmp->type == ICMPT_TIME_EXCEEDED) ||
-	    (icmp->type == ICMPT_PARAM_PROB) ||
-	    (icmp->type == ICMPT_SRC_QUENCH) ||
-	    (icmp->type == ICMPT_REDIRECT)) {
+	if (ICMPT_HAS_OPKT(icmp->type)) {
 		*prid = PRID_IPV4;
 		*off = prp_poff(reg);
 		*maxlen = prp_plen(reg);

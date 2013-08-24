@@ -437,6 +437,13 @@ struct icmph {
 	 ((_t) == ICMPT_TIME_EXCEEDED) ||	\
 	 ((_t) == ICMPT_PARAM_PROB))
 
+#define ICMPT_HAS_OPKT(_t)			\
+	(((_t) == ICMPT_DEST_UNREACH)  ||	\
+	 ((_t) == ICMPT_TIME_EXCEEDED) ||	\
+	 ((_t) == ICMPT_PARAM_PROB)    ||	\
+	 ((_t) == ICMPT_SRC_QUENCH)    ||	\
+	 ((_t) == ICMPT_REDIRECT))
+
 #define ICMPT_IS_ECHO(_t)			\
 	(((_t) == ICMPT_ECHO_REPLY)  ||		\
 	 ((_t) == ICMPT_ECHO_REQUEST))
