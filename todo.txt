@@ -16,13 +16,15 @@ PML
 
 
 Protocol parsing & Namespace
+ + Add test test cases to validate basic packet parsing.
  * Check restrictions on parsing to ensure termination.
  > Add short-form parsing for protocols using the above.
- > More checking of ICMP/ICMPv6 packets by type.
  > MPLS
  > PPP
  > GRE
  > GTP
+ > VXLAN
+ > PPOE
  > other tunnel formats
 
 
@@ -36,13 +38,10 @@ netvm_prog API:
 
 
 NetVM Coprocessors
- + Fix up / test regex compilation on error patterns (catlib).
- * Timer interrupt
  * DNS Resolver coprocessor
- * Generic C library netvm coprocessor
+ * Coprocessor for RNG
  > Hash table coprocessor
  > Backing store coprocessor for packets (replaces queue coprocessor)
- > Coprocessor for RNG
 
 
 pktmux/pktdemux:
@@ -51,7 +50,6 @@ pktmux/pktdemux:
 
 
 pdiff:
- + Better payload comparison
  * Two-column output format
  * pml edit script output format
 

@@ -22,7 +22,7 @@
 #define IDCHARS	"_abcdefghijklmnopqrstuvwxyz"\
 		"ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 #define WSCHARS " \t\r\n"
-#define OPCHARS "=!<>~+-*/%&|^.@?{}[](),;$"
+#define OPCHARS "=!<>~+-*/%&|^.@?{}[](),;$:"
 #define QUOTE		'"'
 #define REXQUOTE	'`'
 
@@ -421,10 +421,14 @@ static int skip_ws(struct pmllex *lex)
 }
 
 
+/* 
+   check that all the characters except for the last in the lex string are
+   hex digits.
+ */
 static int ckhex(struct pmllex *lex)
 {
 	const char *s = lexstr(lex);
-	ulong len = lexslen(lex);
+	ulong len = lexslen(lex) - 1;
 	while (len > 0) {
 		if (!isxdigit(*s++))
 			return 0;
@@ -455,7 +459,7 @@ static int read_eth_or_ipv6(struct pmllex *lex, int cc)
 {
 	int i;
 	int rv;
-	int nc = 1 + cc;	/* # of colons */
+	int nc = 0;		/* # of colons */
 	int has2oct = 0;	/* has 2-byte field */
 	int ch;
         uint n[6];
@@ -464,15 +468,18 @@ static int read_eth_or_ipv6(struct pmllex *lex, int cc)
 		nc++;
 		if ((rv = scanhex(lex)) < 0)
 			goto err;
-		if (rv == 0) {
-			++cc;
-		} else if (rv > 2) {
+		if (rv > 2) {
 			has2oct = 1;
 			if (rv > 4)
 				goto err;
 		}
 		ch = nextc(lex);
+		if (rv == 0 && ch == ':')
+			++cc;
 	} while (ch == ':');
+
+	if (cc > 1)
+		goto err;
 
 	pushback(lex, ch);
 	TERMINATE(lex);
@@ -486,13 +493,12 @@ static int read_eth_or_ipv6(struct pmllex *lex, int cc)
 		return PMLTOK_ETHADDR;
 	} else {
 		/* ipv6 address */
-		if (nc > 7)
+		if (nc > 8)
 			goto errv6;
 		if (str_parse_ip6a(&lex->tokx.u.v6addr, lexstr(lex)) < 0)
 			goto errv6;
 		return PMLTOK_IPV6ADDR;
 	}
-
 
 err:
 	pmll_err(lex, 1, "invalid IPv6 or 802.11 address");
@@ -516,7 +522,7 @@ static int read_id(struct pmllex *lex, int ch)
 	/* check for start of IPv6 or ethernet address */
 	if (ch < 0) {
 		return ch;
-	} else if (ch == ':' && lexslen(lex) <= 4 && ckhex(lex)) {
+	} else if (ch == ':' && lexslen(lex) <= 5 && ckhex(lex)) {
 		return read_eth_or_ipv6(lex, 0);
 	} else {
 		pushback(lex, ch);
