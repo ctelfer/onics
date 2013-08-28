@@ -241,7 +241,8 @@ int ns_fmt_summary(struct ns_elem *elem, byte_t *pkt, struct prparse *prp,
 		soff = str_copy(s, pfx, ssize);
 		if (soff >= ssize)
 			return -1;
-		--soff;
+		s += soff;
+		ssize -= soff;
 	}
 
 	if (elem->type == NST_NAMESPACE) {
@@ -249,26 +250,27 @@ int ns_fmt_summary(struct ns_elem *elem, byte_t *pkt, struct prparse *prp,
 		r = ns_get_offlen(ns, prp, &off, &len);
 		if (r < 0)
 			return r;
-		nlen = str_copy(s + soff, ns->fullname, ssize - soff);
+		nlen = str_copy(s, ns->fullname, ssize);
 	} else if (elem->type == NST_PKTFLD) {
 		pf = (struct ns_pktfld *)elem;
 		r = pf_get_offlen(pf, prp, &off, &len);
 		if (r < 0)
 			return r;
-		nlen = str_copy(s + soff, pf->fullname, ssize - soff);
+		nlen = str_copy(s, pf->fullname, ssize);
 	} else {
 		nlen = 0;
 		abort_unless(0);
 	}
 
-	if (nlen >= ssize - soff)
+	if (nlen >= ssize)
 		return -1;
-	soff += nlen - 1;
+	s += nlen;
+	ssize -= nlen;
 
 	head = prp_get_base(prp);
 	off -= prp_poff(head);
 
-	r = str_fmt(s + soff, ssize - soff, " -- [%lu:%lu]\n", off, len);
+	r = str_fmt(s, ssize, " -- [%lu:%lu]\n", off, len);
 	if (r < 0)
 		return -1;
 
@@ -295,7 +297,8 @@ int ns_fmt_raw(struct ns_elem *elem, byte_t *pkt, struct prparse *prp,
 		soff = str_copy(s, pfx, ssize);
 		if (soff >= ssize)
 			return -1;
-		--soff;
+		s += soff;
+		ssize -= soff;
 	}
 
 	if (elem->type == NST_NAMESPACE) {
@@ -303,27 +306,28 @@ int ns_fmt_raw(struct ns_elem *elem, byte_t *pkt, struct prparse *prp,
 		r = ns_get_offlen(ns, prp, &off, &len);
 		if (r < 0)
 			return r;
-		nlen = str_copy(s + soff, ns->fullname, ssize - soff);
+		nlen = str_copy(s, ns->fullname, ssize);
 	} else if (elem->type == NST_PKTFLD) {
 		pf = (struct ns_pktfld *)elem;
 		r = pf_get_offlen(pf, prp, &off, &len);
 		if (r < 0)
 			return r;
-		nlen = str_copy(s + soff, pf->fullname, ssize - soff);
+		nlen = str_copy(s, pf->fullname, ssize);
 	} else {
 		nlen = 0;
 		abort_unless(0);
 	}
 
-	if (nlen >= ssize - soff)
+	if (nlen >= ssize)
 		return -1;
-	soff += nlen - 1;
+	s += nlen;
+	ssize -= nlen;
 
 	head = prp_get_base(prp);
 	off -= prp_poff(head);
 	r = 0;
 
-	r = str_fmt(s + soff, ssize - soff, " -- [%lu:%lu]\n", off, len);
+	r = str_fmt(s, ssize, " -- [%lu:%lu]\n", off, len);
 	if (r < 0)
 		return -1;
 
@@ -403,15 +407,18 @@ static int fmt_name(char *s, size_t ssize, const char *pfx,
 		soff = str_copy(s, pfx, ssize);
 		if (soff >= ssize)
 			return -1;
-		--soff;
+		s += soff;
+		ssize -= soff;
 	}
 
-	noff = str_copy(s + soff, name, ssize - soff);
-	if (noff > ssize - soff)
+	noff = str_copy(s, name, ssize);
+	if (noff >= ssize)
 		return -1;
-	soff += noff - 1;
+	s += noff;
+	ssize -= noff;
+	soff += noff;
 
-	r = align(s + soff, ssize - soff, soff);
+	r = align(s, ssize, soff);
 	if (r < 0)
 		return -1;
 	soff += r;
@@ -595,20 +602,24 @@ static int buildstr(char *s, size_t ssize, const char *pfx, const char *name,
 		soff = str_copy(s, pfx, ssize);
 		if (soff >= ssize)
 			return -1;
-		--soff;
+		s += soff;
+		ssize -= soff;
 	}
 
-	noff = str_copy(s + soff, name, ssize - soff);
-	if (noff >= ssize - soff)
+	noff = str_copy(s, name, ssize);
+	if (noff >= ssize)
 		return -1;
-	soff += noff - 1;
+	s += noff;
+	ssize -= noff;
+	soff += noff;
 
-	r = align(s + soff, ssize - soff, soff);
+	r = align(s, ssize, soff);
 	if (r < 0)
 		return -1;
-	soff += r;
+	s += r;
+	ssize -= r;
 
-	r = str_fmt(s + soff, ssize - soff, "%s\n", data);
+	r = str_fmt(s, ssize, "%s\n", data);
 	if (r < 0)
 		return -1;
 

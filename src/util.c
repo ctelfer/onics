@@ -220,8 +220,8 @@ void shexdump(char *s, size_t ssize, const char *pfx, ulong addr, byte_t *p,
 			scl = str_copy(s, pfx, ssize);
 			if (scl >= ssize)
 				return;
-			ssize -= scl-1;
-			s += scl-1;
+			ssize -= scl;
+			s += scl;
 		}
 
 		n = snprintf(s, ssize, 
@@ -250,8 +250,8 @@ void shexdump(char *s, size_t ssize, const char *pfx, ulong addr, byte_t *p,
 			scl = str_copy(s, pfx, ssize);
 			if (scl >= ssize)
 				return;
-			s += scl-1;
-			ssize -= scl-1;
+			s += scl;
+			ssize -= scl;
 		}
 
 		n = snprintf(s, ssize, "    %06lx:  ", addr + aoff);

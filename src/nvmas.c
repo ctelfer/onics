@@ -521,7 +521,7 @@ int str2inst(const char *s, struct htab *ct, uint inum, struct netvm_inst *ni)
 	int argmask = 0;
 	int nargs = 0;
 
-	if (str_copy(ns, s, sizeof(ns)) > sizeof(ns))
+	if (str_copy(ns, s, sizeof(ns)) >= sizeof(ns))
 		return ERR_TOOLONG;
 	if ((nt = tokenize(ns, toks, array_length(toks), 1)) <= 0)
 		return nt == 0 ? ERR_NARG : -nt;
@@ -1380,8 +1380,7 @@ void usage()
 	char buf[4096];
 	fprintf(stderr, "usage: nvmas [options] [infile [outfile]]\n");
 	optparse_print(&optparser, buf, sizeof(buf));
-	str_cat(buf, "\n", sizeof(buf));
-	fprintf(stderr, "%s", buf);
+	fprintf(stderr, "%s\n", buf);
 	exit(1);
 }
 

@@ -26,7 +26,6 @@
 #include <cat/err.h>
 #include <cat/stdclio.h>
 #include <cat/optparse.h>
-#include <cat/str.h>
 #include <cat/emalloc.h>
 #include "pktbuf.h"
 #include "protoparse.h"
@@ -61,8 +60,7 @@ void usage()
 	char buf[4096];
 	fprintf(stderr, "usage: nvmpf [options] progfile [INFILE [OUTFILE]]\n");
 	optparse_print(&optparser, buf, sizeof(buf));
-	str_cat(buf, "\n", sizeof(buf));
-	fprintf(stderr, "%s\n", buf);
+	fprintf(stderr, "%s\n\n", buf);
 	exit(1);
 }
 
