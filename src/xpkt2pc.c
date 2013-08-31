@@ -3,8 +3,8 @@
  * Copyright 2012-2013
  * Christopher Adam Telfer
  *
- * opcout.c -- Write an xpkt stream of packets to a pcap file.
- *   This program does not use libpcap.
+ * xpkt2pc.c -- Write an xpkt stream of packets to a pcap file.
+ *              This program does not use libpcap.
  *
  *
  *  This program is free software: you can redistribute it and/or modify
@@ -32,8 +32,6 @@
 #include <cat/optparse.h>
 
 struct clopt g_optarr[] = {
-	CLOPT_INIT(CLOPT_STRING, 'i', "--iface",
-		"interface to send out on (UNSUPPORTED)"),
 	CLOPT_INIT(CLOPT_NOARG, 'h', "--help", "print help")
 };
 
@@ -71,9 +69,6 @@ int main(int argc, char *argv[])
 	optparse_reset(&g_oparser, argc, argv);
 	while (!(rv = optparse_next(&g_oparser, &opt))) {
 		switch (opt->ch) {
-		case 'i':
-			usage("option -i unsupported");
-			break;
 		case 'h':
 			usage(NULL);
 		}

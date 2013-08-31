@@ -3,8 +3,8 @@
  * Copyright 2012-2013
  * Christopher Adam Telfer
  *
- * opcin.c -- Read pcap files and output the packets in xpkt format.
- *            This implementation does not use libpcap.
+ * pc2xpkt.c -- Read pcap files and output the packets in xpkt format.
+ *              This implementation does not use libpcap.
  *
  *
  *  This program is free software: you can redistribute it and/or modify
@@ -34,12 +34,8 @@
 #define PKTMAX  (1024 * 64 + 64)
 
 struct clopt g_options[] = {
-	CLOPT_INIT(CLOPT_STRING, 'i', "--iface", 
-		"interface to sniff from (UNSUPPORTED)"),
 	CLOPT_INIT(CLOPT_UINT,   'n', "--iface-num",
 		   "interface number to tag packets with"),
-	CLOPT_INIT(CLOPT_NOARG,  'p', "--promisc",
-		   "set interface in promiscuous mode (UNSUPPORTED)"),
 	CLOPT_INIT(CLOPT_STRING, 'h', "--help", "print help")
 };
 
@@ -77,14 +73,8 @@ int main(int argc, char *argv[])
 	optparse_reset(&g_oparser, argc, argv);
 	while (!(rv = optparse_next(&g_oparser, &opt))) {
 		switch (opt->ch) {
-		case 'i':
-			usage("option '-i' is unsupported");
-			break;
 		case 'n':
 			ifnum = opt->val.uint_val;
-			break;
-		case 'p':
-			usage("option '-p' is unsupported");
 			break;
 		case 'h':
 			usage(NULL);
