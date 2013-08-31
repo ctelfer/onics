@@ -1,0 +1,95 @@
+.TH "x2hpkt" 1 "August 2013" "ONICS 1.0"
+.SH NAME
+x2hpkt - Convert a stream of packets from XPKT format to hex dump 
+format.
+.P
+.SH SYNOPSYS
+\fBx2hpkt\fP [\fB-fhx\fP] [\fIinfile\fP [\fIoutfile\fP]]
+.P
+.SH DESCRIPTION
+\fBx2hpkt\fP reads in a stream of XPKT-formatted packets and outputs
+them in a canonical hexadecimal dump format annotated with decoded
+packet fields.  By default \fBx2hpkt\fP reads the packets from standard
+input and outputs them to standard output.  If \fIinfile\fP is specified
+then \fBx2hpkt\fP reads from it instead.  If \fIoutfile\fP is specified,
+then \fBx2hpkt\fP opens, creates and truncates that file before writing
+its output to that file.
+.P
+\fBx2hpkt\fP uses the standard protocol decoding suite that comes with
+ONICS to decode packet fields.  The program itself treats packet fields
+as an abstract data type through the \fBprotoparse\fP and \fBns\fP
+libraries.  Thus it has no protocol-specific data encoded within it.
+Extending the ONICS protocol parsing automatically extends
+\fBx2hpkt\fP's packet decoding capabilities.
+.P
+.SH OPTIONS
+.IP \fB-f\fP
+Flush the output for a packet after each packet is read.  This can be
+useful if packets are coming in live and subsequent programs should
+receive input packets in a timely manner.
+.IP \fB-h\fP
+Print the usage of the command and exit.
+.IP \fB-x\fP
+Dump the XPKT header along with every packet.  This allows a program
+reading in the hex dump format to reproduce the original input file
+completely.  By default, \fBx2hpkt\fP only dumps the actual packet data.
+.P
+.SH "HEXPKT FORMAT"
+.P
+The \fBhexpkt\fP format is a fairly typical hexadecimal representation
+of binary data that is used by various tools.  Each blank line or line
+that starts with a '#' is ignored entirely.  Every other line should
+have the form:
+.nf
+
+	\fIaddress\fP: \fIhexval\fP [\fIhexval\fP ...] |\fItext\fP ...|
+
+.fi
+The \fIaddress\fP is specified in hexidecimal.  It specifies the offset
+in the file where the data on the rest of the line should reside.
+\fBx2hpkt\fP outputs individual bytes separately in the hex dump with
+each byte represented as a 2-digit hexadecimal number.  (There is no
+prefix to specify that the value is in hexadecimal such as "0x" for
+example.)  Other programs (e.g. tcpdump) will output 2- or 4-byte values
+grouped together.  The portion of the hexdump between the '|' characters
+displays the ASCII text values for most printable non-special
+characters.  \fBx2hpkt\fP prints characters like tabs, newlines, etc... 
+as well as bytes that do not correspond to a printable ASCII characters
+with the '.' character.
+.P
+The \fBhexpkt\fP format imposes two additional rules for the hex dump
+that is not present in other dumps.  First, packets are delimited by
+blank lines and so must not contain any blank lines within them.
+Second, addresses are relative to the start of a packet.  Thus,
+addresses in a \fBhexpkt\fP stream 'reset' at the start of every packet.
+.P
+.SH EXAMPLES
+.P
+Dump a set of packets to 'less' for browsing:
+.nf
+
+    x2hpkt capture.xpkt | less
+
+.fi
+Convert packets from PCAP to XPKT to hexdump to XPKT to PCAP:
+.nf
+
+    pc2xpkt capture.pcap | x2hpkt -x | h2xpkt | 
+	xpkt2pc > recap.pcap
+
+.fi
+Dump packets captured from nework interface eth0:
+.nf
+
+    pktin eth0 | x2hpkt -f | less
+
+.fi
+.P
+.SH AVAILABILITY
+This utility should be available on all supported ONICS platforms.
+.P
+.SH AUTHOR
+Christopher A. Telfer <ctelfer@gmail.com>
+.P
+.SH "SEE ALSO"
+h2xpkt(1), pc2xpkt(1), xpkt2pc(1), pcapin(1), pcapout(1)

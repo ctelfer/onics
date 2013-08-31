@@ -111,7 +111,7 @@ int readline(char *cp, size_t len)
 		ch = fgetc(infile);
 		if (ch == EOF)
 			break;
-		if (!isprint(ch) && (ch != '\n'))
+		if (!isprint(ch) && (ch != '\n') && (ch != '\t'))
 			err("invalid character (%d) on line %lu\n", ch, 
 			    g_lineno);
 		if (ch == '\n')
