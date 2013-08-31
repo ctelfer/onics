@@ -1,0 +1,52 @@
+.TH "pktin" 1 "August 2013" "ONICS 1.0"
+.SH NAME
+pktin - Read a packet in from an interface.
+.P
+.SH SYNOPSYS
+\fBpktin\fP [\fB-ph\fP] [\fB-i\fP \fIifnum\fP] 
+\fIifname\fP [\fIoutfile\fP]]
+.P
+.SH DESCRIPTION
+\fBpktin\fP reads packets from a network interface using an OS-specific 
+user-space API.  It converts these packets to the XPKT format and
+then writes them out.  By default, \fBpktin\fP reads the packets from
+\fIifname\fP and writes them to standard output.  However, if the
+\fIoutfile\fP parameter exists then \fBpktin\fP writes the packets to
+that file.
+.P
+.SH OPTIONS
+.P
+.IP \fB-h\fP
+Print the usage of the command and exit.
+.IP \fB-p\fP
+Don't enable promiscuous mode when opening the interface.
+.IP \fB-i\fP \fIifnum\fP
+Tag all incoming packets with an XPKT_TAG_INIFACE tag that has an
+interface number equal to \fIifnum\fP.  This is useful when packets can
+come in from multiple interfaces to disambiguate their origin.  If the
+user does not set this option, then \fBpktin\fP will tag incoming
+packets with interface number 0 by default.
+.P
+.SH EXAMPLES
+.P
+.nf
+
+Read packets from eth0 and store them in a file capture.xpkt
+
+    pktin eth0 capture.xpkt
+
+Read packets in and tag them with interface number 3 before
+passing them to the rest of the pipeline.
+
+    pktin -i 3 eth0 | ...
+.fi
+.P
+.SH AVAILABILITY
+As of ONICS 1.0, OpenBSD and Linux are supported.  The OpenBSD code
+shoudl be portable to other flavors of BSD.  However, this is still untested. 
+.P
+.SH AUTHOR
+Christopher A. Telfer <ctelfer@gmail.com>
+.P
+.SH "SEE ALSO"
+pktout(1), pc2xpkt(1), xpkt2pc(1), pcapin(1), pcapout(1) 

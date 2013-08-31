@@ -1,0 +1,50 @@
+.TH "pktout" 1 "August 2013" "ONICS 1.0"
+.SH NAME
+pktout - Write a packet out to an interface
+.P
+.SH SYNOPSYS
+\fBpktout\fP [\fB-h\fP] [\fIinfile\fP] \fIifname\fP
+.P
+.SH DESCRIPTION
+\fBpktout\fP Reads in a stream of XPKT packets and transmits them out 
+a network interface through an OS-specific API.  By default,
+\fBpktout\fP reads from standard input and transmits out interface
+\fIifname\fP.  If the \fIinfile\fP parameter is given, then \fBpktout\fP
+reads the packets from that file instead.
+.P
+.SH OPTIONS
+.P
+.IP \fB-h\fP
+Print the usage of the command and exit.
+.P
+.SH EXAMPLES
+.P
+.nf
+
+Replay an XPKT file out onto the network via eth0:
+
+    pktout capture.xpkt eth0
+
+Replay a PCAP file onto the network at top speed:
+
+    pc2xpkt capture.pcap | pktout eth0
+
+Replay a PCAP file onto the network released according to
+the packet timestamps:
+
+    pc2xpkt capture.pcap | pktrel | pktout eth0
+
+Obviously pc2xpkt isn't required if your packet traces are
+already in XPKT format.  :)
+.fi
+.P
+.SH AVAILABILITY
+As of ONICS 1.0, OpenBSD and Linux are supported.  The OpenBSD code
+should be portable to other flavors of BSD.  However, this is still
+untested. 
+.P
+.SH AUTHOR
+Christopher A. Telfer <ctelfer@gmail.com>
+.P
+.SH "SEE ALSO"
+pktin(1), pc2xpkt(1), xptk2pc(1), pcapin(1), pcapout(1), pktrel(1)
