@@ -1,0 +1,52 @@
+.TH "pcapout" 1 "August 2013" "ONICS 1.0"
+.SH NAME
+pcapout - Read in XPKT and output them using the libpcap library.
+.P
+.SH SYNOPSYS
+\fBpcapout\fP [\fB-h\fP] [\fIinfile\fP [\fIoutfile\fP]]
+.P
+\fBpcapout\fP [\fB-h\fP] -i \fIifname\fP [\fIinfile\fP]
+.P
+.SH DESCRIPTION
+\fBpcapout\fP reads in a stream of XPKT packets and writes them out
+using the libpcap library.  By default \fBpcapout\fP reads XPKT-format
+packets from standard input and outputs a PCAP trace to standard output.
+If \fIinfile\fP is specified, then \fBpcapout\fP reads the packets from
+that file instead.  If the \fBoutfile\fP parameter is specified then
+\fBpcapout\fP writes the PCAP trace to that file creating and truncating
+it if necessary.  The \fB-i\fP option instructs the program to inject
+packets to interface \fIifname\fP using libpcap instead of writing to a
+file.
+.P
+.SH OPTIONS
+.P
+.IP \fB-h\fP
+Print the usage of the command and exit.
+.IP \fB-i\fP \fIifname\fP
+Write packets to the interface \fIifname\fP.
+.P
+.SH EXAMPLES
+.P
+.nf
+Convert an XPKT file to a PCAP file:
+
+	pcapout infile.xpkt outfile.pcap
+
+Concatenate several XPKT files and save them in a PCAP file:
+
+	cat capture1.xpkt capture2.xpkt | pcapout > outfile.pcap
+
+Send a set of packets out eth0:
+
+	pcapout -i eth0 capture.xpkt 
+.fi
+.P
+.SH AVAILABILITY
+As of ONICS 1.0 this program is available on all ONICS platforms that
+have libpcap support.
+.P
+.SH AUTHOR
+Christopher A. Telfer <ctelfer@gmail.com>
+.P
+.SH "SEE ALSO"
+pcapin(1), pktin(1), pktout(1), pc2xpkt(1), xpkt2pc(1)

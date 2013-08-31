@@ -3,7 +3,7 @@
 pktin - Read a packet in from an interface.
 .P
 .SH SYNOPSYS
-\fBpktin\fP [\fB-ph\fP] [\fB-i\fP \fIifnum\fP] 
+\fBpktin\fP [\fB-hp\fP] [\fB-i\fP \fIifnum\fP] 
 \fIifname\fP [\fIoutfile\fP]]
 .P
 .SH DESCRIPTION
@@ -30,20 +30,24 @@ packets with interface number 0 by default.
 .SH EXAMPLES
 .P
 .nf
-
 Read packets from eth0 and store them in a file capture.xpkt
 
     pktin eth0 capture.xpkt
 
 Read packets in and tag them with interface number 3 before
-passing them to the rest of the pipeline.
+passing them to x2hpkt to dump.
 
-    pktin -i 3 eth0 | ...
+    pktin -i 3 eth0 | x2hpkt -x
+
+Copy packets from one interface to another:
+
+    pktin eth0 | pktout eth1
+
 .fi
 .P
 .SH AVAILABILITY
 As of ONICS 1.0, OpenBSD and Linux are supported.  The OpenBSD code
-shoudl be portable to other flavors of BSD.  However, this is still untested. 
+should be portable to other flavors of BSD.  However, this is still untested. 
 .P
 .SH AUTHOR
 Christopher A. Telfer <ctelfer@gmail.com>

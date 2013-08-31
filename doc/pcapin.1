@@ -1,0 +1,68 @@
+.TH "pcapin" 1 "August 2013" "ONICS 1.0"
+.SH NAME
+pcapin - Read packets using libpcap and output them in XPKT format.
+.P
+.SH SYNOPSYS
+\fBpcapin\fP [\fB-hp\fP] [\fB-n\fP \fIifnum\fP] 
+[\fIinfile\fP [\fIoutfile\fP]]
+.P
+\fBpcapin\fP [\fB-hp\fP] [\fB-n\fP \fIifnum\fP] [\fB-i\fP \fIifname\fP] 
+[\fIoutfile\fP]
+.P
+.SH DESCRIPTION
+\fBpcapin\fP Reads in packets through the libpcap library and outputs
+them in XPKT format.  It can read packets from PCAP trace files or
+directly from network interfaces where libpcap supports such packet
+capture.  If the \fB-i\fP option is not set then \fBpcapin\fP will read
+packets from standard input by default or \fIinfile\fP if specified.
+\fBpcapin\fP outputs the XPKT stream to standard output by default but
+will open and create a file \fIoutfile\fP if that parameter is given.
+If the \fI-i\fP option is set, it specifies a live interface for
+\fBpcapin\fP to read from.  Reading from a live interface will most
+likely require root privileges.
+.P
+.SH OPTIONS
+.P
+.IP \fB-h\fP
+Print the usage of the command and exit.
+.IP \fB-i\fP \fIifname\fP
+Capture packets from interface \fIifname\fP.  By default, setting this
+option will also cause the program to put the interface into promiscuous
+mode.
+.IP \fB-n\fP \fIifnum\fP
+Tag all incoming packets with an XPKT_TAG_INIFACE tag that has an
+interface number equal to \fIifnum\fP.  This is useful when packets can
+come in from multiple interfaces to disambiguate their origin.  If the
+user does not set this option, then \fBpcapin\fP will tag incoming
+packets with interface number 0 by default.
+.IP \fB-p\fP
+Don't enable promiscuous mode when opening the interface.  This is only
+meaningful if the \fB-i\fP option is specified.
+.P
+.SH EXAMPLES
+.P
+.nf
+Convert a packet capture file from PCAP to XPKT format:
+
+    pcapin infile.pcap outfile.xpkt
+
+Read in a stream of packets from eth0 and pass them to the
+x2hpkt program:
+
+    pcapin -i eth0 | x2hpkt
+
+Bump packets from one interface to another:
+
+    pcapin -i eth0 | pcapout -i eth1
+
+.fi
+.P
+.SH AVAILABILITY
+As of ONICS 1.0 this program is available on all ONICS platforms that
+have libpcap support.
+.P
+.SH AUTHOR
+Christopher A. Telfer <ctelfer@gmail.com>
+.P
+.SH "SEE ALSO"
+pcapout(1), pktin(1), pktout(1), pc2xpkt(1), xpkt2pc(1)

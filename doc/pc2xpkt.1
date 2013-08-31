@@ -1,0 +1,41 @@
+.TH "pc2xpkt" 1 "August 2013" "ONICS 1.0"
+.SH NAME
+pc2xpkt - Convert a stream of packets from PCAP format to XPKT.
+.P
+.SH SYNOPSYS
+\fBpc2xpkt\fP [\fB-h\fP] [\fIinfile\fP [\fIoutfile\fP]]
+.P
+.SH DESCRIPTION
+\fBpc2xpkt\fP converts a stream of packets from PCAP format to 
+XPKT format using an ONICS-specific code.  By default, \fBpc2xpkt\fP
+reads a PCAP trace from standard input and writes a stream of XPKT
+packets to standard output.  If \fIinfile\fP is specified, then
+\fBpc2xpkt\fP reads from that file instead.  If \fIoutfile\fP is
+specified, then \fBpc2xpkt\fP writes the XPKTs to that file instead of
+standard output.
+.P
+.SH OPTIONS
+.P
+.IP \fB-h\fP
+Print the usage of the command and exit.
+.P
+.SH EXAMPLES
+.P
+.nf
+Convert a PCAP file to an XPKT file:
+
+	pc2xpkt input.pcap output.xpkt
+
+Dump a PCAP file using x2hpkt for browsing:
+
+	pc2xpkt input.pcap | x2hpkt | less
+.fi
+.P
+.SH AVAILABILITY
+This utility should be available on all supported ONICS platforms.
+.P
+.SH AUTHOR
+Christopher A. Telfer <ctelfer@gmail.com>
+.P
+.SH "SEE ALSO"
+xpkt2pc(1), pktin(1), pktout(1) pcapin(1), pcapout(1)

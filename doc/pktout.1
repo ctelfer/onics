@@ -25,6 +25,11 @@ Replay an XPKT file out onto the network via eth0:
 
     pktout capture.xpkt eth0
 
+Concatenate a series of packet captures and send them out 
+in order:
+
+    cat capture1.xpkt capture2.xpkt capture3.xpt | pktout eth0
+
 Replay a PCAP file onto the network at top speed:
 
     pc2xpkt capture.pcap | pktout eth0

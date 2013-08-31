@@ -49,8 +49,10 @@ void usage(const char *estr)
 	char ubuf[4096];
 	if (estr != NULL)
 		fprintf(stderr, "Error -- %s\n", estr);
-	err("usage: %s [options] [INFILE [OUTFILE]]\n", g_oparser.argv[0]);
-	err("       %s [-i IFACE] [options] [INFILE]\n", g_oparser.argv[0]);
+	fprintf(stderr, "usage: %s [options] [INFILE [OUTFILE]]\n",
+		g_oparser.argv[0]);
+	fprintf(stderr, "       %s [-i IFACE] [options] [INFILE]\n",
+		g_oparser.argv[0]);
 	optparse_print(&g_oparser, ubuf, sizeof(ubuf));
 	fprintf(stderr, "%s\n", ubuf);
 	exit(1);
