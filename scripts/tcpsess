@@ -170,7 +170,10 @@ senddata() {
 while [ $# -gt 0 ]
 do
 
-	if [ $1 = "-m" ] 
+	if [ $1 = "-h" ] 
+	then
+		usage
+	elif [ $1 = "-m" ] 
 	then
 		[ $# -lt 2 ] && usage
 		CMODS="$CMODS $2"

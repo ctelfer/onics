@@ -25,36 +25,98 @@
 #include <stdlib.h>
 #include <string.h>
 #include <cat/err.h>
+#include <cat/optparse.h>
 #include "pktbuf.h"
+
+
+struct clopt g_options[] = {
+	CLOPT_INIT(CLOPT_UINT,   'd', "--dlt",
+		"Datalink type of the packet"),
+	CLOPT_INIT(CLOPT_NOARG, 'h', "--help", "print help")
+};
+
+struct clopt_parser g_oparse =
+CLOPTPARSER_INIT(g_options, array_length(g_options));
+
+const char *g_ifname;
+const char *g_ofname;
+FILE *g_infile;
+FILE *g_outfile;
+uint g_dltype = PRID_RAWPKT;
+
+
+void usage(const char *prog, const char *estr)
+{
+	char str[4096];
+	if (estr)
+		fprintf(stderr, "%s\n", estr);
+	optparse_print(&g_oparse, str, sizeof(str));
+	fprintf(stderr, "usage: %s [options] [INFILE [OUTFILE]]\n%s\n", prog,
+		str);
+	exit(1);
+}
+
+
+void parse_args(int argc, char *argv[])
+{
+	int rv;
+	struct clopt *opt;
+
+	g_infile = stdout;
+	g_outfile = stdout;
+
+	optparse_reset(&g_oparse, argc, argv);
+	while (!(rv = optparse_next(&g_oparse, &opt))) {
+		switch (opt->ch) {
+		case 'h':
+			usage(argv[0], NULL);
+			break;
+		case 'd':
+			g_dltype = opt->val.uint_val;
+			break;
+		}
+	}
+	if (rv < 0 || rv > argc)
+		usage(argv[0], g_oparse.errbuf);
+
+	if (rv < argc) {
+		g_ifname = argv[rv++];
+		g_infile = fopen(g_ifname, "r");
+		if (g_infile == NULL)
+			errsys("Error opening file %s: ", g_ifname);
+	}
+
+	if (rv < argc) {
+		g_ofname = argv[rv++];
+		g_outfile = fopen(g_ofname, "w");
+		if (g_outfile == NULL)
+			errsys("Error opening file %s: ", g_ofname);
+	}
+}
 
 
 int main(int argc, char *argv[])
 {
 	struct pktbuf *pkb;
-	FILE *in = stdin;
 	size_t nr;
 
-	if (argc > 1) {
-		in = fopen(argv[1], "r");
-		if (in == NULL)
-			errsys("error opening input file");
-	}
+	parse_args(argc, argv);
 
 	pkb_init_pools(1);
 	pkb = pkb_create(PKB_MAX_PKTLEN);
 	if (pkb == NULL)
 		errsys("error allocating packet buffer");
 
-	pkb_set_dltype(pkb, PRID_RAWPKT);
+	pkb_set_dltype(pkb, g_dltype);
 
-	nr = fread(pkb_data(pkb), 1, PKB_MAX_PKTLEN, in);
-	if (ferror(in))
+	nr = fread(pkb_data(pkb), 1, PKB_MAX_PKTLEN, g_infile);
+	if (ferror(g_infile))
 		errsys("error reading in packet data");
 
 	pkb_set_len(pkb, nr);
 	pkb_pack(pkb);
 
-	if (pkb_file_write(pkb, stdout) < 0)
+	if (pkb_file_write(pkb, g_outfile) < 0)
 		errsys("unable to write out packet");
 
 	return 0;

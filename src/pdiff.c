@@ -1272,7 +1272,7 @@ int main(int argc, char *argv[])
 	struct file_emitter fe;
 
 	if (argc < 3 || strcmp(argv[1], "-h") == 0)
-		err("usage: %s FILE1 FILE2");
+		err("usage: %s FILE1 FILE2\n", argv[0]);
 
 	fdiff_init(&Fdiff);
 	hdiff_init(&Hdiff);

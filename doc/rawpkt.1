@@ -1,0 +1,47 @@
+.TH "rawpkt" 1 "August 2013" "ONICS 1.0"
+.SH NAME
+rawpkt - Generate a raw XPKT from a data file.
+.P
+.SH SYNOPSYS
+\fBrawpkt\fP [\fIinfile\fP [\fIoutfile\fP]]
+.P
+.SH DESCRIPTION
+\fBrawpkt\fP generates an XPKT packet given an input file.  The entirety
+of the input file goes into the packet.  By default, the XPKT header
+will have a data link type of PRID_RAWPKT.  However, the user can
+override this.  \fBrawpkt\fP can wrap a payload so that future scripts
+can wrap other headers (TCP, IP, ETH) around the packet to build up the
+full header.
+.P
+.SH EXAMPLES
+.P
+Create a raw packet from a textfile:
+.nf
+
+	rawpkt somefile.txt newpkt.xpkt
+
+.fi
+Create an XPKT from a binary packet file that starts with an Ethernet
+header.  (Ethernet is data link type 0x0201.)
+.nf
+
+	rawpkt -d 0x0201 packet.bin packet.xpkt
+
+.fi
+Generate a complete TCP/IP/Eth packet from a text file:
+.nf
+
+	rawpkt somefile.txt | tcpwrap | ipwrap | 
+	       ethwrap > packet.xpkt
+
+.fi
+.P
+.SH AVAILABILITY
+This utility should be available on all supported ONICS platforms.
+.P
+.SH AUTHOR
+Christopher A. Telfer <ctelfer@gmail.com>
+.P
+.SH "SEE ALSO"
+tcpwrap(1), ipwrap(1), ip6wrap(1), icmpwrap(1), icmp6wrap(1),
+ethwrap(1), arpwrap(1)
