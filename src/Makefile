@@ -46,20 +46,27 @@ PLATFORM_TARGETS= \
 
 TARGETS=${COMMON_TARGETS} ${PCAP_TARGETS} ${PLATFORM_TARGETS}
 
-all: ${LIBOBJS} ${COMMON_TARGETS}
+all: ${LIBOBJS} ${COMMON_TARGETS} ${PLATFORM_TARGETS}
 
 pcap: ${LIBOBJS} ${PCAP_TARGETS}
 
 platform: ${LIBOBJS} ${PLATFORM_TARGETS}
 
+pktin.c: cfgnone
+pktout.c: cfgnone
+
+
+cfgnone: pktin-none.c pktout-none.c
+	@[ -h pktin.c ] || ln -s pktin-none.c pktin.c
+	@[ -h pktout.c ] || ln -s pktout-none.c pktout.c
 
 cfglinux: pktin-linux.c pktout-linux.c
-	[ -h pktin.c ] || ln -s pktin-linux.c pktin.c
-	[ -h pktout.c ] || ln -s pktout-linux.c pktout.c
+	@[ -h pktin.c ] || ln -s pktin-linux.c pktin.c
+	@[ -h pktout.c ] || ln -s pktout-linux.c pktout.c
 
 cfgbsd: pktin-bsd.c pktout-bsd.c
-	[ -h pktin.c ] || ln -s pktin-bsd.c pktin.c
-	[ -h pktout.c ] || ln -s pktout-bsd.c pktout.c
+	@[ -h pktin.c ] || ln -s pktin-bsd.c pktin.c
+	@[ -h pktout.c ] || ln -s pktout-bsd.c pktout.c
 
 
 ${BINDIR}/pktin: pktin.o ${PKTOBJ} ${PKTHDR}
