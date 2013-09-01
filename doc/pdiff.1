@@ -1,0 +1,54 @@
+.TH "pdiff" 1 "August 2013" "ONICS 1.0"
+.SH NAME
+pdiff - Parse and print the differences between two packet traces.
+.P
+.SH SYNOPSYS
+\fBpdiff\fP \fIfile1\fP \fIfile2\fP
+.P
+.SH DESCRIPTION
+\fBpdiff\fP compares two stream of packets in XPKT format and reports
+the edits with the smallest edit distance to transform the first stream
+(in \fIfile1\fP) into the second stream (in \fIfile2\fP).  \fBpdiff\fP
+considers insertions, removals and modifications at different levels of
+granularity.  It will look for inserted/deleted/modified packets.  For
+packets that are modified, it will look for inserted/deleted/modified
+protocol PDUs.  For packets with modified PDUs, \fBpdiff\fP will look
+for inserted/deleted/modified packet fields.
+.P
+When computing the minimum edit distance from \fIfile1\fP to
+\fIfile2\fP, \fBpdiff\fP considers the cost of deleting a header or
+field to be the cost of dropping the packet entirely times the fraction
+of the bits that the header or field contains compared to the entire
+packet.  Similarly, \fBpdiff\fP considers the cost of inserting a header
+or packet field to be the cost of inserting a packet times the fraction
+of the data to be inserted compared to the entire final resultant
+packet.  The cost of a modification is generally approximately the cost
+of a deletion plus an insertion.  Finally, \fBpdiff\fP also compares 
+unparsed packet data.  Currently, this last level of comparison does not
+involve a full edit distance calculation:  rather only a linear
+comparison with an insert or removal if the lengths of the payload data
+mismatch.
+.P
+\fBpdiff\fP uses the standard protocol decoding suite that comes with
+ONICS to decode packet fields.  The program itself treats packet fields
+as an abstract data type through the \fBprotoparse\fP and \fBns\fP
+libraries.  Thus it has no protocol-specific data encoded within it.
+Extending the ONICS protocol parsing automatically extends
+\fBpdiff\fP's packet decoding capabilities.
+.P
+.SH EXAMPLES
+.P
+Print the difference between two files:
+.nf
+
+    pdiff before.xpkt after.xpkt
+
+.fi
+.SH AVAILABILITY
+This utility should be available on all supported ONICS platforms.
+.P
+.SH AUTHOR
+Christopher A. Telfer <ctelfer@gmail.com>
+.P
+.SH "SEE ALSO"
+x2hpkt(1)

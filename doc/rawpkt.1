@@ -3,7 +3,7 @@
 rawpkt - Generate a raw XPKT from a data file.
 .P
 .SH SYNOPSYS
-\fBrawpkt\fP [\fIinfile\fP [\fIoutfile\fP]]
+\fBrawpkt\fP [\fB-d\fP \fIdltype\fP] [\fIinfile\fP [\fIoutfile\fP]]
 .P
 .SH DESCRIPTION
 \fBrawpkt\fP generates an XPKT packet given an input file.  The entirety
@@ -12,6 +12,13 @@ will have a data link type of PRID_RAWPKT.  However, the user can
 override this.  \fBrawpkt\fP can wrap a payload so that future scripts
 can wrap other headers (TCP, IP, ETH) around the packet to build up the
 full header.
+.P
+.SH OPTIONS
+.IP \fB-d\fP \fIdltype\fP
+Set the datalink type of the packet to \fPdltype\fI.  By default the
+datalink type will be PRID_RAWPKT.
+.IP \fB-h\fP
+Print the usage of the command and exit.
 .P
 .SH EXAMPLES
 .P

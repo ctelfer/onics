@@ -53,14 +53,17 @@ void usage(const char *estr)
 	if (estr != NULL)
 		fprintf(stderr, "Error -- %s\n", estr);
 	optparse_print(&g_oparser, ubuf, sizeof(ubuf));
-	err("usage: %s [options] [file]\n" "%s", g_oparser.argv[0], ubuf);
+	fprintf(stderr, "usage: %s [options] [INFILE [OUTFILE]]\n%s\n", 
+	        g_oparser.argv[0], ubuf);
+	exit(1);
 }
 
 
-void parse_args(int argc, char *argv[], int *fd)
+void parse_args(int argc, char *argv[], int *ifd, int *ofd)
 {
 	int rv;
 	struct clopt *opt;
+	const char *fn;
 
 	optparse_reset(&g_oparser, argc, argv);
 	while (!(rv = optparse_next(&g_oparser, &opt))) {
@@ -79,10 +82,21 @@ void parse_args(int argc, char *argv[], int *fd)
 		usage(g_oparser.errbuf);
 
 	if (rv < argc) {
-		*fd = open(argv[rv], O_RDONLY);
-		if (*fd < 0)
-			errsys("unable to open file '%s'", argv[rv]);
+		fn = argv[rv++];
+		*ifd = open(fn, O_RDONLY);
+		if (*ifd < 0)
+			errsys("unable to open file '%s'", fn);
 	}
+
+	if (rv < argc) {
+		fn = argv[rv++];
+		*ofd = open(fn, O_RDONLY);
+		if (*ofd < 0)
+			errsys("unable to open file '%s'", fn);
+	}
+
+	if (rv < argc)
+		usage(NULL);
 }
 
 
@@ -110,10 +124,11 @@ int main(int argc, char *argv[])
 	cat_time_t pkts, now, base_now, base_pkts, dp, dn;
 	struct xpkt_tag_ts *ts;
 	int infd = 0;
+	int outfd = 1;
 
 	pkb_init_pools(1);
 
-	parse_args(argc, argv, &infd);
+	parse_args(argc, argv, &infd, &outfd);
 
 	if (g_start_delay > 0)
 		sleepfor(tm_dset(g_start_delay), tm_uget());
@@ -149,12 +164,13 @@ int main(int argc, char *argv[])
 			if (tm_cmp(dp, dn) > 0)
 				sleepfor(tm_sub(dp, dn), now);
 		} else {
-			fprintf(stderr, "no timestamp on packet %lu: sending\n", g_npkts);
+			fprintf(stderr, "no timestamp on packet %lu: sending\n",
+				g_npkts);
 		}
 
 		rv = pkb_pack(p);
 		abort_unless(rv == 0);
-		if (pkb_fd_write(p, 1) < 0)
+		if (pkb_fd_write(p, outfd) < 0)
 			errsys("Error writing packet %lu", g_npkts);
 		pkb_free(p);
 	}

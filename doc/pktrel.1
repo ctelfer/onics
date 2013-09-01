@@ -1,0 +1,55 @@
+.TH "pktrel" 1 "August 2013" "ONICS 1.0"
+.SH NAME
+pktrel - Release packets according to a time specifications.
+.P
+.SH SYNOPSYS
+\fBpktrel\fP [\fB-h\fP] [\fB-d\fP \fIdelay\fP] [\fB-i\fP \fIinterval\fP] 
+[\fIinfile\fP [\fIoutfile\fP]]
+.P
+.SH DESCRIPTION
+\fBpktrel\fP reads in packets in XPKT format and releases them according
+to a time specification.  By default \fBpktrel\fP releases the packets
+according to the difference in timestamps in the packet stream.
+This assumes that the packets are sorted according to their timestamps.
+If this is not true, \fBpktrel\fP will still release all the packets,
+but they will not come out in timestamp order or with the appropriate
+delay between some packets.  \fBpktrel\fP can also release packets at 
+a regular interval by using the \fB-i\fP option.
+.P
+.SH OPTIONS
+.IP \fB-d\fP \fIdelay\fP
+Delay the transmission of the first packet by \fIdelay\fP seconds.
+\fIdelay\fP may be a floating point value.
+.IP \fB-h\fP
+Print the usage of the command and exit.
+.IP \fB-i\fP \fIinterval\fP
+Instead of releasing packets according to their timestamps, release them
+at regular \fIinterval\fP second intervals.  \fIinterval\fP may be a 
+floating point value.
+.P
+.SH EXAMPLES
+.P
+Replay a captured stream with the same inter-packet intervals observed
+in the capture.
+.nf
+
+    pktrel capture.xpkt | pktout eth0
+
+.fi
+Replay a set of packets releasing each packet 0.1 seconds after the
+previous one.  Delay the transmission of the first packet by 5.5
+seconds.
+.nf
+
+    pktrel -i 0.1 -d 5.5 packets.xpkt | pktout eth0
+
+.fi
+.P
+.SH AVAILABILITY
+This utility should be available on all supported ONICS platforms.
+.P
+.SH AUTHOR
+Christopher A. Telfer <ctelfer@gmail.com>
+.P
+.SH "SEE ALSO"
+pktout(1), pktdemux(1), pktdemux(1), pcapout(1)
