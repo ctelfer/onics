@@ -85,7 +85,7 @@ void usage()
 {
 	char buf[4096];
 	fprintf(stderr, "usage: pml [options] [INFILE [OUTFILE]]\n");
-	fprintf(stderr, "       pml [-c NVMPFILE] [options] [INFILE]\n");
+	fprintf(stderr, "       pml [-e EXPR|-f PROGFILE ...] [-c NVMPFILE]\n");
 	optparse_print(&optparser, buf, sizeof(buf));
 	str_cat(buf, "\n", sizeof(buf));
 	fprintf(stderr, "%s\n", buf);
@@ -134,6 +134,8 @@ void parse_options(int argc, char *argv[], FILE **fin, FILE **fout)
 {
 	struct clopt *opt;
 	int rv;
+	const char *fn;
+
 	optparse_reset(&optparser, argc, argv);
 	while (!(rv = optparse_next(&optparser, &opt))) {
 		if (opt->ch == 'h') {
@@ -159,17 +161,20 @@ void parse_options(int argc, char *argv[], FILE **fin, FILE **fout)
 		usage();
 
 	if (rv < argc) {
-		*fin = fopen(argv[rv], "r");
-		if (*fin == NULL)
-			errsys("fopen(\"%s\", \"r\")", argv[rv]);
-	}
-
-	if (rv + 1 < argc) {
 		if (ofname != NULL)
 			usage();
-		*fout = fopen(argv[rv+1], "w");
+
+		fn = argv[rv++];
+		*fin = fopen(fn, "r");
+		if (*fin == NULL)
+			errsys("fopen(\"%s\", \"r\")", fn);
+	}
+
+	if (rv < argc) {
+		fn = argv[rv++];
+		*fout = fopen(fn, "w");
 		if (*fout == NULL)
-			errsys("fopen(\"%s\", \"w\")", argv[rv+1]);
+			errsys("fopen(\"%s\", \"w\")", fn);
 	}
 }
 
