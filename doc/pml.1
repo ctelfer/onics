@@ -251,6 +251,7 @@ have a type of 'int' or 'sref'.  A global variable declaration takes the form:
   int NAME [= EXPRESSION] ;
   sref NAME ;
   str NAME '[' LENGTH ']' [= EXPRESSION] ;
+  str NAME '[' ']' = EXPRESSION ;
 .fi
 .P
 The first form declares a 64-byte integer variable.  If EXPRESSION is
@@ -264,7 +265,11 @@ longer length than the initialization expression, then the program
 initializes the remaining bytes in the string are initialized to 0.  If
 the initializer is greater in length than the variable then the compiler
 will report an error.  A byte string variable without an initializer
-will initially contain all 0s in every byte.
+will initially contain all 0s in every byte.  The fourth form declares a
+string variable and sets its length to the length of its initializer.
+The initializer can be a protocol constant, scalar or literal string.
+Substring access to protocol constants or literal strings is not
+supported.
 .P
 A program can have local variable declarations at the beginning of the
 action portions of a rule or the body of a function.  They may not
@@ -385,65 +390,6 @@ following type conversion implicitly:
   mstr->void
 .fi
 .P
-.SS "LOCATORS"
-A locator is a named reference to a value.  The name may refer to a
-variable, a protocol, a field in a packet or a constant.  A locator can
-have the following forms:
-.P
-.SS "Direct Access"
-.nf
-  name          -- can refer to: variable, constant, packet field,
-                   protocol, or protocol constant
-
-  name.name2[...]
-                -- can refer to: packet field, protocol or 
-                   protocol constant
-
-  @name{p}
-  @name{p}.name2...
-  @name{p,i}
-  @name{p,i}.name2...
-                -- can refer to: packet field
-.fi
-.P
-.SS "Substring Access"
-A program can access any non-empty substring of a str or sref type
-locator.  ('SLOC' below refers to any direct access string locator given
-in the previous section.)  One can provide an offset or an offset and
-length to specify the substring.  Both values can be arbitrary
-expressions as long as they can be converted to type int.  Specifying an
-invalid substring (e.g. a negative offset or length, or an offset or
-length that is out of bounds for the string) will trigger a run-time
-error and abort the program.
-.P
-.nf
-  SLOC[off]	
-  SLOC[off, len]	
-		-- could refer to: variable, protocol, protocol
-		   constant packet field.
-.fi
-.P
-.SS "Protocol ID"
-.nf
-  @@name
-  @@name.name2	-- could refer to: protocol name
-.fi
-.P
-At a given point in the PML program, the compiler consults the following
-namespaces in the following order to determine which value a locator
-refers to: protocol namespace, parameters, constants global variables,
-local variables.  Recall from VARIABLES above, that a locator matches
-none of the above namespaces will implicitly cause a local variable
-declaration if the reference is in the body of a function or the action
-of a rule.  However, the only locator form allowable for such a
-declaration is the very first direct access form:  a name with no '@',
-\'.', '{' or '}' symbols.
-.P
-The type of a locator expression is the type of the value it refers to
-with one exception.  A locator that refers to a 'sref' variable has type
-\'str' (unless modified with the unary & operator in which case the
-expression has type 'sref').
-.P
 .SS "STATEMENTS"
 PML has the following types of statements:
 .nf
@@ -551,6 +497,65 @@ PML has the following types of statements:
    assignment modifies the LOCATOR variable to point to refer to a new
    string.
 .fi
+.P
+.SS "LOCATORS"
+A locator is a named reference to a value.  The name may refer to a
+variable, a protocol, a field in a packet or a constant.  A locator can
+have the following forms:
+.P
+.SS "Direct Access"
+.nf
+  name          -- can refer to: variable, constant, packet field,
+                   protocol, or protocol constant
+
+  name.name2[...]
+                -- can refer to: packet field, protocol or 
+                   protocol constant
+
+  @name{p}
+  @name{p}.name2...
+  @name{p,i}
+  @name{p,i}.name2...
+                -- can refer to: packet field
+.fi
+.P
+.SS "Substring Access"
+A program can access any non-empty substring of a str or sref type
+locator.  ('SLOC' below refers to any direct access string locator given
+in the previous section.)  One can provide an offset or an offset and
+length to specify the substring.  Both values can be arbitrary
+expressions as long as they can be converted to type int.  Specifying an
+invalid substring (e.g. a negative offset or length, or an offset or
+length that is out of bounds for the string) will trigger a run-time
+error and abort the program.
+.P
+.nf
+  SLOC[off]	
+  SLOC[off, len]	
+		-- could refer to: variable, protocol, protocol
+		   constant packet field.
+.fi
+.P
+.SS "Protocol ID"
+.nf
+  @@name
+  @@name.name2	-- could refer to: protocol name
+.fi
+.P
+At a given point in the PML program, the compiler consults the following
+namespaces in the following order to determine which value a locator
+refers to: protocol namespace, parameters, constants global variables,
+local variables.  Recall from VARIABLES above, that a locator matches
+none of the above namespaces will implicitly cause a local variable
+declaration if the reference is in the body of a function or the action
+of a rule.  However, the only locator form allowable for such a
+declaration is the very first direct access form:  a name with no '@',
+\'.', '{' or '}' symbols.
+.P
+The type of a locator expression is the type of the value it refers to
+with one exception.  A locator that refers to a 'sref' variable has type
+\'str' (unless modified with the unary & operator in which case the
+expression has type 'sref').
 .P
 .SS "PACKET WORKING SET"
 PML keeps a small, fixed size working set of packet buffers during

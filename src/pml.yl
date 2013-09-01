@@ -595,13 +595,26 @@ gvar(G) ::= iddecl(I) ASSIGN expr(E) SEMICOLON. {
 gvar(G) ::= iddecl(I) LBRACKET NUM(N) RBRACKET ASSIGN value(VAL) SEMICOLON. {
 	G = NULL;
 	if (I.type != PML_ETYPE_STRREF) {
-		pml_ast_err(ast, "non-blob declaration with length");
+		pml_ast_err(ast, "non-str declaration with length");
 		free(I.name);
 	} else {
 		G = pml_var_alloc(ast, I.name, PML_VTYPE_GLOBAL, 
 				  PML_ETYPE_BYTESTR, N.u.num, VAL);
 	}
 }
+gvar(G) ::= iddecl(I) LBRACKET RBRACKET ASSIGN value(VAL) SEMICOLON. {
+	G = NULL;
+	if (I.type != PML_ETYPE_STRREF) {
+		pml_ast_err(ast, "non-str with \"[]\"");
+		free(I.name);
+	} else {
+		G = pml_var_alloc(ast, I.name, PML_VTYPE_GLOBAL, 
+				  PML_ETYPE_BYTESTR, -1, VAL);
+		if (G == NULL)
+			pml_ast_err(ast, "Error allocating global str var");
+	}
+}
+
 
 /* Rules */
 rstart(R) ::= pktpat(P). {

@@ -19,15 +19,16 @@
  *  You should have received a copy of the GNU General Public License
  *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-#include "pmltree.h"
-#include "ns.h"
-#include "util.h"
-#include <cat/aux.h>
-#include <cat/str.h>
-#include <cat/bitops.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdarg.h>
+#include <limits.h>
+#include <cat/aux.h>
+#include <cat/str.h>
+#include <cat/bitops.h>
+#include "pmltree.h"
+#include "ns.h"
+#include "util.h"
 
 
 /* macros to simplify list management */
@@ -1173,6 +1174,50 @@ union pml_expr_u *pml_unop_alloc(struct pml_ast *ast, int op,
 }
 
 
+static int find_gstr_init_size(union pml_expr_u *init)
+{
+	struct pml_literal *lit;
+	struct pml_locator *loc;
+	struct ns_elem *e;
+	struct ns_bytestr *bs;
+
+	if (PML_EXPR_IS_SCALAR(init)) {
+		return SCALAR_SIZE;
+	} else if (PML_EXPR_IS_BYTESTR(init)) {
+		abort_unless(init->expr.type == PMLTT_BYTESTR);
+		lit = &init->literal;
+		if (lit->u.bytestr.len > INT_MAX)
+			return -1;
+		return lit->u.bytestr.len;
+	} else if (init->expr.etype == PML_ETYPE_UNKNOWN &&
+	   	   init->expr.type == PMLTT_LOCATOR) {
+		/* check for protocol constants: all others are errors */
+		loc = &init->loc;
+		/* we do not currently allow slices of protocol constants */
+		if (loc->pkt != NULL || loc->idx != NULL || loc->off != NULL ||
+		    loc->len != NULL)
+			return -1;
+
+		e = ns_lookup(NULL, loc->name);
+		if (e == NULL)
+			return -1;
+
+		if (e->type == NST_SCALAR) {
+			return SCALAR_SIZE;
+		} else if (e->type == NST_BYTESTR) {
+			bs = (struct ns_bytestr *)e;
+			if (bs->value.len > INT_MAX)
+				return -1;
+			return bs->value.len;
+		} else {
+			return -1;
+		}
+	} else {
+		return -1;
+	}
+}
+
+
 struct pml_variable *pml_var_alloc(struct pml_ast *ast, char *name, 
 				   int vtype, int etype, int size,
 				   union pml_expr_u *init)
@@ -1193,6 +1238,17 @@ struct pml_variable *pml_var_alloc(struct pml_ast *ast, char *name,
 	} else if (etype == PML_ETYPE_STRREF) {
 		v->width = STRREF_SIZE;
 	} else {
+		if (size < 0) {
+			abort_unless(init != NULL);
+			abort_unless(vtype == PML_VTYPE_GLOBAL);
+			size = find_gstr_init_size(init);
+			if (size < 0) {
+				free(name);
+				pmln_free(init);
+				pmln_free(v);
+				return NULL;
+			}
+		}
 		v->width = size;
 		v->etype = PML_ETYPE_BYTESTR;
 	}
@@ -3826,7 +3882,7 @@ void pml_ast_mem_init(struct pml_ast *ast)
 
 	dyb = &ast->mi_bufs[PML_SEG_RWMEM];
 
-	memset(dyb->data, 0, dyb->len);
+	memset(dyb->data, 0, dyb->size);
 
 	for_each_gvar(n, ast) {
 		v = (struct pml_variable *)l_to_node(n);
