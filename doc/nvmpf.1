@@ -1,0 +1,108 @@
+.TH "nvmpf" 1 "August 2013" "ONICS 1.0"
+.SH NAME
+nvmpf - Execute a compiled NetVM program.
+.P
+.SH SYNOPSYS
+\fBnvmpf\fP [\fB-Ehqsv\fP] \fIprogfile\fP [\fIinfile\fP [\fIoutfile\fP]]
+.P
+.SH DESCRIPTION
+\fBnvmpf\fI runs a NetVM program from the command line passing packets
+into it from standard input and writing out packets to standard output.
+If \fIinfile\fP is specified, then \fBnvmpf\fI reads packets from that
+file instead.  If \fBoutfile\fP is specified, then \fBnvmpf\fP writes
+packets out to that that file instead of standard output.  All debug
+messages as well as output generated through a NetVM output coprocessor
+goes to standard error.
+.P
+A user might want to use \fBnvmpf\fP because they want their programs to
+access facilities that are lower level than or unsupported by the PML
+programming environment.  Alternately, the user may not want to have to
+recompile a PML program with every invocation.  So in that case, the
+user compiles the PML program to \fBnprg\fP format and just run that
+program each time.  The pml(1) and \fBnvmpf\fP execution environments
+should always be semantically equivalent.
+.P
+.SH "NETVM OVERVIEW"
+NetVM is a stack-based virtual machine with a simple instruction set, a
+segmented memory model that includes references to a specific working
+set of packets.  The NetVM can both access and manipulate packet parsing
+information intrinsically. The NetVM also has operations for bulk data
+movement, pattern matching and formatted output.  The goal is to
+acclerate and simplify common operations in networking.  The VM always
+accesses data in big-endian byte order.  
+.P
+The NetVM code store is not writable from within the VM and NetVM
+supports modes of operation similar to the BPF packet filter that can
+allow programs to run in a provably safe and bounded run-time manner.
+NetVM has a finite data stack that most instructions access.
+Additionally, a program can declare up to four memory segments to
+different regions of memory and can assign different permissions to each
+segment.  (However, the VM can not execute code from these segments:
+only from the instruction store.)
+.P
+The pml(1) or nvmas(1) utilities both currently compile programs to the
+\fBnprg\fP program format.  This simple format contains four separate
+code regions:  \fBstart\fP, \fBend\fP, \fBpacket\fP, and \fBtick\fP.
+\fBnvmpf\fP executes the code in \fBstart\fP when the program first
+starts.  It, similarly executes the code in \fBend\fP after the program
+ends.  This occurs after the \fBbegin\fP section completes and when
+\fBnvmpf\fP attempts to read the next packet and finds that there are
+none further to process.  \fBnvmpf\fP executes the code in the
+\fBtick\fP segment once per millisecond.  Finally, \fBnvmpf\fP executes
+the code in \fBpacket\fP once for each packet that it reads in.  Each
+section runs to completion in \fBnvmpf\fP.  So, if they take an
+exceptionally long amount of time, then \fBtick\fP may not execute once
+per millisecond.  If \fBnvmpf\fB detects that multiple milleseconds have
+passed since the last invocation of the \fBtick\fP segment, it will
+execute \fBtick\fP once for every millisecond passed.  Note well that
+these segments are a property of the \fBnprg\fP program format and
+semantics as well as the \fBnvmpf\fP execution environment:  they are
+not intrinsic to NetVM itself.
+.P
+.SH OPTIONS
+.P
+.IP \fB-E\fP
+Ignore run-time errors that the VM detects in the program.  When such an
+error occurs, simply drop the current packet set and move onto the next
+packet.  If this flag is not present \fBpml\fP will abort when it
+encounters such an error.  Run-time errors including trying to access
+packet fields that are not present or accessing a byte string out of
+bounds (preventable by proper checking in the program).
+.IP \fB-h\fP
+Print the usage of the command and exit.
+.IP \fB-q\fP
+Decrease the verbosity.  Can be specified multiple times.
+.IP \fB-s\fP
+Single step the PML program in the NetVM interpreter.  This option
+mainly has meaning when the verbosity is increased to the degree that,
+when this option is specified, \fBpml\fP will output the individual
+instructions that it executes along with stack traces.  This is, of
+course, mainly a debugging feature.
+.IP \fB-v\fP
+Increase the verbosity.  Can be specified multiple times.
+.P
+.SH EXAMPLES
+.P
+Compile a program using nvmas and run it using nvmpf:
+.nf
+
+	nvmas program.na program.nprg
+	nvmpf program.nprg infile.xpkt outfile.xpkt
+	
+.fi
+.P
+Compile a PML program and run it using nvmpf:
+.nf
+
+	pml -f program.pml -c program.nprg
+	nvmpf program.nprg infile.xpkt outfile.xpkt
+	
+.fi
+.SH AVAILABILITY
+This utility should be available on all supported ONICS platforms.
+.P
+.SH AUTHOR
+Christopher A. Telfer <ctelfer@gmail.com>
+.P
+.SH "SEE ALSO"
+pml(1), nvmas(1)

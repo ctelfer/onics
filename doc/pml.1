@@ -54,7 +54,7 @@ design of this VM and its features.
 .P
 .SH OPTIONS
 .P
-.IP \fB-d\fP \fInprgfile\fP
+.IP \fB-c\fP \fInprgfile\fP
 Do not run the PML program on packets.  Rather, compile the PML program
 to a NetVM program and save it in \fInprgfile\fP (usually has the .nprg
 extension).
@@ -78,7 +78,7 @@ line.
 .IP \fB-h\fP
 Print the usage of the command and exit.
 .IP \fB-q\fP
-Decrease the verbosity.  Can be specified multiple times.  See \fB-v\fP.
+Decrease the verbosity.  Can be specified multiple times.
 .IP \fB-s\fP
 Single step the PML program in the NetVM interpreter.  This option
 mainly has meaning when the verbosity is increased to the degree that,
@@ -86,8 +86,7 @@ when this option is specified, \fBpml\fP will output the individual
 instructions that it executes along with stack traces.  This is, of
 course, mainly a debugging feature.
 .IP \fB-v\fP
-Increase the verbosity.  Can be specified multiple times.  TODO explain
-verbosity levels.
+Increase the verbosity.  Can be specified multiple times.
 .P
 .SH "THE PML LANGUAGE"
 The Packet Manipulation Language is a simple scripting language
@@ -1043,15 +1042,17 @@ Compile a PML program and run it using nvmpf:
 Generate a TCP packet:
 .nf
 
-	pml -e "BEGIN {
-                pkt_new(0, 12);
-                parse_push_front(0, @tcp);
-                parse_push_front(0, @ip);
-                parse_push_front(0, @eth);
-                tcp.payload = "Hello World\\n";
-                fix_dltype(0);
-                fix_all_len(0);
-                fix_all_csum(0);
+	pml -e "str payload = "Hello World";
+		BEGIN {
+                    pkt_new(0, str_len(&payload));
+                    parse_push_front(0, @tcp);
+                    parse_push_front(0, @ip);
+                    parse_push_front(0, @eth);
+                    tcp.payload = payload;
+                    fix_dltype(0);
+                    fix_all_len(0);
+                    fix_all_csum(0);
+		    send;
 		}" > tcppacket.xpkt
 
 .fi
