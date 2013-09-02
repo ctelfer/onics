@@ -1,0 +1,42 @@
+#!/bin/sh
+
+usage() {
+	echo "usage: $0 [-f file] [stmt1 stmt2 ...]">&2
+	exit 1
+}
+
+PMLSCRIPT="{
+	pkt_ins_d(0, str_addr(&pkt.payload), 8);
+	parse_push_front(0, @udp);
+"
+
+INFILE=""
+
+if [ $# -gt 0 ]
+then
+	[ "$1" = "-h" ] && usage
+	if [ "$1" = "-f" ]
+	then
+		[ $# -lt 2 ] && usage
+		INFILE="$2"
+		shift
+		shift
+	fi
+fi
+
+for S
+do
+	PMLSCRIPT="$PMLSCRIPT
+$S"
+done
+
+PMLSCRIPT="$PMLSCRIPT
+	fix_dltype(0);
+}"
+
+if [ "$INFILE" != "" ]
+then
+	exec pml -e "$PMLSCRIPT" < "$INFILE"
+else
+	exec pml -e "$PMLSCRIPT" 
+fi

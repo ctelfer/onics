@@ -9,6 +9,7 @@ OPTS=-g -Wall -Wno-pointer-sign
 LIBS=-L${CATLIB_ROOT}/lib -lcat_dbg
 DEFS=
 BINDIR=../bin
+INSTALL_DIR=/usr/local/bin
 
 # common objects for packets
 PKTOBJ= xpkt.o protoparse.o ns.o util.o pktbuf.o
@@ -19,6 +20,10 @@ LIBOBJS= ${PKTOBJ} stdproto.o netvm.o netvm_prog.o pmltree.o \
 	 netvm_std_coproc.o pmllex.o pml.o pmlncg.o pml_tok_strs.o fld.o \
 	 opcap.o 
 
+ALL_BINARIES= \
+	      rawpkt pktdemux pktmux pktrel x2hpkt h2xpkt \
+	      nvmas nvmpf pml pc2xpkt xpkt2pc pdiff nft \
+	      pktin pktout pcapin pcapout
 
 COMMON_TARGETS= \
 	${BINDIR}/rawpkt \
@@ -47,6 +52,12 @@ PLATFORM_TARGETS= \
 TARGETS=${COMMON_TARGETS} ${PCAP_TARGETS} ${PLATFORM_TARGETS}
 
 all: ${LIBOBJS} ${COMMON_TARGETS} ${PLATFORM_TARGETS}
+
+install: all
+	cp ../bin/* $(INSTALL_DIR)
+
+uninstall:
+	for p in $(ALL_BINARIES) ; do rm -f $(INSTALL_DIR)/$$p ; done 
 
 pcap: ${LIBOBJS} ${PCAP_TARGETS}
 
