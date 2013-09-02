@@ -54,11 +54,11 @@ design of this VM and its features.
 .P
 .SH OPTIONS
 .P
-.IP \fB-c\fP \fInprgfile\fP
+.IP "\fB-c\fP \fInprgfile\fP"
 Do not run the PML program on packets.  Rather, compile the PML program
 to a NetVM program and save it in \fInprgfile\fP (usually has the .nprg
 extension).
-.IP \fB-e\fP \fIexpr\fP
+.IP "\fB-e\fP \fIexpr\fP"
 Add \fIexpr\fP to the list of PML statements to compile.  This option
 can appear multiple times.  \fBpml\fP compiles the final program from
 the code that the \fB-e\fP and \fB-f\fP arguments specify in the order
@@ -70,7 +70,7 @@ packet.  If this flag is not present \fBpml\fP will abort when it
 encounters such an error.  Run-time errors including trying to access
 packet fields that are not present or accessing a byte string out of
 bounds (preventable by proper checking in the program).
-.IP \fB-f\fP \fIprogfile\fP
+.IP "\fB-f\fP \fIprogfile\fP"
 Add \fIprogfile\fP to the list of PML program files to compile.
 \fBpml\fP compiles the final program from the code that the \fB-e\fP and
 \fB-f\fP arguments specify in the order they were given on the command
