@@ -1,0 +1,47 @@
+.TH "pktdemux" 1 "August 2013" "ONICS 1.0"
+.SH NAME
+pktdemux - Demultiplex a stream XPKT packets to multiple output streams.
+.P
+.SH SYNOPSYS
+\fBpktdemux\fP [\fB-h\fP] [\fIinfile\fP]
+.P
+.SH DESCRIPTION
+\fBpktdemux\fP reads in a stream of packets from standard input,
+inspects their XPKT_TAG_OUTIFACE tags and writes the packet out to a
+file descriptor based on the tag value.  If the tag is not present, then
+\fBpktdemux\fP writes the packet to standard output.  Otherwise, it
+writes the packet to file descriptor (3 + tag_value).  If \fIinfile\fP
+is specified, then \fBpktdemux\fP reads the packets from there.
+.P
+.SH OPTIONS
+.P
+.IP \fB-h\fP
+Print the usage of the command and exit.
+.P
+.SH EXAMPLES
+.P
+Split a packet trace between two files by tag:
+.nf
+
+	pktdemux input.xpkt 3>stream1.xpkt 4>stream2.xpkt >/dev/null
+
+.fi
+Demultiplex packets between two ethernet interfaces:
+.nf
+
+	mknod /tmp/out1 p 
+	mknod /tmp/out2 p 
+	 ... pml ... | pktdemux 3>/tmp/out1 4>/tmp/out2 &
+	pktout /tmp/out1 eth0 &
+	pktout /tmp/out2 eth1 & 
+
+.fi
+.P
+.SH AVAILABILITY
+This utility should be available on all supported ONICS platforms.
+.P
+.SH AUTHOR
+Christopher A. Telfer <ctelfer@gmail.com>
+.P
+.SH "SEE ALSO"
+pktin(1), pktout(1), pcapin(1), pcapout(1), pktmux(1), pml(1)

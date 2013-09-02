@@ -61,11 +61,13 @@ void usage(const char *estr)
 }
 
 
-void parse_options()
+void parse_options(int argc, char *argv[], int *infd)
 {
 	int rv;
+	const char *fn;
 	struct clopt *opt;
 
+	optparse_reset(&g_oparser, argc, argv);
 	while (!(rv = optparse_next(&g_oparser, &opt))) {
 		switch (opt->ch) {
 		case 'h':
@@ -75,7 +77,14 @@ void parse_options()
 	if (rv < 0)
 		usage(g_oparser.errbuf);
 
-	if (g_oparser.argc - rv != 0)
+	if (rv < argc) {
+		fn = argv[rv++];
+		*infd = open(fn, O_RDONLY);
+		if (*infd < 0)
+			errsys("Error opening file %s for reading: ", fn);
+	}
+
+	if (rv < argc)
 		usage("Extra arguments present");
 }
 
@@ -91,9 +100,11 @@ int fdok(int fd)
 
 int main(int argc, char *argv[])
 {
-	int rv, fd;
+	int rv, fd, infd = 0;
 	struct pktbuf *p;
 	struct xpkt_tag_iface *xif;
+
+	parse_options(argc, argv, &infd);
 
 	bset_set(g_fdseen, 0);
 	bset_set(g_fdseen, 1);
@@ -102,7 +113,7 @@ int main(int argc, char *argv[])
 
 	pkb_init_pools(1);
 
-	while ((rv = pkb_fd_read(&p, 0)) > 0) {
+	while ((rv = pkb_fd_read(&p, infd)) > 0) {
 		++g_npkts;
 		fd = 1;
 		xif = (struct xpkt_tag_iface *)

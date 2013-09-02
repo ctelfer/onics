@@ -1,0 +1,42 @@
+.TH "pktmux" 1 "August 2013" "ONICS 1.0"
+.SH NAME
+pktmux - Multiplex a set of XPKT streams to a single output.
+.P
+.SH SYNOPSYS
+\fBpktmux\fP [\fB-h\fP] \fInstreams\fP
+.P
+.SH DESCRIPTION
+.P
+\fBpktmux\fP multiplexes XPKT formatted packets coming in over a set of
+file descriptors into a single output stream.  The program takes a
+single argument which is the number of file descriptors to multiplex.
+The program will mutiplex input from file descriptors
+[3,3+\fInstreams\fP-1].  \fBpktmux\fP multiplexes packets round-robin
+but is aware when there are no packets available on a given input file
+descriptor.
+.P
+.SH OPTIONS
+.P
+.IP \fB-h\fP
+Print the usage of the command and exit.
+.P
+.SH EXAMPLES
+.P
+.nf
+
+	mknod /tmp/in1 p 
+	mknod /tmp/in2 p 
+	pktin eth0 >/tmp/in1 &  
+	pktin eth1 >/tmp/in2 &
+	pktmux 2 3<s1 4<s2 | pml ... &
+
+.fi
+.P
+.SH AVAILABILITY
+This utility should be available on all supported ONICS platforms.
+.P
+.SH AUTHOR
+Christopher A. Telfer <ctelfer@gmail.com>
+.P
+.SH "SEE ALSO"
+pktdemux(1), pktin(1), pktout(1), pcapin(1), pcapout(1), pml(1)

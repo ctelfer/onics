@@ -54,11 +54,12 @@ void usage(const char *estr)
 }
 
 
-void parse_options()
+void parse_options(int argc, char *argv[])
 {
 	int rv;
 	struct clopt *opt;
 
+	optparse_reset(&g_oparser, argc, argv);
 	while (!(rv = optparse_next(&g_oparser, &opt))) {
 		switch (opt->ch) {
 		case 'h':
@@ -145,8 +146,7 @@ int main(int argc, char *argv[])
 	int i;
 	struct uemux mux;
 
-	optparse_reset(&g_oparser, argc, argv);
-	parse_options();
+	parse_options(argc, argv);
 	fclose(stdin);
 
 	pkb_init_pools(1);
