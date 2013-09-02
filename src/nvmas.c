@@ -55,8 +55,8 @@
 .entry (start|packet|tick|end) @label
 
 label:	add 
-	jmpi, @label
-	bzi, 3
+	jmpi @label
+	bzi  3
 	cpop 0, 0, z, w
 	pkfxli *PKTN:PRID:INDEX:FIELD[OFFSET]
 */

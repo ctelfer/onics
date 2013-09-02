@@ -1,0 +1,509 @@
+.TH "nvmas" 1 "August 2013" "ONICS 1.0"
+.SH NAME
+nvmas - Assemble a NetVM program.
+.P
+.SH SYNOPSYS
+\fBnvmas\fP [\fB-deh\fP] [\fIinfile\fP [\fIoutfile\fP]]
+.P
+.SH DESCRIPTION
+\fBnvmas\fP is an assembler for the NetVM virtual machine.  It takes an
+input file and generates a \fBnprg\fP file which nvmpf(1) is able to
+execute.  If \fIinfile\fP is unspecified, \fBnvmas\fP reads the program
+from standard input.  If \fIoutfile\fP is unspecified, \fBnvmas\fP
+writes the output to standard output.  When given the \fB-d\fP option,
+\fBnvmas\fP disassembles a program rather than assembling one.
+.P
+.SH "NETVM OVERVIEW"
+NetVM is a stack-based virtual machine with a simple instruction set, a
+segmented memory model that includes references to a specific working
+set of packets.  The NetVM can both access and manipulate packet parsing
+information intrinsically. The NetVM also has operations for bulk data
+movement, pattern matching and formatted output.  The goal is to
+acclerate and simplify common operations in networking.  The VM always
+accesses data in big-endian byte order.  
+.P
+The NetVM code store is not writable from within the VM and NetVM
+supports modes of operation similar to the BPF packet filter that can
+allow programs to run in a provably safe and bounded run-time manner.
+NetVM has a finite data stack that most instructions access.
+Additionally, a program can declare up to four memory segments to
+different regions of memory and can assign different permissions to each
+segment.  (However, the VM can not execute code from these segments:
+only from the instruction store.)
+.P
+The pml(1) or nvmas(1) utilities both currently compile programs to the
+\fBnprg\fP program format.  This simple format contains four separate
+code regions:  \fBstart\fP, \fBend\fP, \fBpacket\fP, and \fBtick\fP.
+\fBnvmpf\fP executes the code in \fBstart\fP when the program first
+starts.  It, similarly executes the code in \fBend\fP after the program
+ends.  This occurs after the \fBbegin\fP section completes and when
+\fBnvmpf\fP attempts to read the next packet and finds that there are
+none further to process.  \fBnvmpf\fP executes the code in the
+\fBtick\fP segment once per millisecond.  Finally, \fBnvmpf\fP executes
+the code in \fBpacket\fP once for each packet that it reads in.  Each
+section runs to completion in \fBnvmpf\fP.  So, if they take an
+exceptionally long amount of time, then \fBtick\fP may not execute once
+per millisecond.  If \fBnvmpf\fB detects that multiple milleseconds have
+passed since the last invocation of the \fBtick\fP segment, it will
+execute \fBtick\fP once for every millisecond passed.  Note well that
+these segments are a property of the \fBnprg\fP program format and
+semantics as well as the \fBnvmpf\fP execution environment:  they are
+not intrinsic to NetVM itself.
+.P
+.SH OPTIONS
+.IP \fB-d\fP
+Dissassemble rather than assemble.  The input is an \fBnprg\fP file.
+\fBnfmas\fP will output a NetVM assembly program that that would
+assemble to the exact same \fBnprg\fP file.
+.IP \fB-e\fP
+Ignore any errors found during disassembly.
+.IP \fB-h\fP
+Print the usage of the command and exit.
+.P
+.P
+.SH "NETVM ASSEMBLER"
+The NetVM assembler is relatively simple.  Lines that begin with a '#'
+are ignored.  Assembler directives start with a '.' followed by a name.
+All other non-blank lines have the form:
+.nf
+
+        [label:]    opcode[%]  [val1, [val2 ...]]
+
+.fi
+or
+.nf
+
+         [label:]    opcode    *PKTN:PRID:INDEX:PRP_FIELD[OFFSET]
+
+.fi
+See below for a discussion of the packet descriptor format.  A branch
+instruction can also take as one of its values a label name preceded by
+an '@' sign.  This instructs the assembler to populate the instruction
+with the appropriate offset to target the label.  The assemlber is a
+2-pass assembler and so branches can be forward or backwards. Example:
+.nf
+
+         some_label:    add
+         ...
+         br             @some_label
+         ...
+
+.fi
+.P
+.SS "DIRECTIVES"
+The NetVM assembly language supports the following directives.
+.nf
+
+        .include "file"
+                        -- read in file and include it
+                           literally at this location in the
+                           assembly code.
+
+        .define NAME NUM
+                        -- Define a NAME to a numeric value.
+                           The NAME can then be used in any
+                           instruction or directive where a
+                           number is expected.
+
+        .segment SEGNUM PERMS LENGTH
+                        -- Declare a memory segment in the VM.
+                           SEGNUM must be between 0 and 3.
+                           PERMS is a bitmask of 1 for read
+                           permission and 2 for write 
+                           permission.  LENGTH specifies the
+                           length of the segment in bytes.
+
+        .coproc INDEX TYPE
+                        -- Declare that coprocessor INDEX has
+                           type TYPE.
+
+        .entry ETYPE @LABEL
+                        -- Declare that entry point ETYPE is
+                           at label @LABEL.  The possible
+                           values for ETYPE are 'start',
+                           'packet', 'tick', and 'end'.
+
+        .mem NAME SEGNUM ADDR NBYTES [INIT]
+                        -- Declare a symbolic name for a 
+                           memory region.  The SEGNUM is the
+                           memory segment where it resides.
+                           ADDR gives the address within the
+                           segment.  NBYTES is the length of
+                           the region.  INIT is an optional
+                           quoted string to initialize the
+                           region on startup. 
+
+.fi
+After a ".mem" directive, the program can use the following tokens to
+in the program wherever a number is expected:
+.nf
+
+        NAME.seg        Refers to the segment number of the 
+                        memory region.  This will include the
+                        'is_packet' bit.
+
+        NAME.addr       The address of the memory segment.
+
+.fi
+.P
+.SS "INSTRUCTIONS"
+Each instruction has 5 fields:  an 8-bit opcode, three 8-bit fields 
+\fBx\fP, \fBy\fP, \fBz\fP, and a 32-bit field \fBw\fP.  The instruction
+specifies these fields in order separated by commas.  Some operations
+encode a 'packet descriptor' (labeled 'pdesc' in the instruction
+description).  In that case the 56 bits of non-opcode data encode
+information specifying a packet field.  The assembler allows one to
+specify this in non-encoded form as mentioned above.
+.P
+The PKTN is the packet number, PRID is the protocol ID of of the
+protocol, INDEX is the numeric index of the PRID, PRP_FIELD is the index
+of field in the protocol parse.  OFFSET is the offset from the field
+offset in the packet.  If there are multiple PDUs in the packet with the
+same PRID, the NetVM differentiates between them by the INDEX field.
+The first PDU with a given PRID will be index 0, the second PDU with
+that PRID will be index 1 and so forth.
+.P
+In the following table the 'MN' column gives the instruction mnemonic.
+The 'Fields' column contains the instruction fields that must be
+specified (i.e. \fBx\fP, \fBy\fP, \fBz\fP, \fBw\fP).  Some instructions
+can swap their two arguments.  To specify such, the opcode must be
+followed by a '%' character.  (e.g. sub% specifies to swap the arguments
+before subtracting them.  If in instruction can swap its arguments the
+\'Fields' column will contain a '%' character.  The 'Description' column
+discusses the operation semantics.  Each instruction description gives
+the state of the stack that it consumes enclosed in [].  Each stack
+value is a single 32-bit value except for a [pdesc] which is a 64-bit
+value (i.e.  it takes two spots in the stack). 
+.P
+Most memory operations accept addresses in a unified address space 
+format.  This format is a single 32-bit address that can refer to 
+any memory segment or packet buffer.  The format is:
+.nf
+
+        Field           Bit Range
+        -----           ---------
+        is_packet       31-31
+        seg_number      28-30
+        offset          0-27
+
+.fi
+Note that the packet segments are distinct from the memory region
+segments.
+.P
+.nf
+Instruction field types:
+    v, v1, v2 - a generic numeric value
+    len - a length, usually of some region in memory
+    pdesc - a header descriptor (see below)
+    pkn - an index into the packet table
+    rxaddr - address of regular expression in memory
+    rxlen - length of regular expression in memory
+    cp - coprocessor identifier
+    addr - an address (see above).  May refer to a packet or memory segment.
+           (also, a1, a2, a3, amk... )
+
+        MN      Fields  Description
+        --      ------  ---------------------------------------------
+        pop     w       discards top 'w' entries of stack
+        popto   w       discard all but last 'w' in stack frame
+        push    w       pushes 'w' onto stack
+        zpush   w       pushes 'w' 0s onto the stack
+        dup     w       dups 'w' from the top of the stack
+        swap    x,w     swap stack pos 'x' and 'w' from SP down
+        ldbp    x       [i] load value 'i' above(below if 'x') BP
+        ldbpi   x,w     as BPLD but position is taken from 'w'
+        stbp            [v, i] pop top of stack and store the value
+                          i positions above (below if x) the BP;
+                          must be in the adjusted stack frame.
+        stbpi   w       [v] as BPST but position is taken from 'w'
+        pushfr          push current BP onto stack and set the BP
+                          to the new stack pointer.
+        popfr   x,w     pop the stack to the BP-1. If 'x' > 0 then
+                          save the top 'x' values to a max of
+                          NETVM_MAXRET.  If 'w' > 0, also pop
+                          the 'w' values below the stack frame.
+
+For LDPF and LDPFI, if 'x' is set then generate a unified address 
+by setting the packet number and ISPKT bit in the high byte.  
+(note: not all fields are offsets from the packet start.  use
+accordingly). 
+        
+        MN      Fields  Description
+        --      ------  ---------------------------------------------
+        ldpf            [pdesc] load field from proto parse
+        ldpfi   pdesc   load field from proto parse (packed pdesc)
+
+
+For these 5 load operations, x must be in [1,8] or [129,136]
+If x is in [129,136], the result will be sign extended to 64 bits 
+for a value of x-128 bytes.   The same address conventions are
+followed on the ST, STI, STU, STPD, STPDI, instructions.
+        
+        MN      Fields  Description
+        --      ------  ---------------------------------------------
+        ld              [addr,len] load len(max 8) bytes from addr
+        ldli    x       [addr] load 'x' (max 8) bytes from addr
+        ldi     x,y,w   load x bytes from mem seg y @ addr w
+        ldpd    x       [pdesc] x bytes from the pkt desc location
+        ldpdi   pdesc   x bytes from the (packed) desc location
+
+
+Bulk comparison operations:
+
+        MN      Fields  Description
+        --      ------  ---------------------------------------------
+        cmp             [a1,a2,len] compare bytes in mem
+        pcmp            [a1,a2,len] compare bits via prefix
+        mskcmp          [a1,a2,amk,len] compare bytes via mask
+
+Arithmatic operations
+
+        MN      Fields  Description
+        --      ------  ---------------------------------------------
+        not             [v] logcal not (1 or 0)
+        invert          [v] bit-wise inversion
+        popl            [v] # of bits in v for lower x bytes
+        nlz             [v] # leading 0s in v for lower x bytes
+
+        add     %       [v1,v2] add v1 and v2
+        addi    %w      [v] add v1 and w
+        sub     %       [v1,v2] subtract v2 from v1
+        subi    %w      [v] subtract w from v
+        mul     %       [v1,v2] multiply v1 by v2
+        muli    %w      [v] multiply v by w
+        div     %       [v1,v2] divide v1 by v2
+        divi    %w      [v] divide v by w
+        mod     %       [v1,v2] remainder of v1 / v2
+        modi    %w      [v] remainder of v / w
+        shl     %       [v1,v2] v1 left shifted by (v2 % 64)
+        shli    %w      [v] v left shifted by (w % 64)
+        shr     %       [v1,v2] v1 right shifted by (v2 % 64)
+        shri    %w      [v] v1 right shifted by (w % 64)
+        shra    %       [v1,v2] v1 right arith shift by (v2 % 64)
+        shrai   %w      [v] v1 right arith shift by (w % 64)
+        and     %       [v1,v2] bitwise v1 and v2
+        andi    %w      [v] bitwise v and w
+        or      %       [v1,v2] bitwise v1 or v2
+        ori     %w      [v] bitwise v1 or w
+        xor     %       [v1,v2] bitwise v1 exclusive or v2
+        xori    %w      [v] bitwise v1 exclusive or w
+        eq      %       [v1,v2] v1 equals v2
+        eqi     %w      [v] v1 equals w
+        neq     %       [v1,v2] v1 not equal to v2
+        neqi    %w      [v] v1 not equal to w
+        lt      %       [v1,v2] v1 < v2 (signed)
+        lti     %w      [v] v1 < w (signed)
+        le      %       [v1,v2] v1 <= v2 (signed)
+        lei     %w      [v] v1 <= w (signed)
+        gt      %       [v1,v2] v1 > v2 (signed)
+        gti     %w      [v] v1 > w (signed)
+        ge      %       [v1,v2] v1 >= v2 (signed)
+        gei     %w      [v] v1 >= w (signed)
+        ult     %       [v1,v2] v1 < v2 (unsigned)
+        ulti    %w      [v] v1 < w (unsigned)
+        ule     %       [v1,v2] v1 <= v2 (unsigned)
+        ulei    %w      [v] v1 <= w (unsigned)
+        ugt     %       [v1,v2] v1 > v2 (unsigned)
+        ugti    %w      [v] v1 > w (unsigned)
+        uge     %       [v1,v2] v1 >= v2 (unsigned)
+        ugei    %w      [v] v1 >= w (unsigned)
+        min     %       [v1,v2] signed min(v1,v2)
+        mini    %w      [v] signed min(v,'w')
+        max     %       [v1,v2] signed max(v1,v2)
+        maxi    %w      [v] signed max(v,'w')
+        umin    %       [v1,v2] unsigned min(v1,v2)
+        umini   %w      [v] unsigned min(v,'w')
+        umax    %       [v1,v2] unsigned max(v1,v2)
+        umaxi   %w      [v] unsigned max(v,'w')
+
+Restricted coprocessor operations:
+
+        getcpt          [cp] push the type of co-processor 'cp'
+                           push NETVM_CPT_NONE if it doesn't exist
+        cpopi   x,y,z,w [cp params] call coprocessor x w/op y.
+
+Restricted control flow operations:
+
+        bri     w       PC += (signed)w (must be > 0 in matchonly)
+        bnzi    w       [c] PC += w if c is non-zero (ditto)
+        bzi     w       [c] PC += w if c is zero (ditto)
+        jmpi    w       branch to absolute address w
+        halt    w       halt program and put 'w' in 'status'
+
+The instructions from here on are not allowed in pure match run.
+There are possible 3 reasons for this:
+ 1) We cannot validate that the program will terminate in 
+    # cycles <= # of instructions with these operations.
+ 2) These operations could modify memory or the packets. 
+ 3) We cannot verify the coprocessor operation statically as
+    the operation gets selected at runtime.
+        
+
+General coprocessor operation:
+
+        MN      Fields  Description
+        --      ------  ---------------------------------------------
+        cpop            [cp params, cpop, cpi] call coprocessor
+                          'cpi' with operation 'cpop'.
+
+Arbitrary control flow operations:
+
+        MN      Fields  Description
+        --      ------  ---------------------------------------------
+        br              [v] PC += v
+        bnz             [c,v] PC += v if c is non-zero
+        bz              [c,v] PC += v if c is zero
+        pushpc  w       pushes the pc + 'w' - 1 onto the stack
+                          this is the value one would jump to
+                          to start 'w' instructions after the puship
+                          instruction.
+        jmp             [addr] branch to absolute address addr
+
+        call            [(args..,)v]: branch and link to v
+                          Store next PC on stack, then push
+                          current BP to SP, set BP to new SP
+        ret     x,w     [(rets..,)]: return from call
+                          branch back to bp-2 addr, restoring
+                          bp to bp-1 value.  save the top 'x'
+                          vals from the stack.  pop to bp-1-'w'.
+                          push the saved values onto the stack.
+
+Storage Operations:
+
+        MN      Fields  Description
+        --      ------  ---------------------------------------------
+        st              [v,addr,len] store len(max 8) bytes of
+                          v to addr
+        stli    w       [v,addr] store x(max 8) bytes of v to addr
+        sti     x,y,w   [v] store x bytes of v to w in seg y
+        stpd    x       [v,pdesc] store x bytes of v at pdesc
+        stpdi   pdesc   [v] store x bytes of v at (packed) pdesc
+
+        move            [a1,a2,len] move len bytes from
+                          a1 to a2.  (note unified addresses)
+
+Packet specific operations:
+
+        MN      Fields  Description
+        --      ------  ---------------------------------------------
+        pknew           [pkn,len] create packet of length 'len'
+                          + 256 bytes of pad.  if 'x' then len = 0
+                          else, len = 'len'
+        pkswap          [pkn1,pkn2] swap packets pkn1 and pkn2 
+        pkcopy          [pkn2,pkn1] copy packet from pkn1 to pkn2
+        pkdel           [pkn] delete packet
+
+        pksla   x       [pdesc] set layer 'x' to prp in pdesc
+        pkcla   x       [pkn] clear layer 'x'
+        pkppsh  x       [pkn,prid] "push" prp of prid in packet
+                          pkn to inner header if !x or outer if x
+        pkppop  x       [pkn] pop the top prp off of packet pkn
+                          if x then pop from front else innermost
+
+        pkprs   x       [pkn] delete parse and if 'x' == 0 reparse
+        pkfxd           [pkn] set dltype to PRID_ of 2nd prp
+        pkpup           [pdesc] update parse fields (stack pdesc)
+
+        pkfxl           [pdesc] fix length fields in the packet
+                          If pdesc refers to the base parse, fix
+                          all lengths that are in a layer
+        pkfxli  pdesc   fix length fields in packet (packed pdesc)
+        pkfxc           [pdesc] fix checksum fields in the packet
+                          If pdesc refers to the base parse, fix
+                          all checksums that are in a layer
+        pkfxci  pdesc   fix checksums in the packet (packed pdesc)
+
+For these 3 operations, it is an error if the 
+address doesn't refer to a packet:
+
+        MN      Fields  Description
+        --      ------  ---------------------------------------------
+        pkins   x       [addr,len] insert len bytes @ pd.offset
+                          move new bytes down if x or up if !x
+        pkcut   x       [addr,len] cut len bytes @ pd.offset
+                          move new bytes down if x or up if !x
+        pkadj           [pdesc,amt] adjust offset 'field' by
+                          amt (signed) bytes in parse
+.fi
+.P
+The format for packet descriptors on the stack is as follows.  Word 0
+refers to the top of the stack and word 1 refers to the second word on
+the stack.  (the word following word 0).
+.nf
+
+        Field           Word    Bit Range
+        -----           ----    ---------
+        PRID            0       16-31
+        INDEX           0       8-15
+        PRP_FIELD       0       0-7
+        IS_PACKET       1       31-31 (must be 1)
+        PKTN            1       28-30
+        OFFSET          1       0-27
+
+.fi
+The NetVM recognizes the following protocol parse fields that the
+program can query and even sometimes set:
+.nf
+
+        PRP Field Name                  Value
+        --------------                  -----
+        Header Length                   0
+        Payload Length                  1
+        Trailer Length                  2
+        Total Length                    3
+        Error Flags                     4
+        PRID                            5
+        INDEX                           6
+        Start offset                    7
+        Payload offset                  8
+        Trailer offset                  9
+        End offset                      10
+        Proto-specific offset 0         11
+        Proto-specific offset 1         12
+        ...
+
+.fi
+The offsets are expressed in bytes from the start of the packet buffer.
+.P
+.SH EXAMPLES
+.P
+Assemble a program to an \fBnprg\fP file for use with nvmpf.
+.nf
+
+        nvmas program.nvas program.nprg
+        nvmpf program.nprg infile.xpkt outfile.xpkt
+
+.fi
+Disassemble a program from an \fBnprg\fP file for viewing:
+.nf
+
+        nvmas -d program.nvas | less
+
+.fi
+Example code: 
+.nf
+# comment
+\.include "filename"
+\.define PRID_TCP           0x0006
+\.define RWSEG              0
+\.define RWPERMS            3
+\.segment RWSEG RWPERMS     1024
+\.define CPT_XPKT           1
+\.coproc 0 CPT_XPKT
+\.mem myvar RWSEG 32 12 "Hello World\\n"
+\.entry packet @label
+
+label:  push   5
+        subi   1
+        bnzi   @label
+        pkfxli *0:0x0100:0:0[0]
+.fi
+.P
+.SH AVAILABILITY
+This utility should be available on all supported ONICS platforms.
+.P
+.SH AUTHOR
+Christopher A. Telfer <ctelfer@gmail.com>
+.P
+.SH "SEE ALSO"
+nvmpf(1), pml(1)
