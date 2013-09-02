@@ -20,39 +20,37 @@ To build:
      2) Change to the catlib directory and type:
        make
 
-     3) Change to the onics directory and type
+     3) Change to the onics directory and type:
        make
 
-     4) To build platform specific tools:
-       cd src
-       make pcap       # if libpcap is installed
-       make cfglinux   # if running on linux
-       make platform   # if on a supported platform (linux only for now)
+     4) To install run:
+       sudo make install
 
   This will:
    * build the tools
    * build test programs (under tests/bin)
    * run regression tests
+   * install the programs and manpages in /usr/local
 
-  The tools themselves go in bin/.  There are also scripts in the scripts/
-  directory that use the tools in bin/.
+  The program binaries are in bin/. There are also scripts in the scripts/
+  directory that use the tools in bin/.  The manpages are in doc/.
 
 Examples:
 
   # convert a pcap file to xpkt format
-  pcapin PCAPFILE > XPKTFILE
+  pc2xpkt PCAPFILE XPKTFILE
 
   # Read from an interface using libpcap and dump to an xpkt file
-  pcapin -i INTERFACE > xpkt file
+  pktin INTERFACE XPKTFILE
 
   # dump a pcap file to a hex format for reading
   pcapin PCAPFILE | x2hpkt | less
 
   # convert xpkt to hexpkt
-  x2hpkt < INXPKT > OUTHEXPKT
+  x2hpkt INXPKT OUTHEXPKT
 
   # convert hexpkt to xpkt
-  x2hpkt < INHEXPKT > OUTXPKT
+  h2xpkt INHEXPKT OUTXPKT
 
   # Join two xpkt files into one.  (note: you can't do this with pcap
   # files, but can with xpkt)
@@ -60,11 +58,11 @@ Examples:
 
   # Send an xpkt file to tcpdump for dissecting (why? to demonstrate tool 
   # integration)
-  pcapout XPKTFILE | tcpdump -vvvvs 0 -r - 
+  xpkt2pc XPKTFILE | tcpdump -vvvvs 0 -r - 
 
   # Full pipeline of translations:
   # pcap -> xpkt -> hexpkt -> xpkt -> pcap -> tcpdump output
-  pcapin < PCAPFILE | x2hpkt -x | h2xpkt | pcapout | tcpdump -nvXs 0 -r - | less
+  pc2xpkt PCAPFILE | x2hpkt -x | h2xpkt | xpkt2pc | tcpdump -nvXs 0 -r - | less
 
 
   #
@@ -73,9 +71,9 @@ Examples:
 
   # Read all packets from one interface, toggle their DF bits and send
   # them out a different interface.
-  pcapin -i IFACE1 | 
-    pml -e '?- ip -? { ip.df = ip.df ^ 1 ; fix_all_csum(0); }'
-    pcapout -i IFACE2
+  pktin IFACE1 | 
+    pml -e '?- ip -? { ip.df = ip.df ^ 1 ; fix_all_csum(0); }' |
+    pktout IFACE2
 
 
   # Read in the first 5 TCP packets, drop the rest.
@@ -84,17 +82,17 @@ Examples:
     ?- not tcp or n >= 5 -? { drop; }
     { n = n + 1; }
   EOF
-  pml -f x.pml < INXPKT > OUTXPKT
+  pml -f x.pml INXPKT OUTXPKT
 
 
   # Print an error for every TCP packet that has evil in it.
   pcapin -i IFACE1 | 
     pml -e '
-      var n = 0;
+      int n = 0;
       { n = n + 1; }
       ?- tcp and tcp.payload =~ `[eE][vV][iI][lL]` -? { 
           print "Packet ", n, " is evil\n";
-      }'
+      }' >/dev/null
 
 
 
@@ -117,16 +115,6 @@ with several principles in mind.
 
  * Small, bounded resource footprint -- Each tool should be able to
     function well in low memory/CPU environments.
-
-Some of these ideals are not yet met to the developer's satisfaction
-yet.  For example, the PCAP utilities require libpcap.  The NetVM that 
-underlies PML uses a 64-bit runtime stack which is a bit much for embedded
-environments (although compilers can cope).  Each of these choices had 
-a rationale (or maybe a rationalization) but the hope is nevertheless to 
-continue to push the tools towards those ideals.  I intend to write my
-own thin libpcap parser, for example and packet capture/transmission
-code.  I also am considering making the scalar width of NetVM 32-bits
-instead of 64.  But these are for down the road.
 
 
 COMPONENTS
@@ -165,17 +153,15 @@ could, for example, extract only one or two files to get a functioning
 AVL tree implementation that works without the rest of the library or
 even a functioning Standard C library.  I freely confess that some of
 the code in that library I wrote simply to prove that I could implement
-X myself without needing someone else's code.
+it myself without needing someone else's code.
 
 One last quick note about "lemon".  The lemon parser generator is a
 public domain parser generator that D. Richard Hipp wrote as part of
 sqlite.  I like it better than bison for a variety of reasons and use it
-to generate the PML parser.  Among other factors, it is self-contained
-(two C files) and being public domain, it can go directly in this
-project.  But I am by no means claiming credit for writing this code:
-that accolade goes to Dr. Hipp and if he is reading this: you have my
-many thanks!
-
+to generate the PML parser.  It is self-contained (two C files) and, being
+public domain, it can go directly in this project.  But I am by no means
+claiming credit for writing this code: that accolade goes to Dr. Hipp and if he
+is reading this: you have my many thanks!
 
 
 CURRENT TOOLS
@@ -205,9 +191,13 @@ shell scripts using these tools for common tasks.
 
     h2xpkt - converts “hex packet” packets to XPKT format.
 
+    nft - Network flow tracker: tracks flows in a stream of packets.
+
     nvmas - an assembler for the NetVM that underlies pml and nvmpf.
 
     nvmpf - a pure NetVM packet filter program.
+
+    pc2xpkt - convert PCAP files to XPKT using ONICS libraries.
 
     pktmux - a program to multiplex packets from multiple input streams.
         (needs some work)
@@ -223,18 +213,10 @@ shell scripts using these tools for common tasks.
 
     rawpkt - convert a file into a packet with no datalink types.
 
+    xpkt2pc - convert XPKT files to PCAP using ONICS libraries.
 
 There are also various scripts built on the above tools.  All of these scripts
 should be in strictly compliant bourne shell script.
-
-    ppick - a program to select a subset of packets from a stream.  This is
-	a PML script.
-
-    peseq - embed a sequence number into various fields in a packet stream.
-
-    pxseq - extract a sequence number from embedded fields in a packet stream.
-
-    pcount - count the packets in a stream.
 
     ethwrap - wrap a packet in an ethernet frame header.
 
@@ -246,15 +228,25 @@ should be in strictly compliant bourne shell script.
 
     icmp6wrap - wrap a packet in an ICMPv6 header.
 
-    udpwrap - wrap a packet in a UDP header.
+    pcount - count the packets in a stream.
+
+    peseq - embed a sequence number into various fields in a packet stream.
+
+    ppick - a program to select a subset of packets from a stream.  This is
+	a PML script.
+
+    pxseq - extract a sequence number from embedded fields in a packet stream.
 
     tcpwrap - wrap a packet in a TCP header.
 
     tcpsess - generate a partial or complete TCP stream from a set of data 
 	files for traffic in the flow.
 
+    udpwrap - wrap a packet in a UDP header.
 
 
 MORE SAMPLES
 
    See tests/data/pml/*.pml for more PML code examples.
+
+   There are also examples in the manpages for the above programs and scripts.
