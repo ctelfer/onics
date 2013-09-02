@@ -51,9 +51,9 @@ PLATFORM_TARGETS= \
 
 TARGETS=${COMMON_TARGETS} ${PCAP_TARGETS} ${PLATFORM_TARGETS}
 
-all: ${LIBOBJS} ${COMMON_TARGETS} ${PLATFORM_TARGETS}
+all: ${LIBOBJS} ${COMMON_TARGETS} ${PLATFORM_TARGETS} ${PCAP_TARGETS}
 
-install: all
+install: ${COMMON_TARGETS} ${PLATFORM_TARGETS} ${PCAP_TARGETS}
 	cp ../bin/* $(INSTALL_DIR)
 
 uninstall:
@@ -65,7 +65,6 @@ platform: ${LIBOBJS} ${PLATFORM_TARGETS}
 
 pktin.c: cfgnone
 pktout.c: cfgnone
-
 
 cfgnone: pktin-none.c pktout-none.c
 	@[ -h pktin.c ] || ln -s pktin-none.c pktin.c
@@ -79,6 +78,23 @@ cfgbsd: pktin-bsd.c pktout-bsd.c
 	@[ -h pktin.c ] || ln -s pktin-bsd.c pktin.c
 	@[ -h pktout.c ] || ln -s pktout-bsd.c pktout.c
 
+pcapin-tgt.c: cfgnopcap
+pcapout-tgt.c: cfgnopcap
+
+cfgnopcap: pcapin-none.c pcapout-none.c
+	@[ -h pcapin-tgt.c ] || ln -s pcapin-none.c pcapin-tgt.c
+	@[ -h pcapout-tgt.c ] || ln -s pcapout-none.c pcapout-tgt.c
+
+cfgpcap: pcapin.c pcapout.c
+	@[ -h pcapin-tgt.c ] || ln -s pcapin.c pcapin-tgt.c
+	@[ -h pcapout-tgt.c ] || ln -s pcapout.c pcapout-tgt.c
+
+
+pcapin.o: pcapin-tgt.c
+	${CC} -c $< -o $@ ${DEFS} ${INCS} ${OPTS}
+
+pcapout.o: pcapout-tgt.c
+	${CC} -c $< -o $@ ${DEFS} ${INCS} ${OPTS}
 
 ${BINDIR}/pktin: pktin.o ${PKTOBJ} ${PKTHDR}
 	${CC} -o ${BINDIR}/pktin pktin.o ${PKTOBJ} \
@@ -183,4 +199,5 @@ clean:
 	rm -f lex.pml.c pml.c pml.h pml.out pml_tok_strs.c
 	rm -f ../lemon/lemon
 	rm -f pktin.c pktout.c
+	rm -f pcapin-tgt.c pcapout-tgt.c
 

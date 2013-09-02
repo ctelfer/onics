@@ -1,10 +1,10 @@
 
 all:
-	cd src ; make
+	cd src && ./configure && make
 	cd tests ; make
 
 install:
-	cd src && make install
+	cd src && ./configure && make install
 	cd scripts && make install
 	cd doc && make install 
 
