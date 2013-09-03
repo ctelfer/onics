@@ -36,6 +36,4 @@ PMLSCRIPT="$PMLSCRIPT
 	fix_all_csum(0);
 }"
 
-echo PML script: $PMLSCRIPT >&2 
-
 exec pml -e "$PMLSCRIPT" $INFILE
