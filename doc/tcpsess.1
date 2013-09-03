@@ -1,0 +1,125 @@
+.TH "tcpsess" 1 "August 2013" "ONICS 1.0"
+.SH NAME
+tcpsess - Generate part or all of a TCP stream from input files.
+.P
+.SH SYNOPSYS
+\fBtcpsess\fP [\fB-SF\fP] [\fB-m\fP|\fB-M\fP \fIpmlstmts\fP ...]
+[\fB-c\fP|\fB-s\fP \fIfile\fP ...]
+.P
+.SH DESCRIPTION
+\fBtcpsess\fP generates correctly formed TCP streams from a set of
+input files and pml(1) statements to modify the connection parameters.
+The caller specifies a series of files and their directions
+(client-to-server or server-to-client) using the \fB-c\fP and \fB-s\fP
+options.  \fBtcpsess\fP starts by generating a TCP handshake.  Next, it
+reads in each file specified by the \fB-c\fP and \fB-s\fP options and
+generates TCP data packets for the data in the file.  \fBtcpsess\fP also
+generates ACK packets after every three data packets and always one ACK
+after the last data packet for a given file.  Finally, after all of the
+\fB-c\fP and \fB-s\fP options are handled, \fBtcpsess\fP generates the
+FIN handshake to tear down the connection.
+.P
+\fBtcpsess\fB properly tracks sequence and acknowledgement numbers
+throughout the data stream.  The user can elect to omit the SYN or FIN
+handshakes as well.  Furthermore, since XPKT files can be concatenated,
+the user can use multiple invocations of \fBtcpsess\fP to build up a TCP
+stream from different pieces.  The user is able to modify parameters of
+the connection through both environment variables and through the
+\fB-m\fP and \fB-M\fP options.
+.P
+.SH "ENVIRONMENT VARIABLES"
+.IP \fBIPAC\fP
+Specifies the IP address of the client of the connection.
+Defaults to 1.2.3.4.
+.IP \fBCPORT\fP
+Specifies the TCP port of the client of the connection.  Defaults to
+31337.
+.IP \fBSEQC\fP
+Specifies the initial sequence number to use for the client of the
+connection.  Defaults to 1.
+.IP \fBIPAS\fP
+Specifies the IP address of the server of the connection.
+Defaults to 4.5.6.7.
+.IP \fBSPORT\fP
+Specifies the TCP port of the server of the connection.  Defaults to
+80.
+.IP \fBSEQS\fP
+Specifies the initial sequence number to use for the server of the
+connection.  Defaults to 1.
+.P
+.SH OPTIONS
+.IP "\fB-c\fP \fIfilename\fP"
+Read in \fIfilename\fP and generate TCP packets sending this file as
+data from client to server.
+.IP \fB-F\fP
+Skip generating the FIN handshake for the connection.
+.IP "\fB-m\fP \fIpmlstmts\fP"
+Apply \fIpmltstmts\fP to all packets in the stream sent from client to
+server.
+.IP "\fB-M\fP \fIpmlstmts\fP
+Apply \fIpmltstmts\fP to all packets in the stream sent from server to
+client.
+.IP "\fB-s\fP \fIfilename\fP"
+Read in \fIfilename\fP and generate TCP packets sending this file as
+data from server to client.
+.IP \fB-S\fP
+Skip generating the SYN handshake for the connection.
+.P
+.SH EXAMPLES
+Generate a TCP stream from a file containing a HTTP GET request and a file
+containing a the response.
+.nf
+
+        tcpsess -c get_request.txt -s get_response.txt > 
+                http_session.xpkt
+
+.fi
+Generate a from a set of files building the stream up incrementally and
+overriding the default connection parameters.  This example assumes that
+the packet data is divided up into a series of request/response pairs in
+files named request_1 request_2 ... and response_1 response_2 ... .
+.nf
+
+        IPAC=192.168.0.1
+        CPORT=12345
+        SEQC=10000
+        IPAS=4.0.0.32
+        SPORT=443
+        SEQS=20000
+        export IPAC CPORT SEQC IPAS SPORT SEQS
+
+        # Set the IP ID of all packets from client to server to 1234
+        # Set the IP ID of all packets from server to clietn to 4321 
+        PARAMS='-m "ip.id = 1234;" -M "ip.id = 4321"'
+        
+        # Generate the SYN handshake
+        tcpsess -F $PARAMS > https_session.xpkt
+
+        # Generate the data packets and ACKs
+        for p in 1 2 3 4 5 
+        do
+                tcpsess -SF -c request_$p $PARAMS >>
+                        https_session.xpkt
+                SIZE=`ls -l request_$p | awk '{print $5}'`
+                SEQC=`expr $SEQC \+ $SIZE`
+
+                tcpsess -SF -s response_$p $PARAMS >>
+                        https_session.xpkt
+                SIZE=`ls -l response_$p | awk '{print $5}'`
+                SEQS=`expr $SEQS \+ $SIZE`
+                
+        done
+
+        # Generate the FIN handshake
+        tcpsess -S $PARAMS >> https_session.xpkt
+
+.fi
+.P
+.SH AVAILABILITY
+This utility should be available on all supported ONICS platforms.
+.P
+.SH AUTHOR
+Christopher A. Telfer <ctelfer@gmail.com>
+.P
+.SH "SEE ALSO"
+pml(1), ppick(1), pcount(1)

@@ -1,0 +1,82 @@
+.TH "oprotowrap" 1 "August 2013" "ONICS 1.0"
+.SH NAME
+ethwrap, ipwrap, ip6wrap, tcpwrap, udpwrap, icmpwrap, icmp6wrap 
+- Wrap an XPKT formatted packet in a new header.
+.P
+.SH SYNOPSYS
+\fBethwrap\fP [\fB-f\fP \fIinfile\fP] [\fIstmt1\fP \fIstmt2\fP ...]
+.P
+\fBipwrap\fP [\fB-f\fP \fIinfile\fP] [\fIstmt1\fP \fIstmt2\fP ...]
+.P
+\fBip6wrap\fP [\fB-f\fP \fIinfile\fP] [\fIstmt1\fP \fIstmt2\fP ...]
+.P
+\fBtcpwrap\fP [\fB-f\fP \fIinfile\fP] [\fIstmt1\fP \fIstmt2\fP ...]
+.P
+\fBudpwrap\fP [\fB-f\fP \fIinfile\fP] [\fIstmt1\fP \fIstmt2\fP ...]
+.P
+\fBicmpwrap\fP [\fB-f\fP \fIinfile\fP] [\fIstmt1\fP \fIstmt2\fP ...]
+.P
+\fBicmp6wrap\fP [\fB-f\fP \fIinfile\fP] [\fIstmt1\fP \fIstmt2\fP ...]
+.P
+.P
+.SH DESCRIPTION
+Each of these utilities read a stream of XPKT formatted packst  in from
+standard input (or alternately a file if \fB-f\fP is specified) and wrap
+the packet in a new header.  A user can chain invocations of these
+together to build up a complete network packet.  Each utility also
+allows the user to specify additional PML statements (see pml(1)) to 
+execute after wrapping the header.  A script can use this feature to set
+protocol fields to values other than the default.  Each script also
+fixes length, checksum and datalink type fields for the packets before
+outputting them.
+.P
+\fBethwrap\fP wraps each packet in an Ethernet II frame header.
+\fBipwrap\fP wraps an IPv4 header around each packet.  \fBip6wrap\fP
+wraps an IPv6 header around each packet.  \fBtcpwrap\fP wraps a TCP
+header around each packet.  \fBudpwrap\fP wraps each packet in a UDP
+header.  \fBicmpwrap\fP wraps each packet in an IPv4 ICMP header.
+Finally, \fBicmp6wrap\fP wraps an ICMPv6 header around each packet.
+.P
+.SH OPTIONS
+.P
+.IP "\fB-f\fP \fIinfile\fP"
+Instead of reading the packet data from standard input, read the 
+packet data from \fIinfile\fP
+.P
+.SH EXAMPLES
+.P
+Create a simple UDP packet from the command line:
+.nf
+
+        echo "Hello World" | rawpkt | udpwrap | 
+                             ipwrap | ethwrap > file.xpkt
+
+.fi
+.P
+A more complicated example building an ICMP response to a TCP packet
+and then sending the packet:
+.nf
+
+        echo "Some payload data" | 
+                rawpkt                                          |
+                udpwrap  "udp.sport = 12345; udp.dport = 123;"  | 
+                ipwrap   "ip.saddr = 192.168.0.1; 
+                          ip.daddr = 10.0.0.3;"                 | 
+                icmpwrap "icmp.type = 11; icmp.code = 0;"       | 
+                ipwrap   "ip.daddr = 192.168.0.1; 
+                          ip.saddr = 10.0.0.1;"                 | 
+                ethwrap  "eth.src = 00:11:22:33:44:55; 
+                          eth.dst = aa:bb:cc:dd:ee:ff;"         | 
+                pktout eth0
+
+
+.fi
+.P
+.SH AVAILABILITY
+This utility should be available on all supported ONICS platforms.
+.P
+.SH AUTHOR
+Christopher A. Telfer <ctelfer@gmail.com>
+.P
+.SH "SEE ALSO"
+rawpkt(1), pml(1)

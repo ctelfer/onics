@@ -1,0 +1,53 @@
+.TH "pcount" 1 "August 2013" "ONICS 1.0"
+.SH NAME
+pcount - Count packets through the utility.
+.P
+.SH SYNOPSYS
+\fBpcount\fB [\fB-s\fP \fIinterval\fP] \fIinfile\fP 
+.P
+\fBpcount\fB [\fB-s\fP \fIinterval\fP] \fB-p\fP 
+[\fIinfile\fP [\fIoutfile\fP]]
+.P
+.SH DESCRIPTION
+\fBpcount\fP is a thin wrapper around pml(1) that counts packets in
+XPKT format.  By default, \fBpcount\fP reads, counts, and discards packets
+ from standard input until it reaches an end-of-file.  It then reports the
+number of packets it counted to standard error.  If \fIinfile\fP is 
+specified then \fBpcount\fP reads packets from that file instead.
+.P
+If the \fB-p\fP option is present, then \fBpcount\fP reads packets from
+standard input and passes them to standard output.  As before, when
+\fBpcount\fP reaches an end-of-file it reports the number of packets
+that it counted to standard error.  The user can optionally override 
+both the input to \fIinfile\fP and the output to \fIoutfile\fP.
+.P
+.SH OPTIONS
+.IP "\fB-s\fP \fIinterval\fP"
+Report the number of packets seen so far every \fIinterval\fP seconds.
+This argument must be an integral number of seconds.
+.IP "\fB-p\fP"
+Do not discard packets but rather pass them through to output.
+.P
+.SH EXAMPLES
+Count the number of packets in a capture file.
+.nf
+
+        pcount file.xpkt
+
+.fi
+.P
+Count the packets coming out of eth0 as they go to a capture file.
+Report the current count every 10 seconds.
+.nf
+
+        pktin eth0 | pcount -s 10 -p > capture.xpkt
+
+.P
+.SH AVAILABILITY
+This utility should be available on all supported ONICS platforms.
+.P
+.SH AUTHOR
+Christopher A. Telfer <ctelfer@gmail.com>
+.P
+.SH "SEE ALSO"
+pml(1), ppick(1)
