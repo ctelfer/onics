@@ -36,9 +36,4 @@ PMLSCRIPT="$PMLSCRIPT
 	fix_all_csum(0);
 }"
 
-if [ "$INFILE" != "" ]
-then
-	exec pml -e "$PMLSCRIPT" < "$INFILE"
-else
-	exec pml -e "$PMLSCRIPT" 
-fi
+exec pml -e "$PMLSCRIPT" $INFILE

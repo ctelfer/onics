@@ -38,7 +38,6 @@ struct clopt g_options[] = {
 struct clopt_parser g_oparse =
 CLOPTPARSER_INIT(g_options, array_length(g_options));
 
-const char *g_ifname;
 const char *g_ofname;
 FILE *g_infile;
 FILE *g_outfile;
@@ -61,8 +60,9 @@ void parse_args(int argc, char *argv[])
 {
 	int rv;
 	struct clopt *opt;
+	const char *fn;
 
-	g_infile = stdout;
+	g_infile = stdin;
 	g_outfile = stdout;
 
 	optparse_reset(&g_oparse, argc, argv);
@@ -80,17 +80,17 @@ void parse_args(int argc, char *argv[])
 		usage(argv[0], g_oparse.errbuf);
 
 	if (rv < argc) {
-		g_ifname = argv[rv++];
-		g_infile = fopen(g_ifname, "r");
+		fn = argv[rv++];
+		g_infile = fopen(fn, "r");
 		if (g_infile == NULL)
-			errsys("Error opening file %s: ", g_ifname);
+			errsys("Error opening file %s: ", fn);
 	}
 
 	if (rv < argc) {
-		g_ofname = argv[rv++];
-		g_outfile = fopen(g_ofname, "w");
+		fn = argv[rv++];
+		g_outfile = fopen(fn, "w");
 		if (g_outfile == NULL)
-			errsys("Error opening file %s: ", g_ofname);
+			errsys("Error opening file %s: ", fn);
 	}
 }
 

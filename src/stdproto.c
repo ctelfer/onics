@@ -306,7 +306,7 @@ static int eth_add(struct prparse *reg, byte_t *buf, struct prpspec *ps,
 
 	prp_add_insert(reg, prp, enclose);
 	if (buf && prp_hlen(prp) >= ETHHLEN) {
-		memset(buf + ps->off, 0, prp_hlen(prp));
+		memset(prp_header(prp, buf, void), 0, prp_hlen(prp));
 		prp->offs[PRP_ETHFLD_ETYPE] = prp_poff(prp) - 2;
 		if (enclose) {
 			etype = 0;
@@ -637,8 +637,8 @@ static int ipv4_add(struct prparse *reg, byte_t *buf, struct prpspec *ps,
 
 	prp_add_insert(reg, prp, enclose);
 	if (buf) {
+		memset(prp_header(prp, buf, void), 0, prp_hlen(prp));
 		ip = prp_header(prp, buf, struct ipv4h);
-		memset(ip, 0, prp_hlen(prp));
 		ip->vhl = 0x40 | (ps->hlen >> 2);
 		ip->len = hton16(prp_totlen(prp));
 		if (ps->hlen > IPH_MINLEN) {
@@ -848,8 +848,8 @@ static int udp_add(struct prparse *reg, byte_t *buf, struct prpspec *ps,
 
 	prp_add_insert(reg, prp, enclose);
 	if (buf) {
+		memset(prp_header(prp, buf, void), 0, prp_hlen(prp));
 		udp = prp_header(prp, buf, struct udph);
-		memset(udp, 0, sizeof(*udp));
 		hton16i(prp_totlen(prp), &udp->len);
 	}
 
@@ -1202,8 +1202,8 @@ static int icmp_add(struct prparse *reg, byte_t *buf, struct prpspec *ps,
 
 	prp_add_insert(reg, prp, enclose);
 	if (buf) {
+		memset(prp_header(prp, buf, void), 0, prp_hlen(prp));
 		icmp = prp_header(prp, buf, struct icmph);
-		memset(icmp, 0, sizeof(*icmp));
 		icmp->type = ICMPT_ECHO_REQUEST;
 		icmp->cksum = ~ones_sum(icmp, prp_totlen(prp), 0);
 	}
@@ -1462,9 +1462,9 @@ static int ipv6_add(struct prparse *reg, byte_t *buf, struct prpspec *ps,
 		return -1;
 
 	if (buf) {
+		memset(prp_header(prp, buf, void), 0, prp_hlen(prp));
 		ip6 = prp_header(prp, buf, struct ipv6h);
 		prp->offs[PRP_IPV6FLD_NXTHDR] = prp_soff(prp) + 6;
-		memset(ip6, 0, prp_hlen(prp));
 		*(byte_t *)ip6 = 0x60;
 		ip6->len = hton16(prp_plen(prp));
 		ip6->nxthdr = IPPROT_RESERVED;
@@ -1648,8 +1648,8 @@ static int icmp6_add(struct prparse *reg, byte_t *buf, struct prpspec *ps,
 
 	prp_add_insert(reg, prp, enclose);
 	if (buf) {
+		memset(prp_header(prp, buf, void), 0, prp_hlen(prp));
 		icmp6 = prp_header(prp, buf, struct icmp6h);
-		memset(icmp6, 0, sizeof(*icmp6));
 		icmp6->type = ICMP6T_ECHO_REQUEST;
 		ipprp = find_ipprp(reg);
 		if (ipprp == NULL)  {

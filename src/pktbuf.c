@@ -43,6 +43,8 @@ struct pcache pkb_buf_pool;
 struct pcache pkb_xpkt_pool;
 struct pcache pkb_data_pools[array_length(pkb_data_pool_sizes)];
 
+#define SET_LAYER_AUTO		-1
+#define SET_LAYER_FORCE		-2
 
 #define DLT_NONE_PAD		0
 #define DLT_ETHERNET2_PAD	2
@@ -631,16 +633,20 @@ void pkb_set_layer(struct pktbuf *pkb, struct prparse *prp, int layer)
 		pkb->layers[layer] = prp;
 	} else {
 		if (islink(prp->prid)) {
-			if (!pkb->layers[PKB_LAYER_DL])
+			if (!pkb->layers[PKB_LAYER_DL] || 
+			    layer == SET_LAYER_FORCE)
 				pkb->layers[PKB_LAYER_DL] = prp;
 		} else if (istunnel(prp->prid)) {
-			if (!pkb->layers[PKB_LAYER_TUN])
+			if (!pkb->layers[PKB_LAYER_TUN] || 
+			    layer == SET_LAYER_FORCE)
 				pkb->layers[PKB_LAYER_TUN] = prp;
 		} else if (isnet(prp->prid)) {
-			if (!pkb->layers[PKB_LAYER_NET])
+			if (!pkb->layers[PKB_LAYER_NET] ||
+			    layer == SET_LAYER_FORCE)
 				pkb->layers[PKB_LAYER_NET] = prp;
 		} else if (isxport(prp->prid)) {
-			if (!pkb->layers[PKB_LAYER_XPORT])
+			if (!pkb->layers[PKB_LAYER_XPORT] ||
+			    layer == SET_LAYER_FORCE)
 				pkb->layers[PKB_LAYER_XPORT] = prp;
 		}
 	}
@@ -686,7 +692,7 @@ int pkb_wrapprp(struct pktbuf *pkb, int prid)
 		return -1;
 	if (prp_add(&pkb->prp, pkb->buf, &ps, 1) < 0)
 		return -1;
-	pkb_set_layer(pkb, prp_next(&pkb->prp), -1);
+	pkb_set_layer(pkb, prp_next(&pkb->prp), SET_LAYER_FORCE);
 	return 0;
 }
 
