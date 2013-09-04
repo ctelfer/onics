@@ -20,7 +20,6 @@
  *  You should have received a copy of the GNU General Public License
  *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-#include "pktbuf.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -36,6 +35,7 @@
 #include <cat/err.h>
 #include <cat/optparse.h>
 #include <cat/str.h>
+#include "pktbuf.h"
 
 #define PKTMAX  (1024 * 64 + 64)
 

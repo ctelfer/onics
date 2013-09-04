@@ -43,16 +43,19 @@ enum {
 #define PKB_F_ALLOCED	0x4
 #define PKB_F_RESET_MASK	((ushort)~(PKB_F_PACKED|PKB_F_PARSED))
 
+#define PKB_CB_SIZE	64
+
 struct pktbuf {
 	struct list 	entry;
 	byte_t *	buf;
 	ulong		bufsize;
 	struct xpkt *	xpkt;
 	ulong		xsize;
-	ulong		xhlen; /* cached when packed */
+	ulong		xhlen;	/* cached when packed */
 	struct prparse  prp;
 	struct prparse *layers[PKB_LAYER_NUM];
-	ushort		flags;
+	uint		flags;
+	byte_t		cb[PKB_CB_SIZE]; /* app can put what it wants here */
 };
 
 /* initialize the packet buffer subsystem */

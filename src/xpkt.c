@@ -535,14 +535,14 @@ void xpkt_tag_pi_init(struct xpkt_tag_parseinfo *t, uint16_t proto,
 }
 
 
-void xpkt_tag_ai_init(struct xpkt_tag_appinfo *t, uint16_t subtype, uint32_t *p,
+void xpkt_tag_ai_init(struct xpkt_tag_appinfo *t, uint16_t subtype, void *p,
 		      uint nw)
 {
 	abort_unless(t);
 	if (nw > 0) {
 		abort_unless(nw < 255);
 		abort_unless(p);
-		memcpy(t->data, p, nw * 4);
+		memmove(t->data, p, nw * 4);
 	}
 
 	t->type = XPKT_TAG_APPINFO;

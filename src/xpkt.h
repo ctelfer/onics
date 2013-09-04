@@ -342,6 +342,6 @@ struct xpkt_tag_appinfo {
 /* nw is the number of words of data in the tag */
 /* if nw == 0, then p must not be null and nw must be <= 254 */
 void xpkt_tag_ai_init(struct xpkt_tag_appinfo *t, uint16_t subtype,
-		      uint32_t *p, uint nw);
+		      void *p, uint nw);
 
 #endif /* __xpkt_h */

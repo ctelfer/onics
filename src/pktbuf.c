@@ -514,8 +514,10 @@ int pkb_file_write(struct pktbuf *pkb, FILE *fp)
 
 	abort_unless(fp && pkb);
 
-	if (!(pkb->flags & PKB_F_PACKED))
+	if (!(pkb->flags & PKB_F_PACKED)) {
+		errno = EINVAL;
 		return -1;
+	}
 
 	nw = fwrite(pkb->xpkt, 1, pkb->xhlen, fp);
 	if (nw < pkb->xhlen)
@@ -540,8 +542,10 @@ int pkb_fd_write(struct pktbuf *pkb, int fd)
 
 	abort_unless((fd >= 0) && pkb);
 
-	if (!(pkb->flags & PKB_F_PACKED))
+	if (!(pkb->flags & PKB_F_PACKED)) {
+		errno = EINVAL;
 		return -1;
+	}
 
 	nw = io_write(fd, pkb->xpkt, pkb->xhlen);
 	if (nw < pkb->xhlen)

@@ -23,7 +23,7 @@ LIBOBJS= ${PKTOBJ} stdproto.o netvm.o netvm_prog.o pmltree.o \
 ALL_BINARIES= \
 	      rawpkt pktdemux pktmux pktrel x2hpkt h2xpkt \
 	      nvmas nvmpf pml pc2xpkt xpkt2pc pdiff nft \
-	      pktin pktout pcapin pcapout
+	      pktin pktout pcapin pcapout psort
 
 COMMON_TARGETS= \
 	${BINDIR}/rawpkt \
@@ -38,7 +38,8 @@ COMMON_TARGETS= \
 	${BINDIR}/pc2xpkt\
 	${BINDIR}/xpkt2pc\
 	${BINDIR}/pdiff \
-	${BINDIR}/nft
+	${BINDIR}/nft \
+	${BINDIR}/psort
 
 
 PCAP_TARGETS= \
@@ -54,10 +55,17 @@ TARGETS=${COMMON_TARGETS} ${PCAP_TARGETS} ${PLATFORM_TARGETS}
 all: ${LIBOBJS} ${COMMON_TARGETS} ${PLATFORM_TARGETS} ${PCAP_TARGETS}
 
 install: ${COMMON_TARGETS} ${PLATFORM_TARGETS} ${PCAP_TARGETS}
-	cp ../bin/* $(INSTALL_DIR)
+	@for p in $(ALL_BINARIES) ; do \
+		echo Installing $$p to $(INSTALL_DIR); \
+		cp ../bin/$$p $(INSTALL_DIR) ; \
+		chmod 755 $(INSTALL_DIR)/$$p ; \
+	done 
 
 uninstall:
-	for p in $(ALL_BINARIES) ; do rm -f $(INSTALL_DIR)/$$p ; done 
+	@for p in $(ALL_BINARIES) ; do \
+		echo Removing $(INSTALL_DIR)/$$p ; \
+		rm -f $(INSTALL_DIR)/$$p ; \
+	done 
 
 pcap: ${LIBOBJS} ${PCAP_TARGETS}
 
@@ -172,6 +180,11 @@ ${BINDIR}/pdiff: pdiff.o stdproto.o fld.o ${PKTOBJ} ${PKTHDR}
 ${BINDIR}/nft: nft.o stdproto.o ${PKTOBJ} ${PKTHDR}
 	${CC} -o ${BINDIR}/nft nft.o stdproto.o ${PKTOBJ} \
 		${DEFS} ${OPTS} ${INCS} ${LIBS}
+
+${BINDIR}/psort: psort.o ${PKTOBJ} ${PKTHDR}
+	${CC} -o ${BINDIR}/psort psort.o ${PKTOBJ} \
+		${DEFS} ${OPTS} ${INCS} ${LIBS}
+
 
 
 .c.o:

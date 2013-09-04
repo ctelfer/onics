@@ -1130,6 +1130,13 @@ Intrinsics:
   -- int min(scalar1, scalar2)
   -- int max(scalar1, scalar2)
 
+TODO:
+  -- int  meta_has(pnum, type, idx)
+  -- int  meta_add(pnum, type)
+  -- int  meta_rem(pnum, type, idx)
+  -- int  meta_get(pnum, type, idx, off, nbytes);
+  -- void meta_set(pnum, type, idx, off, nbytes, val);
+
 
 Formatted printing in PML
  - print [%<fmt>%]<expr> [,[%<fmt>%]<expr> ...]

@@ -11,10 +11,19 @@ WRAP_DOCS=ethwrap.1 ipwrap.1 ip6wrap.1 icmpwrap.1 icmp6wrap.1 tcpwrap.1 \
 	  udpwrap.1
 
 install: $(ALL_DOCS)
-	cp $(ALL_DOCS) $(INSTALL_DIR)
-	for p in $(WRAP_DOCS) ; \
-		do ln -s $(INSTALL_DIR)/oprotowrap.1 $(INSTALL_DIR)/$$p ; done 
+	@for p in $(ALL_DOCS) ; do \
+		echo Installing $$p to $(INSTALL_DIR) ; \
+		cp $$p $(INSTALL_DIR) ; \
+		chmod 644 $(INSTALL_DIR)/$$p ; \
+	done
+	@for p in $(WRAP_DOCS) ; do \
+		echo Linking $$p to oprotowrap.1 ; \
+		ln -s $(INSTALL_DIR)/oprotowrap.1 $(INSTALL_DIR)/$$p ; \
+	done 
 
 uninstall:
-	for p in $(ALL_DOCS) $(WRAP_DOCS) ; do rm -f $(INSTALL_DIR)/$$p ; done 
+	@for p in $(WRAP_DOCS) $(ALL_DOCS) ; do \
+		echo Removing $(INSTALL_DIR)/$$p ; \
+		rm -f $(INSTALL_DIR)/$$p ; \
+	done 
 
