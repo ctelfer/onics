@@ -453,6 +453,8 @@ void dump_xpkt_meta(struct pktbuf *pkb)
 	struct xpkt_tag_class *c;
 	struct xpkt_tag_seq *seq;
 	struct xpkt_tag_parseinfo *pi;
+	struct xpkt_tag_appinfo *ai;
+	int i;
 
 	for (t = pkb_next_tag(pkb, NULL); t != NULL; t = pkb_next_tag(pkb, t)) {
 		switch (t->type) {
@@ -512,6 +514,19 @@ void dump_xpkt_meta(struct pktbuf *pkb)
 			       "off = %llu, length = %llu\n",
 			       (uint)pi->proto, (ullong)pi->off,
 			       (ullong)pi->len);
+			break;
+
+		case XPKT_TAG_APPINFO:
+			ai = (struct xpkt_tag_appinfo *)t;
+			fprintf(outfile,
+				"# XPKT: App-specific info: subtype = %u",
+				(uint)ai->subtype);
+			for (i = 0; i < ai->nwords * 4; ++i) {
+				if (i % 16 == 0)
+					fprintf(outfile, "\n# XPKT:\t");
+				fprintf(outfile, "%02x", ai->data[i]);
+			}
+			fprintf(outfile, "\n");
 			break;
 		}
 	}

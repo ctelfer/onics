@@ -50,20 +50,24 @@ static void xpktcp_reset(struct netvm_coproc *cp)
 
 static int xpktcp_validate(struct netvm_inst *inst, struct netvm *vm)
 {
-	if ((inst->y >= NETVM_CPOC_LDTAG) && (inst->y <= NETVM_CPOC_STTAG)) {
+	int width;
+
+	if ((inst->y == NETVM_CPOC_LDTB) || (inst->y == NETVM_CPOC_STTB) ||
+	    (inst->y == NETVM_CPOC_RDTAG) || (inst->y == NETVM_CPOC_WRTAG)) {
 		if (!netvm_valid_width(inst->z))
 			return -1;
-		if (inst->w != 0) {
-			if ((inst->z != 2) && (inst->z != 4) && (inst->z != 8))
-				return -1;
-		}
+		width = inst->z & 0x7F;
+		if (width != 1 && width != 2 && width != 4)
+			return -1;
 	}
 
 	/* Write and store operations not permitted in matchonly mode */
 	if (vm->matchonly) {
-	       if ((inst->y == NETVM_CPOC_STTAG)  || 
+	       if ((inst->y == NETVM_CPOC_STTB)  || 
 	           (inst->y == NETVM_CPOC_ADDTAG) ||
-	           (inst->y == NETVM_CPOC_DELTAG))
+	           (inst->y == NETVM_CPOC_DELTAG) ||
+	           (inst->y == NETVM_CPOC_ADDXTAG) ||
+	           (inst->y == NETVM_CPOC_WRTAG))
 		return -1;
 	}
 	return 0;
@@ -99,7 +103,7 @@ void xpktcp_hastag(struct netvm *vm, struct netvm_coproc *cp, int cpi)
 }
 
 
-void xpktcp_rdtag(struct netvm *vm, struct netvm_coproc *cp, int cpi)
+void xpktcp_ldtag(struct netvm *vm, struct netvm_coproc *cp, int cpi)
 {
 	struct netvm_xpkt_cp *xcp = container(cp, struct netvm_xpkt_cp, coproc);
 	struct netvm_inst *inst = &vm->inst[vm->pc];
@@ -172,12 +176,11 @@ void xpktcp_deltag(struct netvm *vm, struct netvm_coproc *cp, int cpi)
 }
 
 
-void xpktcp_ldtag(struct netvm *vm, struct netvm_coproc *cp, int cpi)
+void xpktcp_ldtb(struct netvm *vm, struct netvm_coproc *cp, int cpi)
 {
 	struct netvm_xpkt_cp *xcp = container(cp, struct netvm_xpkt_cp, coproc);
 	struct netvm_inst *inst = &vm->inst[vm->pc];
 	ulong addr;
-	ulong val;
 	int width;
 
 	S_POP(vm, addr);
@@ -185,23 +188,10 @@ void xpktcp_ldtag(struct netvm *vm, struct netvm_coproc *cp, int cpi)
 	width = inst->z;
 	FATAL(vm, NETVM_ERR_MEMADDR, addr > XPKT_TAG_MAXW * 4 - (width & 0x7F));
 	netvm_p2stk(vm, (byte_t *)(xcp->tag + addr), width);
-	VMCKRET(vm);
-	if ((width & 0x80)) {
-		val = S_GET(vm, 0);
-		switch(width & 0x7F) {
-		case 2: val = swap16(val);
-			break;
-		case 4: val = swap32(val);
-			break;
-		default:
-			VMERR(vm, NETVM_ERR_WIDTH);
-		}
-		S_SET(vm, 0, val);
-	}
 }
 
 
-void xpktcp_sttag(struct netvm *vm, struct netvm_coproc *cp, int cpi)
+void xpktcp_sttb(struct netvm *vm, struct netvm_coproc *cp, int cpi)
 {
 	struct netvm_xpkt_cp *xcp = container(cp, struct netvm_xpkt_cp, coproc);
 	struct netvm_inst *inst = &vm->inst[vm->pc];
@@ -214,18 +204,6 @@ void xpktcp_sttag(struct netvm *vm, struct netvm_coproc *cp, int cpi)
 	S_POP(vm, val);
 	p = xcp->tag + addr;
 	FATAL(vm, NETVM_ERR_MEMADDR, addr > XPKT_TAG_MAXW * 4 - (width & 0x7F));
-
-	if ((width & 0x80)) {
-		switch(width & 0x7F) {
-		case 2: val = swap16(val);
-			break;
-		case 4: val = swap32(val);
-			break;
-		default:
-			VMERR(vm, NETVM_ERR_WIDTH);
-		}
-	}
-
 	netvm_stk2p(vm, p, val, width);
 }
 
@@ -234,6 +212,135 @@ void xpktcp_clrtbuf(struct netvm *vm, struct netvm_coproc *cp, int cpi)
 {
 	struct netvm_xpkt_cp *xcp = container(cp, struct netvm_xpkt_cp, coproc);
 	memset(xcp->tag, 0, sizeof(xcp->tag));
+}
+
+
+void xpktcp_addxtag(struct netvm *vm, struct netvm_coproc *cp, int cpi)
+{
+	struct netvm_xpkt_cp *xcp = container(cp, struct netvm_xpkt_cp, coproc);
+	struct netvm_inst *inst = &vm->inst[vm->pc];
+	struct netvm_xpktcp_tagdesc td;
+	struct pktbuf *pkb;
+	ulong n;
+	ulong nw;
+	int rv;
+
+	if (inst->op == NETVM_OC_CPOPI) {
+		n = inst->w;
+	} else {
+		S_POP(vm, n);
+	}
+	xtagdesc(&td, n);
+	FATAL(vm, NETVM_ERR_PKTNUM, (td.pktnum >= NETVM_MAXPKTS));
+	FATAL(vm, NETVM_ERR_NOPKT, !(pkb = vm->packets[td.pktnum]));
+
+	switch (td.type) {
+	case XPKT_TAG_TIMESTAMP:
+		xpkt_tag_ts_init((struct xpkt_tag_ts *)xcp->tag, 0, 0);
+		break;
+	case XPKT_TAG_SNAPINFO:
+		xpkt_tag_si_init((struct xpkt_tag_snapinfo *)xcp->tag, 0);
+		break;
+	case XPKT_TAG_INIFACE:
+		xpkt_tag_iif_init((struct xpkt_tag_iface *)xcp->tag, 0);
+		break;
+	case XPKT_TAG_OUTIFACE:	
+		xpkt_tag_oif_init((struct xpkt_tag_iface *)xcp->tag, 0);
+		break;
+	case XPKT_TAG_FLOW:
+		xpkt_tag_flowid_init((struct xpkt_tag_flowid *)xcp->tag, 0);
+		break;
+	case XPKT_TAG_CLASS:
+		xpkt_tag_class_init((struct xpkt_tag_class *)xcp->tag, 0);
+		break;
+	case XPKT_TAG_SEQ:
+		xpkt_tag_seq_init((struct xpkt_tag_seq *)xcp->tag, 0);
+		break;
+	case XPKT_TAG_PARSEINFO:
+		xpkt_tag_pi_init((struct xpkt_tag_parseinfo *)xcp->tag, 
+				 PRID_NONE, 0, 0);
+		break;
+	case XPKT_TAG_APPINFO:
+		if (inst->op == NETVM_OC_CPOPI) {
+			nw = inst->z;
+		} else {
+			S_POP(vm, nw);
+			FATAL(vm, NETVM_ERR_BADCPOP, nw > 255);
+		}
+		xpkt_tag_ai_init((struct xpkt_tag_appinfo *)xcp->tag, 0, NULL,
+				 nw);
+		break;
+	default:
+		VMERR(vm, NETVM_ERR_BADCPOP);
+
+	}
+	rv = pkb_add_tag(pkb, (struct xpkt_tag_hdr *)xcp->tag);
+	FATAL(vm, NETVM_ERR_BADCPOP, (rv < 0));
+}
+
+
+void xpktcp_rdtag(struct netvm *vm, struct netvm_coproc *cp, int cpi)
+{
+	struct netvm_inst *inst = &vm->inst[vm->pc];
+	struct netvm_xpktcp_tagdesc td;
+	struct pktbuf *pkb;
+	struct xpkt_tag_hdr *xth;
+	ulong n;
+	ulong addr;
+	int width;
+
+	if (inst->op == NETVM_OC_CPOPI) {
+		n = inst->w;
+	} else {
+		S_POP(vm, n);
+	}
+	S_POP(vm, addr);
+	width = inst->z;
+
+	xtagdesc(&td, n);
+	FATAL(vm, NETVM_ERR_PKTNUM, (td.pktnum >= NETVM_MAXPKTS));
+	FATAL(vm, NETVM_ERR_NOPKT, !(pkb = vm->packets[td.pktnum]));
+	xth = pkb_find_tag(pkb, td.type, td.index);
+	FATAL(vm, NETVM_ERR_BADCPOP, (xth == NULL));
+	FATAL(vm, NETVM_ERR_MEMADDR, 
+	      (addr >= 1024 || (addr + (width & 0x7F) > xpkt_tag_size(xth))));
+	xpkt_pack_tag(xth);
+	netvm_p2stk(vm, (byte_t *)xth + addr, width);
+	xpkt_unpack_tag(xth);
+}
+
+
+void xpktcp_wrtag(struct netvm *vm, struct netvm_coproc *cp, int cpi)
+{
+	struct netvm_inst *inst = &vm->inst[vm->pc];
+	struct netvm_xpktcp_tagdesc td;
+	struct pktbuf *pkb;
+	struct xpkt_tag_hdr *xth;
+	ulong n;
+	ulong val;
+	ulong addr;
+	int width;
+
+	if (inst->op == NETVM_OC_CPOPI) {
+		n = inst->w;
+	} else {
+		S_POP(vm, n);
+	}
+	S_POP(vm, val);
+	S_POP(vm, addr);
+	width = inst->z;
+
+	xtagdesc(&td, n);
+	FATAL(vm, NETVM_ERR_PKTNUM, (td.pktnum >= NETVM_MAXPKTS));
+	FATAL(vm, NETVM_ERR_NOPKT, !(pkb = vm->packets[td.pktnum]));
+	xth = pkb_find_tag(pkb, td.type, td.index);
+	FATAL(vm, NETVM_ERR_BADCPOP, (xth == NULL));
+	FATAL(vm, NETVM_ERR_MEMADDR, 
+	      (addr < 2 || addr >= 1024 ||
+	       (addr + (width & 0x7F) > xpkt_tag_size(xth))));
+	xpkt_pack_tag(xth);
+	netvm_stk2p(vm, (byte_t *)xth + addr, val, width);
+	xpkt_unpack_tag(xth);
 }
 
 
@@ -249,12 +356,15 @@ int init_xpkt_cp(struct netvm_xpkt_cp *cp)
 	cp->coproc.validate = &xpktcp_validate;
 	opp = cp->ops;
 	opp[NETVM_CPOC_HASTAG] = xpktcp_hastag;
-	opp[NETVM_CPOC_RDTAG] = xpktcp_rdtag;
+	opp[NETVM_CPOC_LDTAG] = xpktcp_ldtag;
 	opp[NETVM_CPOC_ADDTAG] = xpktcp_addtag;
 	opp[NETVM_CPOC_DELTAG] = xpktcp_deltag;
-	opp[NETVM_CPOC_LDTAG] = xpktcp_ldtag;
-	opp[NETVM_CPOC_STTAG] = xpktcp_sttag;
+	opp[NETVM_CPOC_LDTB] = xpktcp_ldtb;
+	opp[NETVM_CPOC_STTB] = xpktcp_sttb;
 	opp[NETVM_CPOC_CLRTBUF] = xpktcp_clrtbuf;
+	opp[NETVM_CPOC_ADDXTAG] = xpktcp_addxtag;
+	opp[NETVM_CPOC_RDTAG] = xpktcp_rdtag;
+	opp[NETVM_CPOC_WRTAG] = xpktcp_wrtag;
 	return 0;
 }
 

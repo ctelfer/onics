@@ -955,7 +955,6 @@ void netvm_stk2p(struct netvm *vm, byte_t *p, ulong val, int width)
 	case 1: *p = val;
 		break;
 	default:
-		abort_unless(0);	/* should be checked at validation */
 		VMERR(vm, NETVM_ERR_WIDTH);
 	}
 }

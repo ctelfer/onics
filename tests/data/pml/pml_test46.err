@@ -1,0 +1,13 @@
+checking for tag
+adding tag
+setting subtype
+writing 1-byte values
+writing 2-byte values
+writing 4-byte values
+
+Now reading back data
+subtype = 1234
+	808182838485868788898a8b8c8d8e8f
+	80108012801480168018801a801c801e
+	8000002080000024800000288000002c
+	00000000000000000000000000000000

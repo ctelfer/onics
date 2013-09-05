@@ -50,18 +50,29 @@ struct netvm_xpktcp_tagdesc {
 
 enum {
 	NETVM_CPOC_HASTAG,	/* [td]/'w' == td */
-	NETVM_CPOC_RDTAG,	/* [td]/'w' == td -- read tag into buf */
+	NETVM_CPOC_LDTAG,	/* [td]/'w' == td -- read tag into buf */
 	NETVM_CPOC_ADDTAG,	/* [td]/'w' == td -- add tag in buf to packet */
 	NETVM_CPOC_DELTAG,	/* [td]/'w' == td -- delete tag from packet */
 
 	/* NOTE: with these two, if the high order bit is set for width */
 	/* then the bytes will get swapped before storing.  This is only */
 	/* valid for widths 2 and 4. */
-	NETVM_CPOC_LDTAG,	/* [addr] z == width -- load from tag */
+	NETVM_CPOC_LDTB,	/* [addr] z == width -- load from tag */
 				/*     buf onto stack  */
-	NETVM_CPOC_STTAG,	/* [v,addr] z == width -- store 'v' */
+	NETVM_CPOC_STTB,	/* [v,addr] z == width -- store 'v' */
 				/*     into tag buffer */
 	NETVM_CPOC_CLRTBUF,	/* Zero the tag buffer */
+
+	NETVM_CPOC_ADDXTAG,	/* [td,[lenw]]/'w' == td, 'z' == lenw */
+       				/* 	-- add known xpkt.h tag in buf to */
+				/*     packet.  If APPINFO, lenw mmust be */
+				/*     present and specifies word length. */
+				/*     NOTE: uses the tag space to build! */
+	NETVM_CPOC_RDTAG,	/* [td,addr]/[addr]'w' == td:  width == z */
+				/*      -- Read 'z' bytes from tag td */
+	NETVM_CPOC_WRTAG,	/* [td,v,addr]/[v,addr]'w' == td:  width == z */
+				/*      -- Write 'z' bytes of 'v' to tag 'td' */
+				/*      addr >= 2: can't change type/len */
 
 	NETVM_CPOC_NUMXPKT,
 };

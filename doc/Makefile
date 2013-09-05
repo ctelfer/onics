@@ -10,6 +10,8 @@ ALL_DOCS= \
 WRAP_DOCS=ethwrap.1 ipwrap.1 ip6wrap.1 icmpwrap.1 icmp6wrap.1 tcpwrap.1 \
 	  udpwrap.1
 
+all:
+
 install: $(ALL_DOCS)
 	@for p in $(ALL_DOCS) ; do \
 		echo Installing $$p to $(INSTALL_DIR) ; \

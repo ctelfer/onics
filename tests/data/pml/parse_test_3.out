@@ -306,6 +306,75 @@ Functions
       Variable: val [param; width=4, addr=1]
    Body -- 
       (null)
+   Function[intrinsic]: meta_has() -- 2 args, 0-byte stack, return type=scalar
+   Parameters & Variables -- 
+      Variable: pnum [param; width=4, addr=0]
+      Variable: type [param; width=4, addr=1]
+   Body -- 
+      (null)
+   Function[intrinsic]: meta_add() -- 2 args, 0-byte stack, return type=void
+   Parameters & Variables -- 
+      Variable: pnum [param; width=4, addr=0]
+      Variable: type [param; width=4, addr=1]
+   Body -- 
+      (null)
+   Function[intrinsic]: meta_add_info() -- 2 args, 0-byte stack, return type=void
+   Parameters & Variables -- 
+      Variable: pnum [param; width=4, addr=0]
+      Variable: numw [param; width=4, addr=1]
+   Body -- 
+      (null)
+   Function[intrinsic]: meta_rem() -- 2 args, 0-byte stack, return type=void
+   Parameters & Variables -- 
+      Variable: pnum [param; width=4, addr=0]
+      Variable: type [param; width=4, addr=1]
+   Body -- 
+      (null)
+   Function[intrinsic]: meta_rd8() -- 3 args, 0-byte stack, return type=scalar
+   Parameters & Variables -- 
+      Variable: pnum [param; width=4, addr=0]
+      Variable: type [param; width=4, addr=1]
+      Variable: off [param; width=4, addr=2]
+   Body -- 
+      (null)
+   Function[intrinsic]: meta_rd16() -- 3 args, 0-byte stack, return type=scalar
+   Parameters & Variables -- 
+      Variable: pnum [param; width=4, addr=0]
+      Variable: type [param; width=4, addr=1]
+      Variable: off [param; width=4, addr=2]
+   Body -- 
+      (null)
+   Function[intrinsic]: meta_rd32() -- 3 args, 0-byte stack, return type=scalar
+   Parameters & Variables -- 
+      Variable: pnum [param; width=4, addr=0]
+      Variable: type [param; width=4, addr=1]
+      Variable: off [param; width=4, addr=2]
+   Body -- 
+      (null)
+   Function[intrinsic]: meta_wr8() -- 4 args, 0-byte stack, return type=void
+   Parameters & Variables -- 
+      Variable: pnum [param; width=4, addr=0]
+      Variable: type [param; width=4, addr=1]
+      Variable: off [param; width=4, addr=2]
+      Variable: val [param; width=4, addr=3]
+   Body -- 
+      (null)
+   Function[intrinsic]: meta_wr16() -- 4 args, 0-byte stack, return type=void
+   Parameters & Variables -- 
+      Variable: pnum [param; width=4, addr=0]
+      Variable: type [param; width=4, addr=1]
+      Variable: off [param; width=4, addr=2]
+      Variable: val [param; width=4, addr=3]
+   Body -- 
+      (null)
+   Function[intrinsic]: meta_wr32() -- 4 args, 0-byte stack, return type=void
+   Parameters & Variables -- 
+      Variable: pnum [param; width=4, addr=0]
+      Variable: type [param; width=4, addr=1]
+      Variable: off [param; width=4, addr=2]
+      Variable: val [param; width=4, addr=3]
+   Body -- 
+      (null)
    Function[intrinsic]: exit() -- 1 args, 0-byte stack, return type=void
    Parameters & Variables -- 
       Variable: rval [param; width=4, addr=0]

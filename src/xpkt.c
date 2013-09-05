@@ -191,6 +191,22 @@ void xpkt_pack_hdr(struct xpkthdr *xh)
 }
 
 
+void xpkt_unpack_tag(struct xpkt_tag_hdr *xth)
+{
+	xth->xhword = ntoh16(xth->xhword);
+	if (xth->type < XPKT_TAG_NUM_TYPES)
+		(*tagops[xth->type].unpack)(xth);
+}
+
+
+void xpkt_pack_tag(struct xpkt_tag_hdr *xth)
+{
+	xth->xhword = hton16(xth->xhword);
+	if (xth->type < XPKT_TAG_NUM_TYPES)
+		(*tagops[xth->type].pack)(xth);
+}
+
+
 int xpkt_unpack_tags(uint32_t *tags, uint16_t tlen)
 {
 	struct xpkt_tag_hdr *xth;
@@ -210,9 +226,7 @@ int xpkt_unpack_tags(uint32_t *tags, uint16_t tlen)
 			if (xth->nwords != tagops[xth->type].nwords)
 				return -3;
 		}
-		xth->xhword = ntoh16(xth->xhword);
-		if (xth->type < XPKT_TAG_NUM_TYPES)
-			(*tagops[xth->type].unpack)(xth);
+		xpkt_unpack_tag(xth);
 		tags += xth->nwords + 1;
 	}
 
@@ -275,10 +289,8 @@ void xpkt_pack_tags(uint32_t *tags, uint16_t tlen)
 	tend = tags + tlen;
 	while (tags < tend) {
 		xth = (struct xpkt_tag_hdr *)tags;
-		xth->xhword = hton16(xth->xhword);
 		abort_unless(xth->nwords + 1 <= tend - tags);
-		if (xth->type < XPKT_TAG_NUM_TYPES)
-			(*tagops[xth->type].pack)(xth);
+		xpkt_pack_tag(xth);
 		tags += xth->nwords + 1;
 	}
 }
@@ -540,9 +552,11 @@ void xpkt_tag_ai_init(struct xpkt_tag_appinfo *t, uint16_t subtype, void *p,
 {
 	abort_unless(t);
 	if (nw > 0) {
-		abort_unless(nw < 255);
-		abort_unless(p);
-		memmove(t->data, p, nw * 4);
+		abort_unless(nw <= 255);
+		if (p != NULL)
+			memmove(t->data, p, nw * 4);
+		else
+			memset(t->data, 0, nw * 4);
 	}
 
 	t->type = XPKT_TAG_APPINFO;

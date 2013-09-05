@@ -654,13 +654,13 @@ static int _i_cg_mget(struct pmlncg *cg, struct pml_function *f,
 	EMIT_XW(cg, RET, 1, f->arity);
 
 	/* [td] read the tag into the coprocessor mem */
-	PUSH(cg, NETVM_CPOC_RDTAG);
+	PUSH(cg, NETVM_CPOC_LDTAG);
 	PUSH(cg, NETVM_CPI_XPKT);
 	EMIT_NULL(cg, CPOP);
 
 	/* [] copy the value out of coprocessor memory */
 	PUSH(cg, x->addr);
-	PUSH(cg, NETVM_CPOC_LDTAG);
+	PUSH(cg, NETVM_CPOC_LDTB);
 	PUSH(cg, NETVM_CPI_XPKT);
 	EMIT_Z(cg, CPOP, x->len);
 
@@ -678,7 +678,7 @@ static int _i_cg_mset(struct pmlncg *cg, struct pml_function *f,
 		      struct cg_intr *intr)
 {
 	struct pml_ibuf *b = &cg->ibuf;
-	struct cg_meta_ctx *x = intr->ctx;;
+	struct cg_meta_ctx *x = intr->ctx;
 	struct cg_func_ctx *fc = (struct cg_func_ctx *)f->cgctx;
 
 	abort_unless(x);
@@ -720,14 +720,14 @@ static int _i_cg_mset(struct pmlncg *cg, struct pml_function *f,
 	/* [td] write the tag header */
 	PUSH(cg, x->taghdr);
 	PUSH(cg, 0);
-	PUSH(cg, NETVM_CPOC_STTAG);
+	PUSH(cg, NETVM_CPOC_STTB);
 	PUSH(cg, NETVM_CPI_XPKT);
 	EMIT_Z(cg, CPOP, 4);
 
 	/* [td] Load the tag value */
 	EMIT_XW(cg, LDBPI, 1, 3);
 	PUSH(cg, x->addr);
-	PUSH(cg, NETVM_CPOC_STTAG);
+	PUSH(cg, NETVM_CPOC_STTB);
 	PUSH(cg, NETVM_CPI_XPKT);
 	EMIT_Z(cg, CPOP, x->len);
 
@@ -735,7 +735,7 @@ static int _i_cg_mset(struct pmlncg *cg, struct pml_function *f,
 		/* [td]: store nanosecond value to the tag buffer */
 		EMIT_XW(cg, LDBPI, 1, 4);
 		PUSH(cg, x->addr + x->len);
-		PUSH(cg, NETVM_CPOC_STTAG);
+		PUSH(cg, NETVM_CPOC_STTB);
 		PUSH(cg, NETVM_CPI_XPKT);
 		EMIT_Z(cg, CPOP, x->len);
 	}
@@ -750,6 +750,86 @@ static int _i_cg_mset(struct pmlncg *cg, struct pml_function *f,
 	return 0;
 }
 
+/*
+ * generate a generic metadata function based on parameters from
+ * a cg_meta_ctx structure
+ */
+static int _i_cg_meta(struct pmlncg *cg, struct pml_function *f,
+		      struct cg_intr *intr)
+{
+	struct pml_ibuf *b = &cg->ibuf;
+	struct cg_meta_ctx *x = intr->ctx;
+	struct cg_func_ctx *fc = (struct cg_func_ctx *)f->cgctx;
+	int nr = 0;
+
+	abort_unless(x);
+	fc->addr = nexti(b);
+	fc->resolved = 1;
+
+	if (x->type == NETVM_CPOC_ADDXTAG) {
+		/* test whether type is APPINFO and push a 0 if so */
+		/* if not, push the length given as a parameter. */
+		if (x->len == 0) {
+			EMIT_XW(cg, LDBPI, 1, 3);
+			EMIT_W(cg, SUBI, XPKT_TAG_APPINFO);
+			EMIT_W(cg, BZI, 2);
+			PUSH(cg, 0);
+		} else {
+			EMIT_XW(cg, LDBPI, 1, 3);
+		}
+	}
+
+	switch(x->type) {
+	case NETVM_CPOC_HASTAG:
+	case NETVM_CPOC_ADDXTAG:
+	case NETVM_CPOC_DELTAG:
+		EMIT_XW(cg, LDBPI, 1, 2);
+		if (x->type != NETVM_CPOC_ADDXTAG || x->len == 0) {
+			EMIT_XW(cg, LDBPI, 1, 3);
+			EMIT_W(cg, SHLI, 8);
+			EMIT_NULL(cg, OR);
+		} else {
+			EMIT_W(cg, ORI, (XPKT_TAG_APPINFO << 8));
+		}
+		PUSH(cg, x->type);
+		PUSH(cg, NETVM_CPI_XPKT);
+		EMIT_NULL(cg, CPOP);
+		nr = (x->type == NETVM_CPOC_HASTAG);
+		EMIT_XW(cg, RET, nr, f->arity);
+		break;
+
+	case NETVM_CPOC_RDTAG:
+		/* [pnum, type, off] -> [td, off] */
+		EMIT_XW(cg, LDBPI, 1, 4);
+		EMIT_XW(cg, LDBPI, 1, 2);
+		EMIT_XW(cg, LDBPI, 1, 3);
+		EMIT_W(cg, SHLI, 8);
+		EMIT_NULL(cg, OR);
+		PUSH(cg, x->type);
+		PUSH(cg, NETVM_CPI_XPKT);
+		EMIT_Z(cg, CPOP, x->len);
+		EMIT_XW(cg, RET, 1, f->arity);
+		break;
+
+	case NETVM_CPOC_WRTAG:
+		/* [pnum, type, off, val] -> [td, val, off] */
+		EMIT_XW(cg, LDBPI, 1, 4);
+		EMIT_XW(cg, LDBPI, 1, 5);
+		EMIT_XW(cg, LDBPI, 1, 2);
+		EMIT_XW(cg, LDBPI, 1, 3);
+		EMIT_W(cg, SHLI, 8);
+		EMIT_NULL(cg, OR);
+		PUSH(cg, x->type);
+		PUSH(cg, NETVM_CPI_XPKT);
+		EMIT_Z(cg, CPOP, x->len);
+		EMIT_XW(cg, RET, 0, f->arity);
+		break;
+	default:
+		abort_unless(0);
+	}
+
+	return 0;
+}
 
 struct cg_meta_ctx _i_ts_sec_ctx = 
 	{ 4, XPKT_TAG_TIMESTAMP, 4, TAG_TS, 0x01020000 };
@@ -767,6 +847,26 @@ struct cg_meta_ctx _i_class_ctx =
 	{ 4, XPKT_TAG_CLASS, 8, TAG_OTHER, 0x06020000 };
 struct cg_meta_ctx _i_seq_ctx =
 	{ 4, XPKT_TAG_SEQ, 8, TAG_OTHER, 0x07020000 };
+struct cg_meta_ctx _i_has_ctx =
+	{ 0, NETVM_CPOC_HASTAG, 0, 0, 0 };
+struct cg_meta_ctx _i_add_ctx =
+	{ 0, NETVM_CPOC_ADDXTAG, 0, 0, 0 };
+struct cg_meta_ctx _i_add_info_ctx =
+	{ 1, NETVM_CPOC_ADDXTAG, 0, 0, 0 };
+struct cg_meta_ctx _i_rem_ctx =
+	{ 0, NETVM_CPOC_DELTAG, 0, 0, 0 };
+struct cg_meta_ctx _i_rd8_ctx =
+	{ 1, NETVM_CPOC_RDTAG, 0, 0, 0 };
+struct cg_meta_ctx _i_rd16_ctx =
+	{ 2, NETVM_CPOC_RDTAG, 0, 0, 0 };
+struct cg_meta_ctx _i_rd32_ctx =
+	{ 4, NETVM_CPOC_RDTAG, 0, 0, 0 };
+struct cg_meta_ctx _i_wr8_ctx =
+	{ 1, NETVM_CPOC_WRTAG, 0, 0, 0 };
+struct cg_meta_ctx _i_wr16_ctx =
+	{ 2, NETVM_CPOC_WRTAG, 0, 0, 0 };
+struct cg_meta_ctx _i_wr32_ctx =
+	{ 4, NETVM_CPOC_WRTAG, 0, 0, 0 };
 
 struct cg_intr intrinsics[] = { 
 	{ "str_len", NULL, _i_str, NULL, 2, 
@@ -824,7 +924,7 @@ struct cg_intr intrinsics[] = {
 
 	/* 
 	 * these get full regular function implementations and require 
-	 * no special callling conventions.
+	 * no special calling conventions.
 	 */
 	{ "meta_get_ts_sec",  _i_cg_mget, NULL, &_i_ts_sec_ctx,  0, { {0} } },
 	{ "meta_get_ts_nsec", _i_cg_mget, NULL, &_i_ts_nsec_ctx, 0, { {0} } },
@@ -841,6 +941,16 @@ struct cg_intr intrinsics[] = {
 	{ "meta_set_flowid",  _i_cg_mset, NULL, &_i_flow_ctx,    0, { {0} } },
 	{ "meta_set_class",   _i_cg_mset, NULL, &_i_class_ctx,   0, { {0} } },
 	{ "meta_set_seq",     _i_cg_mset, NULL, &_i_seq_ctx,     0, { {0} } },
+	{ "meta_has",         _i_cg_meta, NULL, &_i_has_ctx,     0, { {0} } },
+	{ "meta_add",         _i_cg_meta, NULL, &_i_add_ctx,     0, { {0} } },
+	{ "meta_add_info",    _i_cg_meta, NULL, &_i_add_info_ctx,0, { {0} } },
+	{ "meta_rem",         _i_cg_meta, NULL, &_i_rem_ctx,     0, { {0} } },
+	{ "meta_rd8",         _i_cg_meta, NULL, &_i_rd8_ctx,     0, { {0} } },
+	{ "meta_rd16",        _i_cg_meta, NULL, &_i_rd16_ctx,    0, { {0} } },
+	{ "meta_rd32",        _i_cg_meta, NULL, &_i_rd32_ctx,    0, { {0} } },
+	{ "meta_wr8",         _i_cg_meta, NULL, &_i_wr8_ctx,     0, { {0} } },
+	{ "meta_wr16",        _i_cg_meta, NULL, &_i_wr16_ctx,    0, { {0} } },
+	{ "meta_wr32",        _i_cg_meta, NULL, &_i_wr32_ctx,    0, { {0} } },
 
 	{ "exit", NULL, _i_scarg, 0, 1, 
 		{ NETVM_OP(HALT,0,0,0,NVMP_STATUS_EXIT) } },

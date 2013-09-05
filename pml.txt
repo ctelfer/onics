@@ -861,6 +861,42 @@ Packet Metadata Intrinsics
   void meta_set_seq(int pnum, int seq)
   	- set the packet sequence number of packet 'pnum' to 'seq'.
 
+  int  meta_has(pnum, type)
+	- Return whether the packet has a tag of type 'type'
+
+  void meta_add(pnum, type)
+	- Add an xpkt tag of type 'type':  limited to timestamp,
+	  snapinfo, iniface, outiface, flow, class, seq, 
+	  appinfo (0 extra words).
+
+  void meta_add_info(pnum, len)
+	- Add an xpkt tag of type XPKT_TAG_APPINFO of length 'len'
+	  in packet pnum;
+
+  void meta_rem(pnum, type)
+	- Remove the first tag of type 'type'
+
+  int  meta_rd8(pnum, type, off)
+	- read 1 byte from a tag at offset 'off'
+
+  int  meta_rd16(pnum, type, off)
+	- read 2 bytes from a tag at offset 'off'
+
+  int  meta_rd32(pnum, type, off)
+	- read 4 bytes from a tag at offset 'off'
+
+  void meta_wr8(pnum, type, off, val)
+	- write 1 byte 'val' from a tag at offset 'off'.
+	  off must be >= 2
+
+  void meta_wr16(pnum, type, off, val)
+	- write 2 bytes 'val' from a tag at offset 'off'.
+	  off must be >= 2
+
+  void meta_wr32(pnum, type, off, val)
+	- write 4 bytes 'val' from a tag at offset 'off'.
+	  off must be >= 2
+
 Miscellaneous
   void exit(int status) 
   	- abort program with exit status 'status'.
@@ -1122,6 +1158,16 @@ Intrinsics:
   -- void meta_set_class(pnum, tc)
   -- int  meta_get_seq(pnum)
   -- void meta_set_seq(pnum, seq)
+  -- int  meta_has(pnum, type)
+  -- void meta_add(pnum, type)
+  -- void meta_add_info(pnum, len)
+  -- void meta_rem(pnum, type)
+  -- int  meta_rd8(pnum, type, off)
+  -- int  meta_rd16(pnum, type, off)
+  -- int  meta_rd32(pnum, type, off)
+  -- void meta_wr8(pnum, type, off, val)
+  -- void meta_wr16(pnum, type, off, val)
+  -- void meta_wr32(pnum, type, off, val)
 
   -- void exit(scalar) -- abort program with exit status 'scalar'
 
@@ -1129,13 +1175,6 @@ Intrinsics:
   -- int log2(scalar) -- floor of the base 2 log of scalar
   -- int min(scalar1, scalar2)
   -- int max(scalar1, scalar2)
-
-TODO:
-  -- int  meta_has(pnum, type, idx)
-  -- int  meta_add(pnum, type)
-  -- int  meta_rem(pnum, type, idx)
-  -- int  meta_get(pnum, type, idx, off, nbytes);
-  -- void meta_set(pnum, type, idx, off, nbytes, val);
 
 
 Formatted printing in PML

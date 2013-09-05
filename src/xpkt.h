@@ -35,7 +35,7 @@
  */
 #define XPKT_HLEN	8
 #define XPKT_TAG_MINW	1
-#define XPKT_TAG_MAXW	255
+#define XPKT_TAG_MAXW	256
 ONICS_PACK_DECL(
 struct xpkthdr {
 	uint32_t		len;
@@ -111,6 +111,14 @@ int xpkt_validate_hdr(struct xpkthdr *xh);
 
 /* Pack an xpkt header to network byte order */
 void xpkt_pack_hdr(struct xpkthdr *xh);
+
+
+/* unpack a specific tag: assumes the tag is valid including nwords */
+void xpkt_unpack_tag(struct xpkt_tag_hdr *xth);
+
+
+/* pack a specific tag: assumes the tag is valid including nwords */
+void xpkt_pack_tag(struct xpkt_tag_hdr *xth);
 
 
 /* 

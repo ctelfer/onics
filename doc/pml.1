@@ -950,6 +950,48 @@ setting it.
   	- set the packet sequence number of packet 'pnum' to 'seq'.
 .fi
 .P
+The following metadata manipulation functions are also available and allow
+more fine-grained control over metadata.  But they are also, therefore,
+more dangerous and can break things more easily.
+.nf
+  int  meta_has(pnum, type)
+        - Return whether the packet has a tag of type 'type'.
+
+  void meta_add(pnum, type)
+	- Add an xpkt tag of type 'type':  limited to timestamp,
+	  snapinfo, iniface, outiface, flow, class, seq, 
+	  appinfo (0 extra words).
+
+  void meta_add_info(pnum, len)
+	- Add an xpkt tag of type XPKT_TAG_APPINFO of length 'len'
+	  in packet pnum;
+
+  void meta_rem(pnum, type)
+	- Remove the first tag of type 'type'
+
+  int  meta_rd8(pnum, type, off)
+	- read 1 byte from a tag at offset 'off'
+
+  int  meta_rd16(pnum, type, off)
+	- read 2 bytes from a tag at offset 'off'
+
+  int  meta_rd32(pnum, type, off)
+	- read 4 bytes from a tag at offset 'off'
+
+  void meta_wr8(pnum, type, off, val)
+	- write 1 byte 'val' from a tag at offset 'off'.  
+	  off must be >= 2
+
+  void meta_wr16(pnum, type, off, val)
+	- write 2 bytes 'val' from a tag at offset 'off'.
+	  off must be >= 2
+
+  void meta_wr32(pnum, type, off, val)
+	- write 4 bytes 'val' from a tag at offset 'off'.
+	  off must be >= 2
+
+.fi
+.P
 .SS "Miscellaneous"
 .nf
   void exit(int status) 

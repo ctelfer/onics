@@ -1,0 +1,26 @@
+before
+meta_has(0, TS)=1
+	timestamp = 1261318264 seconds and 488768000 nanoseconds
+meta_has(0, SNAP)=0
+meta_has(0, INIF)=1
+	input port = 0
+meta_has(0, OUTIF)=0
+meta_has(0, FLOW)=0
+meta_has(0, CLASS)=0
+meta_has(0, SEQ)=0
+meta_has(0, PARSE)=0
+
+adding snap info
+adding outport
+adding flow
+adding class
+adding seq
+
+after
+timestamp = 1 seconds and 2 nanoseconds
+pre-snap length = 4096
+input port = 50
+output port = 51
+flow id = 0xdeadbeef
+traffic class = 0x1010
+sequence number = 1234
