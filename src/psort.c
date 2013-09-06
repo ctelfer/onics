@@ -32,6 +32,7 @@
 FILE *g_infile;
 FILE *g_outfile;
 int g_ktype = XPKT_TAG_TIMESTAMP;
+int g_ai_include_subtype = 0;
 const char *g_progname;
 int g_reverse = 0;
 
@@ -55,8 +56,11 @@ void usage(const char *estr)
 	fprintf(stderr, "usage: %s [options] IFACE [OUTFILE]\n%s\n", g_progname,
 		str);
 	fprintf(stderr, "\nKEYTYPE can be one of:\n");
-	fprintf(stderr, "\t'timestamp', 'flowid', 'class', 'seq', 'appinfo'\n");
+	fprintf(stderr, "\t'timestamp', 'flowid', 'class', 'seq', "
+			"'[+]appinfo'\n");
 	fprintf(stderr, "\tThe default keytype is 'timestamp'\n");
+	fprintf(stderr, "\t'+appinfo' includes the subtype, "
+			"'appinfo' does not\n");
 	exit(1);
 }
 
@@ -73,7 +77,10 @@ static void set_key_type(const char *kts)
 		g_ktype = XPKT_TAG_SEQ;
 	else if (strcmp(kts, "appinfo") == 0)
 		g_ktype = XPKT_TAG_APPINFO;
-	else
+	else if (strcmp(kts, "*appinfo") == 0) {
+		g_ktype = XPKT_TAG_APPINFO;
+		g_ai_include_subtype = 1;
+	} else
 		usage("Unknown key type");
 }
 
@@ -144,6 +151,7 @@ void set_key(struct pktbuf *p)
 	struct xpkt_tag_seq *xseq;
 	struct xpkt_tag_appinfo *xai;
 	int nb;
+	int nbmax;
 
 	memset(p->cb, 0xFF, sizeof(p->cb));
 	xh = pkb_find_tag(p, g_ktype, 0);
@@ -172,10 +180,15 @@ void set_key(struct pktbuf *p)
 		break;
 	case XPKT_TAG_APPINFO:
 		xai = (struct xpkt_tag_appinfo *)xh;
-		pack(p->cb, sizeof(p->cb), "h", xai->subtype);
+		if (g_ai_include_subtype) {
+			pack(p->cb, sizeof(p->cb), "h", xai->subtype);
+			nbmax = sizeof(p->cb) - 2;
+		} else {
+			nbmax = sizeof(p->cb);
+		}
 		nb = xai->nwords * 4;
-		if (nb > sizeof(p->cb) - 2)
-			nb = sizeof(p->cb) - 2;
+		if (nb > nbmax)
+			nb = nbmax;
 		memcpy(p->cb, xai->data, nb);
 		break;
 	default:
@@ -199,11 +212,9 @@ static int pkb_cmp(const void *le1, const void *le2)
 	p1 = container(le1, struct pktbuf, entry);
 	p2 = container(le2, struct pktbuf, entry);
 	rv = memcmp(p1->cb, p2->cb, sizeof(p1->cb));
-	if (g_reverse) {
-		return rv < 0 ? 1 : ((rv > 0) ? -1 : 0);
-	} else {
-		return rv;
-	}
+	if (g_reverse)
+		rv = rv < 0 ? 1 : ((rv > 0) ? -1 : 0);
+	return rv;
 }
 
 
