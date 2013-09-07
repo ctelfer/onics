@@ -50,6 +50,11 @@ pktmux/pktdemux:
 
 
 pdiff:
+ + unit tests
  * Two-column output format
  * pml edit script output format
 
+psort:
+ + unit tests
+ ? subfields of fields
+ ? header fields

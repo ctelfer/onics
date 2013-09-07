@@ -130,6 +130,10 @@ void *fld_get_trln(byte_t *p, struct prparse *plist, const char *s,
 void *fld_get_pi(byte_t *p, struct prparse *plist, struct ns_pktfld *pf,
 		 uint idx, ulong *len);
 
+/* as fld_get_pi() but with idx == 0) */
+void *fld_get_p(byte_t *p, struct prparse *plist, struct ns_pktfld *pf,
+		ulong *len);
+
 
 /*
  * read the value of the 'idx'th 'pf' field in a packet with

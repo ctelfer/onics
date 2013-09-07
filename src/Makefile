@@ -181,8 +181,8 @@ ${BINDIR}/nft: nft.o stdproto.o ${PKTOBJ} ${PKTHDR}
 	${CC} -o ${BINDIR}/nft nft.o stdproto.o ${PKTOBJ} \
 		${DEFS} ${OPTS} ${INCS} ${LIBS}
 
-${BINDIR}/psort: psort.o ${PKTOBJ} ${PKTHDR}
-	${CC} -o ${BINDIR}/psort psort.o ${PKTOBJ} \
+${BINDIR}/psort: psort.o stdproto.o fld.o ${PKTOBJ} ${PKTHDR}
+	${CC} -o ${BINDIR}/psort psort.o stdproto.o fld.o ${PKTOBJ} \
 		${DEFS} ${OPTS} ${INCS} ${LIBS}
 
 

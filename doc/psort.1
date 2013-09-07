@@ -7,28 +7,24 @@ psort - Sort a set of packets.
 [\fIinfile\fP [\fIoutfile\fP]]
 .P
 .SH DESCRIPTION
-\fBpsort\fP reads in a stream of XPKT formatted packets and sorts them 
+\fBpsort\fP reads in a stream of XPKT formatted packets and sorts them
 according to a key specified by the user.  By default \fBpsort\fP reads
 from standard input and writes to standard output.  If \fIinfile\fP is
 specified then \fBpsort\fP reads from that file instead.  If
 \fIoutfile\fP is specified then \fBpsort\fP writes to it instead.  By
 default, \fBpsort\fP sorts packets in ascending order.
 .P
-The different key types that the user can sort on are all based on an
-XPKT tag.  While this might seem limiting, keep in mind that the user
-can tag a packet with the XPKT_TAG_APPINFO tag which can hold up to 1022
-bytes of application-specified data. 
-.P
 .SH OPTIONS
 .IP \fB-h\fP
 Print the usage of the command and exit.
 .IP "\fB-k\fP \fIkeytype\fP"
-The \fIketype\fP argument can be one of "timestamp", "flowid", "class",
-"seq", "appinfo" or "+appinfo".  The default is "timestamp".  Each of 
-these corresponds to an XPKT tag type and the metadata it represents.
-The "appinfo" keytype is the data in the XPKT_TAG_APPINFO tag without
-the 2-byte subtype field.  The "+appinfo" keytype includes the 2-byte
-subfield.
+The \fIkeytype\fP argument can be one of xpkt.timestamp, xpk.tflowid,
+xpkt.class, xpkt.seq", xpkt.appinfo, xpkt.+appinfo or any parsed packet
+field.  The default is xpkt.timestamp.  Each of the key fields that
+start with "xpkt." refer to an XPKT tag type and the metadata it
+represents.  The xpkt.appinfo keytype is the data in the
+XPKT_TAG_APPINFO tag without the 2-byte subtype field.  The
+xpkt.+appinfo keytype includes the 2-byte subfield.
 .IP \fB-r\fP
 Perform a reverse sort (decending instead of ascending order).
 .P
@@ -37,17 +33,25 @@ Perform a reverse sort (decending instead of ascending order).
 Sort a set of packets by timestamp:
 .nf
 
-	psort input.xpkt output.xpkt
+        psort input.xpkt output.xpkt
 
 .fi
 Read in the TCP packets from a packet trace and sort them by flow ID in
 reverse:
 .nf
 
-	ppick tcp infile.xpkt | psort -r -k flowid > outfile.xpkt
+        ppick tcp infile.xpkt | psort -r -k flowid > outfile.xpkt
 
 .fi
 .P
+Sort a set of packets by IPv4 source address and then IPv4 destination 
+address and then IPv4 TTL.
+.nf
+
+        psort -k ip.saddr -k ip.daddr -k ip.ttl \\
+                infile.xpkt outfile.xpkt
+
+.fi
 .SH AVAILABILITY
 This utility should be available on all supported ONICS platforms.
 .P

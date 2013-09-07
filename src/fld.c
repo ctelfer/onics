@@ -122,7 +122,7 @@ static int pfofflen(struct prparse *prp, struct ns_pktfld *pf,
 		return -1;
 #endif
 	if (NSF_IS_INBITS(pf->flags)) {
-		len = (off + pf->len + NSF_BITOFF(pf->flags) + 7) / 8;
+		len = (pf->len + NSF_BITOFF(pf->flags) + 7) / 8;
 #if SANITY
 		if (prp_totlen(prp) - off > len)
 			return -1;
@@ -371,6 +371,13 @@ void *fld_get_pi(byte_t *p, struct prparse *plist, struct ns_pktfld *pf,
 		return NULL;
 
 	return p + off;
+}
+
+
+void *fld_get_p(byte_t *p, struct prparse *plist, struct ns_pktfld *pf,
+		ulong *len)
+{
+	return fld_get_pi(p, plist, pf, 0, len);
 }
 
 

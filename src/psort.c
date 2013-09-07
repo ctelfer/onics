@@ -28,13 +28,42 @@
 #include <cat/err.h>
 #include <cat/pack.h>
 #include "pktbuf.h"
+#include "ns.h"
+#include "stdproto.h"
+#include "fld.h"
 
+
+enum {
+	KF_XPKT,
+	KF_NSPF,
+};
+
+struct kfxpkt {
+	int type;
+	int tagtype;
+	int aisub;
+};
+
+struct kfnspf {
+	int type;
+	int idx;
+	struct ns_pktfld *pf;
+};
+
+union keyfield {
+	int		type;
+	struct kfxpkt	xpkt;
+	struct kfnspf	nspf;
+};
+
+
+int numkf = 0;
+union keyfield keyfields[256];
 FILE *g_infile;
 FILE *g_outfile;
-int g_ktype = XPKT_TAG_TIMESTAMP;
-int g_ai_include_subtype = 0;
 const char *g_progname;
 int g_reverse = 0;
+ulong keytrunc = 0;
 
 struct clopt g_options[] = {
 	CLOPT_INIT(CLOPT_NOARG, 'h', "--help", "print help"),
@@ -46,6 +75,8 @@ struct clopt g_options[] = {
 struct clopt_parser g_oparse =
 CLOPTPARSER_INIT(g_options, array_length(g_options));
 
+#define DEFAULT_KEYTYPE	"xpkt.timestamp"
+
 
 void usage(const char *estr)
 {
@@ -56,32 +87,59 @@ void usage(const char *estr)
 	fprintf(stderr, "usage: %s [options] IFACE [OUTFILE]\n%s\n", g_progname,
 		str);
 	fprintf(stderr, "\nKEYTYPE can be one of:\n");
-	fprintf(stderr, "\t'timestamp', 'flowid', 'class', 'seq', "
-			"'[+]appinfo'\n");
-	fprintf(stderr, "\tThe default keytype is 'timestamp'\n");
-	fprintf(stderr, "\t'+appinfo' includes the subtype, "
-			"'appinfo' does not\n");
+	fprintf(stderr, "\t'xpkt.timestamp', 'xpkt.flowid', 'xpkt.class', \n"
+			"\t'xpkt.seq', 'xpkt.[+]appinfo'\n");
+	fprintf(stderr, "The default keytype is '%s'.\n", DEFAULT_KEYTYPE);
+	fprintf(stderr, "The 'xpkt.+appinfo' includes the subtype, "
+			"'xpkt.appinfo' does not.\n");
 	exit(1);
 }
 
 
-static void set_key_type(const char *kts)
+static void add_kfxpkt(int tagtype, int aisub)
 {
-	if (strcmp(kts, "timestamp") == 0)
-		g_ktype = XPKT_TAG_TIMESTAMP;
-	else if (strcmp(kts, "flowid") == 0)
-		g_ktype = XPKT_TAG_FLOW;
-	else if (strcmp(kts, "class") == 0)
-		g_ktype = XPKT_TAG_CLASS;
-	else if (strcmp(kts, "seq") == 0)
-		g_ktype = XPKT_TAG_SEQ;
-	else if (strcmp(kts, "appinfo") == 0)
-		g_ktype = XPKT_TAG_APPINFO;
-	else if (strcmp(kts, "*appinfo") == 0) {
-		g_ktype = XPKT_TAG_APPINFO;
-		g_ai_include_subtype = 1;
-	} else
-		usage("Unknown key type");
+	struct kfxpkt *kxf;
+	kxf = &keyfields[numkf++].xpkt;
+	kxf->type = KF_XPKT;
+	kxf->tagtype = tagtype;
+	kxf->aisub = aisub;
+}
+
+
+static void add_kfnspf(const char *name)
+{
+	struct kfnspf *kpf;
+	struct ns_elem *e;
+	kpf = &keyfields[numkf++].nspf;
+	kpf->type = KF_NSPF;
+	kpf->idx = 0;
+	e = ns_lookup(NULL, name);
+	if (e == NULL || e->type != NST_PKTFLD)
+		err("Invalid packet field type: %s\n", name);
+	kpf->pf = (struct ns_pktfld *)e;
+}
+
+
+static void add_key_type(const char *kts)
+{
+	if (numkf == array_length(keyfields))
+		err("Too many key fields\n");
+
+	if (strcmp(kts, "xpkt.timestamp") == 0) {
+		add_kfxpkt(XPKT_TAG_TIMESTAMP, 0);
+	} else if (strcmp(kts, "xpkt.flowid") == 0) {
+		add_kfxpkt(XPKT_TAG_FLOW, 0);
+	} else if (strcmp(kts, "xpkt.class") == 0) {
+		add_kfxpkt(XPKT_TAG_CLASS, 0);
+	} else if (strcmp(kts, "xpkt.seq") == 0) {
+		add_kfxpkt(XPKT_TAG_SEQ, 0);
+	} else if (strcmp(kts, "xpkt.appinfo") == 0) {
+		add_kfxpkt(XPKT_TAG_APPINFO, 0);
+	} else if (strcmp(kts, "xpkt.*appinfo") == 0) {
+		add_kfxpkt(XPKT_TAG_APPINFO, 1);
+	} else {
+		add_kfnspf(kts);
+	}
 }
 
 
@@ -102,7 +160,7 @@ void parse_args(int argc, char *argv[])
 			usage(NULL);
 			break;
 		case 'k':
-			set_key_type(opt->val.str_val);
+			add_key_type(opt->val.str_val);
 			break;
 		case 'r':
 			g_reverse = 1;
@@ -111,6 +169,9 @@ void parse_args(int argc, char *argv[])
 	}
 	if (rv < 0)
 		usage(g_oparse.errbuf);
+
+	if (numkf == 0)
+		add_key_type(DEFAULT_KEYTYPE);
 
 	if (rv < argc) {
 		fn = argv[rv++];
@@ -133,66 +194,154 @@ void read_packets(struct list *pl)
 {
 	int rv;
 	struct pktbuf *p;
+	ulong pn = 0;
 
 	l_init(pl);
-	while ((rv = pkb_file_read(&p, g_infile)) > 0)
+	while ((rv = pkb_file_read(&p, g_infile)) > 0) {
+		++pn;
+		if (pkb_parse(p) < 0)
+			err("Error parsing packet %lu\n", pn);
 		l_enq(pl, &p->entry);
+	}
 	if (rv < 0)
 		errsys("pkb_file_read(): ");
 }
 
 
-void set_key(struct pktbuf *p)
+int add_xpkt_key(struct kfxpkt *kxf, struct pktbuf *p, int koff)
 {
+	int maxlen;
+	int nb;
+	byte_t tbuf[8];
+	byte_t *bp = tbuf;
 	struct xpkt_tag_hdr *xh;
 	struct xpkt_tag_ts *xts;
 	struct xpkt_tag_flowid *xf;
 	struct xpkt_tag_class *xc;
 	struct xpkt_tag_seq *xseq;
 	struct xpkt_tag_appinfo *xai;
-	int nb;
-	int nbmax;
 
-	memset(p->cb, 0xFF, sizeof(p->cb));
-	xh = pkb_find_tag(p, g_ktype, 0);
+	maxlen = sizeof(p->cb) - koff;
+	xh = pkb_find_tag(p, kxf->tagtype, 0);
 	if (xh == NULL)
-		return;
+		return koff;
 
-	switch (g_ktype) {
+	switch (kxf->tagtype) {
 	case XPKT_TAG_TIMESTAMP:
 		xts = (struct xpkt_tag_ts *)xh;
-		pack(p->cb, sizeof(p->cb), "ww", xts->sec, xts->nsec);
+		nb = pack(tbuf, sizeof(tbuf), "ww", xts->sec, xts->nsec);
 		break;
 	case XPKT_TAG_FLOW:
 		xf = (struct xpkt_tag_flowid *)xh;
-		pack(p->cb, sizeof(p->cb), "ww", (ulong)(xf->flowid >> 32), 
-		     (ulong)(xf->flowid & 0xFFFFFFFFul));
+		nb = pack(tbuf, sizeof(tbuf), "ww", (ulong)(xf->flowid >> 32),
+		          (ulong)(xf->flowid & 0xFFFFFFFFul));
 		break;
 	case XPKT_TAG_CLASS:
 		xc = (struct xpkt_tag_class *)xh;
-		pack(p->cb, sizeof(p->cb), "ww", (ulong)(xc->tag >> 32), 
-		     (ulong)(xc->tag & 0xFFFFFFFFul));
+		nb = pack(tbuf, sizeof(tbuf), "ww", (ulong)(xc->tag >> 32),
+		          (ulong)(xc->tag & 0xFFFFFFFFul));
 		break;
 	case XPKT_TAG_SEQ:
 		xseq = (struct xpkt_tag_seq *)xh;
-		pack(p->cb, sizeof(p->cb), "ww", (ulong)(xseq->seq >> 32), 
-		     (ulong)(xseq->seq & 0xFFFFFFFFul));
+		nb = pack(tbuf, sizeof(tbuf), "ww", (ulong)(xseq->seq >> 32),
+		          (ulong)(xseq->seq & 0xFFFFFFFFul));
 		break;
 	case XPKT_TAG_APPINFO:
+		nb = 0;
 		xai = (struct xpkt_tag_appinfo *)xh;
-		if (g_ai_include_subtype) {
-			pack(p->cb, sizeof(p->cb), "h", xai->subtype);
-			nbmax = sizeof(p->cb) - 2;
-		} else {
-			nbmax = sizeof(p->cb);
+		if (kxf->aisub) {
+			if (maxlen >= 2) {
+				pack(p->cb + koff, maxlen, "h", xai->subtype);
+				koff += 2;
+				maxlen -= 2;
+			} else {
+				if (maxlen == 1) {
+					*(p->cb + koff) = 
+						(xai->subtype >> 8) & 0xFF;
+					maxlen = 0;
+					++koff;
+				}
+				++keytrunc;
+				return koff;
+			}
 		}
+		bp = xai->data;
 		nb = xai->nwords * 4;
-		if (nb > nbmax)
-			nb = nbmax;
-		memcpy(p->cb, xai->data, nb);
 		break;
 	default:
 		abort_unless(0);
+	}
+
+	if (nb > maxlen) {
+		nb = maxlen;
+		++keytrunc;
+	}
+
+	memmove(p->cb + koff, bp, nb);
+
+	return koff + nb;
+}
+
+
+int add_nspf_key(struct kfnspf *kpf, struct pktbuf *p, int koff)
+{
+	struct ns_pktfld *pf = kpf->pf;
+	int maxlen = sizeof(p->cb) - koff;
+	void *pfp;
+	byte_t *kp;
+	ulong len;
+	ulong val;
+
+	if (maxlen <= 0) {
+		++keytrunc;
+		return koff;
+	}
+
+	kp = p->cb + koff;
+
+	if (NSF_IS_INBITS(pf->flags)) {
+		if (fld_get_vi(p->buf, &p->prp, pf, kpf->idx, &val) < 0)
+			return koff;
+		len = (pf->len + 7) / 8;
+		switch(len) {
+		case 4: *kp++ = (val >> 24) & 0xFF;
+			if (--maxlen <= 0) { ++keytrunc; break; }
+		case 3: *kp++ = (val >> 16) & 0xFF;
+			if (--maxlen <= 0) { ++keytrunc; break; }
+		case 2: *kp++ = (val >> 8) & 0xFF;
+			if (--maxlen <= 0) { ++keytrunc; break; }
+		case 1: *kp = val & 0xFF;
+			break;
+		default:
+			abort_unless(0);
+		}
+	} else {
+		pfp = fld_get_pi(p->buf, &p->prp, pf, kpf->idx, &len);
+		if (pfp == NULL)
+			return koff;
+		if (len > maxlen) {
+			len = maxlen;
+			++keytrunc;
+		}
+		memmove(kp, pfp, len);
+	}
+
+	return koff + len;
+}
+
+
+void set_key(struct pktbuf *p)
+{
+	int koff = 0;
+	int i;
+	memset(p->cb, 0x0, sizeof(p->cb));
+	for (i = 0; i < numkf; ++i) {
+		if (keyfields[i].type == KF_XPKT) {
+			koff = add_xpkt_key(&keyfields[i].xpkt, p, koff);
+		} else {
+			abort_unless(keyfields[i].type == KF_NSPF);
+			koff = add_nspf_key(&keyfields[i].nspf, p, koff);
+		}
 	}
 }
 
@@ -202,6 +351,9 @@ void load_keys(struct list *pl)
 	struct list *l;
 	l_for_each(l, pl)
 		set_key(container(l, struct pktbuf, entry));
+	if (keytrunc)
+		fprintf(stderr, "Key truncaction detected %lu times\n",
+			keytrunc);
 }
 
 
@@ -243,6 +395,7 @@ int main(int argc, char *argv[])
 	struct list pl;
 
 	pkb_init_pools(128);
+	register_std_proto();
 	parse_args(argc, argv);
 	read_packets(&pl);
 	load_keys(&pl);
