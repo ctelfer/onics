@@ -25,8 +25,17 @@ start with "xpkt." refer to an XPKT tag type and the metadata it
 represents.  The xpkt.appinfo keytype is the data in the
 XPKT_TAG_APPINFO tag without the 2-byte subtype field.  The
 xpkt.+appinfo keytype includes the 2-byte subfield.
+.IP \fB-q\fP
+Decrease verbosity.
 .IP \fB-r\fP
 Perform a reverse sort (decending instead of ascending order).
+.IP \fB-s\fP
+Enable strict mode.  In strict mode \fBpsort\fP will abort with an error
+message if it is unable to build the key for any packet.  This can occur
+if the key is too large or if \fBpsort\fP encounters a packet that lacks
+a field that it is supposed to build a key for.
+.IP \fB-v\fP
+Increase verbosity.
 .P
 .SH EXAMPLES
 .P

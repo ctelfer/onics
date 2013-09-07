@@ -40,12 +40,14 @@ enum {
 
 struct kfxpkt {
 	int type;
+	const char *name;
 	int tagtype;
 	int aisub;
 };
 
 struct kfnspf {
 	int type;
+	const char *name;
 	int idx;
 	struct ns_pktfld *pf;
 };
@@ -59,21 +61,26 @@ union keyfield {
 
 int numkf = 0;
 union keyfield keyfields[256];
-FILE *g_infile;
-FILE *g_outfile;
-const char *g_progname;
-int g_reverse = 0;
+FILE *infile;
+FILE *outfile;
+const char *progname;
+int reverse = 0;
 ulong keytrunc = 0;
+ulong fldmiss = 0;
+int verbosity = 1;
+int strict = 0;
 
-struct clopt g_options[] = {
-	CLOPT_INIT(CLOPT_NOARG, 'h', "--help", "print help"),
-	CLOPT_INIT(CLOPT_NOARG, 'r', "--reverse",
-		   "reverse the direction of the sort"),
-	CLOPT_I_STRING('k', "--key-type", "KEYTYPE",
+struct clopt options[] = {
+	CLOPT_I_NOARG('h', NULL, "print help"),
+	CLOPT_I_STRING('k', NULL, "KEYTYPE",
 		       "Set the key type to sort on"),
+	CLOPT_I_NOARG('q', NULL, "decrease verbosity"),
+	CLOPT_I_NOARG('r', NULL, "reverse the direction of the sort"),
+	CLOPT_I_NOARG('s', NULL, "strict node"),
+	CLOPT_I_NOARG('v', NULL, "increase verbosity"),
 };
-struct clopt_parser g_oparse =
-CLOPTPARSER_INIT(g_options, array_length(g_options));
+struct clopt_parser oparse =
+CLOPTPARSER_INIT(options, array_length(options));
 
 #define DEFAULT_KEYTYPE	"xpkt.timestamp"
 
@@ -83,24 +90,27 @@ void usage(const char *estr)
 	char str[4096];
 	if (estr)
 		fprintf(stderr, "%s\n", estr);
-	optparse_print(&g_oparse, str, sizeof(str));
-	fprintf(stderr, "usage: %s [options] IFACE [OUTFILE]\n%s\n", g_progname,
-		str);
+	optparse_print(&oparse, str, sizeof(str));
+	fprintf(stderr, "usage: %s [options] IFACE [OUTFILE]\nOptions:\n%s\n",
+		progname, str);
 	fprintf(stderr, "\nKEYTYPE can be one of:\n");
 	fprintf(stderr, "\t'xpkt.timestamp', 'xpkt.flowid', 'xpkt.class', \n"
 			"\t'xpkt.seq', 'xpkt.[+]appinfo'\n");
 	fprintf(stderr, "The default keytype is '%s'.\n", DEFAULT_KEYTYPE);
 	fprintf(stderr, "The 'xpkt.+appinfo' includes the subtype, "
 			"'xpkt.appinfo' does not.\n");
+	fprintf(stderr, "\nIn strict mode, if a key can not be built\n");
+	fprintf(stderr, "exactly as specified, psort exits with an error.\n");
 	exit(1);
 }
 
 
-static void add_kfxpkt(int tagtype, int aisub)
+static void add_kfxpkt(const char *name, int tagtype, int aisub)
 {
 	struct kfxpkt *kxf;
 	kxf = &keyfields[numkf++].xpkt;
 	kxf->type = KF_XPKT;
+	kxf->name = name;
 	kxf->tagtype = tagtype;
 	kxf->aisub = aisub;
 }
@@ -111,6 +121,7 @@ static void add_kfnspf(const char *name)
 	struct kfnspf *kpf;
 	struct ns_elem *e;
 	kpf = &keyfields[numkf++].nspf;
+	kpf->name = name;
 	kpf->type = KF_NSPF;
 	kpf->idx = 0;
 	e = ns_lookup(NULL, name);
@@ -126,17 +137,17 @@ static void add_key_type(const char *kts)
 		err("Too many key fields\n");
 
 	if (strcmp(kts, "xpkt.timestamp") == 0) {
-		add_kfxpkt(XPKT_TAG_TIMESTAMP, 0);
+		add_kfxpkt(kts, XPKT_TAG_TIMESTAMP, 0);
 	} else if (strcmp(kts, "xpkt.flowid") == 0) {
-		add_kfxpkt(XPKT_TAG_FLOW, 0);
+		add_kfxpkt(kts, XPKT_TAG_FLOW, 0);
 	} else if (strcmp(kts, "xpkt.class") == 0) {
-		add_kfxpkt(XPKT_TAG_CLASS, 0);
+		add_kfxpkt(kts, XPKT_TAG_CLASS, 0);
 	} else if (strcmp(kts, "xpkt.seq") == 0) {
-		add_kfxpkt(XPKT_TAG_SEQ, 0);
+		add_kfxpkt(kts, XPKT_TAG_SEQ, 0);
 	} else if (strcmp(kts, "xpkt.appinfo") == 0) {
-		add_kfxpkt(XPKT_TAG_APPINFO, 0);
+		add_kfxpkt(kts, XPKT_TAG_APPINFO, 0);
 	} else if (strcmp(kts, "xpkt.*appinfo") == 0) {
-		add_kfxpkt(XPKT_TAG_APPINFO, 1);
+		add_kfxpkt(kts, XPKT_TAG_APPINFO, 1);
 	} else {
 		add_kfnspf(kts);
 	}
@@ -149,12 +160,12 @@ void parse_args(int argc, char *argv[])
 	struct clopt *opt;
 	const char *fn;
 
-	g_infile = stdin;
-	g_outfile = stdout;
-	g_progname = argv[0];
+	infile = stdin;
+	outfile = stdout;
+	progname = argv[0];
 
-	optparse_reset(&g_oparse, argc, argv);
-	while (!(rv = optparse_next(&g_oparse, &opt))) {
+	optparse_reset(&oparse, argc, argv);
+	while (!(rv = optparse_next(&oparse, &opt))) {
 		switch (opt->ch) {
 		case 'h':
 			usage(NULL);
@@ -162,31 +173,50 @@ void parse_args(int argc, char *argv[])
 		case 'k':
 			add_key_type(opt->val.str_val);
 			break;
-		case 'r':
-			g_reverse = 1;
+		case 'q':
+			--verbosity;
 			break;
+		case 'r':
+			reverse = 1;
+			break;
+		case 's':
+			strict = 1;
+			break;
+		case 'v':
+			++verbosity;
 		}
 	}
 	if (rv < 0)
-		usage(g_oparse.errbuf);
+		usage(oparse.errbuf);
 
 	if (numkf == 0)
 		add_key_type(DEFAULT_KEYTYPE);
 
 	if (rv < argc) {
 		fn = argv[rv++];
-		g_infile = fopen(fn, "r");
-		if (g_infile == NULL)
+		infile = fopen(fn, "r");
+		if (infile == NULL)
 			errsys("Error opening file %s: ", fn);
 	}
 
 	if (rv < argc) {
 		fn = argv[rv++];
-		g_outfile = fopen(fn, "w");
-		if (g_outfile == NULL)
+		outfile = fopen(fn, "w");
+		if (outfile == NULL)
 			errsys("Error opening file %s: ", fn);
 	}
 
+}
+
+
+void check_strict(const char *s, const char *fn, ulong pn)
+{
+	if (strict) {
+		err("Packet %lu: %s in field '%s' in strict mode: exiting\n",
+		    pn, s, fn);
+	} else if (verbosity > 1) {
+		fprintf(stderr, "Packet %lu: %s in field '%s'.\n", pn, s, fn);
+	}
 }
 
 
@@ -197,7 +227,7 @@ void read_packets(struct list *pl)
 	ulong pn = 0;
 
 	l_init(pl);
-	while ((rv = pkb_file_read(&p, g_infile)) > 0) {
+	while ((rv = pkb_file_read(&p, infile)) > 0) {
 		++pn;
 		if (pkb_parse(p) < 0)
 			err("Error parsing packet %lu\n", pn);
@@ -208,7 +238,7 @@ void read_packets(struct list *pl)
 }
 
 
-int add_xpkt_key(struct kfxpkt *kxf, struct pktbuf *p, int koff)
+int add_xpkt_key(struct kfxpkt *kxf, struct pktbuf *p, int koff, ulong pn)
 {
 	int maxlen;
 	int nb;
@@ -223,8 +253,11 @@ int add_xpkt_key(struct kfxpkt *kxf, struct pktbuf *p, int koff)
 
 	maxlen = sizeof(p->cb) - koff;
 	xh = pkb_find_tag(p, kxf->tagtype, 0);
-	if (xh == NULL)
+	if (xh == NULL) {
+		++fldmiss;
+		check_strict("Lookup miss", kxf->name, pn);
 		return koff;
+	}
 
 	switch (kxf->tagtype) {
 	case XPKT_TAG_TIMESTAMP:
@@ -262,6 +295,7 @@ int add_xpkt_key(struct kfxpkt *kxf, struct pktbuf *p, int koff)
 					++koff;
 				}
 				++keytrunc;
+				check_strict("Truncated key", kxf->name, pn);
 				return koff;
 			}
 		}
@@ -275,6 +309,7 @@ int add_xpkt_key(struct kfxpkt *kxf, struct pktbuf *p, int koff)
 	if (nb > maxlen) {
 		nb = maxlen;
 		++keytrunc;
+		check_strict("Truncated key", kxf->name, pn);
 	}
 
 	memmove(p->cb + koff, bp, nb);
@@ -283,7 +318,7 @@ int add_xpkt_key(struct kfxpkt *kxf, struct pktbuf *p, int koff)
 }
 
 
-int add_nspf_key(struct kfnspf *kpf, struct pktbuf *p, int koff)
+int add_nspf_key(struct kfnspf *kpf, struct pktbuf *p, int koff, ulong pn)
 {
 	struct ns_pktfld *pf = kpf->pf;
 	int maxlen = sizeof(p->cb) - koff;
@@ -294,22 +329,38 @@ int add_nspf_key(struct kfnspf *kpf, struct pktbuf *p, int koff)
 
 	if (maxlen <= 0) {
 		++keytrunc;
+		check_strict("Truncated key", kpf->name, pn);
 		return koff;
 	}
 
 	kp = p->cb + koff;
 
 	if (NSF_IS_INBITS(pf->flags)) {
-		if (fld_get_vi(p->buf, &p->prp, pf, kpf->idx, &val) < 0)
+		if (fld_get_vi(p->buf, &p->prp, pf, kpf->idx, &val) < 0) {
+			++fldmiss;
+			check_strict("Lookup miss", kpf->name, pn);
 			return koff;
+		}
 		len = (pf->len + 7) / 8;
 		switch(len) {
 		case 4: *kp++ = (val >> 24) & 0xFF;
-			if (--maxlen <= 0) { ++keytrunc; break; }
+			if (--maxlen <= 0) { 
+				++keytrunc; 
+				check_strict("Truncated key", kpf->name, pn);
+				break; 
+			}
 		case 3: *kp++ = (val >> 16) & 0xFF;
-			if (--maxlen <= 0) { ++keytrunc; break; }
+			if (--maxlen <= 0) {
+				++keytrunc;
+				check_strict("Truncated key", kpf->name, pn);
+				break; 
+			}
 		case 2: *kp++ = (val >> 8) & 0xFF;
-			if (--maxlen <= 0) { ++keytrunc; break; }
+			if (--maxlen <= 0) {
+				++keytrunc;
+				check_strict("Truncated key", kpf->name, pn);
+				break;
+			}
 		case 1: *kp = val & 0xFF;
 			break;
 		default:
@@ -317,11 +368,15 @@ int add_nspf_key(struct kfnspf *kpf, struct pktbuf *p, int koff)
 		}
 	} else {
 		pfp = fld_get_pi(p->buf, &p->prp, pf, kpf->idx, &len);
-		if (pfp == NULL)
+		if (pfp == NULL) {
+			++fldmiss;
+			check_strict("Lookup miss", kpf->name, pn);
 			return koff;
+		}
 		if (len > maxlen) {
 			len = maxlen;
 			++keytrunc;
+			check_strict("Truncated key", kpf->name, pn);
 		}
 		memmove(kp, pfp, len);
 	}
@@ -330,17 +385,17 @@ int add_nspf_key(struct kfnspf *kpf, struct pktbuf *p, int koff)
 }
 
 
-void set_key(struct pktbuf *p)
+void set_key(struct pktbuf *p, ulong pn)
 {
 	int koff = 0;
 	int i;
 	memset(p->cb, 0x0, sizeof(p->cb));
 	for (i = 0; i < numkf; ++i) {
 		if (keyfields[i].type == KF_XPKT) {
-			koff = add_xpkt_key(&keyfields[i].xpkt, p, koff);
+			koff = add_xpkt_key(&keyfields[i].xpkt, p, koff, pn);
 		} else {
 			abort_unless(keyfields[i].type == KF_NSPF);
-			koff = add_nspf_key(&keyfields[i].nspf, p, koff);
+			koff = add_nspf_key(&keyfields[i].nspf, p, koff, pn);
 		}
 	}
 }
@@ -349,11 +404,14 @@ void set_key(struct pktbuf *p)
 void load_keys(struct list *pl)
 {
 	struct list *l;
+	ulong pn = 0;
 	l_for_each(l, pl)
-		set_key(container(l, struct pktbuf, entry));
-	if (keytrunc)
-		fprintf(stderr, "Key truncaction detected %lu times\n",
-			keytrunc);
+		set_key(container(l, struct pktbuf, entry), ++pn);
+
+	if (keytrunc > 0 && verbosity > 0)
+		fprintf(stderr, "Key truncacted %lu times\n", keytrunc);
+	if (fldmiss > 0 && verbosity > 0)
+		fprintf(stderr, "Field lookup missed %lu times\n", fldmiss);
 }
 
 
@@ -364,7 +422,7 @@ static int pkb_cmp(const void *le1, const void *le2)
 	p1 = container(le1, struct pktbuf, entry);
 	p2 = container(le2, struct pktbuf, entry);
 	rv = memcmp(p1->cb, p2->cb, sizeof(p1->cb));
-	if (g_reverse)
+	if (reverse)
 		rv = rv < 0 ? 1 : ((rv > 0) ? -1 : 0);
 	return rv;
 }
@@ -384,7 +442,7 @@ void write_packets(struct list *pl)
 	while ((l = l_deq(pl)) != NULL) {
 		p = container(l, struct pktbuf, entry);
 		pkb_pack(p);
-		if (pkb_file_write(p, g_outfile) < 0)
+		if (pkb_file_write(p, outfile) < 0)
 			errsys("pkb_file_write(): ");
 	}
 }
