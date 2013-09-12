@@ -50,17 +50,17 @@ uint g_ifnum = (uint)-1;
 FILE *g_outfile;
 int g_ifsock;
 int g_promisc = 1;
+int g_inonly = 0;
 uint g_prid;
 uint g_buflen;
 byte_t g_xbuf[1024];
 
 struct clopt g_options[] = {
-	CLOPT_INIT(CLOPT_STRING, 'i', "--iface", "interface to sniff from"),
-	CLOPT_INIT(CLOPT_UINT,   'n', "--iface-num",
-		"interface number to tag packets with"),
-	CLOPT_INIT(CLOPT_NOARG, 'p', "--promisc",
-		"don't enable promiscuous mode"),
-	CLOPT_INIT(CLOPT_NOARG, 'h', "--help", "print help")
+	CLOPT_I_NOARG('h', NULL, "print help"),
+	CLOPT_I_UINT('n', NULL, "IFNUM",
+		     "interface number to tag packets with"),
+	CLOPT_I_NOARG('I', NULL, "capture incoming packets only"),
+	CLOPT_I_NOARG('p', NULL, "don't enable promiscuous mode"),
 };
 
 struct clopt_parser g_oparse =
@@ -87,14 +87,17 @@ void parse_args(int argc, char *argv[])
 	optparse_reset(&g_oparse, argc, argv);
 	while (!(rv = optparse_next(&g_oparse, &opt))) {
 		switch (opt->ch) {
+		case 'h':
+			usage(argv[0], NULL);
+			break;
 		case 'n':
 			g_ifnum = opt->val.uint_val;
 			break;
+		case 'I':
+			g_inonly = 1;
+			break;
 		case 'p':
 			g_promisc = 0;
-			break;
-		case 'h':
-			usage(argv[0], NULL);
 			break;
 		}
 	}
@@ -168,7 +171,7 @@ int bpfdev_open()
 void init_ifsock()
 {
 	struct ifreq ifr;
-	uint dlt;
+	uint arg;
 
 	g_ifsock = bpfdev_open();
 	if (g_ifsock < 0)
@@ -178,20 +181,35 @@ void init_ifsock()
 	if (ioctl(g_ifsock, BIOCSETIF, &ifr) < 0)
 		errsys("ioctl() BIOCSETIF: ");
 
-	if (ioctl(g_ifsock, BIOCGDLT, &dlt) < 0)
+	if (ioctl(g_ifsock, BIOCGDLT, &arg) < 0)
 		errsys("ioctl() BIOCGDLT: ");
 
-	if (dlt == DLT_EN10MB) {
+	if (arg == DLT_EN10MB) {
 		g_prid = PRID_ETHERNET2;
 	} else {
-		err("unknown datalink type: %u", dlt);
+		err("unknown datalink type: %u", arg);
 	}
 
 	if (g_promisc)
 		ioctl(g_ifsock, BIOCPROMISC, NULL);
 
 	if (ioctl(g_ifsock, BIOCGBLEN, &g_buflen) < 0)
-		errsys("ioctl() BIOCGBLEN: ");
+		errsys("ioctl(BIOCGBLEN...): ");
+
+	if (g_inonly) {
+#ifdef BIOCSDIRFILT /* OpenBSD */
+		arg = BPF_DIRECTION_OUT;
+		if (ioctl(g_ifsock, BIOCSDIRFILT, &arg) < 0)
+			errsys("ioctl(BIOCSDIRFILT, OUT)...");
+#elif defined(BIOCSSEESENT) /* osX */
+		arg = 0;
+		if (ioctl(g_ifsock, BIOCSSEESENT, &arg) < 0)
+			errsys("ioctl(BIOCSSEESENT, 0)...");
+#else
+		err("Option -O not supported on this platform\n");
+#endif
+	}
+
 }
 
 

@@ -45,16 +45,17 @@ uint g_ifnum = (uint)-1;
 FILE *g_outfile;
 int g_ifsock;
 int g_promisc = 1;
+int g_inonly = 0;
 struct pktbuf *g_pkb;
 struct xpkt_tag_ts *g_ts;
 struct xpkt_tag_iface *g_tiif;
 
 struct clopt g_options[] = {
-	CLOPT_INIT(CLOPT_UINT,   'n', "--iface-num",
-		"interface number to tag packets with"),
-	CLOPT_INIT(CLOPT_NOARG, 'p', "--promisc",
-		"don't enable promiscuous mode"),
-	CLOPT_INIT(CLOPT_NOARG, 'h', "--help", "print help")
+	CLOPT_I_NOARG('h', NULL, "print help"),
+	CLOPT_I_UINT('n', NULL, "IFNUM",
+		     "interface number to tag packets with"),
+	CLOPT_I_NOARG('I', NULL, "Capture incoming packets only"),
+	CLOPT_I_NOARG('p', NULL, "don't enable promiscuous mode"),
 };
 
 struct clopt_parser g_oparse =
@@ -84,6 +85,9 @@ void parse_args(int argc, char *argv[])
 		switch (opt->ch) {
 		case 'n':
 			g_ifnum = opt->val.uint_val;
+			break;
+		case 'I':
+			g_inonly = 1;
 			break;
 		case 'p':
 			g_promisc = 0;
@@ -121,7 +125,7 @@ static void init_pkb()
 	xpkt_tag_iif_init(&ti, g_ifnum);
 	rv = pkb_add_tag(g_pkb, (struct xpkt_tag_hdr *)&ti);
 	abort_unless(rv == 0);
-	g_tiif = (struct xpkt_tag_iface *)pkb_find_tag(g_pkb, XPKT_TAG_INIFACE, 0);
+	g_tiif = (struct xpkt_tag_iface*)pkb_find_tag(g_pkb,XPKT_TAG_INIFACE,0);
 	abort_unless(g_tiif);
 
 	xpkt_tag_ts_init(&ts, 0, 0);
@@ -196,6 +200,14 @@ void packet_loop()
 		if (len < 0) {
 			errsys("error receiving packet: ");
 		} else if (len > 0) {
+			/*
+			 * Check whether we only want incoming packets
+			 * Unfortunately, linux doesn't have PACKET_INCOMING
+			 * that we can set as a parameter to bind(2).
+			 */
+			if (g_inonly && sll.sll_pkttype == PACKET_OUTGOING)
+				continue;
+
 			/* add snaplen */
 			if (len > buflen) {
 				xpkt_tag_si_init(&si, len);

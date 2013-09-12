@@ -96,6 +96,7 @@ void init_ifsock()
 	int n = 0;
 	char devname[64];
 	struct ifreq ifr;
+	uint hdrcmp = 1;
 
 	do {
 		snprintf(devname, sizeof(devname), "/dev/bpf%d", n++);
@@ -107,7 +108,10 @@ void init_ifsock()
 
 	str_copy(ifr.ifr_name, g_oifn, sizeof(ifr.ifr_name));
 	if (ioctl(g_ifsock, BIOCSETIF, &ifr) < 0)
-		errsys("ioctl() BIOCSETIF: ");
+		errsys("ioctl(BIOCSETIF,...): ");
+
+	if (ioctl(g_ifsock, BIOCSHDRCMPLT, &hdrcmp) < 0)
+		errsys("ioctl(BIOCSHDRCMPLT, 1): ");
 }
 
 

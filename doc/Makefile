@@ -1,6 +1,6 @@
 # Makefile for ONICS scripts
 
-INSTALL_DIR=/usr/local/share/man/man1
+INSTALL_DIR=/usr/local/man/man1
 
 ALL_DOCS= \
 	  h2xpkt.1 nft.1 nvmas.1 nvmpf.1 oprotowrap.1 pc2xpkt.1 pcapin.1 \
