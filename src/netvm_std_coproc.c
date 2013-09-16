@@ -415,7 +415,7 @@ static void nci_prnum(struct netvm *vm, struct netvm_coproc *ncp, int cpi)
 	fmtbuf[0] = '%';
 	i = 1;
 	if (inst->w > 0) {
-		if (inst->z) 
+		if (inst->z & NETVM_CPOC_LJUST) 
 			fmtbuf[i++] = '-';
 		i += snprintf(&fmtbuf[i], sizeof(fmtbuf)-i, "0%lul", 
 			      (ulong)inst->w);
@@ -443,6 +443,8 @@ static void nci_prnum(struct netvm *vm, struct netvm_coproc *ncp, int cpi)
 	default:
 		abort_unless(0);
 	}
+	if (inst->z & NETVM_CPOC_NEWLINE)
+		fmtbuf[i++] = '\n';
 	fmtbuf[i++] = '\0';
 
 	/* sign extend the result if we are printing a signed decimal */
@@ -461,17 +463,22 @@ static void padspc(struct emitter *e, uint len)
 }
 
 
-static void outstr(struct emitter *e, char *s, ulong len, ulong pad, int ljust)
+static void outstr(struct emitter *e, char *s, ulong len, ulong pad, int flags)
 {
-	/* left pad */
-	if (!ljust && (len < pad))
+	/* if we aren't left-justifying the value, add */
+	/* the space padding to push it to the right. */
+	if ((flags & NETVM_CPOC_LJUST) == 0 && (len < pad))
 		padspc(e, pad - len);
 
 	emit_raw(e, s, len);
 
-	/* right pad */
-	if (ljust && (len < pad))
+	/* if we are left-justifying the value, add space padding */
+	/* to fill out the width to the right. */
+	if ((flags & NETVM_CPOC_LJUST) != 0 && (len < pad))
 		padspc(e, pad - len);
+
+	if (flags & NETVM_CPOC_NEWLINE)
+		emit_char(e, '\n');
 }
 
 
@@ -538,34 +545,34 @@ static void nci_prstr(struct netvm *vm, struct netvm_coproc *ncp, int cpi)
 	    container(ncp, struct netvm_outport_cp, coproc);
 	struct netvm_inst *inst = &vm->inst[vm->pc];
 	ulong addr, len;
-	ulong plen = 0;
+	byte_t *p;
+
+	S_POP(vm, len);
+	S_POP(vm, addr);
+	netvm_get_uaddr_ptr(vm, addr, 0, len, &p);
+	VMCKRET(vm);
+	outstr(cp->outport, p, len, inst->w, inst->z);
+}
+
+
+static void nci_prstri(struct netvm *vm, struct netvm_coproc *ncp, int cpi)
+{
+	struct netvm_outport_cp *cp =
+	    container(ncp, struct netvm_outport_cp, coproc);
+	struct netvm_inst *inst = &vm->inst[vm->pc];
+	ulong addr, len;
 	byte_t *p;
 	uchar seg;
 
 	abort_unless(cp->outport);
-	if (inst->y == NETVM_CPOC_PRSTR) {
-		S_POP(vm, len);
-		S_POP(vm, addr);
-		if (len < inst->w)
-			plen = inst->w - len;
-		netvm_get_uaddr_ptr(vm, addr, 0, len, &p);
-	} else {
-		abort_unless(inst->y == NETVM_CPOC_PRSTRI);
-		len = (inst->w >> 24) & 0xFF;
-		addr = inst->w & 0xFFFFFF;
-		seg = inst->z;
-		netvm_get_seg_ptr(vm, seg, addr, 0, len, &p);
-	}
+	len = (inst->w >> 24) & 0xFF;
+	addr = inst->w & 0xFFFFFF;
+	seg = inst->z;
+	netvm_get_seg_ptr(vm, seg, addr, 0, len, &p);
 
 	VMCKRET(vm);
 
-	if (plen > 0 && inst->z == 0)
-		padspc(cp->outport, plen);
-
 	emit_raw(cp->outport, p, len);
-
-	if (plen > 0 && inst->z != 0)
-		padspc(cp->outport, plen);
 }
 
 
@@ -589,7 +596,7 @@ static void nci_prxstr(struct netvm *vm, struct netvm_coproc *ncp, int cpi)
 	if (2*len < inst->w)
 		plen = inst->w - 2 * len;
 
-	if (plen > 0 && inst->z == 0)
+	if (plen > 0 && (inst->z & NETVM_CPOC_LJUST) == 0)
 		padspc(cp->outport, plen);
 
 	while (len > 0) {
@@ -602,7 +609,7 @@ static void nci_prxstr(struct netvm *vm, struct netvm_coproc *ncp, int cpi)
 		--len;
 	}
 
-	if (plen > 0 && inst->z != 0)
+	if (plen > 0 && (inst->z & NETVM_CPOC_LJUST) != 0)
 		padspc(cp->outport, plen);
 }
 
@@ -625,7 +632,7 @@ void init_outport_cp(struct netvm_outport_cp *cp, struct emitter *em)
 	opp[NETVM_CPOC_PRETH] = nci_preth;
 	opp[NETVM_CPOC_PRIPV6] = nci_pripv6;
 	opp[NETVM_CPOC_PRSTR] = nci_prstr;
-	opp[NETVM_CPOC_PRSTRI] = nci_prstr;
+	opp[NETVM_CPOC_PRSTRI] = nci_prstri;
 	opp[NETVM_CPOC_PRXSTR] = nci_prxstr;
 }
 

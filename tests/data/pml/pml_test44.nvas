@@ -6,8 +6,8 @@
 .coproc 1 2
 .coproc 2 3
 .coproc 3 4
-.mem mi_0_0 0 0 29 "Hello World\x00aaaaAAAAaaaaAAA\x0a\x00"
-.mem mi_1_0 1 0 28 "Hello World\x00aaaaAAAAaaaaAAA\x0a"
+.mem mi_0_0 0 0 29 "Hello World\x00aaaaAAAAaaaaAAAA\x00"
+.mem mi_1_0 1 0 28 "Hello World\x00aaaaAAAAaaaaAAAA"
 
 # Instructions (11 total)
 #   0: 0x02 0x00 0x00 0x00 0x10000000
@@ -28,7 +28,7 @@
 	push      268435468
 #   8: 0x02 0x00 0x00 0x00 0x00000010
 	push      16
-#   9: 0x4d 0x01 0x08 0x00 0x00000000
-	cpopi     1, 8, 0, 0
+#   9: 0x4d 0x01 0x08 0x02 0x00000000
+	cpopi     1, 8, 2, 0
 #  10: 0x52 0x00 0x00 0x00 0x00000001
 	halt      1

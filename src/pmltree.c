@@ -1568,6 +1568,8 @@ char *fflagstr(struct pml_print *p)
 	str_copy(s, "[", sizeof(s));
 	if (p->flags & PML_PFLAG_LJUST)
 		str_cat(s, "l", sizeof(s));
+	if (p->flags & PML_PFLAG_NEWLINE)
+		str_cat(s, "n", sizeof(s));
 	str_cat(s, "]", sizeof(s));
 	return s;
 }

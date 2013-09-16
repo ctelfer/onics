@@ -37,8 +37,6 @@ ID             'foo'
 LPAREN         '('
 NUM            '10' -- '10'
 RPAREN         ')'
-COMMA          ','
-STRING         '"\n"'
 SEMICOLON      ';'
 RBRACE         '}'
 End of file

@@ -10,20 +10,20 @@ BEGIN {
 				j = j + 1;
 				continue;
 			} 
-			print "(i,j) = (", i, ",", j, ")\n";
+			print "(i,j) = (", i, ",", j, ")";
 			j = j + k;
 			k = k + 1;
 			if (j > 1000) {
 				break;
 			}
 		}
-		print "(i,j,k) = (", i, ",", j, ",", k, ")\n";
+		print "(i,j,k) = (", i, ",", j, ",", k, ")";
 		i = i + 1;
 		if (k > 50) {
 		 	k = 1;
 			continue;
 		}
-		print "keeping k\n";
+		print "keeping k";
 	}
 	
 }

@@ -19,5 +19,5 @@ str sf1(int off, str r)
 BEGIN {
 	str lr;
 	&lr = sf1(4, &astring);
-	print "'", lr, "'\n";
+	print "'", lr, "'";
 }

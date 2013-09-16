@@ -7,4 +7,4 @@ int foo(int x) {
 	return x + y +  z;
 }
 
-BEGIN { print "foo(10) = ", foo(10), "\n"; }
+BEGIN { print "foo(10) = ", foo(10); }

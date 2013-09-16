@@ -9,5 +9,5 @@ BEGIN {
 ?- tcp -? { print "%d", tcp.rst; Numpkts = Numpkts + 1; }
 
 END {
-	print "Total of ", Numpkts, " TCP packets seen\n";
+	print "Total of ", Numpkts, " TCP packets seen";
 }

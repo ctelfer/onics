@@ -7,8 +7,8 @@ int C = 0;
 TICK {
 	T = T + 1;
 	if (T % 200 == 0) {
-		print C, " packets seen so far\n";
+		print C, " packets seen so far";
 	}
 }
-END { print C, " packets seen total\n"; } 
+END { print C, " packets seen total"; } 
 

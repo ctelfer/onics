@@ -416,6 +416,7 @@ enum {
 
 enum {
 	PML_PFLAG_LJUST = 1,
+	PML_PFLAG_NEWLINE = 2,
 };
 
 

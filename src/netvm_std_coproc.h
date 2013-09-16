@@ -92,9 +92,15 @@ void fini_xpkt_cp(struct netvm_xpkt_cp *cp);
 /* --------- Output Port Coprocessor --------- */
 
 enum {
-	/* For all operations except PRSTRI, w is the pad width.  */
-	/* pad to the left if z and right otherwise. Numbers get */
-	/* padded with spaces and other types get padded with spaces. */
+	/*
+	 * For all operations except PRSTRI, w is the pad width. 
+	 * pad to the left if (z & NETVM_CPOC_LJUST) and right
+	 * otherwise. Numbers get padded with zeros and other 
+	 * types get padded with spaces.
+	 *
+	 * if (z & NETVM_CPOC_NEWLINE) is set, add a newline to the
+	 * end of the output EXCEPT for PRSTRI.
+	 */
 	NETVM_CPOC_PRBIN,/* [v] print v in binary */
 	NETVM_CPOC_PROCT,/* [v] print v in octal */
 	NETVM_CPOC_PRDEC,/* [v] print v in signed decimal */
@@ -116,6 +122,9 @@ enum {
 #define NETVM_CPOP_PRSTRI(seg, addr, len) \
 	NETVM_OP(CPOPI, NETVM_CPI_OUTPORT, NETVM_CPOC_PRSTRI, seg, \
 		 ((((len) & 0xFF) << 24) | (addr & 0xFFFFFF)))
+
+#define NETVM_CPOC_LJUST	1
+#define NETVM_CPOC_NEWLINE	2
 	
 
 

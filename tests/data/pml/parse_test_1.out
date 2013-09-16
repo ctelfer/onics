@@ -407,7 +407,7 @@ Packet Rules
          2 bytes in read-only segment at address 24
          6869
       -----
-      Print Statement: type: signed decimal, width:0, flags:[]
+      Print Statement: type: signed decimal, width:0, flags:[n]
       Expression -- 
          Locator: variable(x) [[]; width=4]
          Variable -- 
@@ -565,7 +565,7 @@ Packet Rules
       True body -- 
          List:
          -----
-         Print Statement: type: string, width:0, flags:[]
+         Print Statement: type: string, width:0, flags:[n]
          Expression -- 
             Byte string [[c]; width=0] -- 
             12 bytes in read-only segment at address 27
@@ -575,7 +575,7 @@ Packet Rules
       False body -- 
          List:
          -----
-         Print Statement: type: string, width:0, flags:[]
+         Print Statement: type: string, width:0, flags:[n]
          Expression -- 
             Byte string [[c]; width=0] -- 
             13 bytes in read-only segment at address 40

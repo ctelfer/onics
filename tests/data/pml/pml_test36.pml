@@ -18,5 +18,5 @@
 
 	send 1;
 
-	print "got to end with packet\n";
+	print "got to end with packet";
 }

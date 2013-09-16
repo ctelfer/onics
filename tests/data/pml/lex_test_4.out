@@ -34,7 +34,7 @@ STRING         '"Total of "'
 COMMA          ','
 ID             'Numpkts'
 COMMA          ','
-STRING         '" TCP packets seen\n"'
+STRING         '" TCP packets seen"'
 SEMICOLON      ';'
 RBRACE         '}'
 End of file

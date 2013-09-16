@@ -3230,6 +3230,7 @@ int cg_assign(struct pmlncg *cg, struct pml_assign *a)
 int cg_print(struct pmlncg *cg, struct pml_print *pr)
 {
 	uchar y = 0;
+	uchar z = 0;
 	int etype;
 
 	abort_unless(cg && pr);
@@ -3248,20 +3249,23 @@ int cg_print(struct pmlncg *cg, struct pml_print *pr)
 	case PML_FMT_HEXSTR: y = NETVM_CPOC_PRXSTR; break;
 
 	case PML_FMT_IPA:
+		y = NETVM_CPOC_PRIP;
 		EMIT_W(cg, EQI, 4);
-		EMIT_W(cg, BRI, 3);
+		EMIT_W(cg, BNZI, 3);
 		EMIT_W(cg, PUSH, 0);
 		EMIT_W(cg, HALT, NETVM_ERR_BADCPOP);
 		break;
 	case PML_FMT_IP6A:
+		y = NETVM_CPOC_PRIPV6;
 		EMIT_W(cg, EQI, 16);
-		EMIT_W(cg, BRI, 3);
+		EMIT_W(cg, BNZI, 3);
 		EMIT_W(cg, PUSH, 0);
 		EMIT_W(cg, HALT, NETVM_ERR_BADCPOP);
 		break;
 	case PML_FMT_ETHA:
+		y = NETVM_CPOC_PRETH;
 		EMIT_W(cg, EQI, 6);
-		EMIT_W(cg, BRI, 3);
+		EMIT_W(cg, BNZI, 3);
 		EMIT_W(cg, PUSH, 0);
 		EMIT_W(cg, HALT, NETVM_ERR_BADCPOP);
 		break;
@@ -3270,9 +3274,12 @@ int cg_print(struct pmlncg *cg, struct pml_print *pr)
 		abort_unless(0);
 	}
 
-	EMIT_XYZW(cg, CPOPI, NETVM_CPI_OUTPORT, y, 
-		  ((pr->flags & PML_PFLAG_LJUST) != 0),
-		  pr->width);
+	if (pr->flags & PML_PFLAG_LJUST)
+		z |= NETVM_CPOC_LJUST;
+	if (pr->flags & PML_PFLAG_NEWLINE)
+		z |= NETVM_CPOC_NEWLINE;
+
+	EMIT_XYZW(cg, CPOPI, NETVM_CPI_OUTPORT, y, z, pr->width);
 
 	return 0;
 }

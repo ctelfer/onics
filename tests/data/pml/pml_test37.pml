@@ -15,6 +15,6 @@
 
 	send_no_free 1;
 
-	print "got to end with packet\n";
-	print "should get original and then new packet again\n";
+	print "got to end with packet";
+	print "should get original and then new packet again";
 }

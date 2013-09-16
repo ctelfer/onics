@@ -7,5 +7,5 @@ void afunc() { x = 30; }
 
 BEGIN {
 	afunc();
-	print x, "\n";
+	print x;
 }

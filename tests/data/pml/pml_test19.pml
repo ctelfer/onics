@@ -1,9 +1,9 @@
 # Packet data extraction
 #
 ?- pkt.payload[12,2] =~ \x0800 -? { 
-	print "Got an IP packet in ethernet\n"; 
+	print "Got an IP packet in ethernet";
 }
 
 ?- pkt[str_addr(&pkt.payload) + 12, 2] == 0x0800 -? {
-	print "found by indirection\n";
+	print "found by indirection";
 }

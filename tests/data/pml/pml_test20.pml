@@ -8,21 +8,21 @@ str bp;
 BEGIN {
 	&fp = &foo;
 	if (fp == foo) {
-		print "foo agrees\n";
+		print "foo agrees";
 	} else {
-		print "error: foo does not agree\n";
+		print "error: foo does not agree";
 	}
 
 	&bp = &bar;
 	if (bp[0, 8] == bar) {
-		print "bar agrees\n";
+		print "bar agrees";
 	} else {
-		print "error: bar does not agree\n";
+		print "error: bar does not agree";
 	}
 
 	if (fp[5,3] == 0x345678) {
-		print "good: fp[5,3] == 0x345678\n";
+		print "good: fp[5,3] == 0x345678";
 	} else {
-		print "error: fp[3,3] != 0x345678\n";
+		print "error: fp[3,3] != 0x345678";
 	}
 }

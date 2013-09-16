@@ -1,3 +1,3 @@
 # Basic print
 #
-BEGIN { print "Hello World\n"; }
+BEGIN { print "Hello World"; }

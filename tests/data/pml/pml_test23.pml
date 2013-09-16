@@ -1,7 +1,7 @@
 # Regular expressions
 #
-{ print "Packet\n"; }
+{ print "Packet"; }
 
 ?- tcp and tcp.payload =~ `l.*ld` -? { 
-	print "Hello world?\n";
+	print "Hello world?";
 }

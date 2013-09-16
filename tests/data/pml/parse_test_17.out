@@ -403,11 +403,11 @@ Begin Rule
       True body -- 
          List:
          -----
-         Print Statement: type: string, width:0, flags:[]
+         Print Statement: type: string, width:0, flags:[n]
          Expression -- 
             Byte string [[c]; width=0] -- 
-            6 bytes in read-only segment at address 0
-            657175616c0a
+            5 bytes in read-only segment at address 0
+            657175616c
          -----
       -----
       If Statement
@@ -504,11 +504,11 @@ Begin Rule
       True body -- 
          List:
          -----
-         Print Statement: type: string, width:0, flags:[]
+         Print Statement: type: string, width:0, flags:[n]
          Expression -- 
             Byte string [[c]; width=0] -- 
-            3 bytes in read-only segment at address 7
-            68690a
+            2 bytes in read-only segment at address 6
+            6869
          -----
          Assignment to x
          Value -- 
@@ -553,11 +553,11 @@ Begin Rule
                Variable -- 
                   Variable: z [local; width=4, addr=2]
          -----
-         Print Statement: type: string, width:0, flags:[]
+         Print Statement: type: string, width:0, flags:[n]
          Expression -- 
             Byte string [[c]; width=0] -- 
-            6 bytes in read-only segment at address 11
-            68656c6c6f0a
+            5 bytes in read-only segment at address 9
+            68656c6c6f
          -----
       -----
       If Statement

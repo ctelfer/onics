@@ -31,7 +31,7 @@ Variables
       Byte string [[c]; width=0] -- 
       16 bytes in read-only segment at address 12
       6161616141414141
-      616161614141410a
+      6161616141414141
 -----------
 Functions
 -----------
@@ -388,7 +388,7 @@ Begin Rule
                48656c6c6f20576f
                726c64
       -----
-      Print Statement: type: string, width:0, flags:[]
+      Print Statement: type: string, width:0, flags:[n]
       Expression -- 
          Locator: variable(expl) [[]; width=16]
          Variable -- 
@@ -397,7 +397,7 @@ Begin Rule
                Byte string [[c]; width=0] -- 
                16 bytes in read-only segment at address 12
                6161616141414141
-               616161614141410a
+               6161616141414141
       -----
 -----------
 Packet Rules

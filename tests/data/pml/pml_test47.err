@@ -1,0 +1,13 @@
+First without commas:
+-1
+4294967295
+ffffffff
+a text string
+192.168.0.2
+ffff:eeee::1
+aa:bb:cc:dd:ee:ff
+
+
+Now without commas:
+-14294967295ffffffffa text string192.168.0.2ffff:eeee::1aa:bb:cc:dd:ee:ff
+

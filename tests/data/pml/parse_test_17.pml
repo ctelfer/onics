@@ -11,7 +11,7 @@ BEGIN {
 
 	# simple one stmt with 'print' as stmt
 	if ( x == y )
-		print "equal\n";
+		print "equal";
 
 	# simple one stmt 'if-else'
 	if ( y )
@@ -32,7 +32,7 @@ BEGIN {
 
 	# stmtlist for 'if', stmt for 'else'
 	if ( x ) {
-		print "hi\n";
+		print "hi";
 		x = 2;
 	} else
 		y = 3;
@@ -42,7 +42,7 @@ BEGIN {
 		z = 1;
 	else {
 		x = y * z;
-		print "hello\n";
+		print "hello";
 	}
 
 	# dangling else

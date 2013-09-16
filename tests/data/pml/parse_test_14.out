@@ -417,7 +417,7 @@ Begin Rule
          666f6f2831302920
          3d20
       -----
-      Print Statement: type: signed decimal, width:0, flags:[]
+      Print Statement: type: signed decimal, width:0, flags:[n]
       Expression -- 
          Function call to: foo [[]; width=4]
          Arguments -- 
@@ -425,12 +425,6 @@ Begin Rule
             -----
             Scalar [[c]; width=4] -- width 4: 10 (10,0xa)
             -----
-      -----
-      Print Statement: type: string, width:0, flags:[]
-      Expression -- 
-         Byte string [[c]; width=0] -- 
-         1 bytes in read-only segment at address 11
-         0a
       -----
 -----------
 Packet Rules

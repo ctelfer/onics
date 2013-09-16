@@ -25,5 +25,5 @@ BEGIN {
 
 	send 1;
 
-	print "Still running\n";
+	print "Still running";
 }

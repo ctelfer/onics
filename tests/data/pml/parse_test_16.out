@@ -362,11 +362,11 @@ Functions
    Body -- 
       List:
       -----
-      Print Statement: type: string, width:0, flags:[]
+      Print Statement: type: string, width:0, flags:[n]
       Expression -- 
          Byte string [[c]; width=0] -- 
-         3 bytes in read-only segment at address 0
-         68690a
+         2 bytes in read-only segment at address 0
+         6869
       -----
 -----------
 Begin Rule

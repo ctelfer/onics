@@ -8,5 +8,5 @@ inline isudp() {
 	ip[9,1] == 17
 }
 ?- isudp() -? {
-	print "Found UDP\n";
+	print "Found UDP";
 }

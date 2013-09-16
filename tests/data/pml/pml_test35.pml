@@ -3,7 +3,7 @@
 
 # should only get the 'hello'
 BEGIN {
-    print "hello world\n";
+    print "hello world";
     exit(1);
-    print "goodbye world\n";
+    print "goodbye world";
 }

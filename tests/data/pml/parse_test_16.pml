@@ -1,6 +1,6 @@
 # void function declarations.
 #
 
-void afunc() { print "hi\n"; }
+void afunc() { print "hi"; }
 
 BEGIN { afunc(); }

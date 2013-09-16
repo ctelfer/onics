@@ -14,12 +14,12 @@ VERIFY="
 
 	{ s = meta_get_seq(0);
 	  if ( s != nseq )
-		  print \"packet \", nseq, \" out of order (\", s, \"\\n\";
+		  print \"packet \", nseq, \" out of order (\", s, \")\";
 	  nseq = nseq + 1;
 	  drop;
 	}
 
-	END { print nseq-1, \" packets total\\n\"; }
+	END { print nseq-1, \" packets total\"; }
 "
 
 # $1 = num, $2 = name, $3 = seqarg, $4 = xseqarg

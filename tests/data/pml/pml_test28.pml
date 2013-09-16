@@ -9,5 +9,5 @@ BEGIN {
 
 	&r1 = &astring;
 	&r2 = &r1[4,8];
-	print r2, "\n";
+	print r2;
 }

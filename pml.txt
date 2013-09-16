@@ -377,11 +377,16 @@ PML has the following types of statements:
    compiler will flag an error.)
 
  - print [% FMT %] EXPR [,[% FMT %] EXPR ...] ;
+   print [% FMT %] EXPR [,[% FMT %] EXPR ...] , ;
 
-   Evaluate each EXPR and then print its value.  (the print goes to standard
-   error by default when PML is running from the command line.)  If a
-   FMT directive is present, then it modifies the output string.  See
-   FORMATTED PRINTING.
+   Evaluate each EXPR and then print its value.  (the output goes to 
+   standard error by default when PML is running from the command
+   line.)  If a FMT directive is present, then it modifies the output
+   string.  See FORMATTED PRINTING.  A print statement without a trailing
+   comma automatically appends a newline after printing all of the 
+   expressions.  If trailing comma (between the last expression and
+   the semicolon) is present, then the statement does not add a newline
+   to the end of the printing.
 
  - return ;
  - return EXPR ;

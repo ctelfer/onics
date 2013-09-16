@@ -11,6 +11,6 @@ BEGIN {
 	b = 3;
 	a = test(a, b);
 	if (a == 5) {
-		print "I got the right value\n";
+		print "I got the right value";
 	}
 }

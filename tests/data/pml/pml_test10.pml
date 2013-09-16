@@ -11,9 +11,9 @@
 	csum = 0;
 
 	if ( ip.ihl * 4 == ip.hlen ) {
-		print "header lengths match\n";
+		print "header lengths match";
 	} else {
-		print "header lengths don't match\n";
+		print "header lengths don't match";
 	} 
 
 	while ( hlen > 0 ) {
@@ -27,8 +27,8 @@
 	}
 
 	if ( csum == 0xFFFF ) {
-		print "Good checksum\n";
+		print "Good checksum";
 	} else {
-		print "Bad checksum\n";
+		print "Bad checksum";
 	}
 }

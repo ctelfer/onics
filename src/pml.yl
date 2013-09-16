@@ -800,7 +800,14 @@ cfmkw(C) ::= DROP. { C = PML_CFM_DROPALL; }
 /* this is separate because a print 'statement' with multiple */
 /* arguments gets parsed as a set of individual print statements */
 /* in the AST: one for each expression to print */
-prstmt(P) ::= PRINT prlist(PL) SEMICOLON. { P = PL; }
+prstmt(P) ::= PRINT prlist(PL) SEMICOLON. { 
+	struct pml_print *p;
+	p = container(l_prev(&PL->ln), struct pml_print, ln);
+	p->flags |= PML_PFLAG_NEWLINE;
+	P = PL;
+}
+
+prstmt(P) ::= PRINT prlist(PL) COMMA SEMICOLON. { P = PL; }
 
 prlist(N) ::= prlist(O) COMMA expr(E). {
 	struct pml_print *p = pml_print_alloc(ast, E, NULL);

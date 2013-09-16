@@ -8,13 +8,13 @@ const END_OFF = 3;
 
 void dumptcp() {
 	print "TCP segment starts at ",
- 	      pkt_get_off(0, @tcp, 0, START_OFF), "\n";
+ 	      pkt_get_off(0, @tcp, 0, START_OFF);
 	print "TCP header offset was ", 
- 	      pkt_get_off(0, @tcp, 0, PAYLOAD_OFF), "\n";
+ 	      pkt_get_off(0, @tcp, 0, PAYLOAD_OFF);
 	print "TCP trailer starts at ",
- 	      pkt_get_off(0, @tcp, 0, TRAILER_OFF), "\n";
+ 	      pkt_get_off(0, @tcp, 0, TRAILER_OFF);
 	print "TCP segment ends at ",
- 	      pkt_get_off(0, @tcp, 0, END_OFF), "\n";
+ 	      pkt_get_off(0, @tcp, 0, END_OFF);
 }
 
 
@@ -38,15 +38,15 @@ BEGIN {
 	tcp.ack = 1;
 	tcp.psh = 1;
 
-	print "initial headers in packet\n";
+	print "initial headers in packet";
 	dumptcp();
 
 	pkt_ins_u(0, str_addr(&tcp.payload), str_len(&payload));
-	print "\nafter payload space insertion\n";
+	print "\nafter payload space insertion";
 	dumptcp();
 
 	pkt_adj_off(0, @tcp, 0, PAYLOAD_OFF, -str_len(&payload));
-	print "\nafter header offset adjustment\n";
+	print "\nafter header offset adjustment";
 	dumptcp();
 
 	tcp.payload = payload;

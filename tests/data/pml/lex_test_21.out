@@ -1,0 +1,11 @@
+BEGIN          'BEGIN'
+LBRACE         '{'
+PRINT          'print'
+STRING         '"Hello "'
+COMMA          ','
+SEMICOLON      ';'
+PRINT          'print'
+STRING         '"World"'
+SEMICOLON      ';'
+RBRACE         '}'
+End of file

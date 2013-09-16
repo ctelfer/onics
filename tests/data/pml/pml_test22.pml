@@ -38,31 +38,31 @@ int fib2c(int x) {
 
 BEGIN {
 	if (fib(7) == 13) {
-		print "got fib(7) == 13\n";
+		print "got fib(7) == 13";
 	}
 
 	if (fib2a(1) == 1) {
-		print "got fib2a(1) == 1\n";
+		print "got fib2a(1) == 1";
 	}
 	if (fib2a(2) == 1) {
-		print "got fib2a(2) == 1\n";
+		print "got fib2a(2) == 1";
 	}
 	if (fib2a(3) == 2) {
-		print "got fib2a(3) == 2\n";
+		print "got fib2a(3) == 2";
 	}
 	if (fib2a(4) == 3) {
-		print "got fib2a(4) == 3\n";
+		print "got fib2a(4) == 3";
 	}
 	if (fib2a(5) == 5) {
-		print "got fib2a(5) == 5\n";
+		print "got fib2a(5) == 5";
 	}
 	if (fib2a(6) == 8) {
-		print "got fib2a(6) == 8\n";
+		print "got fib2a(6) == 8";
 	}
 	if (fib2a(7) == 13) {
-		print "got fib2a(7) == 13\n";
+		print "got fib2a(7) == 13";
 	}
 	if (fib2a(8) == 21) {
-		print "got fib2a(8) == 21\n";
+		print "got fib2a(8) == 21";
 	}
 }

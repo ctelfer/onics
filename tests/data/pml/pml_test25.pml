@@ -1,16 +1,16 @@
 # Metadata manipulation
 #
 {
-  print "before\n";
+  print "before";
   sec = meta_get_ts_sec(0);
   nsec = meta_get_ts_nsec(0);
-  print "timestamp = ", %u%sec, " seconds and ", %u%nsec, " nanoseconds\n";
-  print "pre-snap length = ", %d%meta_get_presnap(0), "\n";
-  print "input port = ", %d%meta_get_inport(0), "\n";
-  print "output port = ", %d%meta_get_outport(0), "\n";
-  print "flow id = 0x", %x%meta_get_flowid(0), "\n";
-  print "traffic class = 0x", %x%meta_get_class(0), "\n";
-  print "\n";
+  print "timestamp = ", %u%sec, " seconds and ", %u%nsec, " nanoseconds";
+  print "pre-snap length = ", %d%meta_get_presnap(0);
+  print "input port = ", %d%meta_get_inport(0);
+  print "output port = ", %d%meta_get_outport(0);
+  print "flow id = 0x", %x%meta_get_flowid(0);
+  print "traffic class = 0x", %x%meta_get_class(0);
+  print "";
 }
 
 
@@ -25,13 +25,13 @@
 
 
 ?- meta_get_outport(0) == 51 -? {
-  print "after\n";
+  print "after";
   sec = meta_get_ts_sec(0);
   nsec = meta_get_ts_nsec(0);
-  print "timestamp = ", %u%sec, " seconds and ", %u%nsec, " nanoseconds\n";
-  print "pre-snap length = ", %d%meta_get_presnap(0), "\n";
-  print "input port = ", %d%meta_get_inport(0), "\n";
-  print "output port = ", %d%meta_get_outport(0), "\n";
-  print "flow id = 0x", %x%meta_get_flowid(0), "\n";
-  print "traffic class = 0x", %x%meta_get_class(0), "\n";
+  print "timestamp = ", %u%sec, " seconds and ", %u%nsec, " nanoseconds";
+  print "pre-snap length = ", %d%meta_get_presnap(0);
+  print "input port = ", %d%meta_get_inport(0);
+  print "output port = ", %d%meta_get_outport(0);
+  print "flow id = 0x", %x%meta_get_flowid(0);
+  print "traffic class = 0x", %x%meta_get_class(0);
 }

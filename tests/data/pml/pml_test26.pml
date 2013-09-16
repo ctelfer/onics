@@ -7,7 +7,7 @@ BEGIN {
 			i = i + 1;
 			continue;
 		}
-		print "i = ", i, "\n";
+		print "i = ", i;
 		i = i + 1;
 	}
 }
