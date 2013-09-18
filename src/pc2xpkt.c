@@ -34,9 +34,9 @@
 #define PKTMAX  (1024 * 64 + 64)
 
 struct clopt g_options[] = {
-	CLOPT_INIT(CLOPT_UINT,   'n', "--iface-num",
-		   "interface number to tag packets with"),
-	CLOPT_INIT(CLOPT_STRING, 'h', "--help", "print help")
+	CLOPT_I_UINT('n', NULL, "IFNUM",
+		     "interface number to tag packets with"),
+	CLOPT_I_NOARG('h', NULL, "print help")
 };
 
 struct clopt_parser g_oparser =

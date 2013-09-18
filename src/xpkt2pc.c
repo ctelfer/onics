@@ -32,7 +32,7 @@
 #include <cat/optparse.h>
 
 struct clopt g_optarr[] = {
-	CLOPT_INIT(CLOPT_NOARG, 'h', "--help", "print help")
+	CLOPT_I_NOARG('h', NULL, "print help")
 };
 
 

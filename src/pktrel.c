@@ -38,9 +38,9 @@ double g_start_delay = 0.0;
 double g_interval = 0.0;
 
 struct clopt g_optarr[] = {
-	CLOPT_INIT(CLOPT_NOARG, 'h', "--help", "print help"),
-	CLOPT_INIT(CLOPT_DOUBLE, 'd', "--delay", "delay start by <x> seconds"),
-	CLOPT_INIT(CLOPT_DOUBLE, 'i', "--interval", "delay <x> seconds ")
+	CLOPT_I_NOARG('h', NULL, "print help"),
+	CLOPT_I_DOUBLE('d', NULL, "NSEC", "delay start by <x> seconds"),
+	CLOPT_I_DOUBLE('i', NULL, "NSEC", "delay <x> seconds ")
 };
 
 struct clopt_parser g_oparser =

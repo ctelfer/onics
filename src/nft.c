@@ -112,17 +112,14 @@ void build_key_eth(struct pktbuf *pkb, struct prparse *dlprp,
 		   struct flow_key *key, struct flow_key *rkey);
 
 struct clopt g_optarr[] = {
-	CLOPT_INIT(CLOPT_NOARG, 'r', "--realtime",
-		   "run in realtime mode (default)"),
-	CLOPT_INIT(CLOPT_NOARG, 'R', "--relative", 
-		   "report timestamps relative to program start "
-		   "(realtime mode only)"),
-	CLOPT_INIT(CLOPT_NOARG, 't', "--timestamp", "run in timestamp mode"),
-	CLOPT_INIT(CLOPT_STRING, 'f', "--flowfile", 
-		   "file to output flow info to"),
-	CLOPT_INIT(CLOPT_DOUBLE, 'u', "--update-interval",
-		   "set the interval at which to generate updates"),
-	CLOPT_INIT(CLOPT_NOARG, 'h', "--help", "print help"),
+	CLOPT_I_NOARG('r', NULL, "run in realtime mode (default)"),
+	CLOPT_I_NOARG('R', NULL, "report timestamps relative to program start "
+		   		 "(realtime mode only)"),
+	CLOPT_I_NOARG('t', NULL, "run in timestamp mode"),
+	CLOPT_I_STRING('f', NULL, "FLOWFILE", "file to output flow info to"),
+	CLOPT_I_DOUBLE('u', NULL, "INTERVAL",
+		       "set the interval at which to generate updates"),
+	CLOPT_I_NOARG('h', NULL, "print help"),
 };
 
 struct clopt_parser g_oparser =

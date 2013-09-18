@@ -41,10 +41,10 @@ FILE *infile;
 FILE *outfile;
 
 struct clopt g_optarr[] = {
-	CLOPT_INIT(CLOPT_UINT, 'l', "--link-hdr-type", 
-		   "no xpkt header: each packet starts with type <x>"),
-	CLOPT_INIT(CLOPT_NOARG, 'f', "--flush-out", "Flush output per packet"),
-	CLOPT_INIT(CLOPT_NOARG, 'h', "--help", "print help")
+	CLOPT_I_UINT('l', NULL, "LINKTYPE",
+		     "no xpkt header: each packet starts with type <x>"),
+	CLOPT_I_NOARG('f', NULL, "Flush output per packet"),
+	CLOPT_I_NOARG('h', NULL, "print help")
 };
 
 struct clopt_parser g_oparser =

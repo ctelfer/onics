@@ -30,9 +30,9 @@
 
 
 struct clopt g_options[] = {
-	CLOPT_INIT(CLOPT_UINT,   'd', "--dlt",
-		"Datalink type of the packet"),
-	CLOPT_INIT(CLOPT_NOARG, 'h', "--help", "print help")
+	CLOPT_I_UINT('d', NULL, "LINKTYPE",
+		     "Datalink type of the packet"),
+	CLOPT_I_NOARG('h', NULL, "print help")
 };
 
 struct clopt_parser g_oparse =

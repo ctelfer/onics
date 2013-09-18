@@ -42,15 +42,15 @@
 
 
 struct clopt options[] = {
-	CLOPT_INIT(CLOPT_NOARG, 'h', "--help", "print help and exit"),
-	CLOPT_INIT(CLOPT_NOARG, 'E', "--ignore-err", "ignore netvm errors"),
-	CLOPT_INIT(CLOPT_NOARG, 'v', "--verbose", "increase verbosity"),
-	CLOPT_INIT(CLOPT_NOARG, 'q', "--quiet", "decrease verbosity"),
-	CLOPT_INIT(CLOPT_NOARG, 's', "--step", "single step the program"),
-	CLOPT_INIT(CLOPT_STRING, 'f', "--infile", "input PML program"),
-	CLOPT_INIT(CLOPT_STRING, 'e', "--expr", "input expression"),
-	CLOPT_INIT(CLOPT_STRING, 'c', "--compile", 
-		   "compile to netvm program file"),
+	CLOPT_I_NOARG('h', NULL, "print help and exit"),
+	CLOPT_I_NOARG('E', NULL, "ignore netvm errors"),
+	CLOPT_I_NOARG('v', NULL, "increase verbosity"),
+	CLOPT_I_NOARG('q', NULL, "decrease verbosity"),
+	CLOPT_I_NOARG('s', NULL, "single step the program"),
+	CLOPT_I_STRING('f', NULL, "INFILE", "input PML program"),
+	CLOPT_I_STRING('e', NULL, "EXPR", "input expression"),
+	CLOPT_I_STRING('c', NULL, "BINFILE",
+		       "compile to netvm program file"),
 };
 
 struct clopt_parser optparser =

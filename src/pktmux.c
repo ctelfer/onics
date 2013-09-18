@@ -35,7 +35,7 @@ int g_nfd = 0;
 ulong g_npkts = 0;
 
 struct clopt g_optarr[] = {
-	CLOPT_INIT(CLOPT_NOARG, 'h', "--help", "print help")
+	CLOPT_I_NOARG('h', "--help", "print help")
 };
 
 struct clopt_parser g_oparser =

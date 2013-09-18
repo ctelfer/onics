@@ -63,9 +63,9 @@ struct list *next_field = NULL;
 
 
 struct clopt g_optarr[] = {
-	CLOPT_INIT(CLOPT_NOARG, 'x', "--keep-xhdr", "keep xpkt hdr in dump"),
-	CLOPT_INIT(CLOPT_NOARG, 'f', "--flush-out", "Flush output per packet"),
-	CLOPT_INIT(CLOPT_NOARG, 'h', "--help", "print help")
+	CLOPT_I_NOARG('x', NULL, "keep xpkt hdr in dump"),
+	CLOPT_I_NOARG('f', NULL, "Flush output per packet"),
+	CLOPT_I_NOARG('h', NULL, "print help")
 };
 
 struct clopt_parser g_oparser =

@@ -36,8 +36,8 @@
 
 
 struct clopt options[] = {
-	CLOPT_INIT(CLOPT_UINT, 'h', "--help", "print help and exit"),
-	CLOPT_INIT(CLOPT_UINT, 'p', "--prog", "select program to run"),
+	CLOPT_I_NOARG('h', NULL, "print help and exit"),
+	CLOPT_I_UINT('p', NULL, "PROGNUM", "select program to run"),
 };
 
 struct clopt_parser optparser =

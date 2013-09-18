@@ -36,8 +36,8 @@ FILE *infile;
 FILE *outfile;
 
 struct clopt g_optarr[] = {
-	CLOPT_INIT(CLOPT_STRING, 'i', "--iface", "interface to send out on"),
-	CLOPT_INIT(CLOPT_NOARG, 'h', "--help", "print help")
+	CLOPT_I_STRING('i', NULL, "IFNAME", "interface to send out on"),
+	CLOPT_I_NOARG('h', NULL, "print help")
 };
 
 struct clopt_parser g_oparser =

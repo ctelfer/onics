@@ -61,11 +61,10 @@ label:	add
 	pkfxli *PKTN:PRID:INDEX:FIELD[OFFSET]
 */
 
-struct clopt options[] = { 
-	CLOPT_INIT(CLOPT_NOARG, 'h', "--help", "print help and exit"), 
-	CLOPT_INIT(CLOPT_NOARG, 'd', "--disassemble", "disassemble file"),
-	CLOPT_INIT(CLOPT_NOARG, 'e', "--skip_error", 
-				     "skip any errors during disassembly"),
+struct clopt options[] = {
+	CLOPT_I_NOARG('h', NULL, "print help and exit"),
+	CLOPT_I_NOARG('d', NULL, "disassemble file"),
+	CLOPT_I_NOARG('e', NULL, "skip any errors during disassembly"),
 };
 struct clopt_parser optparser = CLOPTPARSER_INIT(options, array_length(options));
 

@@ -40,12 +40,12 @@ FILE *infile;
 FILE *outfile;
 
 struct clopt g_options[] = {
-	CLOPT_INIT(CLOPT_STRING, 'i', "--iface", "interface to sniff from"),
-	CLOPT_INIT(CLOPT_UINT,   'n', "--iface-num",
-		   "interface number to tag packets with"),
-	CLOPT_INIT(CLOPT_NOARG,  'p', "--promisc",
-		   "set interface in promiscuous mode"),
-	CLOPT_INIT(CLOPT_STRING, 'h', "--help", "print help")
+	CLOPT_I_STRING('i', NULL, "IFNAME" "interface to sniff from"),
+	CLOPT_I_UINT('n', NULL, "IFNUM",
+		     "interface number to tag packets with"),
+	CLOPT_I_NOARG('p', "--promisc",
+		      "set interface in promiscuous mode"),
+	CLOPT_I_NOARG('h', NULL, "print help")
 };
 
 struct clopt_parser g_oparse =

@@ -37,11 +37,11 @@
 
 
 struct clopt options[] = {
-	CLOPT_INIT(CLOPT_NOARG, 'h', "--help", "print help and exit"),
-	CLOPT_INIT(CLOPT_NOARG, 'e', "--ignore-err", "ignore netvm errors"),
-	CLOPT_INIT(CLOPT_NOARG, 'v', "--verbose", "increase verbosity"),
-	CLOPT_INIT(CLOPT_NOARG, 'q', "--quiet", "decrease verbosity"),
-	CLOPT_INIT(CLOPT_NOARG, 's', "--single_step", "Single step the VM"),
+	CLOPT_I_NOARG('h', NULL, "print help and exit"),
+	CLOPT_I_NOARG('e', NULL, "ignore netvm errors"),
+	CLOPT_I_NOARG('v', NULL, "increase verbosity"),
+	CLOPT_I_NOARG('q', NULL, "decrease verbosity"),
+	CLOPT_I_NOARG('s', NULL, "Single step the VM"),
 };
 
 struct clopt_parser optparser =

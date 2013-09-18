@@ -45,7 +45,7 @@ const char *g_ifn;
 FILE *g_infile;
 
 struct clopt g_options[] = {
-	CLOPT_INIT(CLOPT_NOARG, 'h', "--help", "print help")
+	CLOPT_I_NOARG('h', NULL, "print help")
 };
 
 struct clopt_parser g_oparse =
