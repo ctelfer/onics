@@ -318,10 +318,10 @@ DIRECT ACCESS:
   name.name2[...]
 		-- could refer to: packet field, protocol or protocol constant
 
-  @name{p}
-  @name{p}.name2...
-  @name{p,i}
-  @name{p,i}.name2...
+  $(pnum)name
+  $(pnum)name.name2...
+  $(pnum,idx)name
+  $(pnum,idx)name.name2...
 		-- could refer to: packet field
 
 SUBSTRING ACCESS: 
@@ -343,20 +343,25 @@ PROTOCOL ID:
 
 At a given point in the PML program, the compiler consults the following
 namespaces in the following order to determine which value a locator
-refers to: protocol namespace, parameters, constants global variables, local
-variables.  Recall from VARIABLES above, that a locator matches none of
-the above namespaces will implicitly cause a local variable declaration
-if the reference is in the body of a function or the action of a rule.
-However, the only locator form allowable for such a declaration is
-the very first direct access form:  a name with no '@', '.', '{' or '}'
-symbols.
-
+refers to: protocol namespace, parameters, constants global variables,
+local variables.  Recall from VARIABLES above, that a locator matches
+none of the above namespaces will implicitly cause a local variable
+declaration if the reference is in the body of a function or the action
+of a rule.  However, the only locator form allowable for such a
+declaration is the very first direct access form:  a name with no
+\'$', '.', '(' or ')' symbols.
 
 The type of a locator expression is the type of the value it refers to
 with one exception.  A locator that refers to a 'sref' variable has type
 'str' (unless modified with the unary & operator in which case the
 expression has type 'sref').
 
+A direct access locator that begins with $(pnum) or $(pnum, idx) refers
+can refer to packets other than packet 0 in the working set (see below).
+The value 'pnum' (which need not be constant) selects the packet number
+in the working set.  If 'idx' is specified, it gives the header index to
+select starting from 0.  So the locator '$(1,2)tcp' refers to the 2nd
+TCP header in the second packet (packet 1) in the working set.
 
 STATEMENTS
 ----------
@@ -785,8 +790,8 @@ Special Locator Intrinsics
 
   Examples:
   	tcp		-> the first TCP PDU of packet 0
-	@ip{1,2}	-> the 2nd IP PDU of packet 1
-	@icmp6{1}	-> the first ICMPv6 PDU of packet 0
+	$(1,2)ip	-> the 2nd IP PDU of packet 1
+	$(1)icmp6	-> the first ICMPv6 PDU of packet 0
 
   void parse_update(pdesc)
   	- Update the protocol parsed fields for the PDU.  One might use
@@ -949,7 +954,7 @@ The following are not constant expressoins:
 	double(X)
 	tcp
 	isHTTP()
-	@ip{2}
+	$(2)ip
 
 The inline's double and somefunc are parameter-constant inlines, but
 isHTTP is not.  A PML program may assign any constant expression to a 'const'.
@@ -1133,6 +1138,17 @@ Intrinsics:
 				'prid' parse in packet 'pnum'
   -- void pkt_adj_off(pnum, prid, idx, oid, amt) - adjust offset 'oid' of the
 				'idx'th 'prid' parse in packet 'pnum' by 'adj'
+
+  -- int pkt_nlists() - return the number of packet lists in the system.
+  -- int pkt_lempty(listnum) - return whether a given packet list is empty.
+  -- void pkt_enq(listnum, pnum) - enqueue packet 'pnum' to the end of packet 
+				   list 'listnum'
+  -- void pkt_deq(listnum, pnum) - dequeue the next packet from the front of
+				   packet list 'listnum' to packet 'pnum'
+  -- void pkt_push(listnum, pnum) - push packet 'pnum' to the front of packet 
+				   list 'listnum'
+  -- void pkt_pop(listnum, pnum) - pop the next packet from the front of
+				   packet list 'listnum' to packet 'pnum'
 
   -- void parse_push_back(pnum, prid)
   -- void parse_pop_back(pnum)

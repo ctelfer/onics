@@ -82,6 +82,7 @@ struct prparse *netvm_find_header(struct netvm *vm, struct netvm_prp_desc *pd,
 	struct pktbuf *pkb;
 	struct prparse *prp;
 	int n = 0;
+	int lidx;
 
 	netvm_get_pd(vm, pd, onstack);
 	if (vm->status != NETVM_STATUS_RUNNING)
@@ -90,11 +91,14 @@ struct prparse *netvm_find_header(struct netvm *vm, struct netvm_prp_desc *pd,
 	if (pd->pktnum >= NETVM_MAXPKTS)
 		VMERRRET(vm, NETVM_ERR_PKTNUM, NULL);
 
-	if (!(pkb = vm->packets[pd->pktnum]))
+	if (!(pkb = vm->packets[pd->pktnum])) {
+		if (pd->field == NETVM_PRP_PIDX)
+			return NULL;
 		VMERRRET(vm, NETVM_ERR_NOPKT, NULL);
+	}
 
 	if (PRID_IS_PCLASS(pd->prid)) {
-		int lidx = pkb_get_lidx(pd->prid);
+		lidx = pkb_get_lidx(pd->prid);
 		if (lidx < 0)
 			VMERRRET(vm, NETVM_ERR_LAYER, NULL);
 		return pkb->layers[lidx];
@@ -312,8 +316,10 @@ static void ni_ldpf(struct netvm *vm)
 	VMCKRET(vm);
 
 	if (!prp) {
-		S_PUSH(vm, 
-		       (pd0.field == NETVM_PRP_PIDX ? 0 : NETVM_PF_INVALID));
+		val = NETVM_PF_INVALID;
+		if (pd0.field == NETVM_PRP_PIDX)
+			val = 0;
+		S_PUSH(vm, val);
 		return;
 	}
 
@@ -337,10 +343,19 @@ static void ni_ldpf(struct netvm *vm)
 		val = prp->prid;
 		break;
 	case NETVM_PRP_PIDX:
-		/* count number of headers until start of packet */
-		for (off = 0; !prp_list_end(prp); prp = prp_prev(prp))
-			++off;
-		val = off;
+		/* 
+		 * Very special case: 
+		 * if prid == PRID_NONE and index == 0 we are testing
+		 * for the existence of the packet.  Otherwise we 
+		 * count packet headers back to the start.
+		 */
+		if (pd0.prid == PRID_NONE && pd0.idx == 0) {
+			val = 1;
+		} else  {
+			for (off = 0; !prp_list_end(prp); prp = prp_prev(prp))
+				++off;
+			val = off;
+		}
 		break;
 	default:
 		abort_unless(pd0.field >= NETVM_PRP_OFF_BASE);
@@ -864,7 +879,7 @@ static void ni_cpop(struct netvm *vm)
 	FATAL(vm, NETVM_ERR_BADCOPROC,
 	      (cpi >= NETVM_MAXCOPROC) || ((coproc=vm->coprocs[cpi]) == NULL));
 	FATAL(vm, NETVM_ERR_BADCPOP, op >= coproc->numops);
-	(*coproc->ops[op])(vm, coproc, cpi);
+	(*coproc->ops[op])(vm, coproc, cpi, op);
 }
 
 

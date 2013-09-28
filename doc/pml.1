@@ -516,12 +516,34 @@ have the following forms:
                 -- can refer to: packet field, protocol or 
                    protocol constant
 
-  @name{p}
-  @name{p}.name2...
-  @name{p,i}
-  @name{p,i}.name2...
+  $(pnum)name
+  $(pnum)name.name2...
+  $(pnum,idx)name
+  $(pnum,idx)name.name2...
                 -- can refer to: packet field
 .fi
+.P
+At a given point in the PML program, the compiler consults the following
+namespaces in the following order to determine which value a locator
+refers to: protocol namespace, parameters, constants global variables,
+local variables.  Recall from VARIABLES above, that a locator matches
+none of the above namespaces will implicitly cause a local variable
+declaration if the reference is in the body of a function or the action
+of a rule.  However, the only locator form allowable for such a
+declaration is the very first direct access form:  a name with no
+\'$', '.', '(' or ')' symbols.
+.P
+The type of a locator expression is the type of the value it refers to
+with one exception.  A locator that refers to a 'sref' variable has type
+\'str' (unless modified with the unary & operator in which case the
+expression has type 'sref').
+.P
+A direct access locator that begins with $(pnum) or $(pnum, idx) refers
+can refer to packets other than packet 0 in the working set (see below).
+The value 'pnum' (which need not be constant) selects the packet number
+in the working set.  If 'idx' is specified, it gives the header index to
+select starting from 1.  So the locator '$(1,2)tcp' refers to the 2nd
+TCP header in the second packet (packet 1) in the working set.
 .P
 .SS "Substring Access"
 A program can access any non-empty substring of a str or sref type
@@ -546,20 +568,6 @@ error and abort the program.
   @@name.name2	-- could refer to: protocol name
 .fi
 .P
-At a given point in the PML program, the compiler consults the following
-namespaces in the following order to determine which value a locator
-refers to: protocol namespace, parameters, constants global variables,
-local variables.  Recall from VARIABLES above, that a locator matches
-none of the above namespaces will implicitly cause a local variable
-declaration if the reference is in the body of a function or the action
-of a rule.  However, the only locator form allowable for such a
-declaration is the very first direct access form:  a name with no '@',
-\'.', '{' or '}' symbols.
-.P
-The type of a locator expression is the type of the value it refers to
-with one exception.  A locator that refers to a 'sref' variable has type
-\'str' (unless modified with the unary & operator in which case the
-expression has type 'sref').
 .P
 .SS "PACKET WORKING SET"
 PML keeps a small, fixed size working set of packet buffers during
@@ -860,6 +868,42 @@ some bit operations quickly.  The intrinsics are given below.
 	  within each unit.
 .fi
 .P
+.SS "Packet Storage and Retrieval"
+The PML runtime environment allows storing a packets in lists.  These
+lists can persist between execution contexts.  Normally, at the end of a
+BEGIN, TICK or END rule or after the last packet rule executes, the
+runtime transmits all packets in the working set.  (This holds true if the
+packet rules terminate early due to a 'send' statement.)  A program can
+instead stash packets in numbered lists in either a first-in-first-out
+(FIFO) or last-in-first-out (LIFO) fashion (or even a combination of the
+two) and then retrieve them at a later point.  The number of available
+packet lists depends on the runtime, but the program can query it using
+\'pkt_nlists()'.  The \fBpml\fP command line application supports 256
+separate lists.  If a PML program terminates, the runtime will free all
+packets still stored in packet lists.
+.P
+.nf
+  int pkt_nlists()
+	- return the number of packet lists in the system.
+
+  int pkt_lempty(int listnum)
+	- return whether a given packet list is empty.
+
+  void pkt_enq(int listnum, int pnum)
+	- enqueue packet 'pnum' to the end of packet list 'listnum'
+
+  void pkt_deq(int listnum, int pnum)
+	- dequeue the next packet from the front of packet list
+	  'listnum' to packet 'pnum'
+
+  void pkt_push(int listnum, int pnum)
+	- push packet 'pnum' to the front of packet list 'listnum'
+
+  void pkt_pop(int listnum, int pnum)
+	- pop the next packet from the front of packet list 'listnum' to
+	  packet 'pnum'
+.fi
+.P
 .SS "Special Locator Intrinsics"
   These intrinsics are special in that the user does not provide a
   standard data type as an argument to the intrinsic.  The 'pdesc'
@@ -871,8 +915,8 @@ some bit operations quickly.  The intrinsics are given below.
 .P
 .nf
   	tcp		-> the first TCP PDU of packet 0
-	@ip{1,2}	-> the 2nd IP PDU of packet 1
-	@icmp6{1}	-> the first ICMPv6 PDU of packet 0
+	$(1,2)ip	-> the 2nd IP PDU of packet 1
+	$(1)icmp6	-> the first ICMPv6 PDU of packet 0
 .fi
 .P
 .nf
@@ -1051,7 +1095,7 @@ The following are not constant expressoins:
 	double(X)
 	tcp
 	isHTTP()
-	@ip{2}
+	$(2)ip
 .fi
 .P
 The inlines 'double' and 'somefunc' above are parameter-constant inlines, but

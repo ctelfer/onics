@@ -144,6 +144,39 @@ Functions
       Variable: amt [param; width=4, addr=4]
    Body -- 
       (null)
+   Function[intrinsic]: pkt_nlists() -- 0 args, 0-byte stack, return type=scalar
+   Parameters & Variables -- 
+   Body -- 
+      (null)
+   Function[intrinsic]: pkt_lempty() -- 1 args, 0-byte stack, return type=scalar
+   Parameters & Variables -- 
+      Variable: list [param; width=4, addr=0]
+   Body -- 
+      (null)
+   Function[intrinsic]: pkt_enq() -- 2 args, 0-byte stack, return type=void
+   Parameters & Variables -- 
+      Variable: list [param; width=4, addr=0]
+      Variable: pnum [param; width=4, addr=1]
+   Body -- 
+      (null)
+   Function[intrinsic]: pkt_deq() -- 2 args, 0-byte stack, return type=void
+   Parameters & Variables -- 
+      Variable: list [param; width=4, addr=0]
+      Variable: pnum [param; width=4, addr=1]
+   Body -- 
+      (null)
+   Function[intrinsic]: pkt_push() -- 2 args, 0-byte stack, return type=void
+   Parameters & Variables -- 
+      Variable: list [param; width=4, addr=0]
+      Variable: pnum [param; width=4, addr=1]
+   Body -- 
+      (null)
+   Function[intrinsic]: pkt_pop() -- 2 args, 0-byte stack, return type=void
+   Parameters & Variables -- 
+      Variable: list [param; width=4, addr=0]
+      Variable: pnum [param; width=4, addr=1]
+   Body -- 
+      (null)
    Function[intrinsic]: parse_push_back() -- 2 args, 0-byte stack, return type=void
    Parameters & Variables -- 
       Variable: pnum [param; width=4, addr=0]

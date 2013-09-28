@@ -168,7 +168,7 @@ enum {
 	NETVM_PRP_LEN,		/* total length */
 	NETVM_PRP_ERR,		/* error mask */
 	NETVM_PRP_PRID,		/* protocol ID: usually used with pclasses */
-	NETVM_PRP_PIDX,		/* protocol parse index (0 == none) */
+	NETVM_PRP_PIDX,		/* protocol parse index (0 == none) SEE BELOW */
 	NETVM_PRP_OFF_BASE,
 
 	NETVM_PRP_SOFF = NETVM_PRP_OFF_BASE,	/* parse start offset */
@@ -179,6 +179,18 @@ enum {
 
 #define NETVM_ISPRPOFF(f)	((f) >= NETVM_PRP_OFF_BASE)
 #define NETVM_PF_INVALID	0xFFFFFFFF
+
+/*
+ * NETVM_PRP_PIDX is a very special field.  Querying this field will not
+ * generate an error when the packet is not present.  Nor will the field
+ * offset be NETVM_PF_INVALID.  Instead, a 0 value indicates that the
+ * field or even the packet is not present.  A non-zero value indicates
+ * the numeric index of the given parse.  But there is an exception to
+ * this rule as well!  If the PRID of the packet desriptor is PRID_NONE
+ * and the index of the packet descriptor is 0, then NetVM interprets
+ * this as a test for the existence of the packet itself.  So, it will
+ * return 1 if the packet exists and 0 otherwise.
+ */
 
 
 /* 
@@ -192,7 +204,7 @@ enum {
  * CP's 'validate' method should ensure that CPOPI calls are 'safe' and
  * return an error if this can not be guaranteed.
  *
- * Each co-processor also has a co-processor type (CPT) which is a 64-bit ID
+ * Each co-processor also has a co-processor type (CPT) which is a 32-bit ID
  * denoting function, version, etc of the co-processor.  The GETCPT
  * instruction lets the VM query the CPTs of the current VM.  So, a
  * non-matchonly VM can have dynamically discoverable operations. 
@@ -202,7 +214,8 @@ enum {
  * CPOs should generally conform to the conventions of NetVM instructions.
  */
 struct netvm_coproc;
-typedef void (*netvm_cpop)(struct netvm *vm, struct netvm_coproc *cpc, int cpi);
+typedef void (*netvm_cpop)(struct netvm *vm, struct netvm_coproc *cpc, int cpi,
+			   int op);
 
 /*
  * Methods:

@@ -622,6 +622,45 @@ static int _i_pktoff(struct pmlncg *cg, struct pml_call *c,
 }
 
 
+static int _i_cg_listop(struct pmlncg *cg, struct pml_call *c,
+		        struct cg_intr *intr)
+{
+	struct pml_list *pl = c->args;
+	union pml_node *list, *pnum;
+	int cpop;
+
+	if (strcmp(intr->name, "pkt_nlists") == 0) {
+		cpop = NETVM_CPOC_NUMQ;
+	} else if (strcmp(intr->name, "pkt_lempty") == 0) {
+		list = l_to_node(l_head(&pl->list));
+		if (cg_expr(cg, list, PML_ETYPE_SCALAR) < 0)
+			return -1;
+		cpop = NETVM_CPOC_QEMPTY;
+	} else {
+		list = l_to_node(l_head(&pl->list));
+		pnum = l_to_node(l_next(&list->base.ln));
+		if (cg_expr(cg, list, PML_ETYPE_SCALAR) < 0)
+			return -1;
+		if (cg_expr(cg, pnum, PML_ETYPE_SCALAR) < 0)
+			return -1;
+		if (strcmp(intr->name, "pkt_enq") == 0) {
+			cpop = NETVM_CPOC_ENQ;
+		} else if (strcmp(intr->name, "pkt_deq") == 0 || 
+			   strcmp(intr->name, "pkt_pop") == 0) {
+			cpop = NETVM_CPOC_DEQ;
+		} else if (strcmp(intr->name, "pkt_push") == 0) {
+			cpop = NETVM_CPOC_PUSH;
+		} else {
+			abort_unless(0);
+		}
+	}
+
+	EMIT_XY(cg, CPOPI, NETVM_CPI_PKTQ, cpop);
+
+	return 0;
+}
+
+
 /*
  * generate a metadata get function based on parameters from
  * a cg_meta_ctx structure
@@ -898,6 +937,12 @@ struct cg_intr intrinsics[] = {
 	{ "pkt_parse", NULL, _i_scarg, NULL, 1, { NETVM_OP(PKPRS,0,0,0,0) } },
 	{ "pkt_get_off", NULL, _i_pktoff, NULL, 0, { {0} } },
 	{ "pkt_adj_off", NULL, _i_pktoff, NULL, 0, { {0} } },
+	{ "pkt_nlists", NULL, _i_cg_listop, NULL, 0, { {0} } },
+	{ "pkt_lempty", NULL, _i_cg_listop, NULL, 0, { {0} } },
+	{ "pkt_enq",    NULL, _i_cg_listop, NULL, 0, { {0} } },
+	{ "pkt_deq",    NULL, _i_cg_listop, NULL, 0, { {0} } },
+	{ "pkt_push",   NULL, _i_cg_listop, NULL, 0, { {0} } },
+	{ "pkt_pop",    NULL, _i_cg_listop, NULL, 0, { {0} } },
 	{ "parse_push_back",  NULL, _i_scarg, NULL, 1,
 		{ NETVM_OP(PKPPSH,0,0,0,0) } },
 	{ "parse_pop_back",   NULL, _i_scarg, NULL, 1,

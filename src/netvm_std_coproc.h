@@ -143,9 +143,11 @@ void fini_outport_cp(struct netvm_outport_cp *cp);
 /* --------- Packet Queue Coprocessor --------- */
 
 enum {
+	NETVM_CPOC_NUMQ,	/* [] return the number of queues */
 	NETVM_CPOC_QEMPTY,	/* [qnum] return whether a queue is empty */
 	NETVM_CPOC_ENQ,		/* [qnum, pktnum] enqueue onto queue qnum */
-	NETVM_CPOC_DEQ,		/* [qnum, pktnum] dequeue from queue qnum */
+	NETVM_CPOC_PUSH,	/* [qnum, pktnum] stack push onto queue qnum */
+	NETVM_CPOC_DEQ,		/* [qnum, pktnum] dequeue/pop from queue qnum */
 
 	NETVM_CPOC_NUMPQ,
 };
@@ -156,6 +158,7 @@ struct netvm_pktq_cp {
 	netvm_cpop		ops[NETVM_CPOC_NUMPQ];
 	struct list *		queues;
 	uint			nqueues;
+	ulong			npkts;
 };
 
 int init_pktq_cp(struct netvm_pktq_cp *cp, uint nqueues);
@@ -189,7 +192,7 @@ struct netvm_rex_cp {
 	struct memmgr *		rexmm;
 };
 
-int init_rex_cp(struct netvm_rex_cp *cp, struct memmgr *rexmm, uint nrex);
+int init_rex_cp(struct netvm_rex_cp *cp, struct memmgr *rexmm);
 void set_rexmm_cp(struct netvm_rex_cp *cp, struct memmgr *rexmm);
 int add_rex_cp(struct netvm_rex_cp *cp, struct rex_pat *rex);
 void fini_rex_cp(struct netvm_rex_cp *cp);

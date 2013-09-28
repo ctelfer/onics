@@ -3,9 +3,9 @@
 pcount - Count packets through the utility.
 .P
 .SH SYNOPSYS
-\fBpcount\fB [\fB-s\fP \fIinterval\fP] \fIinfile\fP 
+\fBpcount\fB [\fB-q\fP] [\fB-s\fP \fIinterval\fP] \fIinfile\fP 
 .P
-\fBpcount\fB [\fB-s\fP \fIinterval\fP] \fB-p\fP 
+\fBpcount\fB [\fB-q\fP] [\fB-s\fP \fIinterval\fP] \fB-p\fP 
 [\fIinfile\fP [\fIoutfile\fP]]
 .P
 .SH DESCRIPTION
@@ -27,6 +27,9 @@ Report the number of packets seen so far every \fIinterval\fP seconds.
 This argument must be an integral number of seconds.
 .IP "\fB-p\fP"
 Do not discard packets but rather pass them through to output.
+.IP "\fB-q\fP"
+Print more terse output when exiting:  only the total number of packets
+with no text verbage.
 .P
 .SH EXAMPLES
 Count the number of packets in a capture file.

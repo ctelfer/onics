@@ -167,14 +167,14 @@ void parse_options(int argc, char *argv[], FILE **fin, FILE **fout)
 		fn = argv[rv++];
 		*fin = fopen(fn, "r");
 		if (*fin == NULL)
-			errsys("fopen(\"%s\", \"r\")", fn);
+			errsys("fopen(\"%s\", \"r\"): ", fn);
 	}
 
 	if (rv < argc) {
 		fn = argv[rv++];
 		*fout = fopen(fn, "w");
 		if (*fout == NULL)
-			errsys("fopen(\"%s\", \"w\")", fn);
+			errsys("fopen(\"%s\", \"w\"): ", fn);
 	}
 }
 

@@ -2,16 +2,23 @@
 
 DROP=" drop; "
 STATUS=""
+OUTMSG=', " total packets."'
 
 usage() {
-	echo "usage: $0 [-s|--status INTERVAL] [INFILE]" >&2
-	echo "       $0 [-s|--status INTERVAL] [-p|--pass] [INFILE [OUTFILE]]" >&2
+	echo "usage: $0 [-q] [-s|--status INTERVAL] [INFILE]" >&2
+	echo "       $0 [-q] [-s|--status INTERVAL] [-p|--pass] [INFILE [OUTFILE]]" >&2
 	exit 1
 }
 
 if [ $# -gt 0 ]
 then
 	[ "$1" = "-h" -o "$1" = "--help" ] && usage
+
+	if [ "$1" = "-q" ]
+	then
+		OUTMSG=""
+		shift
+	fi
 
 	if [ "$1" = "-s" -o "$1" = "--status" ]
 	then
@@ -42,7 +49,7 @@ fi
 SCRIPT="int C = 0;
 	{ C = C + 1; $DROP }
 	$STATUS
-	END { print C, \" total packets seen.\n\"; }"
+	END { print C $OUTMSG; }"
 
 if [ -z "$DROP" ]
 then

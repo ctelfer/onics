@@ -40,7 +40,7 @@ FILE *infile;
 FILE *outfile;
 
 struct clopt g_options[] = {
-	CLOPT_I_STRING('i', NULL, "IFNAME" "interface to sniff from"),
+	CLOPT_I_STRING('i', NULL, "IFNAME", "interface to sniff from"),
 	CLOPT_I_UINT('n', NULL, "IFNUM",
 		     "interface number to tag packets with"),
 	CLOPT_I_NOARG('p', "--promisc",

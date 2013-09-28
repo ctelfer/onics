@@ -116,5 +116,8 @@ pml_test 44 NONE
 pml_test 45 $PDIR/onepkt.xpkt
 pml_test 46 $PDIR/onepkt.xpkt
 pml_test 47 NONE
+pml_test 48 $PDIR/onepkt.xpkt
+pml_test 49 $PDIR/twoudp.xpkt
+pml_test 50 $PDIR/twoudp.xpkt
 
 exit $ERR

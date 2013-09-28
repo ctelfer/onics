@@ -1,0 +1,8 @@
+There is no packet.
+There is still no packet.
+Packet 1 doesn't exist either.
+Packet 1 doesn't exist again.
+Got a packet when we should.
+Got a packet when we should. (.exists)
+Packet 1 doesn't when packet 0 does.
+Packet 1 doesn't exist when packet 0 does.
