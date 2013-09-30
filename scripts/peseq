@@ -137,7 +137,7 @@ done
 
 PROG="$PROG
       { U = U + 1; $DROP }
-      END { print U, \" unsequenced frames\\n\"; }"
+      END { print U, \" unsequenced frames\"; }"
 
 
 exec pml -e "$PROG" $1

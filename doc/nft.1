@@ -42,6 +42,8 @@ Write the flow events to \fIflowfile\fP instead of writing the flow
 events to standard error.
 .IP \fB-h\fP
 Print the usage of the command and exit.
+.IP \fB-q\fP
+Quiet mode:  do not dump flow events at all.  Just assign flow IDs.
 .IP \fB-r\fP
 Count time according to the real-time of the system.  This is the
 default mode of operation.
@@ -66,7 +68,13 @@ Print the flows from an off-line packet trace to a file:
 Tag flows for use in pml(1):
 .nf
 
-	nft -f /dev/null infile.xpkt | pml -e ""....
+	nft -q infile.xpkt | pml -e ""....
+
+.fi
+Tag flows and split them into separate files:
+.nf
+
+	nft -q infile.xpkt | psplit 
 
 .fi
 Print flows that are coming in from a live capture from eth0:
@@ -83,4 +91,4 @@ This utility should be available on all supported ONICS platforms.
 Christopher A. Telfer <ctelfer@gmail.com>
 .P
 .SH "SEE ALSO"
-pktin(1), pktout(1), pml(1)
+pktin(1), pktout(1), pml(1), psplit(1)

@@ -1,0 +1,75 @@
+.TH "split" 1 "September 2013" "ONICS 1.0"
+.SH NAME
+psplit - Split packets into trace files by flow ID.
+.P
+.SH SYNOPSYS
+\fBpsplit\fP [\fB-ahr\fP] [\fB-p\fP \fIprefix\fP] 
+[\fB-s\fP \fIsuffix\fP] [\fIinfile\fP]
+.P
+.SH DESCRIPTION
+\fBpsplit\fP reads in a stream of XPKT format packets and splits them
+into separate trace files based on their XPKT tagged flow IDs.  By
+default, \fBpsplit\fP stores packets in files named
+"flow.\fIflowid\fP.xpkt".  The \fB-p\fP and \fB-s\fP options can change
+in the prefix and suffix respecitively.  The \fB-p\fP option can also
+select a separate directory to store the file as the prefix can be a
+file path.  \fBpsplit\fP will store packets that are not tagged with a 
+flow ID in a file named \fIprefix\fPnofid\fIsuffix\fP.  \fBpsplit\fP
+will check to see whether a flow filename already exists by default and
+will exit if the file is present.  The user can override this with the
+\fB-a\fP option.
+.P
+.SH OPTIONS
+.IP \fB-a\fP
+Do not check to see if a trace file exists.  Instead, just 
+append packets to the file (creating the file if it doesn't exist).
+.IP \fB-h\fP
+Print the usage of the command and exit.
+.IP "\fB-p\fP \fIprefix\fP"
+Set the prefix of the trace files (including possible directory paths)
+to \fIprefix\fP.  \fIprefix\fP can be a relative or absolute directory
+path.  The default prefix is "flow.".
+.IP \fB-r\fP
+Remove the flow ID tag before writing to the trace file.
+.IP "\fB-s\fP \fIsuffix\fP"
+Set the suffix of the trace files to \fIsuffix\fP.  The default prefix
+is ".xpkt".
+.P
+.SH EXAMPLES
+Create a directory 'flows'.  Then track the flows in the file using
+nft(1) and split the packets into per-flow trace files in that
+directory.  Remove the flow IDs before storing the packets in trace
+files.
+.nf
+
+        mkdir flows
+        nft -q infile.xpkt | psplit -r -p flows/flow.
+
+.fi
+Use PML to tag ARPs in flow 1, localhost packets in flow 2, packets to
+or from 192.168.0.0/24 in flow 3.  Then separate packets by flow
+removing the flow ID before writing them.
+.nf
+
+        pml -e '?- arp -? { meta_set_flowid(0, 1); send; }
+                ?- ip and ip.saddr ~= 127.0.0.0/8 or 
+                   ip.daddr ~= 127.0.0.0/8- ? {
+                        meta_set_flowid(0, 2); 
+                        send;
+                }
+                ?- ip and ip.saddr ~= 192.168.0.0/24 or 
+                   ip.daddr ~= 192.168.0.0/24 -? {
+                        meta_set_flowid(0, 3); 
+                        send;
+                }' infile.xpkt | psplit
+
+.fi
+.P
+.SH AVAILABILITY
+This utility should be available on all supported ONICS platforms.
+.P
+.SH AUTHOR
+Christopher A. Telfer <ctelfer@gmail.com>
+.P
+.SH "SEE ALSO"
+nft(1), pml(1)

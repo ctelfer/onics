@@ -91,8 +91,8 @@ void usage(const char *estr)
 	if (estr)
 		fprintf(stderr, "%s\n", estr);
 	optparse_print(&oparse, str, sizeof(str));
-	fprintf(stderr, "usage: %s [options] IFACE [OUTFILE]\nOptions:\n%s\n",
-		progname, str);
+	fprintf(stderr, "usage: %s [options] [INFILE [OUTFILE]]\n"
+			"Options:\n%s\n", progname, str);
 	fprintf(stderr, "\nKEYTYPE can be one of:\n");
 	fprintf(stderr, "\t'xpkt.timestamp', 'xpkt.flowid', 'xpkt.class', \n"
 			"\t'xpkt.seq', 'xpkt.[+]appinfo'\n");

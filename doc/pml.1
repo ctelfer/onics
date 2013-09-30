@@ -122,7 +122,7 @@ identifiers and indices, rather than field names.  The current ONICS
 toolkit includes protocol definitions for Ethernet II, IP, IPv6, ICMP,
 ICMPv6, UDP and TCP protocols.
 .P
-PML has six basic data types: signed 64-bit integers (int), byte strings
+PML has six basic data types: signed 32-bit integers (int), byte strings
 (str), byte string references (sref), masked byte strings, regular
 expressions and the void type.  However, PML can only store a subset of
 these types in variables.  A PML global variable can hold a int, str or
@@ -228,36 +228,44 @@ WORKING SET)
 PML supports the following native types:
 .nf
  - void  -> no type or value
- - int   -> signed 64-bit integer
+ - int   -> signed 32-bit integer
  - str   -> byte string
- - sref  -> reference to a byte string
+ - sref  -> reference to a byte string 
+	    (declared as a 'str' with no length)
  - mstr  -> byte string with equal length byte string mask
  - regex -> regular expression
 .fi
 .P
-The type void may only be used for a function return value.  The program
-is not able to declare variables of type mstr and regex.  Local
-variables and function parameters may not have type str:  only global
-varaibles can have that type in this version of the language.
+The void type may only be used for a function return value.  The program
+can not contain variables of type mstr and regex.  A program can contain
+constant masked string and regular expression patterns.  But it can not
+store them in variables.  Local variables and function parameters may not
+be byte strings, but may be string references.  Only global varaibles
+may be byte strings.  
 .P
 .SS "VARIABLE DECLARATIONS"
-PML allows one to declare four types of variables:  global variables, local
-variables, function parameters and constants.  A global variable is the
-only variable that can be defined to have a type of 'str'.  It can also
-have a type of 'int' or 'sref'.  A global variable declaration takes the form:
+PML allows one to declare four types of variables:  global variables,
+local variables, function parameters and constants.  A global variable
+is the only variable that can have a byte string type.  It can also have
+a type of \'int' or 'sref'.  A global variable declaration has one of
+the following forms.
 .P
 .nf
   int NAME [= EXPRESSION] ;
-  sref NAME ;
+  str NAME ;
   str NAME '[' LENGTH ']' [= EXPRESSION] ;
   str NAME '[' ']' = EXPRESSION ;
 .fi
 .P
-The first form declares a 64-byte integer variable.  If EXPRESSION is
+The first form declares a 32-byte integer variable.  If EXPRESSION is
 present, then the variable is initialized to the value of the
 expression.  Otherwise it is initialized to 0.  The second form declares
-a globally accessible string reference.  It may not be initialized at
-compile time.  The third form declares a byte string of LENGTH bytes.
+a globally accessible string reference.  Note that although it uses the
+keyword 'str' like a byte string, the lack of '[]'s means that it is a
+reference to a string and not an actual byte strings.  A string
+reference can not have an initializer at compile time.
+.P
+The third form of declaration declares a byte string of LENGTH bytes.
 If EXPRESSION is present, then the string is initialized to the value of
 the expression (which must be of type 'str').  If the variable has a
 longer length than the initialization expression, then the program
@@ -265,18 +273,21 @@ initializes the remaining bytes in the string are initialized to 0.  If
 the initializer is greater in length than the variable then the compiler
 will report an error.  A byte string variable without an initializer
 will initially contain all 0s in every byte.  The fourth form declares a
-string variable and sets its length to the length of its initializer.
-The initializer can be a protocol constant, scalar or literal string.
-Substring access to protocol constants or literal strings is not
-supported.
+byte string variable and sets its length to the length of its
+initializer.  The initializer can be a protocol constant, scalar or
+literal string.  Substring access to protocol constants or literal
+strings is not supported.
 .P
 A program can have local variable declarations at the beginning of the
-action portions of a rule or the body of a function.  They may not
-appear in inlines however.  A rule action or function body may use
-variables of type 'int' without declaring them.  Referencing a variable
-name in a function body or rule action statement that has no binding to
-a previously declared variable or protocol-specific name (see 'LOCATORS'
-below) automatically declares a local variable of type 'int'.
+action portions of a rule or the body of a function.  Variable
+declarations may not appear in inlines.  Again, as mentioned, local
+variables can be integers and string references.  A rule action or
+function body may use variables of type 'int' without declaring them.
+Referencing a variable name in a function body or rule action statement
+that has no binding to a previously declared variable or
+protocol-specific name (see \'LOCATORS' below) automatically declares a
+local variable of type 'int'.  Local variables may not have
+initializers.
 .P
 PML initializes all uninitialized variables to 0 (int), a string of 0s
 (str) or a null reference (sref) depending on the variable type.

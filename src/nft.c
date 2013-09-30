@@ -100,6 +100,7 @@ static cat_time_t tm_update = TM_LONG_INITIALIZER(10, 0);
 static cat_time_t tm_base = TM_LONG_INITIALIZER(0, 0);
 struct dlist update_event;
 int realtime = 1;
+int noreport = 0;
 FILE *evtfile;
 
 void build_key_ipv4(struct pktbuf *pkb, struct prparse *dlprp, 
@@ -112,6 +113,7 @@ void build_key_eth(struct pktbuf *pkb, struct prparse *dlprp,
 		   struct flow_key *key, struct flow_key *rkey);
 
 struct clopt g_optarr[] = {
+	CLOPT_I_NOARG('q', NULL, "Do not report flows: only mark flowids"),
 	CLOPT_I_NOARG('r', NULL, "run in realtime mode (default)"),
 	CLOPT_I_NOARG('R', NULL, "report timestamps relative to program start "
 		   		 "(realtime mode only)"),
@@ -148,6 +150,9 @@ void parse_args(int argc, char *argv[], int *ifd, int *ofd)
 	optparse_reset(&g_oparser, argc, argv);
 	while (!(rv = optparse_next(&g_oparser, &opt))) {
 		switch (opt->ch) {
+		case 'q':
+			noreport = 1;
+			break;
 		case 'r':
 			realtime = 1;
 			break;
@@ -429,6 +434,9 @@ void gen_flow_event(struct flow *f, int evtype)
 	char keystr[256];
 	char tstr[64] = "";
 	cat_time_t dur;
+
+	if (noreport)
+		return;
 
 	flow_key_to_str(&f->key, keystr, sizeof(keystr));
 	if (evtype == FEVT_START) {

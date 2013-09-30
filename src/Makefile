@@ -23,7 +23,7 @@ LIBOBJS= ${PKTOBJ} stdproto.o netvm.o netvm_prog.o pmltree.o \
 ALL_BINARIES= \
 	      rawpkt pktdemux pktmux pktrel x2hpkt h2xpkt \
 	      nvmas nvmpf pml pc2xpkt xpkt2pc pdiff nft \
-	      pktin pktout pcapin pcapout psort
+	      pktin pktout pcapin pcapout psort psplit
 
 COMMON_TARGETS= \
 	${BINDIR}/rawpkt \
@@ -39,7 +39,8 @@ COMMON_TARGETS= \
 	${BINDIR}/xpkt2pc\
 	${BINDIR}/pdiff \
 	${BINDIR}/nft \
-	${BINDIR}/psort
+	${BINDIR}/psort \
+	${BINDIR}/psplit
 
 
 PCAP_TARGETS= \
@@ -183,6 +184,10 @@ ${BINDIR}/nft: nft.o stdproto.o ${PKTOBJ} ${PKTHDR}
 
 ${BINDIR}/psort: psort.o stdproto.o fld.o ${PKTOBJ} ${PKTHDR}
 	${CC} -o ${BINDIR}/psort psort.o stdproto.o fld.o ${PKTOBJ} \
+		${DEFS} ${OPTS} ${INCS} ${LIBS}
+
+${BINDIR}/psplit: psplit.o ${PKTOBJ} ${PKTHDR}
+	${CC} -o ${BINDIR}/psplit psplit.o ${PKTOBJ} \
 		${DEFS} ${OPTS} ${INCS} ${LIBS}
 
 
