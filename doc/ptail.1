@@ -1,0 +1,38 @@
+.TH "ptail" 1 "September 2013" "ONICS 1.0"
+.SH NAME
+ptail - Select the last N packets from a packet stream.
+.P
+.SH SYNOPSYS
+\fBptail\fB [\fB-\fP\fINUMPKTS\fP] [\fIinfile\fP [\fIoutfile\fP]]
+.P
+.SH DESCRIPTION
+\fBptail\fP is a thin wrapper script around pml(1) to save off the
+last N packets in a packet stream or file for some number N.  By default
+ptail selects the last 10 packets in a stream.  If invoked with 
+\fB-\fP\fINUMPKTS\fP where \fINUMPKTS\fP is a positive integer, then
+\fBptail\fP will select that many packets instead.
+.P
+.SH EXAMPLES
+.P
+Extract the last 7 packets from a file:
+.nf
+
+	ptail -7 infile.xpkt outfile.xpkt
+
+.fi
+Save the last 100 packets capture in an online capture of 10,000 packets:
+.nf
+
+	pktin eth0 | ppick 1 10000 | ptail -100 > savefile.txt
+
+.fi
+This implies that the equivalent of 'phead -N' would be 'ppick 1 N'.
+.P
+.SH AVAILABILITY
+This utility should be available on all supported ONICS platforms.
+.P
+.SH AUTHOR
+Christopher A. Telfer <ctelfer@gmail.com>
+.P
+.SH "SEE ALSO"
+pml(1), pcount(1), ppick(1)

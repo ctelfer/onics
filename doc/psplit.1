@@ -67,7 +67,8 @@ removing the flow ID before writing them.
 Read packets off the wire putting each packet in its own file:
 .nf
 
-        pktin | pml -e "int N=0; { N=N+1; meta_set_flowid(0, N); }" |
+        pktin eth0 |
+		pml -e "int N=0; { N=N+1; meta_set_flowid(0, N); }" |
                 psplit -r -p "packet_"
 	
 .fi

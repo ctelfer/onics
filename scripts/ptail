@@ -1,0 +1,37 @@
+#!/bin/sh
+
+MAXSTORE=10
+
+usage() {
+	echo "usage: $0 [-NUMPKTS] [INFILE [OUTFILE]]" >&2
+	exit 1
+}
+
+if [ $# -gt 0 ] && echo $1 | grep "^-" > /dev/null 2>&1
+then
+	if ! echo $1 | grep "^-[0-9][0-9]*$" > /dev/null 2>&1
+	then
+		usage
+	fi
+
+	MAXSTORE=`echo $1 | sed -e 's/^-//'`
+	shift
+fi
+
+exec pml -e "
+	int N = 0;
+	{
+		N = N + 1;
+		pkt_enq(0, 0);
+		if (N > $MAXSTORE) {
+			pkt_deq(0, 0);
+			drop 0;
+		}
+	}
+	END {
+		pkt_deq(0, 0);
+		while (pkt) {
+			send 0;
+			pkt_deq(0, 0);
+		}
+	}" $*
