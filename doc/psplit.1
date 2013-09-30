@@ -64,7 +64,13 @@ removing the flow ID before writing them.
                 }' infile.xpkt | psplit
 
 .fi
-.P
+Read packets off the wire putting each packet in its own file:
+.nf
+
+        pktin | pml -e "int N=0; { N=N+1; meta_set_flowid(0, N); }" |
+                psplit -r -p "packet_"
+	
+.fi
 .SH AVAILABILITY
 This utility should be available on all supported ONICS platforms.
 .P
@@ -72,4 +78,4 @@ This utility should be available on all supported ONICS platforms.
 Christopher A. Telfer <ctelfer@gmail.com>
 .P
 .SH "SEE ALSO"
-nft(1), pml(1)
+nft(1), pktin(1), pml(1)
