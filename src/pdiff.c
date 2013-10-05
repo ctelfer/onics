@@ -31,6 +31,7 @@
 #include <cat/emit_format.h>
 #include <cat/str.h>
 #include <cat/sort.h>
+#include <cat/optparse.h>
 
 #include "ns.h"
 #include "pktbuf.h"
@@ -102,7 +103,6 @@ enum {
 	DROP,
 	INSERT,
 	MODIFY,
-	SWAP,
 };
 
 
@@ -135,7 +135,11 @@ struct pktarr {
 
 /* An entry in the edit-distance calculation matrix */
 struct chgpath {
-	int			action;
+	short			actb;
+	short			actf;
+	ulong			shift;
+	ulong			r;
+	ulong			c;
 	double			cost;
 	struct chgpath *	next;	/* filled in after backtrace */
 };
@@ -187,10 +191,23 @@ struct pdiff {
 	ulong			nb;
 	ulong			na;
 	struct cpmatrix		cpm;
+	double **		mcosts;
 };
 
 
 /* Globals */
+
+int verbosity = 0;
+const char *progname;
+
+struct clopt g_options[] = {
+	CLOPT_I_NOARG('h', NULL, "print help"),
+	CLOPT_I_NOARG('v', NULL, "increase verbosity"),
+};
+struct clopt_parser g_oparse = CLOPTPARSER_INIT_ARR(g_options);
+
+const char *filename1;
+const char *filename2;
 
 /*
  * Basic cost constants.  Dropping is less than half as costly as insertion.
@@ -213,6 +230,46 @@ struct fdiff Fdiff;
 /* used to help enumerate the fields in a packet for nice printing */
 static struct npfield **	Farr = NULL;
 static uint 			Fasiz = 0;
+
+double pkt_cmp(struct pktent *pke1, ulong pke1n, struct pktent *pke2,
+	       ulong pke2n);
+
+void usage(const char *estr)
+{
+	char str[4096];
+	if (estr)
+		fprintf(stderr, "%s\n", estr);
+	optparse_print(&g_oparse, str, sizeof(str));
+	fprintf(stderr, "usage: %s [options] FILE1 FILE2\n%s\n", progname, str);
+	exit(1);
+}
+
+
+void parse_args(int argc, char *argv[])
+{
+	int rv;
+	struct clopt *opt;
+	
+	progname = argv[0];
+	optparse_reset(&g_oparse, argc, argv);
+	while (!(rv = optparse_next(&g_oparse, &opt))) {
+		switch(opt->ch) {
+		case 'h':
+			usage(NULL);
+			break;
+		case 'v':
+			++verbosity;
+			break;
+		}
+	}
+
+	if (rv < 0)
+		usage(g_oparse.errbuf);
+	if (rv > argc - 2)
+		usage("Incorrect # of arguments\n");
+	filename1 = argv[rv];
+	filename2 = argv[rv+1];
+}
 
 
 static void hash_packet(struct pktent *pke)
@@ -338,7 +395,7 @@ static void cpm_ealloc(struct cpmatrix *cpm, ulong nr, ulong nc)
 {
 	struct chgpath *cpe;
 	struct chgpath **rp;
-	ulong i;
+	ulong i, j;
 
 	abort_unless(nr > 0 || nc > 0 || 
 		     ULONG_MAX / sizeof(struct chgpath) / nc <= nr);
@@ -350,6 +407,10 @@ static void cpm_ealloc(struct cpmatrix *cpm, ulong nr, ulong nc)
 
 	rp = cpm->elems;
 	for (i = 0; i < nr; ++i) {
+		for (j = 0; j < nc; ++j) {
+			cpe[j].r = i;
+			cpe[j].c = j;
+		}
 		*rp++ = cpe;
 		cpe += nc;
 	}
@@ -377,20 +438,21 @@ void cpm_backtrace(struct cpmatrix *cpm)
 	abort_unless(c == cpm->ncols - 1);
 
 	elem = cpm_elem(cpm, r, c);
-	while (elem->action != DONE) {
+	elem->actf = DONE;
+	while (elem->actb != DONE) {
 		abort_unless(r < cpm->nrows && c < cpm->ncols);
 
-		switch(elem->action) {
+		switch(elem->actb) {
 		case PASS: 	r -= 1; c -= 1; break;
 		case DROP: 	r -= 1; break;
 		case INSERT: 	c -= 1; break;
 		case MODIFY:	r -= 1; c -= 1; break;
-		case SWAP:	r -= 1; c -= 1; abort_unless(0); break;
 		default:	abort_unless(0);
 		}
 
 		prev = cpm_elem(cpm, r, c);
 		prev->next = elem;
+		prev->actf = elem->actb;
 		elem = prev;
 	}
 }
@@ -402,18 +464,18 @@ static void getmincost(struct chgpath *p, double icost, double dcost,
 	/* bias towards modify */
 	if (icost < dcost) {
 		if (icost < mcost) {
-			p->action = INSERT;
+			p->actb = INSERT;
 			p->cost = icost;
 		} else {
-			p->action = maction;
+			p->actb = maction;
 			p->cost = mcost;
 		}
 	} else {
 		if (dcost < mcost) {
-			p->action = DROP;
+			p->actb = DROP;
 			p->cost = dcost;
 		} else {
-			p->action = maction;
+			p->actb = maction;
 			p->cost = mcost;
 		}
 	}
@@ -423,11 +485,26 @@ static void getmincost(struct chgpath *p, double icost, double dcost,
 void pdiff_load(struct pdiff *pd, FILE *before, const char *bname, 
 		FILE *after, const char *aname)
 {
+	double *dp;
+	ulong i, j;
+
 	pa_readfile(&pd->before, before, bname);
 	pa_readfile(&pd->after, after, aname);
 	pd->nb = pd->before.npkts;
 	pd->na = pd->after.npkts;
 	cpm_ealloc(&pd->cpm, pd->nb+1, pd->na+1);
+
+	/* precompute pair-wise modification costs between each packet */
+	pd->mcosts = calloc(sizeof(double *), pd->nb);
+	dp = calloc(sizeof(double), pd->nb * pd->na);
+	for (i = 0; i < pd->nb; ++i) {
+		pd->mcosts[i] = dp;
+		dp += pd->na;
+		for (j = 0; j < pd->na; ++j) {
+			pd->mcosts[i][j] = pkt_cmp(&pd->before.pkts[i], i+1,
+						   &pd->after.pkts[j], j+1);
+		}
+	}
 }
 
 
@@ -440,6 +517,9 @@ void pdiff_clear(struct pdiff *pd)
 	cpm_clear(&pd->cpm);
 	pd->na = 0;
 	pd->nb = 0;
+	free(pd->mcosts[0]);
+	free(pd->mcosts);
+	pd->mcosts = NULL;
 }
 
 
@@ -558,12 +638,12 @@ void fdiff_compare(struct fdiff *fd, double drop_bit_cost, double ins_bit_cost)
 	double adj_drop_bit_cost = drop_bit_cost * 1.05;
 	double adj_ins_bit_cost = ins_bit_cost * 1.05;
 
-	cpm_elem(cpm, 0, 0)->action = DONE;
+	cpm_elem(cpm, 0, 0)->actb = DONE;
 	cpm_elem(cpm, 0, 0)->cost = 0.0;
 	rnpf = npfl_first(rnpfl);
 	for (i = 1; i < cpm->nrows; ++i) {
 		dpos = cpm_elem(cpm, i, 0);
-		dpos->action = DROP;
+		dpos->actb = DROP;
 		dpos->cost = cpm_elem(cpm, i-1, 0)->cost + 
 			     rnpf->len * adj_drop_bit_cost;
 		rnpf = npf_next(rnpf);
@@ -572,7 +652,7 @@ void fdiff_compare(struct fdiff *fd, double drop_bit_cost, double ins_bit_cost)
 	cnpf = npfl_first(cnpfl);
 	for (i = 1; i < cpm->ncols; ++i) {
 		ipos = cpm_elem(cpm, 0, i);
-		ipos->action = INSERT;
+		ipos->actb = INSERT;
 		ipos->cost = cpm_elem(cpm, 0, i-1)->cost + 
 			     cnpf->len * adj_ins_bit_cost;
 		cnpf = npf_next(cnpf);
@@ -699,28 +779,26 @@ static void emit_fmod_gap(struct emitter *e, struct npf_list *npfl1,
 }
 
 
-static void field_mod_report(struct emitter *e, struct npf_list *npfl1,
-			     struct npfield *npf1, struct npf_list *npfl2,
-			     struct npfield *npf2)
+static void mod_fld_report(struct emitter *e, struct npf_list *npfl1,
+			   struct npfield *npf1, struct npf_list *npfl2,
+			   struct npfield *npf2)
 {
 
 	if (!npf_is_gap(npf1)) {
-		emit_field(e, npfl1, npf1, "%-");
-		emit_field(e, npfl2, npf2, "%+");
+		emit_field(e, npfl1, npf1, "%- ");
+		emit_field(e, npfl2, npf2, "%+ ");
 	} else {
 		emit_fmod_gap(e, npfl1, npf1, npfl2, npf2);
 	}
 }
 
 
-static void hdr_mod_report(struct emitter *e, struct prpent *ppe1, ulong p1n,
+static void mod_hdr_report(struct emitter *e, struct prpent *ppe1, ulong p1n,
 			   struct prpent *ppe2, ulong p2n, 
 			   double drop_bit_cost, double ins_bit_cost)
 {
-	ulong r = 0;
-	ulong c = 0;
 	struct cpmatrix *cpm;
-	struct chgpath *elem, *next;
+	struct chgpath *elem;
 	struct npfield *rnpf, *cnpf;
 	char line[256];
 	struct npf_list *bnpfl, *anpfl;
@@ -737,39 +815,43 @@ static void hdr_mod_report(struct emitter *e, struct prpent *ppe1, ulong p1n,
 	rnpf = npfl_first(bnpfl);
 	cnpf = npfl_first(anpfl);
 
-	while (elem->next != NULL) {
-		next = elem->next;
-		switch (next->action) {
+	while (elem->actf != DONE) {
+		switch (elem->actf) {
 		case PASS: 
-			r += 1; rnpf = npf_next(rnpf);
-			c += 1; cnpf = npf_next(cnpf);
+			if (verbosity > 0) {
+				ns_tostr(rnpf->nse, rnpf->buf, rnpf->prp, line,
+					 sizeof(line), "   ");
+				emit_string(e, line);
+			}
+			rnpf = npf_next(rnpf);
+			cnpf = npf_next(cnpf);
 			break;
 
 		case DROP:
 			ns_tostr(rnpf->nse, rnpf->buf, rnpf->prp, line, 
-				 sizeof(line), "--");
+				 sizeof(line), "-- ");
 			emit_string(e, line);
-			r += 1; rnpf = npf_next(rnpf);
+			rnpf = npf_next(rnpf);
 			break;
 
 		case INSERT:
 			ns_tostr(cnpf->nse, cnpf->buf, cnpf->prp, line,
-				 sizeof(line), "++");
+				 sizeof(line), "++ ");
 			emit_string(e, line);
-			c += 1; cnpf = npf_next(cnpf);
+			cnpf = npf_next(cnpf);
 			break;
 
 		case MODIFY:
-			field_mod_report(e, bnpfl, rnpf, anpfl, cnpf);
-			r += 1; rnpf = npf_next(rnpf);
-			c += 1; cnpf = npf_next(cnpf);
+			mod_fld_report(e, bnpfl, rnpf, anpfl, cnpf);
+			rnpf = npf_next(rnpf);
+			cnpf = npf_next(cnpf);
 			break;
 
-		case SWAP:
 		default: abort_unless(0);
 		}
 
-		elem = next;
+		elem = elem->next;
+		abort_unless(elem != NULL);
 	}
 
 	fdiff_clear(&Fdiff);
@@ -874,7 +956,7 @@ void hdiff_compare(struct hdiff *hd)
 	double ins_bit_cost, adj_ins_bit_cost;
 	struct prpent *bppe, *appe;
 
-	cpm_elem(cpm, 0, 0)->action = DONE;
+	cpm_elem(cpm, 0, 0)->actb = DONE;
 	cpm_elem(cpm, 0, 0)->cost = 0.0;
 
 	/* 
@@ -893,14 +975,14 @@ void hdiff_compare(struct hdiff *hd)
 
 	for (i = 1; i < cpm->nrows; ++i) {
 		dpos = cpm_elem(cpm, i, 0);
-		dpos->action = DROP;
+		dpos->actb = DROP;
 		dpos->cost = cpm_elem(cpm, 0, i-1)->cost +
 			     hd->bpke->prparr[i-1].nbits * adj_drop_bit_cost;
 	}
 
 	for (i = 1; i < cpm->ncols; ++i) {
 		ipos = cpm_elem(cpm, 0, i);
-		ipos->action = INSERT;
+		ipos->actb = INSERT;
 		ipos->cost = cpm_elem(cpm, 0, i-1)->cost +
 			     hd->apke->prparr[i-1].nbits * adj_ins_bit_cost;
 	}
@@ -968,21 +1050,19 @@ void pdiff_compare(struct pdiff *pd)
 	double dcost;
 	struct cpmatrix *cpm = &pd->cpm;
 	struct chgpath *ipos, *dpos, *mpos;
-	struct pktarr *rpkts = &pd->before;
-	struct pktarr *cpkts = &pd->after;
 
-	cpm_elem(cpm, 0, 0)->action = DONE;
+	cpm_elem(cpm, 0, 0)->actb = DONE;
 	cpm_elem(cpm, 0, 0)->cost = 0;
 
 	for (i = 1; i < cpm->nrows; ++i) {
 		dpos = cpm_elem(cpm, i, 0);
-		dpos->action = DROP;
+		dpos->actb = DROP;
 		dpos->cost = i * Pkt_drop_cost;
 	}
 
 	for (i = 1; i < cpm->ncols; ++i) {
 		ipos = cpm_elem(cpm, 0, i);
-		ipos->action = INSERT;
+		ipos->actb = INSERT;
 		ipos->cost = i * Pkt_ins_cost;
 	}
 
@@ -993,8 +1073,7 @@ void pdiff_compare(struct pdiff *pd)
 			dpos = cpm_elem(cpm, i-1, j);
 			mpos = cpm_elem(cpm, i-1, j-1);
 
-			mcost = pkt_cmp(&rpkts->pkts[i-1], i,
-					&cpkts->pkts[j-1], j);
+			mcost = pd->mcosts[i-1][j-1];
 			maction = (mcost == 0.0) ? PASS : MODIFY;
 			mcost += mpos->cost;
 			icost = ipos->cost + Pkt_ins_cost;
@@ -1009,27 +1088,49 @@ void pdiff_compare(struct pdiff *pd)
 }
 
 
-static void print_hdr_op(struct emitter *e, struct prpent *ppe, int isins)
+static void print_hdr_desc(struct emitter *e, struct prpent *ppe, 
+			   const char *op, const char *pfx)
 {
 	char name[256];
-	char *op;
-	char *pfx;
 	struct prparse *prp;
 	ulong psoff;
-	struct npfield *npf;
 
 	prp = ppe->prp;
 	psoff = prp_poff(ppe->npfl.plist);
 
-	op = isins ? "INSERT" : "DROP";
-	pfx = isins ? "H+" : "H-";
-
 	prp_get_name(prp, ppe->idx, name, sizeof(name));
 	emit_format(e, "%s*****\n", pfx);
-	emit_format(e, "%s* %s header %s -- [%lu:%lu]\n", 
+	emit_format(e, "%s* %s%s -- [%lu:%lu]\n", 
 		    pfx, op, name, prp_soff(prp) - psoff,
 		    prp_totlen(prp));
 	emit_format(e, "%s*****\n", pfx);
+}
+
+
+static void print_hdr_op(struct emitter *e, struct prpent *ppe, int action)
+{
+	char *op;
+	char *pfx;
+	struct npfield *npf;
+
+	switch (action) {
+	case PASS:
+		if (verbosity < 1)
+			return;
+		op = "";
+		pfx = "   ";
+		break;
+	case DROP:
+		op = "DROP header ";
+		pfx = "H- ";
+		break;
+	case INSERT:
+		op = "INSERT header ";
+		pfx = "H+ ";
+		break;
+	}
+
+	print_hdr_desc(e, ppe, op, pfx);
 
 	for (npf = npfl_first(&ppe->npfl) ; !npf_is_end(npf) ;
 	     npf = npf_next(npf)) {
@@ -1041,9 +1142,8 @@ static void print_hdr_op(struct emitter *e, struct prpent *ppe, int isins)
 static void mod_pkt_report(struct pktent *pke1, ulong p1n, struct pktent *pke2, 
 			   ulong p2n, struct emitter *e)
 {
-	ulong r = 0, c = 0;
 	struct cpmatrix *cpm;
-	struct chgpath *elem, *next;
+	struct chgpath *elem;
 	struct prpent *rppe, *cppe;
 	double drop_bit_cost;
 	double ins_bit_cost;
@@ -1060,39 +1160,31 @@ static void mod_pkt_report(struct pktent *pke1, ulong p1n, struct pktent *pke2,
 
 
 	elem = cpm_elem(cpm, 0, 0);
-	while (elem->next != NULL)
+	while (elem->actf != DONE)
 	{
-		rppe = &pke1->prparr[r];
-		cppe = &pke2->prparr[c];
-		next = elem->next;
+		rppe = &pke1->prparr[elem->r];
+		cppe = &pke2->prparr[elem->c];
 
-		switch (next->action) {
+		switch (elem->actf) {
 		case PASS:
-			r += 1;
-			c += 1;
-			break;
-
 		case DROP:
-			print_hdr_op(e, rppe, 0);
-			r += 1;
+			print_hdr_op(e, rppe, elem->actf);
 			break;
-
 		case INSERT:
-			print_hdr_op(e, cppe, 1);
-			c += 1;
+			print_hdr_op(e, cppe, elem->actf);
 			break;
-
 		case MODIFY:
-			hdr_mod_report(e, rppe, r+1, cppe, c+1, drop_bit_cost,
-				       ins_bit_cost);
-			r += 1;
-			c += 1;
+			if (verbosity > 0)
+				print_hdr_desc(e, rppe, "", "   ");
+			mod_hdr_report(e, rppe, elem->r+1, cppe, elem->c+1,
+				       drop_bit_cost, ins_bit_cost);
 			break;
 		default:
 			abort_unless(0);
 		}
 
-		elem = next;
+		elem = elem->next;
+		abort_unless(elem != NULL);
 	}
 
 	hdiff_clear(&Hdiff);
@@ -1178,71 +1270,135 @@ static void pke_print(struct emitter *e, struct pktent *pke, char *pfx)
 }
 
 
+static int insdel_is_xpose(struct pdiff *pd, struct chgpath *e1,
+			   struct chgpath *e2)
+{
+	if (e1->actf == DROP) {
+		return e2->actf == INSERT && 
+		       pd->mcosts[e1->r][e2->c] == 0.0;
+	} else {
+		abort_unless(e1->actf == INSERT);
+		return e2->actf == DROP && 
+		       pd->mcosts[e2->r][e1->c] == 0.0;
+	}
+}
+
+
+int ck_report_reorder(struct pdiff *pd, struct chgpath *elem, struct emitter *e)
+{
+	struct chgpath *xpose = elem;
+	struct pktent *pke;
+	ulong npkts = 0;
+
+	xpose = elem->next;
+	while (xpose->actf != DONE) {
+		if (insdel_is_xpose(pd, elem, xpose))
+			break;
+		if (xpose->actf != DROP)
+			npkts++;
+		xpose = xpose->next;
+		abort_unless(xpose != NULL);
+	}
+	if (xpose->actf == DONE)
+		return 0;
+
+	xpose->shift = npkts;
+
+	if (elem->actf == DROP) {
+		emit_string(e, "#####\n");
+		emit_format(e, "# Packet %lu moved forward %lu packets\n", 
+			    elem->r+1, npkts);
+		emit_string(e, "#####\n");
+		emit_string(e, "\n");
+	} else {
+		abort_unless(elem->actf == INSERT);
+		emit_string(e, "#####\n");
+		emit_format(e, "# Move packet %lu from %lu packets ahead\n",
+			    elem->c+1, npkts);
+		emit_string(e, "#####\n");
+		pke = &pd->after.pkts[elem->c];
+		pke_print(e, pke, "<< ");
+		emit_string(e, "\n");
+	}
+	
+	return 1;
+}
+
+
 void pdiff_report(struct pdiff *pd, struct emitter *e)
 {
-	ulong r = 0;
-	ulong c = 0;
 	struct cpmatrix *cpm = &pd->cpm;
-	struct chgpath *elem, *next;
+	struct chgpath *elem;
 	struct pktent *pke;
 
 	elem = cpm_elem(cpm, 0, 0);
-	while (elem->next != NULL) {
-		next = elem->next;
-		switch (next->action) {
+	while (elem->actf != DONE) {
+		switch (elem->actf) {
 		case PASS: 
-			r += 1; 
-			c += 1;
+			if (verbosity > 0) {
+				emit_string(e, "#####\n");
+				emit_format(e, "# Pass packet %lu\n",
+					    elem->r+1);
+				emit_string(e, "#####\n");
+				if (verbosity > 1) {
+					pke = &pd->before.pkts[elem->r];
+					pke_print(e, pke, "   ");
+				}
+				emit_string(e, "\n");
+			}
 			break;
 
 		case DROP:
-			emit_string(e, "#####\n");
-			emit_format(e, "# DROP packet %lu\n", r+1);
-			emit_string(e, "#####\n");
-			pke = &pd->before.pkts[r];
-			pke_print(e, pke, "--");
-			emit_string(e, "\n");
-			r += 1;
+			pke = &pd->before.pkts[elem->r];
+			if (elem->shift > 0) {
+				emit_string(e, "#####\n");
+				emit_format(e, "# Packet %lu moved backwards "
+					       "%lu packets\n", elem->r+1, 
+					    elem->shift);
+				emit_string(e, "#####\n");
+			} else if (!ck_report_reorder(pd, elem, e)) {
+				emit_string(e, "#####\n");
+				emit_format(e, "# DROP packet %lu\n", 
+					    elem->r+1);
+				emit_string(e, "#####\n");
+				pke_print(e, pke, "-- ");
+				emit_string(e, "\n");
+			}
 			break;
 
 		case INSERT:
-			emit_string(e, "#####\n");
-			emit_format(e, "# INSERT packet %lu\n", c+1);
-			emit_string(e, "#####\n");
-			pke = &pd->after.pkts[c];
-			pke_print(e, pke, "++");
-			emit_string(e, "\n");
-			c += 1;
+			pke = &pd->after.pkts[elem->c];
+			if (elem->next->shift > 0) {
+				emit_string(e, "#####\n");
+				emit_format(e, "# Packet %lu moved %lu "
+					       "forward\n", elem->c+1,
+					    elem->shift);
+				emit_string(e, "#####\n");
+				pke_print(e, pke, ">> ");
+				emit_string(e, "\n");
+			} else if (!ck_report_reorder(pd, elem, e)) {
+				emit_string(e, "#####\n");
+				emit_format(e, "# INSERT packet %lu\n",
+					    elem->c+1);
+				emit_string(e, "#####\n");
+				pke_print(e, pke, "++ ");
+				emit_string(e, "\n");
+			}
 			break;
 
 		case MODIFY:
 			emit_string(e, "#####\n");
 			emit_format(e, "# MODIFY packet %lu -> packet %lu\n",
-				    r+1, c+1);
+				    elem->r+1, elem->c+1);
 			emit_string(e, "#####\n");
-			mod_pkt_report(&pd->before.pkts[r], r+1, 
-				       &pd->after.pkts[c], c+1, e);
+			mod_pkt_report(&pd->before.pkts[elem->r], elem->r+1, 
+				       &pd->after.pkts[elem->c], elem->c+1, e);
 			emit_string(e, "\n");
-			r += 1; 
-			c += 1;
-			break;
-
-		case SWAP:
-			emit_string(e, "#####\n");
-			emit_format(e, "# SWAP packet %lu with packet %lu\n",
-				    r, r+1);
-			emit_string(e, "#####\n");
-			pke = &pd->before.pkts[r];
-			pke_print(e, pke, "<<");
-			pke = &pd->before.pkts[r-1];
-			pke_print(e, pke, ">>");
-			emit_string(e, "\n");
-			r += 1;
-			c += 1;
 			break;
 		}
 
-		elem = next;
+		elem = elem->next;
+		abort_unless(elem != NULL);
 	}
 }
 
@@ -1271,8 +1427,7 @@ int main(int argc, char *argv[])
 	const char *f2n;
 	struct file_emitter fe;
 
-	if (argc < 3 || strcmp(argv[1], "-h") == 0)
-		err("usage: %s FILE1 FILE2\n", argv[0]);
+	parse_args(argc, argv);
 
 	fdiff_init(&Fdiff);
 	hdiff_init(&Hdiff);
@@ -1280,8 +1435,8 @@ int main(int argc, char *argv[])
 	register_std_proto();
 	pkb_init_pools(128);
 
-	openfile(argv[1], &f1, &f1n);
-	openfile(argv[2], &f2, &f2n);
+	openfile(filename1, &f1, &f1n);
+	openfile(filename2, &f2, &f2n);
 
 	pdiff_load(&pd, f1, f1n, f2, f2n);
 	pdiff_compare(&pd);

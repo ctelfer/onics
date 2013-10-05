@@ -3,7 +3,7 @@
 pdiff - Parse and print the differences between two packet traces.
 .P
 .SH SYNOPSYS
-\fBpdiff\fP \fIfile1\fP \fIfile2\fP
+\fBpdiff\fP [\fB-vh\fI] \fIfile1\fP \fIfile2\fP
 .P
 .SH DESCRIPTION
 \fBpdiff\fP compares two stream of packets in XPKT format and reports
@@ -35,6 +35,13 @@ as an abstract data type through the \fBprotoparse\fP and \fBns\fP
 libraries.  Thus it has no protocol-specific data encoded within it.
 Extending the ONICS protocol parsing automatically extends
 \fBpdiff\fP's packet decoding capabilities.
+.P
+.SH OPTIONS
+.IP \fB-h\fP
+Print the usage of the command and exit.
+.IP \fB-v\fP
+Increase the verbosity of the output.  Specifying this option multiple
+times further increases output verbosity.
 .P
 .SH EXAMPLES
 .P
