@@ -132,7 +132,7 @@ struct pktarr {
 struct chgpath {
 	short			actb;
 	short			actf;
-	ulong			shift;
+	long			shift;
 	ulong			opkt;
 	ulong			r;
 	ulong			c;
@@ -1046,7 +1046,62 @@ double pkt_cmp(struct pktent *pke1, ulong pke1n, struct pktent *pke2,
 }
 
 
-/* TODO: handle swaps */
+static int is_reorder_pair(struct pdiff *pd, struct chgpath *e1,
+			   struct chgpath *e2)
+{
+	if (e1->actf == DROP) {
+		return e2->actf == INSERT && 
+		       e2->shift == 0 &&
+		       pd->mcosts[e1->r][e2->c] == 0.0;
+	} else {
+		abort_unless(e1->actf == INSERT);
+		return e2->actf == DROP && 
+		       e2->shift == 0 &&
+		       pd->mcosts[e2->r][e1->c] == 0.0;
+	}
+}
+
+
+void find_reorder_pair(struct pdiff *pd, struct chgpath *elem)
+{
+	struct chgpath *trav;
+	long npkts = 0;
+
+	trav = elem->next;
+	while (trav->actf != DONE) {
+		if (is_reorder_pair(pd, elem, trav)) {
+			elem->shift = npkts;
+			trav->shift = -npkts;
+			trav->opkt = (elem->actf == DROP) ? elem->r + 1 :
+				     elem->c + 1;
+			elem->opkt = (trav->actf == DROP) ? trav->r + 1 :
+				     trav->c + 1;
+			break;
+		}
+		if (trav->actf != DROP)
+			++npkts;
+		trav = trav->next;
+		abort_unless(trav != NULL);
+	}
+}
+
+
+static void mark_reorders(struct pdiff *pd)
+{
+	struct cpmatrix *cpm = &pd->cpm;
+	struct chgpath *elem;
+
+	elem = cpm_elem(cpm, 0, 0);
+	while (elem->actf != DONE) {
+		if (elem->shift == 0 && 
+		    (elem->actf == DROP || elem->actf == INSERT))
+			find_reorder_pair(pd, elem);
+		elem = elem->next;
+		abort_unless(elem != NULL);
+	}
+}
+
+
 void pdiff_compare(struct pdiff *pd)
 {
 	ulong i, j;
@@ -1091,6 +1146,8 @@ void pdiff_compare(struct pdiff *pd)
 	}
 
 	cpm_backtrace(&pd->cpm);
+
+	mark_reorders(pd);
 }
 
 
@@ -1276,61 +1333,98 @@ static void pke_print(struct emitter *e, struct pktent *pke, char *pfx)
 }
 
 
-static int insdel_is_xpose(struct pdiff *pd, struct chgpath *e1,
-			   struct chgpath *e2)
+static void report_pass(struct emitter *e, struct pdiff *pd, 
+			struct chgpath *elem)
 {
-	if (e1->actf == DROP) {
-		return e2->actf == INSERT && 
-		       e2->shift == 0 &&
-		       pd->mcosts[e1->r][e2->c] == 0.0;
+	struct pktent *pke;
+	if (verbosity < 1)
+		return;
+
+	emit_string(e, "#####\n");
+	emit_format(e, "# Pass packet %lu\n", elem->r+1);
+	emit_string(e, "#####\n");
+	if (verbosity > 1) {
+		pke = &pd->before.pkts[elem->r];
+		pke_print(e, pke, "   ");
+	}
+	emit_string(e, "\n");
+}
+
+
+static void report_drop(struct emitter *e, struct pdiff *pd, 
+			struct chgpath *elem)
+{
+	struct pktent *pke = &pd->before.pkts[elem->r];
+	if (elem->shift == 0) {
+		emit_string(e, "#####\n");
+		emit_format(e, "# DROP packet %lu\n", elem->r + 1);
+		emit_string(e, "#####\n");
+		pke_print(e, pke, "-- ");
+		emit_string(e, "\n");
+	} else if (elem->shift > 0) {
+		if (verbosity <= 1)
+			return;
+		emit_string(e, "#####\n");
+		emit_format(e, "# Packet %lu moved forward %ld packet%s\n",
+			    elem->r + 1, elem->shift, 
+			    (elem->shift > 1) ? "s" : "");
+		emit_string(e, "#####\n\n");
 	} else {
-		abort_unless(e1->actf == INSERT);
-		return e2->actf == DROP && 
-		       e2->shift == 0 &&
-		       pd->mcosts[e2->r][e1->c] == 0.0;
+		/* shift < 0 */
+		if (verbosity <= 1)
+			return;
+		emit_string(e, "#####\n");
+		emit_format(e, "# Packet %lu moved backwards %ld packet%s\n",
+			    elem->r + 1, -elem->shift, 
+			    elem->shift < -1 ? "s" : "");
+		emit_string(e, "#####\n\n");
 	}
 }
 
 
-int ck_report_reorder(struct pdiff *pd, struct chgpath *elem, struct emitter *e)
+static void report_insert(struct emitter *e, struct pdiff *pd, 
+			  struct chgpath *elem)
 {
-	struct chgpath *xpose = elem;
-	struct pktent *pke;
-	ulong npkts = 0;
-
-	xpose = elem->next;
-	while (xpose->actf != DONE) {
-		if (insdel_is_xpose(pd, elem, xpose))
-			break;
-		if (xpose->actf != DROP)
-			++npkts;
-		xpose = xpose->next;
-		abort_unless(xpose != NULL);
-	}
-	if (xpose->actf == DONE)
-		return 0;
-
-	xpose->shift = npkts;
-	xpose->opkt = elem->r+1;
-
-	if (elem->actf == DROP) {
+	struct pktent *pke = &pd->after.pkts[elem->c];
+	if (elem->shift == 0) {
 		emit_string(e, "#####\n");
-		emit_format(e, "# Packet %lu moved forward %lu packet%s\n", 
-			    elem->r+1, npkts, (npkts > 1) ? "s" : "");
+		emit_format(e, "# INSERT packet\n");
 		emit_string(e, "#####\n");
+		pke_print(e, pke, "++ ");
 		emit_string(e, "\n");
-	} else {
-		abort_unless(elem->actf == INSERT);
+	} else if (elem->shift > 0) {
+		/* inserted earlier and dropped later */
 		emit_string(e, "#####\n");
 		emit_format(e, "# Packet %lu moved backwards %lu packet%s\n",
-			    xpose->r+1, npkts, (npkts > 1) ? "s" : "");
+			    elem->opkt, elem->shift, 
+			    (elem->shift > 1) ? "s" : "");
 		emit_string(e, "#####\n");
-		pke = &pd->after.pkts[elem->c];
 		pke_print(e, pke, "<< ");
 		emit_string(e, "\n");
+	} else {
+		/* shift < 0 */
+		/* dropped earlier and inserted later */
+		emit_string(e, "#####\n");
+		emit_format(e, "# Packet %lu moved forward %ld packet%s\n",
+			    elem->opkt, -elem->shift,
+			    elem->shift < -1 ? "s" : "");
+		emit_string(e, "#####\n");
+		pke_print(e, pke, ">> ");
+		emit_string(e, "\n");
 	}
-	
-	return 1;
+}
+
+
+static void report_modify(struct emitter *e, struct pdiff *pd, 
+			  struct chgpath *elem)
+{
+	struct pktent *before = &pd->before.pkts[elem->r];
+	struct pktent *after = &pd->after.pkts[elem->c];
+	emit_string(e, "#####\n");
+	emit_format(e, "# MODIFY packet %lu\n", elem->r + 1);
+	emit_string(e, "#####\n");
+	mod_pkt_report(before, elem->r + 1, after, elem->c + 1, e);
+	emit_string(e, "\n");
 }
 
 
@@ -1338,77 +1432,23 @@ void pdiff_report(struct pdiff *pd, struct emitter *e)
 {
 	struct cpmatrix *cpm = &pd->cpm;
 	struct chgpath *elem;
-	struct pktent *pke;
 
 	elem = cpm_elem(cpm, 0, 0);
 	while (elem->actf != DONE) {
 		switch (elem->actf) {
 		case PASS: 
-			if (verbosity > 0) {
-				emit_string(e, "#####\n");
-				emit_format(e, "# Pass packet %lu\n",
-					    elem->r+1);
-				emit_string(e, "#####\n");
-				if (verbosity > 1) {
-					pke = &pd->before.pkts[elem->r];
-					pke_print(e, pke, "   ");
-				}
-				emit_string(e, "\n");
-			}
+			report_pass(e, pd, elem);
 			break;
-
 		case DROP:
-			pke = &pd->before.pkts[elem->r];
-			if (elem->shift > 0) {
-				emit_string(e, "#####\n");
-				emit_format(e, "# Packet %lu moved backwards "
-					       "%lu packet%s\n",
-					    elem->r+1, 
-					    elem->shift, 
-					    elem->shift > 1 ? "s" : "");
-				emit_string(e, "#####\n");
-			} else if (!ck_report_reorder(pd, elem, e)) {
-				emit_string(e, "#####\n");
-				emit_format(e, "# DROP packet %lu\n", 
-					    elem->r+1);
-				emit_string(e, "#####\n");
-				pke_print(e, pke, "-- ");
-				emit_string(e, "\n");
-			}
+			report_drop(e, pd, elem);
 			break;
-
 		case INSERT:
-			pke = &pd->after.pkts[elem->c];
-			if (elem->shift > 0) {
-				emit_string(e, "#####\n");
-				emit_format(e, "# Packet %lu moved forward "
-					       "%lu packet%s\n",
-					    elem->opkt,
-					    elem->shift,
-					    elem->shift > 1 ? "s" : "");
-				emit_string(e, "#####\n");
-				pke_print(e, pke, ">> ");
-				emit_string(e, "\n");
-			} else if (!ck_report_reorder(pd, elem, e)) {
-				emit_string(e, "#####\n");
-				emit_format(e, "# INSERT packet\n",
-					    elem->c+1);
-				emit_string(e, "#####\n");
-				pke_print(e, pke, "++ ");
-				emit_string(e, "\n");
-			}
+			report_insert(e, pd, elem);
 			break;
-
 		case MODIFY:
-			emit_string(e, "#####\n");
-			emit_format(e, "# MODIFY packet %lu\n", elem->r+1);
-			emit_string(e, "#####\n");
-			mod_pkt_report(&pd->before.pkts[elem->r], elem->r+1, 
-				       &pd->after.pkts[elem->c], elem->c+1, e);
-			emit_string(e, "\n");
+			report_modify(e, pd, elem);
 			break;
 		}
-
 		elem = elem->next;
 		abort_unless(elem != NULL);
 	}
