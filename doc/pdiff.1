@@ -3,7 +3,7 @@
 pdiff - Parse and print the differences between two packet traces.
 .P
 .SH SYNOPSYS
-\fBpdiff\fP [\fB-vh\fI] \fIfile1\fP \fIfile2\fP
+\fBpdiff\fP [\fB-hMv\fI] \fIfile1\fP \fIfile2\fP
 .P
 .SH DESCRIPTION
 \fBpdiff\fP compares two stream of packets in XPKT format and reports
@@ -39,6 +39,9 @@ Extending the ONICS protocol parsing automatically extends
 .SH OPTIONS
 .IP \fB-h\fP
 Print the usage of the command and exit.
+.IP \fB-M\fP
+Prohibit modifications when computing the difference.  This can be useful
+when you are just interested in seeing how packets got reordered.
 .IP \fB-v\fP
 Increase the verbosity of the output.  Specifying this option multiple
 times further increases output verbosity.
@@ -49,6 +52,19 @@ Print the difference between two files:
 .nf
 
     pdiff before.xpkt after.xpkt
+
+.fi
+Print the difference between two files with more verbose output:
+.nf
+
+    pdiff -v before.xpkt after.xpkt
+
+.fi
+Print the difference between two files with verbose output and
+prohibiting modification:
+.nf
+
+    pdiff -vM before.xpkt after.xpkt
 
 .fi
 .SH AVAILABILITY

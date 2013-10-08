@@ -88,11 +88,6 @@
  *  + Perhaps operate on a _window_ of the packerts at a time to
  *    support larger streams more scalaby.  (memory usage is proportional
  *    to N*M where N is the size of stream 1 and M is the size of stream 2).
- *  + Add support for arbitrary transpositions of the position of packets.
- *    This is trickier than it looks since the problem is only generally 
- *    solved for a finite alphabet.  Making that algorithm work in this case
- *    means making each packet its own 'character' in that alphabet.  This
- *    would have a large memory usage and performance impact.
  */
 
 
@@ -138,6 +133,7 @@ struct chgpath {
 	short			actb;
 	short			actf;
 	ulong			shift;
+	ulong			opkt;
 	ulong			r;
 	ulong			c;
 	double			cost;
@@ -202,6 +198,7 @@ const char *progname;
 
 struct clopt g_options[] = {
 	CLOPT_I_NOARG('h', NULL, "print help"),
+	CLOPT_I_NOARG('M', NULL, "disallow packet modifications"),
 	CLOPT_I_NOARG('v', NULL, "increase verbosity"),
 };
 struct clopt_parser g_oparse = CLOPTPARSER_INIT_ARR(g_options);
@@ -231,6 +228,8 @@ struct fdiff Fdiff;
 static struct npfield **	Farr = NULL;
 static uint 			Fasiz = 0;
 
+int disallow_mods = 0;
+
 double pkt_cmp(struct pktent *pke1, ulong pke1n, struct pktent *pke2,
 	       ulong pke2n);
 
@@ -256,6 +255,9 @@ void parse_args(int argc, char *argv[])
 		switch(opt->ch) {
 		case 'h':
 			usage(NULL);
+			break;
+		case 'M':
+			disallow_mods = 1;
 			break;
 		case 'v':
 			++verbosity;
@@ -486,6 +488,7 @@ void pdiff_load(struct pdiff *pd, FILE *before, const char *bname,
 		FILE *after, const char *aname)
 {
 	double *dp;
+	double cost;
 	ulong i, j;
 
 	pa_readfile(&pd->before, before, bname);
@@ -501,8 +504,11 @@ void pdiff_load(struct pdiff *pd, FILE *before, const char *bname,
 		pd->mcosts[i] = dp;
 		dp += pd->na;
 		for (j = 0; j < pd->na; ++j) {
-			pd->mcosts[i][j] = pkt_cmp(&pd->before.pkts[i], i+1,
-						   &pd->after.pkts[j], j+1);
+			cost = pkt_cmp(&pd->before.pkts[i], i+1,
+				       &pd->after.pkts[j], j+1);
+			if (cost != 0.0 && disallow_mods)
+				cost = Infinity;
+			pd->mcosts[i][j] = cost;
 		}
 	}
 }
@@ -1295,7 +1301,7 @@ int ck_report_reorder(struct pdiff *pd, struct chgpath *elem, struct emitter *e)
 		if (insdel_is_xpose(pd, elem, xpose))
 			break;
 		if (xpose->actf != DROP)
-			npkts++;
+			++npkts;
 		xpose = xpose->next;
 		abort_unless(xpose != NULL);
 	}
@@ -1303,18 +1309,19 @@ int ck_report_reorder(struct pdiff *pd, struct chgpath *elem, struct emitter *e)
 		return 0;
 
 	xpose->shift = npkts;
+	xpose->opkt = elem->r+1;
 
 	if (elem->actf == DROP) {
 		emit_string(e, "#####\n");
-		emit_format(e, "# Packet %lu moved forward %lu packets\n", 
-			    elem->r+1, npkts);
+		emit_format(e, "# Packet %lu moved forward %lu packet%s\n", 
+			    elem->r+1, npkts, (npkts > 1) ? "s" : "");
 		emit_string(e, "#####\n");
 		emit_string(e, "\n");
 	} else {
 		abort_unless(elem->actf == INSERT);
 		emit_string(e, "#####\n");
-		emit_format(e, "# Move packet %lu from %lu packets ahead\n",
-			    elem->c+1, npkts);
+		emit_format(e, "# Packet %lu moved backwards %lu packet%s\n",
+			    xpose->r+1, npkts, (npkts > 1) ? "s" : "");
 		emit_string(e, "#####\n");
 		pke = &pd->after.pkts[elem->c];
 		pke_print(e, pke, "<< ");
@@ -1353,8 +1360,10 @@ void pdiff_report(struct pdiff *pd, struct emitter *e)
 			if (elem->shift > 0) {
 				emit_string(e, "#####\n");
 				emit_format(e, "# Packet %lu moved backwards "
-					       "%lu packets\n", elem->r+1, 
-					    elem->shift);
+					       "%lu packet%s\n",
+					    elem->r+1, 
+					    elem->shift, 
+					    elem->shift > 1 ? "s" : "");
 				emit_string(e, "#####\n");
 			} else if (!ck_report_reorder(pd, elem, e)) {
 				emit_string(e, "#####\n");
@@ -1370,15 +1379,17 @@ void pdiff_report(struct pdiff *pd, struct emitter *e)
 			pke = &pd->after.pkts[elem->c];
 			if (elem->next->shift > 0) {
 				emit_string(e, "#####\n");
-				emit_format(e, "# Packet %lu moved %lu "
-					       "forward\n", elem->c+1,
-					    elem->shift);
+				emit_format(e, "# Packet %lu moved forward "
+					       "%lu packet%s\n",
+					    elem->opkt,
+					    elem->shift,
+					    elem->shift > 1 ? "s" : "");
 				emit_string(e, "#####\n");
 				pke_print(e, pke, ">> ");
 				emit_string(e, "\n");
 			} else if (!ck_report_reorder(pd, elem, e)) {
 				emit_string(e, "#####\n");
-				emit_format(e, "# INSERT packet %lu\n",
+				emit_format(e, "# INSERT packet\n",
 					    elem->c+1);
 				emit_string(e, "#####\n");
 				pke_print(e, pke, "++ ");
@@ -1388,8 +1399,7 @@ void pdiff_report(struct pdiff *pd, struct emitter *e)
 
 		case MODIFY:
 			emit_string(e, "#####\n");
-			emit_format(e, "# MODIFY packet %lu -> packet %lu\n",
-				    elem->r+1, elem->c+1);
+			emit_format(e, "# MODIFY packet %lu\n", elem->r+1);
 			emit_string(e, "#####\n");
 			mod_pkt_report(&pd->before.pkts[elem->r], elem->r+1, 
 				       &pd->after.pkts[elem->c], elem->c+1, e);
