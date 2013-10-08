@@ -1281,10 +1281,12 @@ static int insdel_is_xpose(struct pdiff *pd, struct chgpath *e1,
 {
 	if (e1->actf == DROP) {
 		return e2->actf == INSERT && 
+		       e2->shift == 0 &&
 		       pd->mcosts[e1->r][e2->c] == 0.0;
 	} else {
 		abort_unless(e1->actf == INSERT);
 		return e2->actf == DROP && 
+		       e2->shift == 0 &&
 		       pd->mcosts[e2->r][e1->c] == 0.0;
 	}
 }
@@ -1377,7 +1379,7 @@ void pdiff_report(struct pdiff *pd, struct emitter *e)
 
 		case INSERT:
 			pke = &pd->after.pkts[elem->c];
-			if (elem->next->shift > 0) {
+			if (elem->shift > 0) {
 				emit_string(e, "#####\n");
 				emit_format(e, "# Packet %lu moved forward "
 					       "%lu packet%s\n",
