@@ -399,28 +399,28 @@ Packet Rules
 -----------
    Rule: (packet)
    Pattern -- 
-      Binary Operation: 'multiply' [[]; width=4]
+      Binary Operation: 'modulus' [[]; width=4]
       Left Operand -- 
-         Binary Operation: 'add' [[]; width=4]
+         Binary Operation: 'multiply' [[]; width=4]
          Left Operand -- 
-            Binary Operation: 'equals' [[]; width=4]
+            Binary Operation: 'add' [[]; width=4]
             Left Operand -- 
-               Locator: packet field(tcp.plen) [[]; width=4]
-               Reserved packet field (plen)
+               Binary Operation: 'equals' [[]; width=4]
+               Left Operand -- 
+                  Locator: packet field(tcp.plen) [[]; width=4]
+                  Reserved packet field (plen)
+               Right Operand -- 
+                  Locator: packet field(ip.hlen) [[]; width=4]
+                  Reserved packet field (hlen)
             Right Operand -- 
-               Locator: packet field(ip.hlen) [[]; width=4]
-               Reserved packet field (hlen)
+               Binary Operation: 'subtract' [[]; width=4]
+               Left Operand -- 
+                  Locator: packet field(udp.plen) [[]; width=4]
+                  Reserved packet field (plen)
+               Right Operand -- 
+                  Locator: packet field(tcp.tlen) [[]; width=4]
+                  Reserved packet field (tlen)
          Right Operand -- 
-            Binary Operation: 'subtract' [[]; width=4]
-            Left Operand -- 
-               Locator: packet field(udp.plen) [[]; width=4]
-               Reserved packet field (plen)
-            Right Operand -- 
-               Locator: packet field(tcp.tlen) [[]; width=4]
-               Reserved packet field (tlen)
-      Right Operand -- 
-         Binary Operation: 'modulus' [[]; width=4]
-         Left Operand -- 
             Binary Operation: 'shift left' [[]; width=4]
             Left Operand -- 
                Binary Operation: 'divide' [[]; width=4]
@@ -438,24 +438,24 @@ Packet Rules
                Right Operand -- 
                   Locator: packet field(icmp.header) [[v]; width=0]
                   Reserved packet field (header)
-         Right Operand -- 
-            Binary Operation: 'binary AND' [[]; width=4]
+      Right Operand -- 
+         Binary Operation: 'binary AND' [[]; width=4]
+         Left Operand -- 
+            Binary Operation: 'binary XOR' [[]; width=4]
             Left Operand -- 
-               Binary Operation: 'binary XOR' [[]; width=4]
-               Left Operand -- 
-                  Locator: packet field(icmp6.payload) [[v]; width=0]
-                  Reserved packet field (payload)
-               Right Operand -- 
-                  Locator: packet field(tcp.trailer) [[v]; width=0]
-                  Reserved packet field (trailer)
+               Locator: packet field(icmp6.payload) [[v]; width=0]
+               Reserved packet field (payload)
             Right Operand -- 
-               Binary Operation: 'binary OR' [[]; width=4]
-               Left Operand -- 
-                  Locator: packet field(ip.df) [[]; width=4]
-                  Packet field
-               Right Operand -- 
-                  Locator: packet field(tcp.syn) [[]; width=4]
-                  Packet field
+               Locator: packet field(tcp.trailer) [[v]; width=0]
+               Reserved packet field (trailer)
+         Right Operand -- 
+            Binary Operation: 'binary OR' [[]; width=4]
+            Left Operand -- 
+               Locator: packet field(ip.df) [[]; width=4]
+               Packet field
+            Right Operand -- 
+               Locator: packet field(tcp.syn) [[]; width=4]
+               Packet field
    Action Variables -- 
    Action -- 
       List:

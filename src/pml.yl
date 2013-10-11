@@ -584,10 +584,6 @@ gvar(G) ::= iddecl(I) ASSIGN expr(E) SEMICOLON. {
 		free(I.name);
 		pml_ast_err(ast,
 			    "String reference with initializer not supported.");
-	} else if (!PML_EXPR_IS_CONST(E)) {
-		free(I.name);
-		pml_ast_err(ast, "Var '%s' initializer is not constant.\n",
-			    I.name);
 	} else {
 		G = pml_var_alloc(ast, I.name, PML_VTYPE_GLOBAL, I.type, 0, E); 
 	}
@@ -865,12 +861,12 @@ pktpat(PP) ::= PPBEGIN expr(E) PPEND. { PP = E; }
 
 expr(E) ::= orexpr(OE). { E = OE; }
 
-orexpr(E) ::= andexpr(LHS) OR orexpr(RHS). {
+orexpr(E) ::= orexpr(LHS) OR andexpr(RHS). {
 	E = pml_binop_alloc(ast, PMLOP_OR, LHS, RHS); 
 }
 orexpr(E) ::= andexpr(AE). { E = AE; }
 
-andexpr(E) ::= cmpexpr(LHS) AND andexpr(RHS). {
+andexpr(E) ::= andexpr(LHS) AND cmpexpr(RHS). {
 	E = pml_binop_alloc(ast, PMLOP_AND, LHS, RHS); 
 }
 andexpr(E) ::= cmpexpr(CE). { E = CE; }
@@ -1132,41 +1128,41 @@ cmpop(OP) ::= GT. { OP = PMLOP_GT; }
 cmpop(OP) ::= LEQ. { OP = PMLOP_LEQ; }
 cmpop(OP) ::= GEQ. { OP = PMLOP_GEQ; }
 
-borexpr(E) ::= bxorexpr(LHS) BOR borexpr(RHS). {
+borexpr(E) ::= borexpr(LHS) BOR bxorexpr(RHS). {
 	E = pml_binop_alloc(ast, PMLOP_BOR, LHS, RHS); 
 }
 borexpr(E) ::= bxorexpr(BX). { E = BX; }
 
-bxorexpr(E) ::= bandexpr(LHS) BXOR bxorexpr(RHS). {
+bxorexpr(E) ::= bxorexpr(LHS) BXOR bandexpr(RHS). {
 	E = pml_binop_alloc(ast, PMLOP_BXOR, LHS, RHS); 
 }
 bxorexpr(E) ::= bandexpr(BA). { E = BA; }
 
-bandexpr(E) ::= addexpr(LHS) AMP bandexpr(RHS). {
+bandexpr(E) ::= bandexpr(LHS) AMP addexpr(RHS). {
 	E = pml_binop_alloc(ast, PMLOP_BAND, LHS, RHS); 
 }
 bandexpr(E) ::= addexpr(A). { E = A; }
 
-addexpr(E) ::= mulexpr(LHS) PLUS addexpr(RHS). {
+addexpr(E) ::= addexpr(LHS) PLUS mulexpr(RHS). {
 	E = pml_binop_alloc(ast, PMLOP_PLUS, LHS, RHS); 
 }
-addexpr(E) ::= mulexpr(LHS) MINUS addexpr(RHS). {
+addexpr(E) ::= addexpr(LHS) MINUS mulexpr(RHS). {
 	E = pml_binop_alloc(ast, PMLOP_MINUS, LHS, RHS); 
 }
 addexpr(E) ::= mulexpr(M). { E = M; }
 
-mulexpr(E) ::= shiftexpr(LHS) TIMES mulexpr(RHS). {
+mulexpr(E) ::= mulexpr(LHS) TIMES shiftexpr(RHS). {
 	E = pml_binop_alloc(ast, PMLOP_TIMES, LHS, RHS); 
 }
-mulexpr(E) ::= shiftexpr(LHS) DIV mulexpr(RHS). {
+mulexpr(E) ::= mulexpr(LHS) DIV shiftexpr(RHS). {
 	E = pml_binop_alloc(ast, PMLOP_DIV, LHS, RHS); 
 }
-mulexpr(E) ::= shiftexpr(LHS) MOD mulexpr(RHS). {
+mulexpr(E) ::= mulexpr(LHS) MOD shiftexpr(RHS). {
 	E = pml_binop_alloc(ast, PMLOP_MOD, LHS, RHS); 
 }
 mulexpr(E) ::= shiftexpr(S). { E = S; }
 
-shiftexpr(E) ::= uexpr(LHS) shiftop(OP) shiftexpr(RHS). {
+shiftexpr(E) ::= shiftexpr(LHS) shiftop(OP) uexpr(RHS). {
 	E = pml_binop_alloc(ast, OP, LHS, RHS); 
 }
 shiftexpr(E) ::= uexpr(U). { E = U; }

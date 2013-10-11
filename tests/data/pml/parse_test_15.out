@@ -434,22 +434,22 @@ Functions
          Length -- 
             Binary Operation: 'subtract' [[]; width=4]
             Left Operand -- 
-               Function call to: str_len [[]; width=4]
-               Arguments -- 
-                  List:
-                  -----
-                  Location Address: variable(r) [[c,p]; width=8]
-                  Variable -- 
-                     Variable: r [param; width=8, addr=0]
-                  -----
-            Right Operand -- 
                Binary Operation: 'subtract' [[]; width=4]
                Left Operand -- 
+                  Function call to: str_len [[]; width=4]
+                  Arguments -- 
+                     List:
+                     -----
+                     Location Address: variable(r) [[c,p]; width=8]
+                     Variable -- 
+                        Variable: r [param; width=8, addr=0]
+                     -----
+               Right Operand -- 
                   Locator: variable(off) [[]; width=4]
                   Variable -- 
                      Variable: off [param; width=4, addr=2]
-               Right Operand -- 
-                  Scalar [[c]; width=4] -- width 4: 8 (8,0x8)
+            Right Operand -- 
+               Scalar [[c]; width=4] -- width 4: 8 (8,0x8)
       -----
    Function: baz() -- 2 args, 0-byte stack, return type=string reference
    Parameters & Variables -- 

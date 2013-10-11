@@ -421,19 +421,19 @@ Functions
       Control Flow Modification: 'return'
          Binary Operation: 'add' [[]; width=4]
          Left Operand -- 
-            Locator: variable(x) [[]; width=4]
-            Variable -- 
-               Variable: x [param; width=4, addr=0]
-         Right Operand -- 
             Binary Operation: 'add' [[]; width=4]
             Left Operand -- 
+               Locator: variable(x) [[]; width=4]
+               Variable -- 
+                  Variable: x [param; width=4, addr=0]
+            Right Operand -- 
                Locator: variable(y) [[]; width=4]
                Variable -- 
                   Variable: y [local; width=4, addr=0]
-            Right Operand -- 
-               Locator: variable(z) [[]; width=4]
-               Variable -- 
-                  Variable: z [local; width=4, addr=1]
+         Right Operand -- 
+            Locator: variable(z) [[]; width=4]
+            Variable -- 
+               Variable: z [local; width=4, addr=1]
       -----
 -----------
 Begin Rule
