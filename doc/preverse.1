@@ -1,0 +1,29 @@
+.TH "preverse" 1 "September 2013" "ONICS 1.0"
+.SH NAME
+preverse - Reverse the packets in an XPKT stream
+.P
+.SH SYNOPSYS
+\fBpreverse\fB [\fIinfile\fP [\fIoutfile\fP]]
+.P
+.SH DESCRIPTION
+\fBpreverse\fP is a thin wrapper script around pml(1) reverse the packets
+in a packet stream.  This is a quick and dirty way to reverse the packets as
+it stores them all in memory and then reverses them. 
+.P
+.SH EXAMPLES
+.P
+Reverse the packets in infile.xpkt and store in outfile.xpkt
+.nf
+
+	preverse infile.xpkt outfile.xpkt
+
+.fi
+.P
+.SH AVAILABILITY
+This utility should be available on all supported ONICS platforms.
+.P
+.SH AUTHOR
+Christopher A. Telfer <ctelfer@gmail.com>
+.P
+.SH "SEE ALSO"
+pml(1), psort(1)

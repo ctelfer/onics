@@ -1,0 +1,49 @@
+.TH "xtsscale" 1 "September 2013" "ONICS 1.0"
+.SH NAME
+xtsscale - Scale the timestamps in an XPKT stream
+.P
+.SH SYNOPSYS
+\fBxtsscale\fB \fIfactor\fP [\fIinfile\fP [\fIoutfile\fP]]
+.P
+.SH DESCRIPTION
+\fBxtsscale\fP is a wrapper script around pml(1) to scale the packets in
+an XPKT stream by some factor.  The packet stream is assumed to contain
+packets in monotonically increasing timestamp order.  If the script
+encounters a packet with no XPKT timestamp or with one in the past
+relative to the first timestamp, it will drop the packet.  The
+\fIfactor\fP should be a positive real number (with decimal places 
+optional).  For example 5, 0.3 and 123.456 are all valid factors.
+\fBxtsscale\fP will multiply the relative timestamp (relative to the
+first timestamp it encounters) by \fIfactor\fP, compute a new relative
+timestamp and set that timestamp in the packet.
+.P
+This utility can come in handy should one be replaying packets from a
+packet stream by timestamp (see pktrel(1)) and one wishes to replay 
+them faster or slower than their original capture speed.
+.P
+.SH EXAMPLES
+.P
+Scale the timestamps in a packet trace by a factor of 2 to make the
+inter-packet times double those of the original packet trace and then
+send them out onto the wire.
+.nf
+
+	xtsscale 2 infile.xpkt | pktrel | pktout eth0
+
+.fi
+Sort a packet trace by timestamp (for sanity) and decrease their
+inter-packet timestamp intervals by about a 1/3rd.
+.nf
+
+	psort infile.xpkt | xtsscale 0.333333 > outfile.xpkt
+
+.fi
+.P
+.SH AVAILABILITY
+This utility should be available on all supported ONICS platforms.
+.P
+.SH AUTHOR
+Christopher A. Telfer <ctelfer@gmail.com>
+.P
+.SH "SEE ALSO"
+pml(1), psort(1), pktrel(1)

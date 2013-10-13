@@ -1,0 +1,12 @@
+#!/bin/sh
+#
+
+exec pml -e '
+{ pkt_push(0, 0); }
+END {
+	pkt_pop(0, 0);
+	while ( pkt ) {
+		send 0;
+		pkt_pop(0, 0);
+	}
+}' $*

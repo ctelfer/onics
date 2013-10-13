@@ -1,0 +1,125 @@
+#!/bin/sh
+
+#
+# Scale the timestamps of a stream of of packets.
+# These packets must be sorted.
+#
+
+if [ $# -lt 1 ] || \
+   ! echo "$1" | grep '^[0-9][0-9]*\(\.[0-9][0-9]*\)\?' > /dev/null 2>&1
+then
+	echo usage $0 FACTOR "[INFILE [OUTFILE]]"
+	exit 1
+else
+	IVAL=`echo $1 | sed -e 's/\.//' -e 's/^0*//'`
+	NDEC=`echo $1 | sed -e 's/^[0-9][0-9]*\.\?//' | wc -c`
+	NDEC=`expr $NDEC - 1`
+	shift
+fi
+
+exec pml -e "
+
+int P = 0;
+int base_sec = -1;
+int base_nsec = -1;
+int ndrop = 0;
+int npass = 0;
+
+int Factor = $IVAL;
+int Num_dec_places = $NDEC;
+str ld[32];
+str rd[32];
+int nld = 0;
+int nrd = 0;
+
+int fmul(int n) {
+    i = 0;
+    lsum = 0;
+    while (i < nld) {
+        sum = (sum + ld[i,1] * n) / 10;
+	i = i + 1;
+    }
+
+    i = 0;
+    base = 1;
+    while (i < nrd) {
+        sum = sum + n * rd[i,1] * base; 
+	base = base * 10;
+	i = i + 1;
+    }
+
+    return sum;
+}
+
+
+void load_factor(int f, int nd)
+{
+    while (nld < nd) {
+        ld[nld, 1] = f % 10;
+	nld = nld + 1;
+	f = f / 10;
+    }
+    while (f != 0) {
+        rd[nrd, 1] = f % 10;
+	nrd = nrd + 1;
+	f = f / 10;
+    }
+}
+
+
+BEGIN { load_factor(Factor, Num_dec_places); }
+
+
+{
+    P = P + 1;
+
+    sec = meta_get_ts_sec(0);
+    nsec = meta_get_ts_nsec(0);
+
+    if (sec < 0 or nsec < 0) {
+        print \"Packet \", P, \" has no timestamp: dropping\";
+        ndrop = ndrop + 1;
+        drop;
+    }
+
+    if (base_sec < 0) {
+        base_sec = sec;
+        base_nsec = nsec;
+	npass = npass + 1;
+        send;
+    }
+
+    dsec = sec - base_sec;
+    dnsec = nsec - base_nsec;
+    while (dnsec < 0) {
+        dsec = dsec - 1;
+	dnsec = dnsec + 1000000000;
+    }
+
+    if (sec < 0 or nsec < 0) {
+        print \"Packet \", P, \" is not in order: dropping\";
+	ndrop = ndrop + 1;
+	drop;
+    }
+    ms = dsec * 1000 + dnsec / 1000000;
+    
+    nms = fmul(ms);
+    sec = base_sec + nms / 1000;
+    nsec = base_nsec + (nms % 1000) * 1000000;
+    while (nsec > 1000000000) {
+        nsec = nsec - 1000000000;
+	sec = sec + 1;
+    }
+
+    meta_set_ts(0, sec, nsec);
+    npass = npass + 1;
+}
+
+
+END { 
+    if (ndrop > 0)
+        print ndrop, \" packets dropped.\";
+    if (npass > 0)
+        print npass, \" packets with adjusted timestamps.\";
+}
+" $*

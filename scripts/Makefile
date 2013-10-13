@@ -4,7 +4,8 @@ INSTALL_DIR=/usr/local/bin
 
 ALL_SCRIPTS = \
 	      ethwrap icmp6wrap icmpwrap ip6wrap ipwrap pcount \
-	      peseq ppick ptail pxseq tcpsess tcpwrap udpwrap
+	      peseq ppick preverse ptail pxseq tcpsess tcpwrap \
+	      udpwrap xtsscale
 
 all:
 
