@@ -603,6 +603,9 @@ int ipv4_nxtcld(struct prparse *reg, byte_t *buf, struct prparse *cld,
 
 	abort_unless(buf);
 	ip = prp_header(reg, buf, struct ipv4h);
+	/* non-first-fragment won't have reliable next proto info */
+	if ((ntoh16(ip->fragoff) & IPH_FRAGOFFMASK) > 0)
+		return 0;
 	if (ip->proto == IPPROT_V6V4)
 		*prid = PRID_IPV6;
 	else

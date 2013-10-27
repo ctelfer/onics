@@ -39,7 +39,8 @@ COMMON_TARGETS= \
 	${BINDIR}/pdiff \
 	${BINDIR}/nft \
 	${BINDIR}/psort \
-	${BINDIR}/psplit
+	${BINDIR}/psplit \
+	${BINDIR}/ipfrag
 
 
 PCAP_TARGETS= \
@@ -192,6 +193,10 @@ ${BINDIR}/psort: psort.o stdproto.o fld.o ${PKTOBJ} ${PKTHDR}
 
 ${BINDIR}/psplit: psplit.o ${PKTOBJ} ${PKTHDR}
 	${CC} -o ${BINDIR}/psplit psplit.o ${PKTOBJ} \
+		${DEFS} ${OPTS} ${INCS} ${LIBS}
+
+${BINDIR}/ipfrag: ipfrag.o stdproto.o ${PKTOBJ} ${PKTHDR}
+	${CC} -o ${BINDIR}/ipfrag ipfrag.o stdproto.o ${PKTOBJ} \
 		${DEFS} ${OPTS} ${INCS} ${LIBS}
 
 
