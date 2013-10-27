@@ -1,0 +1,33 @@
+.TH "onics_proto" 7 "October 2013" "ONICS 1.0"
+.SH NAME
+ONICS Standard Protocols - The protocols that ONICS supports by default
+.P
+.SH SYNOPSYS
+\fBpackage onics\fP
+.P
+.SH DESCRIPTION
+.P
+The \fBONICS\fP tool suite uses two different sets of abstractions to
+make its tool suite easily extensible.  Most of the tools that parse
+protocols do not have any protocol specific logic embedded within them.
+The \fBONICS\fP tools call into the \fBprotoparse\fP API to parse a
+packet into a tree of protocols and to manipulate the layout of
+protocols within a buffer (e.g. by inserting or removing data and
+headers from the buffer.).  The tools can then use the \fBns\fP and
+\fBfld\fP APIs to access individual protocol fields within each parse by
+name.  The \fBns\fP API also contains named protocol specific constants
+and masked patterns that are significant within a given protocol.
+.P
+Although the \fBONICS\fP tools load a default set of protocol parsers
+and namespaces, it is trivial to add new parsers as well as to replace
+the existing set of parsers.  Future versions of the tool suite will
+also be able to dynamically load additional protocol libraries at
+load time enabling users to add additional parsers for their own custom
+needs.
+.P
+.SH PROTOCOL LIST
+.P
+Below is the list of the protocols and protocol fields that the
+\fBONICS\fP tools currently support by default.
+.nf
+

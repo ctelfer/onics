@@ -50,9 +50,7 @@ pktmux/pktdemux:
 
 
 pdiff:
- + improve reorder detection
  + unit tests
- + more verbose output when desired
  * Two-column output format
  * pml edit script output format
 
@@ -65,4 +63,10 @@ psplit:
  + unit tests
 
 pmerge:
+ + implement
+
+ipfrag:
+ + implement
+
+ipreasm:
  + implement

@@ -36,6 +36,11 @@ static struct ns_namespace rootns =
 
 #define TYPEOK(t) ((t) <= NST_MASKSTR)
 
+const struct ns_namespace *ns_get_root()
+{
+	return &rootns;
+}
+
 
 int ns_add_elem(struct ns_namespace *ns, struct ns_elem *e)
 {

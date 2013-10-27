@@ -228,7 +228,7 @@ struct ns_maskstr {
 #define NS_MASKSTR_I(name, par, prid, val, mask)			\
 	NS_MASKSTR_I_LEN(name, par, prid, val, mask, array_length(val))
 
-
+const struct ns_namespace *ns_get_root(void);
 int ns_add_elem(struct ns_namespace *ns, struct ns_elem *e);
 void ns_rem_elem(struct ns_elem *e);
 struct ns_elem *ns_lookup(struct ns_namespace *ns, const char *name);

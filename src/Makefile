@@ -9,7 +9,6 @@ OPTS=-g -Wall -Wno-pointer-sign
 LIBS=-L${CATLIB_ROOT}/lib -lcat_dbg
 DEFS=
 BINDIR=../bin
-INSTALL_DIR=/usr/local/bin
 
 # common objects for packets
 PKTOBJ= xpkt.o protoparse.o ns.o util.o pktbuf.o
@@ -56,17 +55,22 @@ TARGETS=${COMMON_TARGETS} ${PCAP_TARGETS} ${PLATFORM_TARGETS}
 all: ${LIBOBJS} ${COMMON_TARGETS} ${PLATFORM_TARGETS} ${PCAP_TARGETS}
 
 install: ${COMMON_TARGETS} ${PLATFORM_TARGETS} ${PCAP_TARGETS}
-	@for p in $(ALL_BINARIES) ; do \
-		echo Installing $$p to $(INSTALL_DIR); \
-		cp ../bin/$$p $(INSTALL_DIR) ; \
-		chmod 755 $(INSTALL_DIR)/$$p ; \
-	done 
+	@( INSTALL_PREFIX=$${INSTALL_PREFIX:-/usr/local} ; \
+	INSTALL_DIR=$${INSTALL_PREFIX}/bin ; \
+	mkdir -p $${INSTALL_DIR} ; \
+	for p in $(ALL_BINARIES) ; do \
+		echo Installing $$p to $${INSTALL_DIR}; \
+		cp ../bin/$$p $${INSTALL_DIR} ; \
+		chmod 755 $${INSTALL_DIR}/$$p ; \
+	done )
 
 uninstall:
-	@for p in $(ALL_BINARIES) ; do \
-		echo Removing $(INSTALL_DIR)/$$p ; \
-		rm -f $(INSTALL_DIR)/$$p ; \
-	done 
+	@( INSTALL_PREFIX=$${INSTALL_PREFIX:-/usr/local} ; \
+	INSTALL_DIR=$${INSTALL_PREFIX}/bin ; \
+	for p in $(ALL_BINARIES) ; do \
+		echo Removing $${INSTALL_DIR}/$$p ; \
+		rm -f $${INSTALL_DIR}/$$p ; \
+	done )
 
 pcap: ${LIBOBJS} ${PCAP_TARGETS}
 

@@ -206,7 +206,7 @@ void init_ifsock()
 		if (ioctl(g_ifsock, BIOCSSEESENT, &arg) < 0)
 			errsys("ioctl(BIOCSSEESENT, 0)...");
 #else
-		err("Option -O not supported on this platform\n");
+		err("Option -I not supported on this platform\n");
 #endif
 	}
 

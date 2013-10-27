@@ -3,7 +3,7 @@
 pktin - Read a packet in from an interface.
 .P
 .SH SYNOPSYS
-\fBpktin\fP [\fB-hp\fP] [\fB-i\fP \fIifnum\fP] 
+\fBpktin\fP [\fB-hIp\fP] [\fB-i\fP \fIifnum\fP] 
 \fIifname\fP [\fIoutfile\fP]]
 .P
 .SH DESCRIPTION
@@ -26,6 +26,13 @@ interface number equal to \fIifnum\fP.  This is useful when packets can
 come in from multiple interfaces to disambiguate their origin.  If the
 user does not set this option, then \fBpktin\fP will tag incoming
 packets with interface number 0 by default.
+.IP \fB-I\fP
+Do not read in packets from the interface that the OS sent out the
+interface.  One can use this option to avoid reading in packets that one
+generated oneself.  For example, a ping application that is sending
+packets out one interface would be much more complicated if it had to
+sift out the echo requests it sent from the stream of incoming packets
+it was watching for to find the echo responses.
 .P
 .SH EXAMPLES
 .P
@@ -42,6 +49,12 @@ passing them to x2hpkt to dump.
 Copy packets from one interface to another:
 
     pktin eth0 | pktout eth1
+
+Copy bridge packets between two interfaces running them through a PML
+program to filter before sending them out:
+
+    pktin -I eth0 | pml -f eth0_to_eth1_program.pml | pktout eth1 &
+    pktin -I eth1 | pml -f eth1_to_eth0_program.pml | pktout eth0 &
 
 .fi
 .P
