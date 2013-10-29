@@ -1,9 +1,9 @@
 # Makefile for ONICS scripts
 
 MAN1_DOCS= \
-	h2xpkt.1 nft.1 nvmas.1 nvmpf.1 oprotowrap.1 pc2xpkt.1 pcapin.1 \
-	pcapout.1 pcount.1 pdiff.1 pktdemux.1 pktin.1 pktmux.1 pktout.1 \
-	pktrel.1 pml.1 ppick.1 preverse.1 psort.1 psplit.1 ptail.1 \
+	h2xpkt.1 ipfrag.1 nft.1 nvmas.1 nvmpf.1 oprotowrap.1 pc2xpkt.1 \
+	pcapin.1 pcapout.1 pcount.1 pdiff.1 pktdemux.1 pktin.1 pktmux.1 \
+	pktout.1 pktrel.1 pml.1 ppick.1 preverse.1 psort.1 psplit.1 ptail.1 \
 	rawpkt.1 tcpsess.1 x2hpkt.1 xpkt2pc.1 xtsscale.1
 
 MAN1_WRAP_DOCS= \
@@ -46,7 +46,7 @@ install: $(ALL_DOCS)
 	done ; \
 	for p in $(MAN1_WRAP_DOCS) ; do \
 		echo Linking $$p to oprotowrap.1 ; \
-		ln -s $${MAN1_INSTALL_DIR}/oprotowrap.1 $${MAN1_INSTALL_DIR}/$$p ; \
+		ln -sf $${MAN1_INSTALL_DIR}/oprotowrap.1 $${MAN1_INSTALL_DIR}/$$p ; \
 	done ; \
 	mkdir -p $${MAN7_INSTALL_DIR} ; \
 	for p in $(MAN7_DOCS) ; do \

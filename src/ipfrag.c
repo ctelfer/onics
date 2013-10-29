@@ -32,6 +32,9 @@
 #include "protoparse.h"
 #include "tcpip_hdrs.h"
 
+#define MIN_IPV4_MTU	68
+#define MIN_IPV6_MTU	1280
+
 enum {
 	PASS = 0,
 	FRAG = 1,
@@ -39,7 +42,7 @@ enum {
 };
 
 struct clopt options[] = {
-	CLOPT_I_STRING('a', NULL, "DFACT",
+	CLOPT_I_STRING('a', NULL, "DFACTION",
 		       "Action to take when frag required but DF bit set."),
 	CLOPT_I_NOARG('d', NULL, "Set the DF bit on new fragments."),
 	CLOPT_I_NOARG('h', NULL, "print help"),
@@ -66,6 +69,8 @@ void usage(const char *estr)
 	if (estr)
 		fprintf(stderr, "%s\n", estr);
 	optparse_print(&oparse, str, sizeof(str));
+	fprintf(stderr, "usage: %s [options] [INFILE [OUTFILE]]\n", progname);
+	fprintf(stderr, "Options:\n%s\n", str);
 	fprintf(stderr, "\tIf neither '-4' nor '-6' are specified, then\n");
 	fprintf(stderr, "\tthe program defaults to '-4'.  The arguments\n");
 	fprintf(stderr, "\tcan specify both '-4' and '-6'\n\n");
@@ -119,6 +124,11 @@ void parse_args(int argc, char *argv[])
 
 	if (frag4 == 0 && frag6 == 0)
 		frag4 = 1;
+
+	if (frag4 && mtu < MIN_IPV4_MTU)
+		err("MTU %lu too small for IPv4 fragmentation.\n", mtu);
+	if (frag6 && mtu < MIN_IPV6_MTU)
+		err("MTU %lu too small for IPv6 fragmentation.\n", mtu);
 
 	if (rv < argc) {
 		fn = argv[rv++];

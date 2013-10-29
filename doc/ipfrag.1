@@ -1,0 +1,81 @@
+.TH "ipfrag" 1 "October 2013" "ONICS 1.0"
+.SH NAME
+ipfrag - Fragment IP and IPv6 packets at a given MTU
+.P
+.SH SYNOPSYS
+\fBipfrag\fP [\fB-dh46\fP] [\fB-m\fP \fImtu\fP]  [\fB-a\fP \fIaction\fP]
+[\fIinfile\fP [\fIoutfile\fP]]
+.P
+.SH DESCRIPTION
+\fBipfrag\fP takes in a stream of XPKT formatted packets, searches for
+the IPv4 and/or IPv6 packets in the stream and fragments them to a
+specified maximum transmission unit (MTU) size.  The MTU is given as the
+number of bytes of the maximum IPv4/IPv6 datagram starting from the IP
+header.  \fBipfrag\fP copies datalink headers prior to the IPv4 or IPv6
+header verbatim into each new fragment.  If neither \fB-4\fP nor
+\fB-6\fP are specified as options, then \fBipfrag\fP defaults to
+fragmenting IPv4 packets only.  Otherwise it fragments only those
+protocols specified as options.
+.P
+.P
+.SH OPTIONS
+.IP "\fB-a\fP \fIaction\fP"
+Sets the action to take if \fBipfrag\fP encounters a packet that
+requires fragmentation but the packet is an IPv4 packet with the Don't
+Fragment bit set.  If \fIaction\fP is "pass", then \fBipfrag\fP passes
+the packet through unmodified.  If \fIaction\fP is "drop", then
+\fBipfrag\fP will drop the packet.  If \fIaction\fP is "frag", then
+\fBipfrag\fP will fragment the packet despite the Don't Fragment bit.
+The resulting fragments will have the Don't Fragment bit set in this
+case.
+.IP \fB-d\fP
+If this option is specified then \fBipfrag\fP will set the Don't
+Fragment bit on every fragment that it generates.  ( \fBipfrag\fP will
+not alter the Don't Fragment bits of packets that it doesn't fragment.)
+.IP \fB-h\fP
+Print the usage of the command and exit.
+.IP "\fB-m\fP \fImtu\fP"
+Set the MTU for fragmentation.  This is the maximum size of a packet
+starting with its IPv4 or IPv6 header.  The default MTU as 1500 bytes.
+\fBipfrag\fP will exit with an error if \fImtu\fP is less than the
+minimum MTU for a protocol that it must fragment.  This is 68 bytes if
+\fBipfrag\fP must fragment IPv4 packets and 1280 bytes if \fBipfrag\fP
+must fragment IPv6 packets.
+.IP \fB-4\fP
+Fragment IPv4 packets.
+.IP \fB-6\fP
+Fragment IPv6 packets.
+.P
+.SH EXAMPLES
+Fragment the IPv4 packets only in a stream with an IPv4 MTU of 576
+bytes.
+.nf
+
+	ipfrag -m 576 input.xpkt output.xpkt
+
+.fi
+Fragment IPv4 datagrams at an MTU of 600 bytes and IPv6 datagrams at an
+MTU of 1280 bytes.  Set the Don't Fragment bit on newly created IPv4
+fragments.
+.nf
+
+	ipfrag -4 -m 600 input.xpkt | ipfrag -6 -m 1280 > output.xpkt
+
+.fi
+Fragment all packets coming in eth0 and send them out eth1 and visa
+versa at an MTU of 800 bytes.  This basically creates a fragmenting
+bridge between eth0 and eth1.
+.nf
+
+	pktin -I eth0 | ipfrag -m 800 | pktout eth1 &
+	pktin -I eth1 | ipfrag -m 800 | pktout eth0 &
+
+.fi
+.SH AVAILABILITY
+This utility should be available on all supported ONICS platforms.
+.P
+.SH AUTHOR
+Christopher A. Telfer <ctelfer@gmail.com>
+.P
+.SH "SEE ALSO"
+pktin(1), pktout(1)
