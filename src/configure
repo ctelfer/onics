@@ -31,6 +31,13 @@ then
 	echo linking BSD-specific source files
 	make cfgbsd
 
+elif uname -a 2>/dev/null | grep Darwin > /dev/null 2>&1 
+then
+
+	echo configure: OSX detected
+	echo linking BSD-specific source files
+	make cfgbsd
+
 else
 	echo Unknown OS detected.  pktin/pktout will not function. 
 fi

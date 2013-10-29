@@ -22,7 +22,7 @@ LIBOBJS= ${PKTOBJ} stdproto.o netvm.o netvm_prog.o pmltree.o \
 ALL_BINARIES= \
 	      rawpkt pktdemux pktmux pktrel x2hpkt h2xpkt \
 	      nvmas nvmpf pml pc2xpkt xpkt2pc pdiff nft \
-	      pktin pktout pcapin pcapout psort psplit
+	      pktin pktout pcapin pcapout psort psplit ipfrag
 
 COMMON_TARGETS= \
 	${BINDIR}/rawpkt \
