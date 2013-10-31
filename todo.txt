@@ -17,6 +17,8 @@ PML
 
 Protocol parsing & Namespace
  + Add test test cases to validate basic packet parsing.
+ + Add test cases for IPv6 parsing.
+ + Add IPv6 extension headers in the namespace.
  * Check restrictions on parsing to ensure termination.
  > Add short-form parsing for protocols using the above.
  > MPLS
@@ -62,10 +64,10 @@ psort:
 psplit:
  + unit tests
 
-pmerge:
- + implement
-
 ipfrag:
+ + unit tests
+
+pmerge:
  + implement
 
 ipreasm:

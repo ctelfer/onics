@@ -4,7 +4,7 @@ ipfrag - Fragment IP and IPv6 packets at a given MTU
 .P
 .SH SYNOPSYS
 \fBipfrag\fP [\fB-dh46\fP] [\fB-m\fP \fImtu\fP]  [\fB-a\fP \fIaction\fP]
-[\fIinfile\fP [\fIoutfile\fP]]
+[\fB-i\fP \fInextid\fP] [\fIinfile\fP [\fIoutfile\fP]]
 .P
 .SH DESCRIPTION
 \fBipfrag\fP takes in a stream of XPKT formatted packets, searches for
@@ -17,23 +17,32 @@ header verbatim into each new fragment.  If neither \fB-4\fP nor
 fragmenting IPv4 packets only.  Otherwise it fragments only those
 protocols specified as options.
 .P
+There are certain packets that \fBipfrag\fP should not fragment and
+others that it can not fragment.  It should not fragment packets with
+the Don't Fragment bit set.  It can not fragment IPv6 packets that have
+an AH header, already have an IPv6 fragment header or whose extension
+headers are larger than the given MTU.  The \fB-a\fP option controls
+what \fBipfrag\fP does when it encounters these.
 .P
 .SH OPTIONS
 .IP "\fB-a\fP \fIaction\fP"
 Sets the action to take if \fBipfrag\fP encounters a packet that
-requires fragmentation but the packet is an IPv4 packet with the Don't
-Fragment bit set.  If \fIaction\fP is "pass", then \fBipfrag\fP passes
-the packet through unmodified.  If \fIaction\fP is "drop", then
-\fBipfrag\fP will drop the packet.  If \fIaction\fP is "frag", then
-\fBipfrag\fP will fragment the packet despite the Don't Fragment bit.
-The resulting fragments will have the Don't Fragment bit set in this
-case.
+requires fragmentation but should or can not be fragmented.  (see above)
+If \fIaction\fP is "pass", then \fBipfrag\fP passes the packet through
+unmodified.  If \fIaction\fP is "drop", then \fBipfrag\fP will drop the
+packet.  If \fIaction\fP is "frag", then \fBipfrag\fP will fragment the
+packet if possible and drop it otherwise.
 .IP \fB-d\fP
 If this option is specified then \fBipfrag\fP will set the Don't
-Fragment bit on every fragment that it generates.  ( \fBipfrag\fP will
+Fragment bit on every fragment that it generates.  (\fBipfrag\fP will
 not alter the Don't Fragment bits of packets that it doesn't fragment.)
 .IP \fB-h\fP
 Print the usage of the command and exit.
+.IP "\fB-i\fP \fInextid\fP"
+When fragmenting unfragmented packets, ONICS will set the IP ID field of
+the packet if this option is set.  It will set the ID of the first set
+of fragments to \fInextid\fP and increment by 1 for each datagram that
+it subsequently fragments.
 .IP "\fB-m\fP \fImtu\fP"
 Set the MTU for fragmentation.  This is the maximum size of a packet
 starting with its IPv4 or IPv6 header.  The default MTU as 1500 bytes.
