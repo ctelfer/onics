@@ -509,6 +509,17 @@ struct ipv6h {
 #define IPV6H_TCLASS(prtcfl)    (((prtcfl) >> 20) & 0xFF)
 #define IPV6H_FLOWID(prtcfl)    ((prtcfl) & 0xFFFFF)
 
+
+struct ipv6_fragh {
+	uint8_t			nxthdr;
+	uint8_t			resv;
+	uint16_t		fragoff;
+	uint32_t		id;
+};
+
+#define IPV6_FRAGH_MFMASK	0x1
+#define IPV6_FRAGH_FOMASK	0xFFF8
+
 /* -- ICMPv6 definitions -- */
 struct icmp6h {
 	uint8_t			type;

@@ -1277,7 +1277,8 @@ static int isv6ext(uint8_t proto)
 	       (proto == IPPROT_V6_ROUTE_HDR) ||
 	       (proto == IPPROT_V6_FRAG_HDR) ||
 	       (proto == IPPROT_V6_DSTOPS) || 
-	       (proto == IPPROT_AH);
+	       (proto == IPPROT_AH) ||
+	       (proto == IPPROT_ESP);
 }
 
 
@@ -1319,6 +1320,51 @@ static int parse_ipv6_hopopt(struct prparse *prp, struct ipv6h *ip6,
 }
 
 
+static int setv6opt(struct prparse *prp, int oidx, ulong xoff)
+{
+	if (!prp_off_valid(prp, oidx)) {
+		prp->offs[oidx] = prp_soff(prp) + IPV6H_LEN + xoff;
+		return 1;
+	} else {
+		return 0;
+	}
+}
+
+
+static int parse_reg_v6_opt(struct prparse *prp, ulong xoff, uint8_t opt,
+			    byte_t *p)
+{
+	switch(opt) {
+	case IPPROT_V6_HOPOPT:
+		/* hop-by-hop options can only come first */
+		if (xoff != 0) {
+			prp->error |= PRP_ERR_OPTERR | PRP_ERR_HLEN;
+			return -1;
+		}
+		prp->offs[PRP_IPV6FLD_HOPOPT] =
+			prp_soff(prp) + IPV6H_LEN + xoff;
+		break;
+
+	case IPPROT_V6_ROUTE_HDR:
+		if (!setv6opt(prp, PRP_IPV6FLD_RTOPT, xoff))
+			setv6opt(prp, PRP_IPV6FLD_EXTOPT, xoff);
+		break;
+
+	case IPPROT_V6_DSTOPS:
+		if (!setv6opt(prp, PRP_IPV6FLD_DSTOPT1, xoff))
+			if (!setv6opt(prp, PRP_IPV6FLD_DSTOPT2, xoff))
+				setv6opt(prp, PRP_IPV6FLD_EXTOPT, xoff);
+		break;
+	default:
+		if (!setv6opt(prp, PRP_IPV6FLD_UNKOPT, xoff))
+			setv6opt(prp, PRP_IPV6FLD_EXTOPT, xoff);
+		break;
+	}
+
+	return 0;
+}
+
+
 static int parse_ipv6_opt(struct prparse *prp, struct ipv6h *ip6, ulong len)
 {
 	ulong xlen = 0;
@@ -1330,19 +1376,33 @@ static int parse_ipv6_opt(struct prparse *prp, struct ipv6h *ip6, ulong len)
 
 	nexth = ip6->nxthdr;
 	p = (byte_t *)ip6 + IPV6H_LEN;
-	if (xlen > len - 8) {
-		prp->error |= PRP_ERR_OPTLEN | PRP_ERR_HLEN;
-		return -1;
-	}
 
 	while (isv6ext(nexth)) {
-		if (nexth == IPPROT_AH) { /* AH is idiotic and useless */
+		if (len - xlen < 8) {
+			prp->error |= PRP_ERR_OPTLEN | PRP_ERR_HLEN;
+			return -1;
+		}
+		/* 
+		 * four cases for option lengths
+		 *  - AH = p[1] * 4 + 8
+		 *  - ESP = > 12 -> we won't parse past this
+		 *  - Frag = 8
+		 *  - All others = p[1] * 8 + 8
+		 */
+		if (nexth == IPPROT_AH) {
+			/* AH is idiotic and mostly useless */
 			olen = (p[1] << 2) + 8;
-			if (!prp_off_valid(prp, PRP_IPV6FLD_AHH)) {
-				prp->offs[PRP_IPV6FLD_AHH] = prp_soff(prp) + 
-							     IPV6H_LEN + xlen;
+			setv6opt(prp, PRP_IPV6FLD_AHH, xlen);
+		} else if (nexth == IPPROT_ESP) {
+			if (len - xlen < 12) {
+				prp->error |= PRP_ERR_OPTLEN | PRP_ERR_HLEN;
+				return -1;
 			}
+			setv6opt(prp, PRP_IPV6FLD_ESPH, xlen);
+			/* TODO try to decode NULL encryption headers? */
+			break;
 		} else if (nexth == IPPROT_V6_FRAG_HDR) {
+			/* Only one fragment header is allowed */
 			if (prp_off_valid(prp, PRP_IPV6FLD_FRAGH)) {
 				prp->error |= PRP_ERR_OPTERR | PRP_ERR_HLEN;
 				return -1;
@@ -1352,26 +1412,22 @@ static int parse_ipv6_opt(struct prparse *prp, struct ipv6h *ip6, ulong len)
 			olen = 8;
 			
 		} else {
+			if (parse_reg_v6_opt(prp, xlen, nexth, p) < 0)
+				return -1;
 			olen = (p[1] << 3) + 8;
 		}
-		if (olen > len - xlen) {
+
+		if (len - xlen < olen) {
 			prp->error |= PRP_ERR_OPTLEN | PRP_ERR_HLEN;
-			return -1;
-		}
-		/* hop-by-hop options can only come first */
-		if (nexth == IPPROT_V6_HOPOPT && xlen != 0) {
-			prp->error |= PRP_ERR_OPTERR | PRP_ERR_HLEN;
 			return -1;
 		}
 
+		nexth = p[0];
+		prp->offs[PRP_IPV6FLD_NXTHDR] =
+			xlen + IPV6H_LEN + prp_soff(prp);
+
 		xlen += olen;
 		p += olen;
-		if (xlen > len - 8) {
-			prp->error |= PRP_ERR_OPTLEN | PRP_ERR_HLEN;
-			return -1;
-		}
-		prp->offs[PRP_IPV6FLD_NXTHDR] = xlen + prp_soff(prp);
-		nexth = p[0];
 	}
 
 	prp_poff(prp) = prp_soff(prp) + IPV6H_LEN + xlen;
@@ -1464,6 +1520,7 @@ static int ipv6_add(struct prparse *reg, byte_t *buf, struct prpspec *ps,
 	if (!prp)
 		return -1;
 
+	prp_add_insert(reg, prp, enclose);
 	if (buf) {
 		memset(prp_header(prp, buf, void), 0, prp_hlen(prp));
 		ip6 = prp_header(prp, buf, struct ipv6h);

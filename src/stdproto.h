@@ -54,11 +54,18 @@ void unregister_std_proto();
 #define PRP_ICMPFLD_GW		(PRP_OI_EXTRA + 4)	/* Redirect */
 #define PRP_ICMPFLD_RESERVED	(PRP_OI_EXTRA + 5)	/* Various */
 
-#define PRP_IPV6_NXFIELDS	4
+#define PRP_IPV6_NXFIELDS	11
 #define PRP_IPV6FLD_NXTHDR	(PRP_OI_EXTRA + 0)
-#define PRP_IPV6FLD_JLEN	(PRP_OI_EXTRA + 1)
-#define PRP_IPV6FLD_AHH		(PRP_OI_EXTRA + 2)
-#define PRP_IPV6FLD_FRAGH	(PRP_OI_EXTRA + 3)
+#define PRP_IPV6FLD_HOPOPT	(PRP_OI_EXTRA + 1)
+#define PRP_IPV6FLD_RTOPT	(PRP_OI_EXTRA + 2)
+#define PRP_IPV6FLD_JLEN	(PRP_OI_EXTRA + 3)
+#define PRP_IPV6FLD_FRAGH	(PRP_OI_EXTRA + 4)
+#define PRP_IPV6FLD_AHH		(PRP_OI_EXTRA + 5)
+#define PRP_IPV6FLD_ESPH	(PRP_OI_EXTRA + 6)
+#define PRP_IPV6FLD_DSTOPT1	(PRP_OI_EXTRA + 7)
+#define PRP_IPV6FLD_DSTOPT2	(PRP_OI_EXTRA + 8)
+#define PRP_IPV6FLD_UNKOPT	(PRP_OI_EXTRA + 9)
+#define PRP_IPV6FLD_EXTOPT	(PRP_OI_EXTRA + 10)
 #define PRP_IPV6_NXDHDR(_ip6prp, _buf) \
 	(*(((byte_t *)_buf) + (_ip6prp)->offs[PRP_IPV6FLD_NXTHDR]))
 
