@@ -109,4 +109,15 @@ int iptostr(char *s, void *ipa, size_t slen);
 /* should always return 40 characters and slen should always be >= 40. */
 int ip6tostr(char *s, void *ip6a, size_t slen);
 
+
+/*
+ * Find a header in an IPv6 header by protocol. Return NULL if not
+ * found within maxlen bytes.  If nhp is not null it will point to the
+ * header field that refers to 'proto'.  If proto < 0 then it returns
+ * the pointer to the first byte after the IPv6 extension headers (with
+ * nhpp pointing to the next header byte in the prior header.  ip6findh
+ * returns NULL if there is some error in parsing the extension headers.
+ */
+byte_t *ip6findh(void *ip6p, ulong maxlen, int proto, byte_t **nhpp);
+
 #endif /* __util_h */

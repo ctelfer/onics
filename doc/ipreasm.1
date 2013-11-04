@@ -1,0 +1,40 @@
+.TH "reasm" 1 "October 2013" "ONICS 1.0"
+.SH NAME
+ipreasm - Reassemble IPv4 and IPv6 fragments to single packets.
+.P
+.SH SYNOPSYS
+\fBipreasm\fP [\fB-h46\fP] [\fB-s\fP \fItabsize\fP]  
+[\fIinfile\fP [\fIoutfile\fP]]
+.P
+.SH DESCRIPTION
+\fBipreasm\fP takes in a stream of XPKT formatted packets, searches for
+the IPv4 and/or IPv6 packets in the stream and reassembles them to
+individual datagrams.  \fBipreasm\fP copies datalink headers prior to
+the IPv4 or IPv6 header verbatim from the first fragment into the each
+new datagram.  If neither \fB-4\fP nor \fB-6\fP are specified as
+options, then \fBipreasm\fP defaults to reassembling IPv4 packets only.
+Otherwise it reassembles only those protocols specified as options.
+.P
+.SH OPTIONS
+.IP \fB-h\fP
+Print the usage of the command and exit.
+.IP "\fB-s\fP \fItabsize\fP"
+Sets the hash table size for storing and looking up fragments.  Hash
+huckets are chained, so the size is not a limit on the number of
+fragments that can be processed.  However, having this value be less
+than the number of outstanding number of fragments at any time will have
+an adverse affect on performance.
+.IP \fB-4\fP
+Reassemble IPv4 packets.
+.IP \fB-6\fP
+Reassemble IPv6 packets.
+.P
+.SH EXAMPLES
+.SH AVAILABILITY
+This utility should be available on all supported ONICS platforms.
+.P
+.SH AUTHOR
+Christopher A. Telfer <ctelfer@gmail.com>
+.P
+.SH "SEE ALSO"
+ipfrag(1), pktin(1), pktout(1)

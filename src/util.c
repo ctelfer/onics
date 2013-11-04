@@ -23,6 +23,7 @@
 #include <ctype.h>
 #include <cat/str.h>
 #include "util.h"
+#include "tcpip_hdrs.h"
 
 
 /*
@@ -425,4 +426,73 @@ int ip6tostr(char *s, void *ip6a, size_t slen)
 		}	
 	}
 	return si;
+}
+
+
+static int isv6ext(uint8_t proto)
+{
+        return (proto == IPPROT_V6_HOPOPT) ||
+               (proto == IPPROT_V6_ROUTE_HDR) ||
+               (proto == IPPROT_V6_FRAG_HDR) ||
+               (proto == IPPROT_V6_DSTOPS) ||
+               (proto == IPPROT_AH);
+}
+
+
+
+byte_t *ip6findh(void *ip6p, ulong maxlen, int proto, byte_t **nhpp)
+{
+	byte_t *hp;
+	byte_t *nhp;
+	ulong olen;
+
+	if (maxlen < IPV6H_LEN)
+		return NULL;
+
+	nhp = ((byte_t *)ip6p + 6);
+	hp = ((byte_t *)ip6p + IPV6H_LEN);
+	maxlen -= IPV6H_LEN;
+
+	if (*nhp == proto) {
+		if (nhpp != NULL)
+			*nhpp = nhp;
+		return hp;
+	}
+
+	while (!isv6ext(*nhp)) {
+		if (maxlen < 8)
+			return NULL;
+
+		switch(*nhp) {
+		case IPPROT_AH:
+			olen = (hp[1] * 4) + 8;
+			break;
+		case IPPROT_V6_FRAG_HDR:
+			olen = 8;
+			break;
+		default:
+			olen = (hp[1] * 8) + 8;
+			break;
+		}
+
+		if (olen < maxlen)
+			return NULL;
+
+		nhp = hp;
+		hp += olen;
+		maxlen -= olen;
+		if (*nhp == proto) {
+			if (nhpp != NULL)
+				*nhpp = nhp;
+			return hp;
+		}
+	}
+
+	if (proto < 0) {
+		if (nhpp != NULL)
+			*nhpp = nhp;
+		return hp;
+	} else {
+		return NULL;
+	}
 }

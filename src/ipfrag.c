@@ -169,7 +169,7 @@ static int frag_action(struct pktbuf *p)
 
 	prp = p->layers[PKB_LAYER_NET];
 	if (prp == NULL) {
-		return 0;
+		return PASS;
 	} else if (prp->prid == PRID_IPV4 && frag4) {
 		if (prp->error != 0 || prp_totlen(prp) <= mtu)
 			return PASS;
