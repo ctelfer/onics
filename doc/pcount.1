@@ -9,17 +9,19 @@ pcount - Count packets through the utility.
 [\fIinfile\fP [\fIoutfile\fP]]
 .P
 .SH DESCRIPTION
-\fBpcount\fP is a thin wrapper around pml(1) that counts packets in
-XPKT format.  By default, \fBpcount\fP reads, counts, and discards packets
- from standard input until it reaches an end-of-file.  It then reports the
-number of packets it counted to standard error.  If \fIinfile\fP is 
-specified then \fBpcount\fP reads packets from that file instead.
+\fBpcount\fP is a thin wrapper around pml(1) that counts packets and
+packet byte lengths in XPKT format.  By default, \fBpcount\fP reads,
+counts, and discards packets from standard input until it reaches an
+end-of-file.  It then reports the number of packets and number of packet
+bytes that it counted to standard error.  If \fIinfile\fP is specified
+then \fBpcount\fP reads packets from that file instead.
 .P
 If the \fB-p\fP option is present, then \fBpcount\fP reads packets from
 standard input and passes them to standard output.  As before, when
-\fBpcount\fP reaches an end-of-file it reports the number of packets
-that it counted to standard error.  The user can optionally override 
-both the input to \fIinfile\fP and the output to \fIoutfile\fP.
+\fBpcount\fP reaches an end-of-file it reports the number of packets and
+packet length bytes that it counted to standard error.  The user can
+optionally override both the input to \fIinfile\fP and the output to
+\fIoutfile\fP.
 .P
 .SH OPTIONS
 .IP "\fB-s\fP \fIinterval\fP"

@@ -2,7 +2,7 @@
 
 DROP=" drop; "
 STATUS=""
-OUTMSG=', " total packets."'
+OUTMSG='print C, " total packets and ", B, " total bytes.";'
 
 usage() {
 	echo "usage: $0 [-q] [-s|--status INTERVAL] [INFILE]" >&2
@@ -16,7 +16,7 @@ then
 
 	if [ "$1" = "-q" ]
 	then
-		OUTMSG=""
+		OUTMSG="print C;"
 		shift
 	fi
 
@@ -29,7 +29,8 @@ then
 			TICK { 
 				T = T + 1;
 				if (T % $INTERVAL == 0) {
-					print C, \" packets seen so far.\n\";
+					print C, \" packets/\",
+					      B, \" bytes seen so far.\";
 				}
 			}"
 		shift
@@ -47,9 +48,10 @@ then
 fi
 
 SCRIPT="int C = 0;
-	{ C = C + 1; $DROP }
+        int B = 0;
+	{ C = C + 1; B = B + str_len(&pkt.payload); $DROP }
 	$STATUS
-	END { print C $OUTMSG; }"
+	END { $OUTMSG }"
 
 if [ -z "$DROP" ]
 then

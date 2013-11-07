@@ -36,11 +36,14 @@
 ulong g_npkts = 0;
 double g_start_delay = 0.0;
 double g_interval = 0.0;
+double g_bps = 0.0;
 
 struct clopt g_optarr[] = {
 	CLOPT_I_NOARG('h', NULL, "print help"),
 	CLOPT_I_DOUBLE('d', NULL, "NSEC", "delay start by <x> seconds"),
-	CLOPT_I_DOUBLE('i', NULL, "NSEC", "delay <x> seconds ")
+	CLOPT_I_DOUBLE('i', NULL, "NSEC", "delay <x> seconds "),
+	CLOPT_I_UINT('p', NULL, "PPS",  "send <x> packets per second"),
+	CLOPT_I_DOUBLE('r', NULL, "BPS",  "send <x> bits per second")
 };
 
 struct clopt_parser g_oparser =
@@ -55,6 +58,8 @@ void usage(const char *estr)
 	optparse_print(&g_oparser, ubuf, sizeof(ubuf));
 	fprintf(stderr, "usage: %s [options] [INFILE [OUTFILE]]\n%s\n", 
 	        g_oparser.argv[0], ubuf);
+	fprintf(stderr,
+		"\tOnly the last of the -i, -p, or -r options will be used\n");
 	exit(1);
 }
 
@@ -71,11 +76,23 @@ void parse_args(int argc, char *argv[], int *ifd, int *ofd)
 		case 'd':
 			g_start_delay = opt->val.dbl_val;
 			break;
-		case 'i':
-			g_interval = opt->val.dbl_val;
-			break;
 		case 'h':
 			usage(NULL);
+			break;
+		case 'i':
+			g_interval = opt->val.dbl_val;
+			g_bps = 0.0;
+			break;
+		case 'p':
+			g_interval = 1.0 / (double)opt->val.uint_val;
+			g_bps = 0.0;
+			break;
+		case 'r':
+			g_bps = opt->val.dbl_val;
+			if (g_bps < 1.0)
+				err("Can not have a rate less than 1 bps\n");
+			g_interval = 0;
+			break;
 		}
 	}
 	if (rv < 0)
@@ -100,19 +117,18 @@ void parse_args(int argc, char *argv[], int *ifd, int *ofd)
 }
 
 
-void sleepfor(cat_time_t amt, cat_time_t start)
+void sleep_until(cat_time_t *when, cat_time_t *now)
 {
-	cat_time_t elapsed;
+	cat_time_t diff;
 
-	if (tm_gtz(amt)) {
-		while (tm_sec(amt) > 0) {
-			sleep(tm_sec(amt));
-			elapsed = tm_sub(tm_uget(), start);
-			amt = tm_sub(amt, elapsed);
-		} 
-
-		if (tm_gtz(amt))
-			usleep(tm_nsec(amt) / 1000);
+	diff = tm_sub(*when, *now);
+	while (tm_gtz(diff)) {
+		if (tm_sec(diff) > 0)
+			sleep(tm_sec(diff));
+		else
+			usleep(tm_nsec(diff) / 1000);
+		*now = tm_uget();
+		diff = tm_sub(*when, *now);
 	}
 }
 
@@ -121,48 +137,56 @@ int main(int argc, char *argv[])
 {
 	int rv;
 	struct pktbuf *p;
-	cat_time_t pkts, now, base_now, base_pkts, dp, dn;
+	cat_time_t pts, now, next, nnext, start_time, start_ts;
 	struct xpkt_tag_ts *ts;
 	int infd = 0;
 	int outfd = 1;
+	ulong bits;
 
 	pkb_init_pools(1);
 
 	parse_args(argc, argv, &infd, &outfd);
 
-	if (g_start_delay > 0)
-		sleepfor(tm_dset(g_start_delay), tm_uget());
+	now = tm_uget();
+	if (g_start_delay > 0) {
+		next = tm_add(now, tm_dset(g_start_delay));
+		sleep_until(&next, &now);
+	}
+	start_time = now;
+	next = now;
+
 
 	while ((rv = pkb_fd_read(&p, infd)) > 0) {
 		now = tm_uget();
-
-		ts = (struct xpkt_tag_ts *)pkb_find_tag(p, XPKT_TAG_TIMESTAMP, 0);
-
 		++g_npkts;
 
 		if (g_interval > 0.0) {
-			sleepfor(tm_dset(g_interval), now);
+			nnext = tm_add(next, tm_dset(g_interval));
+			sleep_until(&next, &now);
+			next = nnext;
+		} else if (g_bps > 1.0) {
+			bits = pkb_get_len(p) * 8;
+			nnext = tm_add(next, tm_dset(bits / g_bps));
+			sleep_until(&next, &now);
+			next = nnext;
 		} else if (ts) {
-			pkts = tm_lset(ts->sec, ts->nsec);
+			ts = (struct xpkt_tag_ts *)pkb_find_tag(p, XPKT_TAG_TIMESTAMP, 0);
+			pts = tm_lset(ts->sec, ts->nsec);
 
-			if (tm_ltz(pkts)) {
+			if (tm_ltz(pts)) {
 				fprintf(stderr,
 					"Invalid timestamp on packet %lu "
 					"(%ld,%ld)\n",
-					g_npkts, tm_sec(pkts), tm_nsec(pkts));
+					g_npkts, tm_sec(pts), tm_nsec(pts));
 				pkb_free(p);
 				continue;
 			}
 
-			if (g_npkts == 1) {
-				base_now = now;
-				base_pkts = pkts;
-			}
+			if (g_npkts == 1)
+				start_ts = pts;
 
-			dn = tm_sub(now, base_now);
-			dp = tm_sub(pkts, base_pkts);
-			if (tm_cmp(dp, dn) > 0)
-				sleepfor(tm_sub(dp, dn), now);
+			next = tm_add(tm_sub(pts, start_ts), start_time);
+			sleep_until(&next, &now);
 		} else {
 			fprintf(stderr, "no timestamp on packet %lu: sending\n",
 				g_npkts);

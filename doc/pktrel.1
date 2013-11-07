@@ -26,6 +26,14 @@ Print the usage of the command and exit.
 Instead of releasing packets according to their timestamps, release them
 at regular \fIinterval\fP second intervals.  \fIinterval\fP may be a 
 floating point value.
+.IP "\fB-p\fP \fIpps\fP"
+Instead of releasing packets according to their timestamps, release
+them at a fixed packet rate of \fIpps\fP packets per second.  This
+is equivalent to invoking \fBpktrel\fP with '\fB-i\fP 1 / \fIpps\fP'.
+.IP "\fB-r\fP \fIbps\fP"
+Instead of releasing packets according to their timestamps, release
+them at a fixed bit rate of \fIbps\fP.  The \fIbps\fP parameter must
+be greater than 1.
 .P
 .SH EXAMPLES
 .P
