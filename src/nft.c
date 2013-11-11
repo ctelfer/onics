@@ -27,7 +27,6 @@
 #include <sys/time.h>
 #include <unistd.h>
 #include <fcntl.h>
-#include <signal.h>
 
 #include <cat/err.h>
 #include <cat/optparse.h>
@@ -68,7 +67,7 @@ struct flow_key {
 	uint16_t		dport;
 	uint16_t		etype;
 	uint8_t			netproto;
-	uint8_t			flags;
+	uint8_t			pad;
 };
 
 
@@ -76,10 +75,10 @@ struct flow {
 	struct flow_key		key;
 	struct dlist		toevt;
 	uint64_t		flowid;
-	ulong			cnpkts;
-	ulong			cnbytes;
-	ulong			snpkts;
-	ulong			snbytes;
+	ulong			npkts;
+	ulong			nbytes;
+	struct flow *		pair;
+	uint			issrv;
 	cat_time_t		start;
 	cat_time_t		end;
 };
@@ -103,14 +102,15 @@ int realtime = 1;
 int noreport = 0;
 FILE *evtfile;
 
+void reverse_key(struct flow_key *rkey, struct flow_key *key);
 void build_key_ipv4(struct pktbuf *pkb, struct prparse *dlprp, 
-		    struct flow_key *key, struct flow_key *rkey);
+		    struct flow_key *key);
 void build_key_ipv6(struct pktbuf *pkb, struct prparse *dlprp, 
-		    struct flow_key *key, struct flow_key *rkey);
+		    struct flow_key *key);
 void build_key_arp(struct pktbuf *pkb, struct prparse *dlprp, 
-		   struct flow_key *key, struct flow_key *rkey);
+		   struct flow_key *key);
 void build_key_eth(struct pktbuf *pkb, struct prparse *dlprp, 
-		   struct flow_key *key, struct flow_key *rkey);
+		   struct flow_key *key);
 
 struct clopt g_optarr[] = {
 	CLOPT_I_NOARG('q', NULL, "Do not report flows: only mark flowids"),
@@ -202,30 +202,39 @@ static void reset_flow_key(struct flow_key *key)
 }
 
 
+void reverse_key(struct flow_key *rkey, struct flow_key *key)
+{
+	reset_flow_key(rkey);
+	rkey->saddr = key->daddr;
+	rkey->daddr = key->saddr;
+	rkey->sport = key->dport;
+	rkey->dport = key->sport;
+	rkey->etype = key->etype;
+	rkey->netproto = key->netproto;
+	rkey->pad = key->pad;
+}
+
+
 void build_key_tcp(struct pktbuf *pkb, struct prparse *tcpprp, 
-		   struct flow_key *key, struct flow_key *rkey)
+		   struct flow_key *key)
 {
 	struct tcph *tcp = prp_header(tcpprp, pkb->buf, struct tcph);
 	key->sport  = ntoh16(tcp->sport);
 	key->dport  = ntoh16(tcp->dport);
-	rkey->sport = ntoh16(tcp->dport);
-	rkey->dport = ntoh16(tcp->sport);
 }
 
 
 void build_key_udp(struct pktbuf *pkb, struct prparse *udpprp, 
-		   struct flow_key *key, struct flow_key *rkey)
+		   struct flow_key *key)
 {
 	struct udph *udp = prp_header(udpprp, pkb->buf, struct udph);
 	key->sport  = ntoh16(udp->sport);
 	key->dport  = ntoh16(udp->dport);
-	rkey->sport = ntoh16(udp->dport);
-	rkey->dport = ntoh16(udp->sport);
 }
 
 
 void build_key_ipv4(struct pktbuf *pkb, struct prparse *ipprp, 
-		    struct flow_key *key, struct flow_key *rkey)
+		    struct flow_key *key)
 {
 	struct ipv4h *ip;
 	struct icmph *icmp;
@@ -239,16 +248,11 @@ void build_key_ipv4(struct pktbuf *pkb, struct prparse *ipprp,
 	key->etype = ETHTYPE_IP;
 	key->netproto = ip->proto;
 
-	rkey->saddr.ip = ip->daddr;
-	rkey->daddr.ip = ip->saddr;
-	rkey->etype = ETHTYPE_IP;
-	rkey->netproto = ip->proto;
-
 	xpprp = prp_next(ipprp);
 	if (xpprp->prid == PRID_TCP) {
-		build_key_tcp(pkb, xpprp, key, rkey);
+		build_key_tcp(pkb, xpprp, key);
 	} else if (xpprp->prid == PRID_UDP) {
-		build_key_udp(pkb, xpprp, key, rkey);
+		build_key_udp(pkb, xpprp, key);
 	} else if (xpprp->prid == PRID_ICMP) {
 		icmp = prp_header(xpprp, pkb->buf, struct icmph);
 		if (ICMPT_IS_ERR(icmp->type)) {
@@ -256,11 +260,9 @@ void build_key_ipv4(struct pktbuf *pkb, struct prparse *ipprp,
 			if (eipprp->prid != PRID_IPV4)
 				return;
 			reset_flow_key(key);
-			reset_flow_key(rkey);
-			build_key_ipv4(pkb, eipprp, key, rkey);
+			build_key_ipv4(pkb, eipprp, key);
 		} else if (ICMPT_IS_QUERY(icmp->type)) {
 			key->sport = ntoh16(icmp->u.echo.id);
-			rkey->sport = ntoh16(icmp->u.echo.id);
 		}
 	} 
 }
@@ -268,7 +270,7 @@ void build_key_ipv4(struct pktbuf *pkb, struct prparse *ipprp,
 
 
 void build_key_ipv6(struct pktbuf *pkb, struct prparse *ip6prp, 
-		    struct flow_key *key, struct flow_key *rkey)
+		    struct flow_key *key)
 {
 	struct ipv6h *ip6;
 	struct icmp6h *icmp6;
@@ -283,16 +285,11 @@ void build_key_ipv6(struct pktbuf *pkb, struct prparse *ip6prp,
 	key->etype = ETHTYPE_IPV6;
 	key->netproto = PRP_IPV6_NXDHDR(ip6prp, pkb->buf);
 
-	rkey->saddr.ip6 = ip6->daddr;
-	rkey->daddr.ip6 = ip6->saddr;
-	rkey->etype = ETHTYPE_IPV6;
-	rkey->netproto = PRP_IPV6_NXDHDR(ip6prp, pkb->buf);
-
 	xpprp = prp_next(ip6prp);
 	if (xpprp->prid == PRID_TCP) {
-		build_key_tcp(pkb, xpprp, key, rkey);
+		build_key_tcp(pkb, xpprp, key);
 	} else if (xpprp->prid == PRID_UDP) {
-		build_key_udp(pkb, xpprp, key, rkey);
+		build_key_udp(pkb, xpprp, key);
 	} else if (xpprp->prid == PRID_ICMP6) {
 		icmp6 = prp_header(xpprp, pkb->buf, struct icmp6h);
 		if (ICMP6T_IS_ERR(icmp6->type)) {
@@ -300,19 +297,17 @@ void build_key_ipv6(struct pktbuf *pkb, struct prparse *ip6prp,
 			if (eip6prp->prid != PRID_IPV6)
 				return;
 			reset_flow_key(key);
-			reset_flow_key(rkey);
-			build_key_ipv6(pkb, eip6prp, key, rkey);
+			build_key_ipv6(pkb, eip6prp, key);
 		} else if (ICMP6T_IS_ECHO(icmp6->type)) {
 			i6echo = (struct icmp6_echo *)icmp6;
 			key->sport = ntoh16(i6echo->id);
-			rkey->sport = ntoh16(i6echo->id);
 		}
 	} 
 }
 
 
 void build_key_arp(struct pktbuf *pkb, struct prparse *arpprp, 
-		   struct flow_key *key, struct flow_key *rkey)
+		   struct flow_key *key)
 {
 	struct arph *arp;
 	struct eth_arph *earp;
@@ -321,7 +316,7 @@ void build_key_arp(struct pktbuf *pkb, struct prparse *arpprp,
 	if ((ntoh16(arp->hwfmt) != ARPT_ETHERNET) || 
 	    (ntoh16(arp->prfmt) != ETHTYPE_IP) || 
 	    (arp->hwlen != 6) || (arp->prlen != 4)) {
-		build_key_eth(pkb, prp_prev(arpprp), key, rkey);
+		build_key_eth(pkb, prp_prev(arpprp), key);
 		return;
 	}
 
@@ -330,15 +325,11 @@ void build_key_arp(struct pktbuf *pkb, struct prparse *arpprp,
 	key->etype = ETHTYPE_ARP;
 	memmove(&key->saddr.ip, earp->sndpraddr, 4);
 	memmove(&key->daddr.ip, earp->trgpraddr, 4);
-
-	rkey->etype = ETHTYPE_ARP;
-	memmove(&rkey->saddr.ip, earp->trgpraddr, 4);
-	memmove(&rkey->daddr.ip, earp->sndpraddr, 4);
 }
 
 
 void build_key_eth(struct pktbuf *pkb, struct prparse *dlprp, 
-		   struct flow_key *key, struct flow_key *rkey)
+		   struct flow_key *key)
 {
 	struct eth2h *eh;
 
@@ -347,21 +338,15 @@ void build_key_eth(struct pktbuf *pkb, struct prparse *dlprp,
 	key->etype = ntoh16(eh->ethtype);
 	key->saddr.eth = eh->src;
 	key->daddr.eth = eh->dst;
-
-	rkey->etype = ntoh16(eh->ethtype);
-	key->saddr.eth = eh->dst;
-	key->daddr.eth = eh->src;
 }
 
 
-int build_flow_key(struct pktbuf *pkb, struct flow_key *key,
-		   struct flow_key *rkey)
+int build_flow_key(struct pktbuf *pkb, struct flow_key *key)
 {
 	struct prparse *dlprp;
 	struct prparse *netprp;
 
 	reset_flow_key(key);
-	reset_flow_key(rkey);
 
 	dlprp = prp_next(&pkb->prp);
 	if (dlprp->prid != PRID_ETHERNET2)
@@ -369,13 +354,13 @@ int build_flow_key(struct pktbuf *pkb, struct flow_key *key,
 
 	netprp = prp_next(dlprp);
 	if (netprp->prid == PRID_IPV4) {
-		build_key_ipv4(pkb, netprp, key, rkey);
+		build_key_ipv4(pkb, netprp, key);
 	} else if (netprp->prid == PRID_IPV6) {
-		build_key_ipv6(pkb, netprp, key, rkey);
+		build_key_ipv6(pkb, netprp, key);
 	} else if (netprp->prid == PRID_ARP) {
-		build_key_arp(pkb, netprp, key, rkey);
+		build_key_arp(pkb, netprp, key);
 	} else {
-		build_key_eth(pkb, dlprp, key, rkey);
+		build_key_eth(pkb, dlprp, key);
 	}
 
 	return 0;
@@ -434,6 +419,7 @@ void gen_flow_event(struct flow *f, int evtype)
 	char keystr[256];
 	char tstr[64] = "";
 	cat_time_t dur;
+	struct flow *pf;
 
 	if (noreport)
 		return;
@@ -445,16 +431,26 @@ void gen_flow_event(struct flow *f, int evtype)
 	} else if (evtype == FEVT_UPDATE) {
 		dur = tm_sub(tm_uget(), f->start);
 		snprintf(tstr, sizeof(tstr), "Start=%.3lf,Dur=%.3lf", 
-			 dbtime(f->start), dbtime(dur));
+			 dbtime(f->start), tm_2dbl(dur));
 	} else if (evtype == FEVT_END) {
 		dur = tm_sub(f->end, f->start);
 		snprintf(tstr, sizeof(tstr), 
 			 "Start=%.3lf,End=%.3lf,Dur=%.3lf", 
-			 dbtime(f->start), dbtime(f->end), dbtime(dur));
+			 dbtime(f->start), dbtime(f->end), tm_2dbl(dur));
 	}
-	fprintf(evtfile, "|FLOW %s|%s|%s|C2S:%lu,%lu|S2C:%lu,%lu|\n", 
-		fevt_strs[evtype], keystr, tstr, 
-		f->cnpkts, f->cnbytes, f->snpkts, f->snbytes);
+
+	if (f->pair != NULL) {
+		if (f->issrv)
+			return;
+		pf = f->pair;
+		fprintf(evtfile, "|FLOW %s|%s|%s|C2S:%lu,%lu|S2C:%lu,%lu|\n", 
+			fevt_strs[evtype], keystr, tstr, 
+			f->npkts, f->nbytes, pf->npkts, f->nbytes);
+	} else {
+		fprintf(evtfile, "|FLOW %s|%s|%s|SENT:%lu,%lu|\n", 
+			fevt_strs[evtype], keystr, tstr, 
+			f->npkts, f->nbytes);
+	}
 }
 
 
@@ -462,46 +458,54 @@ void track_flows(struct flowtab *ft, struct pktbuf *pkb)
 {
 	struct xpkt_tag_flowid xf, *xfp;
 	struct flow_key key, rkey;
-	struct flow *f;
-	int swap = 0;
+	struct flow *f, *pf;
 	int create = 0;
 
-	if (build_flow_key(pkb, &key, &rkey) < 0)
+	if (build_flow_key(pkb, &key) < 0)
 		return;
 
 	/* lookup and create flow */
 	f = st_get_dptr(ft->flows, &key);
-	if (f == NULL) {
-		swap = 1;
-		f = st_get_dptr(ft->flows, &rkey);
-	}
 
 	if (f != NULL) {
 
-		dl_update(&ft->events, &f->toevt, tm_flow_timeout);
+		if (!f->issrv) {
+			dl_update(&ft->events, &f->toevt, tm_flow_timeout);
+		} else {
+			pf = f->pair;
+			abort_unless(pf != NULL);
+			dl_update(&ft->events, &pf->toevt, tm_flow_timeout);
+		}
 
 	} else {
 
 		f = ecalloc(sizeof(*f), 1);
 		f->key = key;
-		f->flowid = next_flowid++;
-		dl_init(&f->toevt, tm_flow_timeout);
-		dl_ins(&ft->events, &f->toevt);
 		f->start = tm_uget();
 		st_put(ft->flows, &f->key, f);
-		create = 1;
-		swap = 0;
+
+		/* link two uni-directional flows but only the first has */
+		/* the timeout */
+		reverse_key(&rkey, &key);
+		pf = st_get_dptr(ft->flows, &rkey);
+		if (pf == NULL) {
+			f->flowid = next_flowid++;
+			dl_init(&f->toevt, tm_flow_timeout);
+			dl_ins(&ft->events, &f->toevt);
+			create = 1;
+		} else {
+			f->issrv = 1;
+			f->flowid = pf->flowid;
+			abort_unless(f->pair == NULL);
+			f->pair = pf;
+			pf->pair = f;
+		}
 
 	}
 
 	/* update stats for the flow */
-	if (!swap) {
-		++f->cnpkts;
-		f->cnbytes += pkb_get_len(pkb);
-	} else {
-		++f->snpkts;
-		f->snbytes += pkb_get_len(pkb);
-	}
+	++f->npkts;
+	f->nbytes += pkb_get_len(pkb);
 
 	xfp = (struct xpkt_tag_flowid *)pkb_find_tag(pkb, XPKT_TAG_FLOW, 0);
 	if (xfp != NULL) {
@@ -528,18 +532,22 @@ static void gen_flow_updates(struct flowtab *ft)
 		gen_flow_event(f, FEVT_UPDATE);
 	}
 	fflush(evtfile);
-
-	dl_init(&update_event, tm_update);
-	dl_ins(&ft->events, &update_event);
 }
 
 
 static void timeout_flow(struct flowtab *ft, struct flow *f)
 {
+	struct flow *pf;
 	st_clr(ft->flows, &f->key);
 	f->end = tm_uget();
 	gen_flow_event(f, FEVT_END);
 	fflush(evtfile);
+
+	if (f->pair != NULL) {
+		pf = f->pair;
+		st_clr(ft->flows, &pf->key);
+		free(pf);
+	}
 	free(f);
 }
 
@@ -555,6 +563,8 @@ void dispatch_time_events(struct flowtab *ft, cat_time_t elapsed)
 		evt = l_to_dl(le);
 		if (evt == &update_event) {
 			gen_flow_updates(ft);
+			dl_init(&update_event, tm_update);
+			dl_ins(&ft->events, &update_event);
 		} else {
 			f = container(l_to_dl(le), struct flow, toevt);
 			timeout_flow(ft, f);

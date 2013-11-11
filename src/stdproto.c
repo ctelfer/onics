@@ -1848,6 +1848,8 @@ static void icmp6_update(struct prparse *prp, byte_t *buf)
 			hlen = ICMP6_ND_RDR_HLEN;
 			oidx = PRP_ICMP6FLD_REDIR;
 			break;
+		default:
+			abort_unless(0);
 		}
 
 		if (prp_totlen(prp) < hlen) {

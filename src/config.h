@@ -22,11 +22,6 @@
 #ifndef __onics_config_h
 #define __onics_config_h
 
-#define HAS_PCAP
-
-#define FMT32   ""
-/* #define FMT32   "l" *//* use this one for 16-bit machines */
-
 /* #define ONICS_INLINE  *//* use this for ANSI-C 89 compilers */
 #define ONICS_INLINE inline
 
