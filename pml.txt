@@ -80,6 +80,7 @@ PROGRAM SYNTAX
 
 At the highest level, a PML program consists of a set of declarations.
 Each declaration can declare:
+  * a file import
   * a rule
   * a function prototype (needed for recursion)
   * a function definition
@@ -93,6 +94,20 @@ COMMENTS
 
 Comments in PML start with a '#' that isn't in a string constant and
 they continue until the end of the line.
+
+
+FILE IMPORT
+-----------
+
+A file import takes the form:
+
+  'import' "FILENAME" ';'
+
+The parser will then search for the file FILENAME along a search path.
+If it fails to find FILENAME, the parser will fail with an error.  If it
+finds said file, it inserts the contents of the file into the PML source
+code as if it were directly substituted in the place of the import line
+itself.
 
 
 RULES

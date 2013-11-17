@@ -71,6 +71,34 @@ static void dump_elem(struct ns_elem *elem, FILE *out, const char *pfx)
 }
 
 
+struct pmlfld { 
+	const char *name;
+	const char *desc;
+} pml_fields[] = { 
+	{ "exists", "protocol exists in packet" }, 
+	{ "hlen", "header length" }, 
+	{ "plen", "payload length" }, 
+	{ "tlen", "trailer length" },
+	{ "totlen", "total PDU length" },
+	{ "error", "error bitmap for PDU" },
+	{ "prid", "protocol ID" }, 
+	{ "index", "index of parse in list" }, 
+	{ "header", "PDU header portion" }, 
+	{ "payload", "PDU payload portion" },
+	{ "trailer", "PDU trailer portion" },
+	{ "parse", "entire PDU (as byte string" },
+};
+
+
+static void print_pml_fields(FILE *out, const char *pfx)
+{
+	int i;
+	for (i = 0; i < array_length(pml_fields); ++i)
+		fprintf(out, "\t%s.%s: field - %s (PML only)\n", pfx,
+			pml_fields[i].name, pml_fields[i].desc);
+}
+
+
 void ns_dump(const struct ns_namespace *ns, FILE *out, const char *pfx, int lvl)
 {
 	uint i;
@@ -78,11 +106,13 @@ void ns_dump(const struct ns_namespace *ns, FILE *out, const char *pfx, int lvl)
 
 	if (strcmp(ns->name, "") != 0) {
 		build_name((struct ns_elem *)ns, pfx, name, sizeof(name));
-		if (lvl == 1)
+		if (lvl == 1) {
 			fprintf(out, "%s: protocol - PRID=0x%04x\n", name,
 				ns->prid);
-		else
+			print_pml_fields(out, name);
+		} else {
 			fprintf(out, "%s: protocol sub-namespace\n", name);
+		}
 		pfx = name;
 	}
 

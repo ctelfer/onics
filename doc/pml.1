@@ -179,10 +179,26 @@ an inline
 a constant
 .IP "*"
 a global variable 
+.IP "*"
+a file import 
 .P
 .SS "COMMENTS"
 Comments in PML start with a '#' that isn't in a string constant and
 they continue until the end of the line.
+.P
+.SS "FILE IMPORT"
+.P
+A file import takes the form:
+.nf
+  'import' "FILENAME" ';'
+.fi
+The parser will search for the import file along a search path.  The
+\fBpml\fP program begins its search in the current directory and then
+will continue to the directory \fIprefix\fP/lib/pml where \fIprefix\fP
+is the installation prefix where the ONICS tool suite is installed.  If
+the PML parser fails to find the import file it will abort with an
+error.  Otherwise it will include the contents of the import file as if
+it were directly substituted in the place of the import line itself.
 .P
 .SS "RULES"
 .P
