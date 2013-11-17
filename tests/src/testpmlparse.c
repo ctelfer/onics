@@ -76,6 +76,7 @@ int main(int argc, char *argv[])
 		errsys("pml_alloc:");
 	pml_ast_init(&tree);
 	pml_ast_add_std_intrinsics(&tree);
+	pml_ast_set_parser(&tree, scanner, parser);
 
 	if (printmask & VERBOSE) {
 		printf("#########\n");
@@ -108,9 +109,6 @@ int main(int argc, char *argv[])
 		printf("Done parsing, destroying scanner and parser\n");
 		printf("########\n");
 	}
-
-	pmll_free(scanner);
-	pml_free(parser);
 
 	if (printmask & TREE1) {
 		if (printmask & VERBOSE) {

@@ -12,7 +12,7 @@ BINDIR=../bin
 
 # common objects for packets
 PKTOBJ= xpkt.o protoparse.o ns.o util.o pktbuf.o
-PKTHDR= xpkt.h protoparse.h ns.h util.h pktbuf.h prid.h config.h
+PKTHDR= xpkt.h protoparse.h ns.h util.h pktbuf.h prid.h onics_config.h sysdeps.h
 
 # all base object files
 LIBOBJS= ${PKTOBJ} stdproto.o netvm.o netvm_prog.o pmltree.o \
@@ -54,7 +54,7 @@ PLATFORM_TARGETS= \
 
 TARGETS=${COMMON_TARGETS} ${PCAP_TARGETS} ${PLATFORM_TARGETS}
 
-all: ${LIBOBJS} ${COMMON_TARGETS} ${PLATFORM_TARGETS} ${PCAP_TARGETS}
+all: ${PLATFORM_TARGETS} ${PCAP_TARGETS} ${LIBOBJS} ${COMMON_TARGETS}
 
 install: ${COMMON_TARGETS} ${PLATFORM_TARGETS} ${PCAP_TARGETS}
 	@( INSTALL_PREFIX=$${INSTALL_PREFIX:-/usr/local} ; \
@@ -78,31 +78,26 @@ pcap: ${LIBOBJS} ${PCAP_TARGETS}
 
 platform: ${LIBOBJS} ${PLATFORM_TARGETS}
 
-pktin.c: cfgnone
-pktout.c: cfgnone
 
-cfgnone: pktin-none.c pktout-none.c
-	@[ -h pktin.c ] || ln -s pktin-none.c pktin.c
-	@[ -h pktout.c ] || ln -s pktout-none.c pktout.c
+pcapin-tgt.c:
+	@echo "no pcapin-tgt.c: run 'configure' first" >&2
+	@exit 1
 
-cfglinux: pktin-linux.c pktout-linux.c
-	@[ -h pktin.c ] || ln -s pktin-linux.c pktin.c
-	@[ -h pktout.c ] || ln -s pktout-linux.c pktout.c
+pcapout-tgt.c:
+	@echo "no pcapout-tgt.c: run 'configure' first" >&2
+	@exit 1
 
-cfgbsd: pktin-bsd.c pktout-bsd.c
-	@[ -h pktin.c ] || ln -s pktin-bsd.c pktin.c
-	@[ -h pktout.c ] || ln -s pktout-bsd.c pktout.c
+pktin.c:
+	@echo "no pktin.c: run 'configure' first" >&2
+	@exit 1
 
-pcapin-tgt.c: cfgnopcap
-pcapout-tgt.c: cfgnopcap
+pktout.c:
+	@echo "no pktout.c: run 'configure' first" >&2
+	@exit 1
 
-cfgnopcap: pcapin-none.c pcapout-none.c
-	@[ -h pcapin-tgt.c ] || ln -s pcapin-none.c pcapin-tgt.c
-	@[ -h pcapout-tgt.c ] || ln -s pcapout-none.c pcapout-tgt.c
-
-cfgpcap: pcapin.c pcapout.c
-	@[ -h pcapin-tgt.c ] || ln -s pcapin.c pcapin-tgt.c
-	@[ -h pcapout-tgt.c ] || ln -s pcapout.c pcapout-tgt.c
+onics_config.h:
+	@echo "no onics_config.h: run 'configure' first" >&2
+	@exit 1
 
 
 pcapin.o: pcapin-tgt.c
@@ -229,6 +224,9 @@ clean:
 	rm -f *.o
 	rm -f lex.pml.c pml.c pml.h pml.out pml_tok_strs.c
 	rm -f ../lemon/lemon
+
+veryclean: clean
 	rm -f pktin.c pktout.c
 	rm -f pcapin-tgt.c pcapout-tgt.c
+	rm -f onics_config.h
 

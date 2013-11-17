@@ -196,6 +196,7 @@ void parse_pml_program(struct netvm_program *prog)
 		errsys("pml_alloc: ");
 	if (pml_ast_init(&ast) < 0)
 		errsys("pml_ast_init(): ");
+	pml_ast_set_parser(&ast, scanner, parser);
 	if (pml_ast_add_std_intrinsics(&ast) < 0)
 		errsys("pml_ast_add_std_intrinsics(): ");
 
@@ -205,21 +206,22 @@ void parse_pml_program(struct netvm_program *prog)
 	do {
 		tok = pmll_nexttok(scanner, &extra);
 		if (tok < 0)
-			err("Syntax error on line %d of %s: '%s'\n",
+			err("Syntax error on line %lu of %s: '%s'\n",
 			    pmll_get_lineno(scanner), 
 			    pmll_get_iname(scanner),
 			    pmll_get_err(scanner));
 		if (pml_parse(parser, &ast, tok, extra)) {
-			err("parse error on line %d: %s\n",
-			    pmll_get_lineno(scanner), ast.errbuf);
+			err("parse error on line %lu of %s: %s\n",
+			    pmll_get_lineno(scanner),
+			    pmll_get_iname(scanner), 
+			    ast.errbuf);
 		}
 	} while (tok > 0);
 
 	if (!ast.done)
 		err("Program file is not a complete PML program\n");
 
-	pmll_free(scanner);
-	pml_free(parser);
+	pml_ast_free_parser(&ast);
 
 	/* TODO: modify pml_ast_print() to take a file to print to files */
 

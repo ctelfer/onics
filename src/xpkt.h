@@ -23,7 +23,7 @@
 #define __xpkt_h
 #include <cat/cat.h>
 #include <cat/cattypes.h>
-#include "config.h"
+#include "sysdeps.h"
 
 /*
  * Format:  

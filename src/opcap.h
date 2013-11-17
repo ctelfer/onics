@@ -24,7 +24,7 @@
 
 #include <stdio.h>
 #include <cat/cattypes.h>
-#include "config.h"
+#include "sysdeps.h"
 
 #define OPC_MAGIC		0xa1b2c3d4
 #define OPC_MAGIC_SWAP		0xd4c3b2a1

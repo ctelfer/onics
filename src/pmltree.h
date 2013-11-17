@@ -37,6 +37,7 @@ union  pml_node;
 struct pml_ast;
 struct pml_stack_frame;
 struct pml_retval;
+typedef void *pml_parser_t;
 
 /* Tree walker */
 #define PML_WALK_XSTKLEN	256
@@ -46,6 +47,7 @@ typedef int pml_walk_f(union pml_node *node, void *ctx, void *xstk);
 typedef int (*pml_eval_f)(struct pml_ast *ast, struct pml_stack_frame *fr,
 			  union pml_node *node, struct pml_retval *v);
 
+#define PML_LIB_PATH "lib/pml"
 
 /* Sizes are in bytes for globals and words (8-bytes) for function */
 /* parameters and local variables. For global variables, rw block 1 */
@@ -76,6 +78,8 @@ struct pml_ast {
 	struct pml_symtab *	ltab;
 	struct pml_function *	livefunc;
 	char			errbuf[256];
+	struct pmllex *		scanner;
+	pml_parser_t *		parser;
 };
 
 /* 
@@ -602,6 +606,9 @@ struct pml_intrinsic {
 /* -- basic AST initialization and maintenance -- */
 int  pml_ast_init(struct pml_ast *ast);
 int  pml_ast_add_std_intrinsics(struct pml_ast *ast);
+void pml_ast_set_parser(struct pml_ast *ast, struct pmllex *scanner,
+		        pml_parser_t *parser);
+void pml_ast_free_parser(struct pml_ast *ast);
 void pml_ast_clear(struct pml_ast *ast);
 void pml_ast_err(struct pml_ast *ast, const char *fmt, ...);
 void pml_ast_clear_err(struct pml_ast *ast);
@@ -691,9 +698,6 @@ int  pml_eval(struct pml_ast *ast, struct pml_stack_frame *fr,
 
 
 /* -- Parser interface -- */
-
-typedef void *pml_parser_t;
-
 pml_parser_t pml_alloc();
 int pml_parse(pml_parser_t p, struct pml_ast *ast, int tok,
 	      struct pmll_val xtok);

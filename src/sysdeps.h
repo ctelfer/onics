@@ -3,7 +3,7 @@
  * Copyright 2012-2013
  * Christopher Adam Telfer
  *
- * config.h -- general configuration file for ONICS.
+ * sysdeps.h -- system dependencies for ONICS.
  *
  *
  *  This program is free software: you can redistribute it and/or modify
@@ -19,13 +19,18 @@
  *  You should have received a copy of the GNU General Public License
  *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-#ifndef __onics_config_h
-#define __onics_config_h
+#ifndef __sysdeps_h
+#define __sysdeps_h
 
-/* #define ONICS_INLINE  *//* use this for ANSI-C 89 compilers */
+#include "onics_config.h"
+
+/* use this for ANSI-C 89 compilers */
+/* #define ONICS_INLINE  */
+/* #define ONICS_PACK_DECL( __DECL__ ) */
+
+/* use this for gcc & clang */
 #define ONICS_INLINE inline
-
 #define ONICS_PACK_DECL( __DECL__ ) \
 	__DECL__ __attribute__((packed))
 
-#endif /* __onics_config_h */
+#endif /* __sysdeps_h */

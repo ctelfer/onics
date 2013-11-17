@@ -173,11 +173,14 @@ int Count;
 %name PML
 %token_prefix PMLTOK_
 %include { 
+#include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
 #include <assert.h>  /* XXX needed by lemon */
 #include <cat/cat.h>
 #include <cat/list.h>
+#include <cat/str.h>
+#include "onics_config.h"
 #include "pmllex.h"
 #include "pmltree.h" 
 #include "ns.h"
@@ -211,6 +214,9 @@ int pml_y_bpt() { return 1; }
 
 %type decl { union pml_node * }
 %destructor decl { pmln_free($$); }
+
+%type idecl { union pml_node * }
+%destructor idecl { pmln_free($$); }
 
 %type funchdr{ struct pml_function * }
 %destructor funchdr { pmln_free($$); }
@@ -361,9 +367,36 @@ prog ::= decllist. {
 }
 
 /* Declarations */
-decllist ::= decllist decl. /* nothing to do: resolved below. */
+decllist ::= decl decllist. /* nothing to do: resolved below. */
 
 decllist ::= . /* nothing to do */
+
+decl ::= idecl SEMICOLON.
+
+idecl ::= IMPORT STRING(FN). {
+	FILE *fp;
+	char path[512];
+
+	str_copy(path, FN.u.raw.data, sizeof(path));
+	fp = fopen(FN.u.raw.data, "r");
+	if (fp == NULL) {
+		str_copy(path, ONICS_INSTALL_PREFIX, sizeof(path));
+		str_cat(path, "/", sizeof(path));
+		str_cat(path, PML_LIB_PATH, sizeof(path));
+		str_cat(path, "/", sizeof(path));
+		str_cat(path, FN.u.raw.data, sizeof(path));
+		fp = fopen(path, "r");
+	}
+	if (fp == NULL) {
+		pml_ast_err(ast, "unable to open file '%s' for import",
+			    FN.u.raw.data);
+	} else if (pmll_add_infile(ast->scanner, fp, 1, path) < 0) {
+		pml_ast_err(ast, "unable to add import file '%s'",
+			    FN.u.raw.data);
+		fclose(fp);
+	}
+	free(FN.u.raw.data);
+}
 
 decl ::= funcproto(F). {
 	if (F != NULL && pml_ast_add_func_proto(ast, F) < 0)

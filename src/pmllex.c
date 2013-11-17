@@ -38,12 +38,13 @@ enum {
 struct inputs {
 	struct list			ln;
 	int				type;
-	const char *			name;
+	ulong				lineno;
 	union {
 		struct cstr_inport	csi;
 		struct file_inport	fi;
 	} inp_u;
 	struct inport *			inp;
+	char				name[256];
 };
 
 #define l_to_input(_n) (container((_n), struct inputs, ln))
@@ -69,10 +70,7 @@ struct pmllex {
 
 	struct pmll_val		tokx;
 
-	ulong 			lineno;
 	char			errbuf[PMLLEX_MAXESTR];
-	ulong			svlineno;
-	const char *		svname;
 	
 	void *			ctx;
 	pmll_eoi_f		eoicb;
@@ -80,6 +78,7 @@ struct pmllex {
 
 #define INLIST(_lex) (&(_lex)->inputs.ln)
 #define CURINPUT(_lex) (l_to_input(l_head(INLIST(_lex))))
+#define NOINPUT(_lex, _pi) (&(_pi)->ln == INLIST(_lex))
 
 
 struct kwtok {
@@ -108,6 +107,7 @@ struct kwtok {
 	{ "send_no_free", PMLTOK_SENDNOFREE },
 	{ "drop",	PMLTOK_DROP },
 	{ "print",	PMLTOK_PRINT },
+	{ "import",	PMLTOK_IMPORT},
 	{ NULL,		0 }
 };
 
@@ -188,17 +188,23 @@ struct pmllex *pmll_alloc(void)
 
 	l_init(&lex->inputs.ln);
 	lex->inputs.type = NTYPE;
-	lex->inputs.name = "*END OF INPUT*";
+	str_copy(lex->inputs.name, "*END OF INPUT*", sizeof(lex->inputs.name));
 	lex->inputs.inp = &null_inport;
 
 	lex->unget = NEXTCNONE;
 	lex->curidx = 0;
-	lex->lineno = 1;
 	pmllv_init(&lex->tokx);
 	memset(&lex->errbuf, 0, sizeof(lex->errbuf));
 	lex->ctx = NULL;
 
 	return lex;
+}
+
+
+static void incr_lineno(struct pmllex *lex)
+{
+	struct inputs *pi = CURINPUT(lex);
+	++pi->lineno;
 }
 
 
@@ -213,7 +219,8 @@ int pmll_add_instr(struct pmllex *lex, const char *s, int front, const char *sn)
 		return -1;
 	}
 	pi->type = STYPE;
-	pi->name = (char *)sn;
+	str_copy(pi->name, sn, sizeof(pi->name));
+	pi->lineno = 1;
 	csinp_init(&pi->inp_u.csi, s);
 	pi->inp = &pi->inp_u.csi.in;
 	if (front)
@@ -236,7 +243,8 @@ int pmll_add_infile(struct pmllex *lex, FILE *f, int front, const char *fn)
 		return -1;
 	}
 	pi->type = FTYPE;
-	pi->name = (char *)fn;
+	str_copy(pi->name, fn, sizeof(pi->name));
+	pi->lineno = 1;
 	finp_init(&pi->inp_u.fi, f);
 	pi->inp = &pi->inp_u.fi.in;
 	if (front)
@@ -273,7 +281,7 @@ static void pmll_err(struct pmllex *lex, int incf, const char *fmt, ...)
 	pi = CURINPUT(lex);
 	if (incf && pi->name != NULL)
 		len = str_fmt(lex->errbuf, sizeof(lex->errbuf),
-			      "file %s line %lu: ", pi->name, lex->lineno);
+			      "file %s line %lu: ", pi->name, pi->lineno);
 	if (len >= 0 && len < sizeof(lex->errbuf))
 		str_vfmt(lex->errbuf + len, sizeof(lex->errbuf) - len, fmt, ap);
 	va_end(ap);
@@ -284,12 +292,9 @@ static void popinput(struct pmllex *lex)
 {
 	struct inputs *pi = CURINPUT(lex);
 
-	lex->svlineno = lex->lineno;
-	lex->svname = pi->name;
 	l_rem(&pi->ln);
 	inp_close(pi->inp);
 	free(pi);
-	lex->lineno = 1;
 }
 
 
@@ -347,11 +352,11 @@ static int nextc(struct pmllex *lex)
 		}
 
 		/* TODO: handle input error */
-		if (pi == &lex->inputs) {
+		if (NOINPUT(lex, pi)) {
 			if (lex->eoicb != NULL)
 				(*lex->eoicb)(lex);
 			pi = CURINPUT(lex);
-			if (pi == &lex->inputs) {
+			if (NOINPUT(lex, pi)) {
 				resetbuf(lex);
 				return NEXTCEOF;
 			}
@@ -400,9 +405,9 @@ static int skip_ws(struct pmllex *lex)
 			else if (ch == NEXTCERR)
 				return -1;
 			else
-				++lex->lineno;
+				incr_lineno(lex);
 		} else if (ch == '\n') {
-			++lex->lineno;
+			incr_lineno(lex);
 		}
 
 		if (--nws <= 0) {
@@ -606,7 +611,7 @@ static int read_str(struct pmllex *lex, int quote)
 			case 'v':  ch = '\v'; break;
 			case 'f':  ch = '\f'; break;
 			case 'r':  ch = '\r'; break;
-			case '\n': ++lex->lineno; break;
+			case '\n': incr_lineno(lex); break;
 			case 'x': 
 				if ((d1 = inp_getc(in)) < 0 || !isxdigit(d1) ||
 				    (d2 = inp_getc(in)) < 0 || !isxdigit(d2)) {
@@ -749,7 +754,7 @@ static int read_hexstr(struct pmllex *lex)
 				pmll_err(lex, 1, "unterminated hexstring");
 				return -1;
 			}
-			++lex->lineno;
+			incr_lineno(lex);
 			do {
 				ch = nextc(lex);
 			} while (ch == ' ' || ch == '\t' || ch == '\r');
@@ -889,20 +894,14 @@ int pmll_nexttok(struct pmllex *lex, struct pmll_val *v)
 ulong pmll_get_lineno(struct pmllex *lex)
 {
 	struct inputs *pi = CURINPUT(lex);
-	if (pi == &lex->inputs)
-		return lex->svlineno;
-	else
-		return lex->lineno;
+	return pi->lineno;
 }
 
 
 const char *pmll_get_iname(struct pmllex *lex)
 {
 	struct inputs *pi = CURINPUT(lex);
-	if (pi == &lex->inputs)
-		return lex->svname;
-	else
-		return pi->name;
+	return pi->name;
 }
 
 

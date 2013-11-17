@@ -17,29 +17,36 @@
 # This is NOT an autoconf script.  Just a hand-crafted script to attempt
 # to configure for the proper platform.
 
+INSTALL_PREFIX=${INSTALL_PREFIX:-/usr/local}
+
 
 if uname -a 2>/dev/null | grep -i linux > /dev/null 2>&1
 then
 	echo configure: Linux detected
 	echo linking linux-specific source files
-	make cfglinux
+	[ -h pktin.c ] || ln -s pktin-linux.c pktin.c
+	[ -h pktout.c ] || ln -s pktout-linux.c pktout.c
 
 elif uname -a 2>/dev/null | grep BSD > /dev/null 2>&1 
 then
 
 	echo configure: BSD detected
 	echo linking BSD-specific source files
-	make cfgbsd
+	[ -h pktin.c ] || ln -s pktin-bsd.c pktin.c
+	[ -h pktout.c ] || ln -s pktout-bsd.c pktout.c
 
 elif uname -a 2>/dev/null | grep Darwin > /dev/null 2>&1 
 then
 
 	echo configure: OSX detected
 	echo linking BSD-specific source files
-	make cfgbsd
+	[ -h pktin.c ] || ln -s pktin-bsd.c pktin.c
+	[ -h pktout.c ] || ln -s pktout-bsd.c pktout.c
 
 else
 	echo Unknown OS detected.  pktin/pktout will not function. 
+	[ -h pktin.c ] || ln -s pktin-none.c pktin.c
+	[ -h pktout.c ] || ln -s pktout-none.c pktout.c
 fi
 
 
@@ -48,7 +55,45 @@ if [ -f /usr/include/pcap.h -o -f /usr/include/pcap/pcap.h -o \
 then
 	echo "configure: libpcap detected"
 	echo "linking libpcap-specific files in"
-	make cfgpcap
+	[ -h pcapin-tgt.c ] || ln -s pcapin-none.c pcapin-tgt.c
+	[ -h pcapout-tgt.c ] || ln -s pcapout-none.c pcapout-tgt.c
 else
 	echo "configure: libpcap not detected: pcapin/pcapout will not function."
+	[ -h pcapin-tgt.c ] || ln -s pcapin.c pcapin-tgt.c
+	[ -h pcapout-tgt.c ] || ln -s pcapout.c pcapout-tgt.c
 fi
+
+
+echo Building onics_config.h
+rm -f config.h
+cat <<EOF > onics_config.h
+/*
+ * ONICS
+ * Copyright 2013
+ * Christopher Adam Telfer
+ *
+ * onics_config.h-- general configuration file for ONICS.
+ *
+ *
+ *  This program is free software: you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation, either version 3 of the License, or
+ *  (at your option) any later version.
+ *
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License
+ *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
+/* AUTOMATICALLY GENERATED FILE:  DO NOT EDIT BY HAND */
+#ifndef __onics_config_h
+#define __onics_config_h
+
+#define ONICS_INSTALL_PREFIX "$INSTALL_PREFIX"
+
+#endif /* __onics_config_h */
+EOF
