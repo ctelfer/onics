@@ -7,17 +7,13 @@ Key:
 
 PML
  + More test cases (control flow especially)
- + String references to arbitrary 'str' values (constants)
  ? proper 'global' variable resolutions in functions and rules
- ? Add "standard include path/files"
  * command line arguments to programs (requires number parsing to be useful)
- * random() intrinsic
  > Either hash table or multi-dimensional array support
 
 
 Protocol parsing & Namespace
  + Add test test cases to validate basic packet parsing.
- + Add test cases for IPv6 parsing.
  + Add IPv6 extension headers in the namespace.
  * Check restrictions on parsing to ensure termination.
  > Add short-form parsing for protocols using the above.
@@ -41,9 +37,8 @@ netvm_prog API:
 
 NetVM Coprocessors
  * DNS Resolver coprocessor
- * Coprocessor for RNG
  > Hash table coprocessor
- > Backing store coprocessor for packets (replaces queue coprocessor)
+ > Backing store coprocessor for packets
 
 
 pktmux/pktdemux:

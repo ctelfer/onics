@@ -1,3 +1,3 @@
 # Intrinsic reference
 #
- { fix_all_len(0); }
+ { fix_lens(0); }

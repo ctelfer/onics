@@ -786,11 +786,11 @@ Packet Buffer / Protocol Unit Manipulation
   	- Set the datalink type of the packet to the outermost protocol
 	  data unit's protocol ID.
 
-  void fix_all_len(pnum)
+  void fix_lens(pnum)
   	- Walk the protocol data units and fix all length fields within
 	  each unit.
 
-  void fix_all_csum(pnum)
+  void fix_csums(pnum)
   	- Walk the protocol data units and fix all the checksum fields
 	  within each unit.
 
@@ -1173,9 +1173,9 @@ Intrinsics:
 
   -- void fix_dltype(pnum)
   -- void fix_len(pdesc)
-  -- void fix_all_len(pnum)
+  -- void fix_lens(pnum)
   -- void fix_csum(pdesc)
-  -- void fix_all_csum(pnum)
+  -- void fix_csums(pnum)
 
   Per packet metadata that may or may not be present.
   If the data is not present the m_get_* function returns -1.

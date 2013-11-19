@@ -52,7 +52,7 @@ BEGIN {
 	tcp.payload = payload;
 
 	fix_dltype(0);
-	fix_all_len(0);
-	fix_all_csum(0);
+	fix_lens(0);
+	fix_csums(0);
 	send;
 }

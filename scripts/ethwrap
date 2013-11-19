@@ -32,7 +32,7 @@ done
 
 PMLSCRIPT="$PMLSCRIPT
 	fix_dltype(0);
-	fix_all_len(0);
+	fix_lens(0);
 }"
 
 exec pml -e "$PMLSCRIPT" $INFILE

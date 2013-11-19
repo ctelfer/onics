@@ -51,7 +51,7 @@ genopkt() {
 				"tcp.win = 65535; $2 " |
 			ipwrap "ip.saddr = $IPAC; ip.daddr = $IPAS; " \
 			       "ip.ttl = 64; " |
-			ethwrap "$CMODS fix_all_len(0); fix_all_csum(0); "
+			ethwrap "$CMODS fix_lens(0); fix_csums(0); "
 	else
 		dd if=$3 bs=1 skip=$4 count=$5 2>/dev/null | rawpkt |
 			tcpwrap "tcp.seqn = $SEQS; tcp.ackn = $ACKS; " \
@@ -59,7 +59,7 @@ genopkt() {
 				"tcp.win = 65535; $2 " |
 			ipwrap "ip.saddr = $IPAS; ip.daddr = $IPAC; " \
 			       "ip.ttl = 64; " |
-			ethwrap "$SMODS fix_all_len(0); fix_all_csum(0); "
+			ethwrap "$SMODS fix_lens(0); fix_csums(0); "
 	fi
 }
 
@@ -74,7 +74,7 @@ genfpkt() {
 				"tcp.win = 65535; $2 " |
 			ipwrap "ip.saddr = $IPAC; ip.daddr = $IPAS; " \
 			       "ip.ttl = 64; " |
-			ethwrap "$CMODS fix_all_len(0); fix_all_csum(0); "
+			ethwrap "$CMODS fix_lens(0); fix_csums(0); "
 	else
 		rawpkt $3 |
 			tcpwrap "tcp.seqn = $SEQS; tcp.ackn = $ACKS; " \
@@ -82,7 +82,7 @@ genfpkt() {
 				"tcp.win = 65535; $2 " |
 			ipwrap "ip.saddr = $IPAS; ip.daddr = $IPAC; " \
 			       "ip.ttl = 64; " |
-			ethwrap "$SMODS fix_all_len(0); fix_all_csum(0); "
+			ethwrap "$SMODS fix_lens(0); fix_csums(0); "
 	fi
 }
 

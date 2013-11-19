@@ -7,8 +7,8 @@ BEGIN {
 	parse_push_front(0, @eth);
 	tcp.payload = "Hello World\n";
 	fix_dltype(0);
-	fix_all_len(0);
-	fix_all_csum(0);
+	fix_lens(0);
+	fix_csums(0);
 
 	pkt_new(1, 68);
 	parse_push_back(1, @eth);
@@ -18,8 +18,8 @@ BEGIN {
 	$(1)ip.proto = 6;
 	$(1)tcp.payload = "Goodbye World\n";
 	fix_dltype(1);
-	fix_all_len(1);
-	fix_all_csum(1);
+	fix_lens(1);
+	fix_csums(1);
 
 	send;
 }

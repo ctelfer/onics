@@ -52,7 +52,7 @@ BEGIN {
 	tcp.sport = 12345;
 	tcp.dport = 80;
 	pkt_splice(&tcp.payload, &"HTTP GET / 1.0\n\n");
-	fix_all_len(0);
-	fix_all_csum(0);
+	fix_lens(0);
+	fix_csums(0);
 	send;
 }

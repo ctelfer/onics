@@ -10,8 +10,8 @@
 	$(1)ip.proto = 6;
 	$(1)tcp.payload = "Goodbye World\n";
 	fix_dltype(1);
-	fix_all_len(1);
-	fix_all_csum(1);
+	fix_lens(1);
+	fix_csums(1);
 
 	send_no_free 1;
 

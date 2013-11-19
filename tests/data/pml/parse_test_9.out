@@ -196,7 +196,7 @@ Functions
       Variable: pdesc [param; width=4, addr=0]
    Body -- 
       (null)
-   Function[intrinsic]: fix_all_len() -- 1 args, 0-byte stack, return type=void
+   Function[intrinsic]: fix_lens() -- 1 args, 0-byte stack, return type=void
    Parameters & Variables -- 
       Variable: pnum [param; width=4, addr=0]
    Body -- 
@@ -206,7 +206,7 @@ Functions
       Variable: pdesc [param; width=4, addr=0]
    Body -- 
       (null)
-   Function[intrinsic]: fix_all_csum() -- 1 args, 0-byte stack, return type=void
+   Function[intrinsic]: fix_csums() -- 1 args, 0-byte stack, return type=void
    Parameters & Variables -- 
       Variable: pnum [param; width=4, addr=0]
    Body -- 
@@ -403,7 +403,7 @@ Packet Rules
    Action -- 
       List:
       -----
-      Function call to: fix_all_len [[]; width=0]
+      Function call to: fix_lens [[]; width=0]
       Arguments -- 
          List:
          -----

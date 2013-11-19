@@ -1,5 +1,5 @@
 LBRACE         '{'
-ID             'fix_all_len'
+ID             'fix_lens'
 LPAREN         '('
 NUM            '0' -- '0'
 RPAREN         ')'

@@ -886,11 +886,11 @@ some bit operations quickly.  The intrinsics are given below.
   	- Set the datalink type of the packet to the outermost protocol
 	  data unit's protocol ID.
 
-  void fix_all_len(pnum)
+  void fix_lens(pnum)
   	- Walk the protocol data units and fix all length fields within
 	  each unit.
 
-  void fix_all_csum(pnum)
+  void fix_csums(pnum)
   	- Walk the protocol data units and fix all the checksum fields
 	  within each unit.
 .fi
@@ -1168,8 +1168,8 @@ Generate a TCP packet:
                     parse_push_front(0, @eth);
                     tcp.payload = payload;
                     fix_dltype(0);
-                    fix_all_len(0);
-                    fix_all_csum(0);
+                    fix_lens(0);
+                    fix_csums(0);
 		    send;
 		}" > tcppacket.xpkt
 

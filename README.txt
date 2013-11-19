@@ -72,7 +72,7 @@ Examples:
   # Read all packets from one interface, toggle their DF bits and send
   # them out a different interface.
   pktin IFACE1 | 
-    pml -e '?- ip -? { ip.df = ip.df ^ 1 ; fix_all_csum(0); }' |
+    pml -e '?- ip -? { ip.df = ip.df ^ 1 ; fix_csums(0); }' |
     pktout IFACE2
 
 

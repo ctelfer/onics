@@ -18,6 +18,6 @@
 	tcp.ackn = 87654321;
 
 	fix_dltype(0);
-	fix_all_len(0);
-	fix_all_csum(0);
+	fix_lens(0);
+	fix_csums(0);
 }

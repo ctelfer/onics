@@ -4,7 +4,7 @@ int dummy(int a, int b, int c) {
 	return 2 * b + c << a;
 }
 
- { fix_all_len(0); }
+ { fix_lens(0); }
 
  { 3 + 5; }
 

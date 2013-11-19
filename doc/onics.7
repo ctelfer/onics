@@ -169,7 +169,7 @@ To toggle the Don't Fragment bit of every packet in a trace file you
 could run:
 .nf
 
-  pml -e '?- ip -? { ip.df = ip.df ^ 1; fix_all_csum(0); }' infile outfile
+  pml -e '?- ip -? { ip.df = ip.df ^ 1; fix_csums(0); }' infile outfile
 
 .fi
 To examine the difference between the files to see what changed:
