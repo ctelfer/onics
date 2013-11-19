@@ -1,0 +1,78 @@
+Packet: 1
+ip.opt.exists: 0
+tcp.exists: 0
+tcp.mss.kind.exists: 0
+udp.sport.exists: 3
+
+Packet: 2
+ip.opt.exists: 0
+tcp.exists: 0
+tcp.mss.kind.exists: 0
+udp.sport.exists: 3
+
+Packet: 3
+ip.opt.exists: 0
+tcp.exists: 3
+tcp.mss.kind.exists: 1
+udp.sport.exists: 0
+
+Packet: 4
+ip.opt.exists: 0
+tcp.exists: 3
+tcp.mss.kind.exists: 1
+udp.sport.exists: 0
+
+Packet: 5
+ip.opt.exists: 0
+tcp.exists: 0
+tcp.mss.kind.exists: 0
+udp.sport.exists: 3
+
+Packet: 6
+ip.opt.exists: 0
+tcp.exists: 0
+tcp.mss.kind.exists: 0
+udp.sport.exists: 3
+
+Packet: 7
+ip.opt.exists: 0
+tcp.exists: 0
+tcp.mss.kind.exists: 0
+udp.sport.exists: 3
+
+Packet: 8
+ip.opt.exists: 0
+tcp.exists: 0
+tcp.mss.kind.exists: 0
+udp.sport.exists: 3
+
+Packet: 9
+ip.opt.exists: 0
+tcp.exists: 3
+tcp.mss.kind.exists: 1
+udp.sport.exists: 0
+
+Packet: 10
+ip.opt.exists: 0
+tcp.exists: 3
+tcp.mss.kind.exists: 1
+udp.sport.exists: 0
+
+Packet: 11
+ip.opt.exists: 0
+tcp.exists: 0
+tcp.mss.kind.exists: 0
+udp.sport.exists: 3
+
+Packet: 12
+ip.opt.exists: 0
+tcp.exists: 3
+tcp.mss.kind.exists: 0
+udp.sport.exists: 0
+
+Packet: 13
+ip.opt.exists: 0
+tcp.exists: 0
+tcp.mss.kind.exists: 0
+udp.sport.exists: 0
+

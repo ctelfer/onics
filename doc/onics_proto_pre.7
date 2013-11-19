@@ -28,9 +28,12 @@ needs.
 .SH PROTOCOL LIST
 .P
 Below is the list of the protocols and protocol fields that the
-\fBONICS\fP tools currently support by default.  The ones marked "(PML
-only)" are only accessible within pml(1) or within scripts that allow
-one to pass in PML code as parameters.  (e.g. ethwrap(1), tcpwrap(1),
-etc...)
+\fBONICS\fP tools currently support by default.  The ones that have the
+type "PML field" are only accessible within pml(1) or within scripts
+that allow one to pass in PML code as parameters.  (e.g. ethwrap(1),
+tcpwrap(1), etc...)  Additionally, PML can test for the existance of
+every regular packet field and protocol name aside from the fields
+marked (PML only) below.  For example, one can test for \fBudp.exists\fP
+or \fBtcp.mss.exists\fP in PML.
 .nf
 

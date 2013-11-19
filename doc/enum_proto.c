@@ -75,7 +75,6 @@ struct pmlfld {
 	const char *name;
 	const char *desc;
 } pml_fields[] = { 
-	{ "exists", "protocol exists in packet" }, 
 	{ "hlen", "header length" }, 
 	{ "plen", "payload length" }, 
 	{ "tlen", "trailer length" },
@@ -94,7 +93,7 @@ static void print_pml_fields(FILE *out, const char *pfx)
 {
 	int i;
 	for (i = 0; i < array_length(pml_fields); ++i)
-		fprintf(out, "\t%s.%s: field - %s (PML only)\n", pfx,
+		fprintf(out, "\t%s.%s: PML field - %s\n", pfx,
 			pml_fields[i].name, pml_fields[i].desc);
 }
 

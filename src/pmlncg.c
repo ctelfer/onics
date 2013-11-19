@@ -1768,9 +1768,20 @@ static void cgpd_init(struct cg_pdesc *cgpd, int oc, int oci, uint8_t x,
 		pf = (struct ns_pktfld *)e;
 		abort_unless(pf->prid != PRID_INVALID);
 
-		cgpd->field = NETVM_PRP_OFF_BASE + pf->oidx;
-		cgpd->prid = pf->prid;
-		cgpd->pfoff = pf->off;
+		if (loc->rpfld == PML_RPF_NONE) {
+			cgpd->field = NETVM_PRP_OFF_BASE + pf->oidx;
+			cgpd->prid = pf->prid;
+			cgpd->pfoff = pf->off;
+		} else {
+			abort_unless(loc->rpfld == PML_RPF_EXISTS);
+			/* see comment above in namespace block */
+			if (pf->oidx == PRP_OI_SOFF)
+				cgpd->field = NETVM_PRP_PIDX;
+			else
+				cgpd->field = NETVM_PRP_OFF_BASE + pf->oidx;
+			cgpd->prid = pf->prid;
+			cgpd->pfoff = 0;
+		}
 	}
 	cgpd->pkt = loc->pkt;
 	cgpd->idx = loc->idx;
@@ -2195,9 +2206,15 @@ static int cg_memref(struct pmlncg *cg, struct pml_locator *loc)
 static int cg_rpf(struct pmlncg *cg, struct pml_locator *loc, int etype)
 {
 	struct cg_pdesc cgpd;
-	struct ns_namespace *ns = (struct ns_namespace *)loc->u.nsref;
+	struct ns_elem *e = loc->u.nsref;
+	uint oidx;
 
-	abort_unless(ns->type == NST_NAMESPACE);
+	abort_unless(e->type == NST_NAMESPACE || e->type == NST_PKTFLD);
+	if (e->type == NST_NAMESPACE)
+		oidx = ((struct ns_namespace *)e)->oidx;
+	else
+		oidx = ((struct ns_pktfld *)e)->oidx;
+
 	cgpd_init2(&cgpd, NETVM_OC_LDPF, 
 	           PML_RPF_IS_BYTESTR(loc->rpfld) != 0, loc);
 
@@ -2207,14 +2224,15 @@ static int cg_rpf(struct pmlncg *cg, struct pml_locator *loc, int etype)
 	if (PML_RPF_IS_BYTESTR(loc->rpfld)) {
 		if (cg_loclen(cg, loc) < 0)
 			return -1;
-	} else if (ns->oidx != PRP_OI_SOFF) {
+	} else if (oidx != PRP_OI_SOFF) {
+		abort_unless(loc->rpfld == PML_RPF_EXISTS);
 		/*
 		 * If we have a namespace referring to a subfield 
 		 * within a protocol then we have to test explicitly
 		 * for invalid rather than implicitly by getting
 		 * the header's parse index.  See cgpd_init2().
 		 */
-		EMIT_W(cg, EQI, NETVM_PF_INVALID);
+		EMIT_W(cg, NEQI, NETVM_PF_INVALID);
 	}
 
 
