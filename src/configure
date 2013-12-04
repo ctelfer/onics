@@ -55,12 +55,12 @@ if [ -f /usr/include/pcap.h -o -f /usr/include/pcap/pcap.h -o \
 then
 	echo "configure: libpcap detected"
 	echo "linking libpcap-specific files in"
-	[ -h pcapin-tgt.c ] || ln -s pcapin-none.c pcapin-tgt.c
-	[ -h pcapout-tgt.c ] || ln -s pcapout-none.c pcapout-tgt.c
-else
-	echo "configure: libpcap not detected: pcapin/pcapout will not function."
 	[ -h pcapin-tgt.c ] || ln -s pcapin.c pcapin-tgt.c
 	[ -h pcapout-tgt.c ] || ln -s pcapout.c pcapout-tgt.c
+else
+	echo "configure: libpcap not detected: pcapin/pcapout will not function."
+	[ -h pcapin-tgt.c ] || ln -s pcapin-none.c pcapin-tgt.c
+	[ -h pcapout-tgt.c ] || ln -s pcapout-none.c pcapout-tgt.c
 fi
 
 
