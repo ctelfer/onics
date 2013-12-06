@@ -692,11 +692,21 @@ int pkb_pushprp(struct pktbuf *pkb, int prid)
 int pkb_wrapprp(struct pktbuf *pkb, int prid)
 {
 	struct prpspec ps;
+	struct prparse *prp;
 	if (prp_get_spec(prid, prp_next(&pkb->prp), 1, &ps) < 0)
 		return -1;
 	if (prp_add(&pkb->prp, pkb->buf, &ps, 1) < 0)
 		return -1;
-	pkb_set_layer(pkb, prp_next(&pkb->prp), SET_LAYER_FORCE);
+	prp = prp_next(&pkb->prp);
+	/* 
+	   in the packet buffer environment, when wrapping headers
+	   only, if we header we wrap goes below the current start
+	   of packet, simply implicitly move the start of packet to
+	   the start of the new header.
+	 */
+	if (prp_poff(&pkb->prp) > prp_soff(prp))
+		prp_poff(&pkb->prp) = prp_soff(prp);
+	pkb_set_layer(pkb, prp, SET_LAYER_FORCE);
 	return 0;
 }
 

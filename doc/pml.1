@@ -861,9 +861,10 @@ some bit operations quickly.  The intrinsics are given below.
 
   void parse_push_back(int pnum, int prid)
   	- push a new protocol header of protocol ID 'prid' to the back
-	  of the protocol data unit chain of packet 'pnum'.  There must
-	  be space within the innermost protocol data unit to hold this
-	  new header.  (Use pkt_ins_* of necessary to create it.)
+	  of the protocol data unit chain of packet 'pnum'.  If this
+	  this will adjust the starting offset of the packet in its
+	  buffer if necessary.  However, it will fail at runtime if
+	  insufficient space exists.
 
   void parse_pop_back(int pnum)
   	- remove the innermost protocol data unit from packet 'pnum'.

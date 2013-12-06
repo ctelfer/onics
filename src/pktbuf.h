@@ -164,6 +164,9 @@ void pkb_fix_dltype(struct pktbuf *pkb);
 int pkb_pushprp(struct pktbuf *pkb, int ptype);
 
 /* Push a new protocol parse to the outermost region of the packet */
+/* If this new header starts below the current packet starting offset */
+/* then implicitly shift the packet starting offset to the new header's */
+/* starting offset. */
 int pkb_wrapprp(struct pktbuf *pkb, int ptype);
 
 /* Remove a protocol parse from the beginning or end of the packet */
