@@ -19,6 +19,8 @@
 
 INSTALL_PREFIX=${INSTALL_PREFIX:-/usr/local}
 
+rm -f .has_pcap
+
 
 if uname -a 2>/dev/null | grep -i linux > /dev/null 2>&1
 then
@@ -55,6 +57,7 @@ if [ -f /usr/include/pcap.h -o -f /usr/include/pcap/pcap.h -o \
 then
 	echo "configure: libpcap detected"
 	echo "linking libpcap-specific files in"
+	echo > .has_pcap
 	[ -h pcapin-tgt.c ] || ln -s pcapin.c pcapin-tgt.c
 	[ -h pcapout-tgt.c ] || ln -s pcapout.c pcapout-tgt.c
 else

@@ -115,12 +115,22 @@ ${BINDIR}/pktout: pktout.o ${PKTOBJ} ${PKTHDR}
 		${DEFS} ${OPTS} ${INCS} ${LIBS}
 
 ${BINDIR}/pcapin: pcapin.o ${PKTOBJ} ${PKTHDR}
+	@( PCAPINC="" ; \
+	[ -f .has_pcap ] && PCAPINC="-lpcap" ; \
+	echo ${CC} -o ${BINDIR}/pcapin pcapin.o ${PKTOBJ} \
+		${DEFS} ${OPTS} ${INCS} ${LIBS} $$PCAPINC ; \
 	${CC} -o ${BINDIR}/pcapin pcapin.o ${PKTOBJ} \
-		${DEFS} ${OPTS} ${INCS} ${LIBS} -lpcap
+		${DEFS} ${OPTS} ${INCS} ${LIBS} $$PCAPINC \
+	)
 
 ${BINDIR}/pcapout: pcapout.o ${PKTOBJ} ${PKTHDR}
+	@( PCAPINC="" ; \
+	[ -f .has_pcap ] && PCAPINC="-lpcap" ; \
+	echo ${CC} -o ${BINDIR}/pcapout pcapout.o ${PKTOBJ} \
+		${DEFS} ${OPTS} ${INCS} ${LIBS} $$PCAPINC ; \
 	${CC} -o ${BINDIR}/pcapout pcapout.o ${PKTOBJ} \
-		${DEFS} ${OPTS} ${INCS} ${LIBS} -lpcap
+		${DEFS} ${OPTS} ${INCS} ${LIBS} $$PCAPINC \
+	)
 
 ${BINDIR}/rawpkt: rawpkt.o ${PKTOBJ}
 	${CC} -o ${BINDIR}/rawpkt rawpkt.o ${PKTOBJ} \
@@ -226,6 +236,7 @@ clean:
 	rm -f ../lemon/lemon
 
 veryclean: clean
+	rm -f .has_pcap
 	rm -f pktin.c pktout.c
 	rm -f pcapin-tgt.c pcapout-tgt.c
 	rm -f onics_config.h
