@@ -58,9 +58,8 @@ int dloffs[PRID_PROTO(PRID_DLT_MAX)+1] = {
 /* ONLY call with a valid dltype or it will abort. */
 static int dlt_offset(uint16_t prid)
 {
-	if ((PRID_FAMILY(prid) == PRID_PF_DLT) && 
-	    (PRID_PROTO(prid) >= PRID_DLT_MIN) &&
-	    (PRID_PROTO(prid) <= PRID_DLT_MAX))
+	if ((PRID_FAMILY(prid) == PRID_PF_DLT) && (prid >= PRID_DLT_MIN) &&
+	    (prid <= PRID_DLT_MAX))
 		return dloffs[PRID_PROTO(prid)];
 	return 0;
 }

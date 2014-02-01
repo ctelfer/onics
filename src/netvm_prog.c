@@ -612,7 +612,7 @@ static int sendpkt(struct netvm *vm, ulong pn, FILE *f, FILE *dout,
 	if (pkb_pack(p) < 0) {
 		if (debug) {
 			esave = errno;
-			fprintf(dout, "Error packet packet for writing\n");
+			fprintf(dout, "Error packing packet for writing\n");
 			errno = esave;
 		}
 		return -1;
@@ -637,6 +637,7 @@ static int sendpkt(struct netvm *vm, ulong pn, FILE *f, FILE *dout,
 	} else {
 		if (debug)
 			fprintf(dout, "Reloading packet buffer\n");
+		pkb_unpack(p);
 		netvm_load_pkt(vm, p, pn);
 	}
 

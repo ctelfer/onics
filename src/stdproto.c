@@ -355,12 +355,12 @@ static void eth_update(struct prparse *prp, byte_t *buf)
 		etype = ntoh16x(p);
 
 		if (etype == ETHTYPE_VLAN) {
-			if (prp_totlen(prp) <  (poff - prp_soff(prp) + 4)) {
+			if (prp_totlen(prp) < (poff - prp_soff(prp) + 4)) {
 				prp->error = PRP_ERR_TOOSMALL;
 				return;
 			}
 			if (vidx < (PRP_OI_EXTRA + PRP_ETH_NXFIELDS)) {
-				prp->offs[vidx] = poff;
+				prp->offs[vidx] = poff - 2;
 				vidx += 1;
 			}
 			p += 4;
