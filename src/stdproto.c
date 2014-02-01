@@ -1,6 +1,6 @@
 /*
  * ONICS
- * Copyright 2012-2013 
+ * Copyright 2012-2014
  * Christopher Adam Telfer
  *
  * stdproto.c -- Standard library of Internet protocol parsers.
@@ -333,6 +333,13 @@ static int eth_add(struct prparse *reg, byte_t *buf, struct prpspec *ps,
 }
 
 
+static int etype_is_vlan(uint16_t etype)
+{
+	return etype == ETHTYPE_C_VLAN ||
+	       etype == ETHTYPE_S_VLAN;
+}
+
+
 static void eth_update(struct prparse *prp, byte_t *buf)
 {
 	ushort etype;
@@ -351,23 +358,20 @@ static void eth_update(struct prparse *prp, byte_t *buf)
 	p = prp_header(prp, buf, byte_t) + ETHHLEN - 2;
 	vidx = PRP_ETHFLD_VLAN0;
 	poff = prp_soff(prp) + ETHHLEN;
-	do {
-		etype = ntoh16x(p);
-
-		if (etype == ETHTYPE_VLAN) {
-			if (prp_totlen(prp) < (poff - prp_soff(prp) + 4)) {
-				prp->error = PRP_ERR_TOOSMALL;
-				return;
-			}
-			if (vidx < (PRP_OI_EXTRA + PRP_ETH_NXFIELDS)) {
-				prp->offs[vidx] = poff - 2;
-				vidx += 1;
-			}
-			p += 4;
-			poff += 4;
-			break;
+	etype = ntoh16x(p);
+	while (etype_is_vlan(etype)) {
+		if (prp_totlen(prp) < (poff - prp_soff(prp) + 4)) {
+			prp->error = PRP_ERR_TOOSMALL;
+			return;
 		}
-	} while (etype == ETHTYPE_VLAN);
+		if (vidx < (PRP_OI_EXTRA + PRP_ETH_NXFIELDS)) {
+			prp->offs[vidx] = poff - 2;
+			vidx += 1;
+		}
+		p += 4;
+		poff += 4;
+		etype = ntoh16x(p);
+	} 
 
 	prp_poff(prp) = poff;
 	prp->offs[PRP_ETHFLD_ETYPE] = poff - 2;
@@ -2049,10 +2053,10 @@ static struct ns_pktfld eth2_vlan0_tpid =
 	NS_BYTEFIELD_IDX_I("tpid", &eth2_vlan0_ns, PRID_ETHERNET2,
 		PRP_ETHFLD_VLAN0, 0, 2,
 	       "Tag Proto ID", &ns_fmt_hex);
-static struct ns_pktfld eth2_vlan0_pcp =
-	NS_BITFIELD_IDX_I("pcp", &eth2_vlan0_ns, PRID_ETHERNET2,
+static struct ns_pktfld eth2_vlan0_pri =
+	NS_BITFIELD_IDX_I("pri", &eth2_vlan0_ns, PRID_ETHERNET2,
 		PRP_ETHFLD_VLAN0, 2, 0, 3,
-	       "Priority Code Point", &ns_fmt_dec);
+	       "Priority", &ns_fmt_dec);
 static struct ns_pktfld eth2_vlan0_cfi =
 	NS_BITFIELD_IDX_I("cfi", &eth2_vlan0_ns, PRID_ETHERNET2,
 		PRP_ETHFLD_VLAN0, 2, 3, 1,
@@ -2062,7 +2066,7 @@ static struct ns_pktfld eth2_vlan0_vid =
 		PRP_ETHFLD_VLAN0, 2, 4, 12,
 	       "VLAN ID", &ns_fmt_dec);
 struct ns_elem *stdproto_eth2_vlan0_ns_elems[STDPROTO_NS_SUB_ELEN] = {
-	(struct ns_elem *)&eth2_vlan0_tpid, (struct ns_elem *)&eth2_vlan0_pcp, 
+	(struct ns_elem *)&eth2_vlan0_tpid, (struct ns_elem *)&eth2_vlan0_pri, 
 	(struct ns_elem *)&eth2_vlan0_cfi, (struct ns_elem *)&eth2_vlan0_vid, 
 };
 
@@ -2076,10 +2080,10 @@ static struct ns_pktfld eth2_vlan1_tpid =
 	NS_BYTEFIELD_IDX_I("tpid", &eth2_vlan1_ns, PRID_ETHERNET2,
 		PRP_ETHFLD_VLAN1, 0, 2,
 	       "Tag Proto ID", &ns_fmt_hex);
-static struct ns_pktfld eth2_vlan1_pcp =
-	NS_BITFIELD_IDX_I("pcp", &eth2_vlan1_ns, PRID_ETHERNET2,
+static struct ns_pktfld eth2_vlan1_pri =
+	NS_BITFIELD_IDX_I("pri", &eth2_vlan1_ns, PRID_ETHERNET2,
 		PRP_ETHFLD_VLAN1, 2, 0, 3,
-	       "Priority Code Point", &ns_fmt_dec);
+	       "Priority", &ns_fmt_dec);
 static struct ns_pktfld eth2_vlan1_cfi =
 	NS_BITFIELD_IDX_I("cfi", &eth2_vlan1_ns, PRID_ETHERNET2,
 		PRP_ETHFLD_VLAN1, 2, 3, 1,
@@ -2089,7 +2093,7 @@ static struct ns_pktfld eth2_vlan1_vid =
 		PRP_ETHFLD_VLAN1, 2, 4, 12,
 	       "VLAN ID", &ns_fmt_dec);
 struct ns_elem *stdproto_eth2_vlan1_ns_elems[STDPROTO_NS_SUB_ELEN] = {
-	(struct ns_elem *)&eth2_vlan1_tpid, (struct ns_elem *)&eth2_vlan1_pcp, 
+	(struct ns_elem *)&eth2_vlan1_tpid, (struct ns_elem *)&eth2_vlan1_pri, 
 	(struct ns_elem *)&eth2_vlan1_cfi, (struct ns_elem *)&eth2_vlan1_vid, 
 };
 

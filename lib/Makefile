@@ -1,14 +1,14 @@
 # Makefile for ONICS library scripts
 
-ALL_LIBS=mkpkt.pml
+ALL_LIBS=mkpkt.pml vlan.pml
 
 
-all: $(ALL_DOCS)
+all: $(ALL_LIBS)
 
 clean:
 
 
-install: $(ALL_DOCS)
+install: $(ALL_LIBS)
 	@( INSTALL_PREFIX=$${INSTALL_PREFIX:-/usr/local} ; \
 	LIB_INSTALL_DIR=$${INSTALL_PREFIX}/lib/pml; \
 	mkdir -p $${LIB_INSTALL_DIR} ; \

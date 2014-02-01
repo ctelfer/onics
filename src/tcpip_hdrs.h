@@ -1,6 +1,6 @@
 /*
  * ONICS
- * Copyright 2012-2013
+ * Copyright 2012-2014
  * Christopher Adam Telfer
  *
  * tcpip_hdrs.h -- Standard TCP/IP headers and definitions.
@@ -43,7 +43,8 @@ struct eth2h {
 #define ETHTYPE_IP              0x0800
 #define ETHTYPE_IPV6            0x86DD
 #define ETHTYPE_ARP             0x0806
-#define ETHTYPE_VLAN            0x8100
+#define ETHTYPE_C_VLAN          0x8100
+#define ETHTYPE_S_VLAN          0x88a8
 #define ETHHLEN                 14
 
 

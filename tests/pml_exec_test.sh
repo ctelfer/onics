@@ -122,5 +122,6 @@ pml_test 50 $PDIR/twoudp.xpkt
 pml_test 51 NONE
 pml_test 52 $PDIR/exmix.xpkt
 pml_test 53 NONE
+pml_test 54 NONE
 
 exit $ERR
