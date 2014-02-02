@@ -703,8 +703,9 @@ A function prototype takes the form:
   RTYPE NAME ( [TYPE NAME [, TYPE NAME]...] ) ;
 .fi
 .P
-The RTYPE can be 'int', 'sref' or 'void'.  Again, 'void' indicates
-that there is no return value from the function.
+The RTYPE can be 'int', 'str' or 'void'.  Again, 'void' indicates
+that there is no return value from the function.  The 'str' type
+indicates that the function returns a string references.
 .P
 A function declaration has the form:
 .P
@@ -799,19 +800,19 @@ some bit operations quickly.  The intrinsics are given below.
 .SS "String Operations"
 .P
 .nf
-  int str_len(sref s)
+  int str_len(str s)
   	- return the length of a string reference
 
-  int str_addr(sref s)
+  int str_addr(str s)
   	- return the address of a string reference
 
-  int str_ispkt(sref s)
+  int str_ispkt(str s)
   	- return whether the string reference refers to a packet
 
-  int str_seg(sref s)
+  int str_seg(str s)
   	- return the segment index/packet # that the reference refers to
 
-  int str_isnull(sref s)
+  int str_isnull(str s)
   	- return whether the reference is an empty reference
 .nf
 .P
@@ -840,11 +841,11 @@ some bit operations quickly.  The intrinsics are given below.
   	- insert 'len' bytes at offset 'off' in packet 'pnum' shifting 
 	  data down in the buffer
 
-  void pkt_cut_u(sref s)
+  void pkt_cut_u(str s)
   	- cut the string from its packet shifting bytes up from the
 	  front.  's' must be a reference to packet data.
 
-  void pkt_cut_d(sref s)
+  void pkt_cut_d(str s)
   	- cut the string from its packet shifting bytes down from the
 	  end.  's' must be a reference to packet data.
 

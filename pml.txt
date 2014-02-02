@@ -33,14 +33,18 @@ indices, rather than field names.  The current ONICS toolkit includes
 protocol definitions for Ethernet II, IP, IPv6, ICMP, ICMPv6, UDP and
 TCP protocols.
 
-PML has six basic data types: signed 64-bit integers (int), byte 
-strings (str), byte string references (sref), masked byte strings, 
-regular expressions and the void type.  However, PML can only store
-a subset of these types in variables.  A PML global variable can hold a
-int, str or sref.  A PML local variable or parameter can only hold an
-int or sref.  Masked byte strings and regular expressions are only 
-available as literal constants (currently).  The void type can only 
-be a return type for a function.
+PML has six basic data types: signed 32-bit integers ('int'), byte
+strings ('str'), byte string references ('sref' but declared as 'str'),
+masked byte strings, regular expressions and the void type.   However,
+PML variables can only store a subset of the PML types.  A PML global
+variable can hold a integer, string or string reference.  A variable
+declared as 'str' can have type 'str' or to a 'sref'.  If the variable
+is declared with brackets ([]) then it it is an actual string.
+Otherwise it is a string refernce:  basically a pointer to a string or
+subregion of a string.  A PML local variable or parameter can only hold
+an integer or string reference.  Masked byte strings and regular
+expressions are only available as literal constants (currently).  The
+void type can only be a return type for a function.
 
 PML also supports named constants.  A program can not modify a constant 
 value and said value may not have any associated memory space in the 
@@ -171,12 +175,13 @@ VARIABLE DECLARATIONS
 ---------------------
 
 PML allows one to declare four types of variables:  global variables, local
-variables, function parameters and constants.  A global variable is the
-only variable that can be defined to have a type of 'str'.  It can also
-have a type of 'int' or 'sref'.  A global variable declaration takes the form:
+variables, function parameters and constants.  A global variable can
+have types 'int' and 'str' and it is the only type of variable where the
+string can be declared as an actual string as opposed to a string
+reference.  A global variable declaration takes the form:
 
   int NAME [= EXPRESSION] ;
-  sref NAME ;
+  str NAME ;
   str NAME '[' LENGTH ']' [= EXPRESSION] ;
 
 The first form declares a 64-byte integer variable.  If EXPRESSION is
@@ -185,7 +190,7 @@ expression.  Otherwise it is initialized to 0.  The second form declares
 a globally accessible string reference.  It may not be initialized at
 compile time.  The third form declares a byte string of LENGTH bytes.
 If EXPRESSION is present, then the string is initialized to the value of
-the expression (which must be of type 'str').  If the variable has a
+the expression (which must be of type string).  If the variable has a
 longer length than the initialization expression, then the program
 initializes the remaining bytes in the string are initialized to 0.  If
 the initializer is greater in length than the variable then the compiler
@@ -201,8 +206,8 @@ name in a function body or rule action statement that has no binding to
 a previously declared variable or protocol-specific name (see 'LOCATORS'
 below) automatically declares a local variable of type 'int'.
 
-PML initializes all uninitialized variables to 0 (int), a string of 0s
-(str) or a null reference (sref) depending on the variable type.
+PML initializes all uninitialized integers to 0, uninitialized strings
+to a string of 0s, uninitialized string references to a null reference.
 
 
 EXPRESSIONS
@@ -267,8 +272,7 @@ Finally, a locator expression's type is equal to the type value that the
 locator refers to.  (see below)
 
 The value of the expression E in a string reference operator must be a
-byte string.  ** Currently, 'E' must be a locator and can not any other
-type of expression that has type 'str'.  I intend to fix this. **
+byte string or string reference. 
 
 The match comparison operators (=~ and !~) perform different comparisons
 depending on the type of the right hand expression.  The left-hand 
@@ -604,8 +608,9 @@ A function prototype takes the form:
 
   RTYPE NAME ( [TYPE NAME [, TYPE NAME]...] ) ;
 
-The RTYPE can be 'int', 'sref' or 'void'.  Again, 'void' indicates
-that there is no return value from the function.
+The RTYPE can be 'int', 'str' or 'void'.  Again, 'void' indicates
+that there is no return value from the function and 'str' means
+the return type is a string reference (sref).
 
 A function declaration has the form:
 
@@ -622,7 +627,7 @@ program will discard the return value of the return expression (if
 present).  If control reaches the end of STATEMENT_LIST without
 encountering a return statement, then the program returns a value of '0'
 if the return type is 'int' or an empty string reference if the type is
-'sref'.  
+'str'.  
 
 
 INLINE DECLARATIONS
@@ -699,19 +704,19 @@ some binary operations quickly.  The intrinsics are given below.
 
 String Operations
 
-  int str_len(sref s)
+  int str_len(str s)
   	- return the length of a string reference
 
-  int str_addr(sref s)
+  int str_addr(str s)
   	- return the address of a string reference
 
-  int str_ispkt(sref s)
+  int str_ispkt(str s)
   	- return whether the string reference refers to a packet
 
-  int str_seg(sref s)
+  int str_seg(str s)
   	- return the segment index/packet # that the reference refers to
 
-  int str_isnull(sref s)
+  int str_isnull(str s)
   	- return whether the reference is an empty reference
 
 
@@ -740,11 +745,11 @@ Packet Buffer / Protocol Unit Manipulation
   	- insert 'len' bytes at offset 'off' in packet 'pnum' shifting 
 	  data down in the buffer
 
-  void pkt_cut_u(sref s)
+  void pkt_cut_u(str s)
   	- cut the string from its packet shifting bytes up from the
 	  front.  's' must be a reference to packet data.
 
-  void pkt_cut_d(sref s)
+  void pkt_cut_d(str s)
   	- cut the string from its packet shifting bytes down from the
 	  end.  's' must be a reference to packet data.
 
@@ -985,7 +990,7 @@ RANDOM NOTES
     - byte string		- str
     - masked byte string	- mstr (NOT DECLARABLE)
     - regular expression	- regex (NOT DECLARABLE)
-    - string pointer		- sref
+    - string reference		- sref (declared as 'str' with no [])
    
   Expressions that can return sref:
     - a location address 
@@ -1018,7 +1023,7 @@ RANDOM NOTES
 
   Value types:
     - local variable    -> scalar, sref
-    - parameter	     -> scalar, sref
+    - parameter	        -> scalar, sref
     - global variable   -> scalar, string, sref
     - constant          -> scalar
     - protocol constant -> scalar, string, masked string
@@ -1126,11 +1131,11 @@ Rules:
 
 
 Intrinsics:
-  -- str_len(sref) - return the length of a string reference
-  -- str_addr(sref) - return the address of a string reference
-  -- str_ispkt(sref) - return whether the string reference refers to a packet
-  -- str_seg(sref) - return the segment index/packet # that the ref refers to
-  -- str_isnull(sref) - return whether the reference is an empty reference
+  -- str_len(str) - return the length of a string reference
+  -- str_addr(str) - return the address of a string reference
+  -- str_ispkt(str) - return whether the string reference refers to a packet
+  -- str_seg(str) - return the segment index/packet # that the ref refers to
+  -- str_isnull(str) - return whether the reference is an empty reference
 
   -- void pkt_new(pnum, len) - create a new packet with 'len' bytes of data
   -- void pkt_new_z(pnum, len) - create a new packet with 0 bytes but 'len' 
@@ -1143,10 +1148,10 @@ Intrinsics:
 				      shifting up
   -- void pkt_ins_d(pnum, off, len) - insert 'len' bytes at 'off' in 'pnum'
 				      shifting down
-  -- void pkt_cut_u(sref) - cut the string from its packet shifting bytes up
-			    from the front
-  -- void pkt_cut_d(sref) - cut the string from its packet shifting bytes down
-			    from the end
+  -- void pkt_cut_u(str) - cut the string from its packet shifting bytes up
+			   from the front
+  -- void pkt_cut_d(str) - cut the string from its packet shifting bytes down
+			   from the end
   -- void pkt_parse(pnum) - reparse a packet 'pnum'
 
   /* very low level functions */
@@ -1270,23 +1275,3 @@ Regular expressions in NetVM
 	[offn, offn-1, offn-2 .. off1, pos]
 	* Error if pattern not loaded
 	* Error if nmatch is too large for the pattern
-
-
- 
-
-int pkt_splice(sref p, sref b)
-{
-	if (!str_ispkt(p))
-		return -1;
-	diff = sref_len(p) - sref_len(b);
-	if (diff > 0)
-		pkt_cut_d(p[sref_len(p) - diff, diff]);
-	} else if (diff < 0) {
-		pkt_ins_u(p, sref_len(p), -diff);
-	}
-	p = b; # string copy
-	fix_csum(sref_seg(p));
-	return 0;
-}
-
-
