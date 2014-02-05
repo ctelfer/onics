@@ -745,7 +745,7 @@ stmt(S) ::= locator(L) ASSIGN expr(E) SEMICOLON. {
 	S = (union pml_node *)a;
 }
 
-stmt(S) ::= AMP locator(L) ASSIGN expr(E) SEMICOLON. {
+stmt(S) ::= AMP locname(L) ASSIGN expr(E) SEMICOLON. {
 	struct pml_assign *a = pmln_alloc(ast, PMLTT_ASSIGN);
 	if (a != NULL) {
 		L->type = PMLTT_LOCADDR;
@@ -1257,25 +1257,6 @@ exprlist(EL) ::= expr(E). {
 
 value(V) ::= locator(L). { 
 	V = (union pml_expr_u *)L;
-}
-value(V) ::= AMP locator(L). { 
-	L->type = PMLTT_LOCADDR;
-	V = (union pml_expr_u *)L;
-}
-value(V) ::= AMP strval(S). { 
-	struct pml_locator *loc = pmln_alloc(ast, PMLTT_LOCADDR);
-
-	if (loc != NULL) {
-		loc->eflags = PML_EFLAG_CONST|PML_EFLAG_PCONST;
-		loc->etype = PML_ETYPE_STRREF;
-		loc->width = 16;
-		loc->reftype = PML_REF_LITERAL;
-		loc->u.litref = (struct pml_literal *)S;
-	} else {
-		pmln_free(S);
-	}
-
-	V = (union pml_expr_u *)loc;
 }
 strval(V) ::= BYTESTR(I). {
 	struct pml_literal *v = pmln_alloc(ast, PMLTT_BYTESTR);

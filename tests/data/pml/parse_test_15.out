@@ -420,7 +420,7 @@ Functions
       List:
       -----
       Control Flow Modification: 'return'
-         Location Address: variable(r) [[p]; width=8]
+         Locator: variable(r) [[]; width=8]
          Variable -- 
             Variable: r [param; width=8, addr=0]
          Offset -- 
@@ -440,7 +440,7 @@ Functions
                   Arguments -- 
                      List:
                      -----
-                     Location Address: variable(r) [[c,p]; width=8]
+                     Locator: variable(r) [[]; width=8]
                      Variable -- 
                         Variable: r [param; width=8, addr=0]
                      -----
@@ -459,11 +459,11 @@ Functions
       List:
       -----
       Control Flow Modification: 'return'
-         Function call to: bar [[]; width=0]
+         Function call to: bar [[]; width=8]
          Arguments -- 
             List:
             -----
-            Location Address: variable(r) [[p]; width=8]
+            Locator: variable(r) [[]; width=8]
             Variable -- 
                Variable: r [param; width=8, addr=0]
             Offset -- 
@@ -490,7 +490,7 @@ Begin Rule
       -----
       Assignment to r
       Value -- 
-         Location Address: variable(astring) [[c,p]; width=8]
+         Locator: variable(astring) [[]; width=16]
          Variable -- 
             Variable: astring [global; width=16, addr=0]
                Initialization value -- 
@@ -501,11 +501,11 @@ Begin Rule
       -----
       Assignment to r2
       Value -- 
-         Function call to: bar [[]; width=0]
+         Function call to: bar [[]; width=8]
          Arguments -- 
             List:
             -----
-            Location Address: variable(r) [[c,p]; width=8]
+            Locator: variable(r) [[]; width=8]
             Variable -- 
                Variable: r [local; width=8, addr=0]
             -----
@@ -514,11 +514,11 @@ Begin Rule
       -----
       Assignment to r
       Value -- 
-         Function call to: bar [[]; width=0]
+         Function call to: bar [[]; width=8]
          Arguments -- 
             List:
             -----
-            Location Address: variable(r) [[c,p]; width=8]
+            Locator: variable(r) [[]; width=8]
             Variable -- 
                Variable: r [local; width=8, addr=0]
             -----
@@ -527,11 +527,11 @@ Begin Rule
       -----
       Assignment to r2
       Value -- 
-         Function call to: bar [[]; width=0]
+         Function call to: bar [[]; width=8]
          Arguments -- 
             List:
             -----
-            Location Address: variable(astring) [[c,p]; width=8]
+            Locator: variable(astring) [[]; width=16]
             Variable -- 
                Variable: astring [global; width=16, addr=0]
                   Initialization value -- 
@@ -545,11 +545,11 @@ Begin Rule
       -----
       Assignment to r
       Value -- 
-         Function call to: bar [[]; width=0]
+         Function call to: bar [[]; width=8]
          Arguments -- 
             List:
             -----
-            Location Address: variable(astring) [[c,p]; width=8]
+            Locator: variable(astring) [[]; width=16]
             Variable -- 
                Variable: astring [global; width=16, addr=0]
                   Initialization value -- 
@@ -576,7 +576,7 @@ Packet Rules
       -----
       Assignment to r
       Value -- 
-         Location Address: variable(astring) [[c,p]; width=8]
+         Locator: variable(astring) [[]; width=16]
          Variable -- 
             Variable: astring [global; width=16, addr=0]
                Initialization value -- 
@@ -603,7 +603,7 @@ Packet Rules
          Arguments -- 
             List:
             -----
-            Location Address: variable(r) [[c,p]; width=8]
+            Locator: variable(r) [[]; width=8]
             Variable -- 
                Variable: r [local; width=8, addr=0]
             -----
@@ -616,7 +616,7 @@ Packet Rules
          Arguments -- 
             List:
             -----
-            Location Address: variable(astring) [[c,p]; width=8]
+            Locator: variable(astring) [[]; width=16]
             Variable -- 
                Variable: astring [global; width=16, addr=0]
                   Initialization value -- 

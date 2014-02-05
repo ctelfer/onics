@@ -334,7 +334,6 @@ In PML an expression is one of:
   (In order of precedence)
 
   - '(' E ')'   : parenthesized expression
-  - '&' E	: string reference to E (value has type 'sref')
   - '-' E       : numerically negated expression
   - 'not' E	: logcal inversion (value is 0 or 1)
   - '~' E	: binary inversion (bit-wise inversion)
@@ -360,13 +359,12 @@ In PML an expression is one of:
   - E1 'or ' E2 : E1 or E2 (short circuit boolean compare)
 .fi
 .P
-The type of an expression is usually 'int'.  There are four exceptions.
-A string reference expression (& E) has type 'sref'.  A byte string
-literal has type 'str'.  A function or inline call has a type of the
-return value of the function or inline (always 'int' for inlines).
-Finally, a locator expression's type is equal to the type value that the
-locator refers to.  (see below) The value of the expression E in a
-string reference operator must be a byte string or a string reference.
+The type of an expression is usually 'int'.  However, there are several
+exceptions.  A byte string literal has type 'str'.  A function or inline
+call has a type of the return value of the function or inline (always
+\'int' for inlines).  A locator expression's type is equal to the type
+value that the locator refers to.  All string references used in
+expressions have type 'str'.
 .P
 The match comparison operators (=~ and !~) perform different comparisons
 depending on the type of the right hand expression.  The left-hand 
@@ -409,6 +407,16 @@ following type conversion implicitly:
   mstr->int - convert the value and the mask of the masked string
               to 'int' as above and return the binary AND of the
               two resulting values.
+
+  str->sref - converts the string to a reference to the string.
+              This can occur in three ways:
+                1) when assigning a 'str' valued expression to an 
+                   'sref' variable by the '& VAR = EXPR' statement.
+                2) when passing a string to an sref parameter
+                   (denoted with type 'str') in a function call.
+                3) when returning a string in a function call with
+                   declared return type 'str' (which means sref in
+                   function call return types).
 
   str->void - discards the value
   int->void
@@ -518,15 +526,14 @@ PML has the following types of statements:
    present.)
 
  - LOCATOR = EXPR ;
-   & LOCATOR = EXPR ;
-
    Evaluate EXPR and assign its value to the location denoted by
    LOCATOR.  LOCATOR and EXPR must have the same type or the PML program
-   must be able to type cast the EXPR to the type of LOCATOR.  In 
-   assignment statement that is prefixed with a '&', the expression must 
-   have type 'sref' and LOCATOR must be a variable of type 'sref'.  This
-   assignment modifies the LOCATOR variable to point to refer to a new
-   string.
+   must be able to type cast the EXPR to the type of LOCATOR. 
+
+ - & VARIABLE = EXPR ;
+   Evaluate EXPR which must have 'str' type.  This assigns the string
+   reference to the returned string to the given VARIABLE which must
+   be of type 'sref'.
 .fi
 .P
 .SS "LOCATORS"
@@ -562,8 +569,7 @@ declaration is the very first direct access form:  a name with no
 .P
 The type of a locator expression is the type of the value it refers to
 with one exception.  A locator that refers to a 'sref' variable has type
-\'str' (unless modified with the unary & operator in which case the
-expression has type 'sref').
+\'str' in all r-values.
 .P
 A direct access locator that begins with $(pnum) or $(pnum, idx) refers
 can refer to packets other than packet 0 in the working set (see below).

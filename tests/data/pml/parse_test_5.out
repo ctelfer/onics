@@ -492,7 +492,7 @@ Packet Rules
          Locator: packet field(tcp) [[]; width=4]
          Reserved packet field (exists)
          Packet -- 
-            Scalar [[c]; width=4] -- width 4: 0 (0,0x0)
+            Scalar [[c]; width=4] -- width 4: 1 (1,0x1)
       -----
       If Statement
       Test -- 
@@ -527,7 +527,7 @@ Packet Rules
          Locator: packet field(tcp) [[]; width=4]
          Reserved packet field (exists)
          Packet -- 
-            Scalar [[c]; width=4] -- width 4: 0 (0,0x0)
+            Scalar [[c]; width=4] -- width 4: 2 (2,0x2)
       -----
       If Statement
       Test -- 
@@ -566,7 +566,7 @@ Packet Rules
          Locator: packet field(tcp) [[]; width=4]
          Reserved packet field (exists)
          Packet -- 
-            Scalar [[c]; width=4] -- width 4: 0 (0,0x0)
+            Scalar [[c]; width=4] -- width 4: 3 (3,0x3)
          Header Index -- 
             Locator: variable(i) [[]; width=4]
             Variable -- 
@@ -610,7 +610,7 @@ Packet Rules
             Locator: packet field(tcp) [[]; width=4]
             Reserved packet field (exists)
             Packet -- 
-               Scalar [[c]; width=4] -- width 4: 0 (0,0x0)
+               Scalar [[c]; width=4] -- width 4: 4 (4,0x4)
             Header Index -- 
                Locator: variable(i) [[]; width=4]
                Variable -- 

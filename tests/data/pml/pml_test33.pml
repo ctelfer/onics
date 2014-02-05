@@ -20,11 +20,11 @@ void dumptcp() {
 
 BEGIN {
 	str payload;
-	&payload = &"HTTP GET / 1.0\n\n";
+	&payload = "HTTP GET / 1.0\n\n";
 
 	len = 14 + 20 + 20;
 	pkt_new_z(0, 2048);
-	pkt_ins_u(0, str_addr(&pkt.payload), len);
+	pkt_ins_u(0, str_addr(pkt.payload), len);
 
 	parse_push_back(0, @eth);
 	eth.ethtype = 0x800;
@@ -41,11 +41,11 @@ BEGIN {
 	print "initial headers in packet";
 	dumptcp();
 
-	pkt_ins_u(0, str_addr(&tcp.payload), str_len(&payload));
+	pkt_ins_u(0, str_addr(tcp.payload), str_len(payload));
 	print "\nafter payload space insertion";
 	dumptcp();
 
-	pkt_adj_off(0, @tcp, 0, PAYLOAD_OFF, -str_len(&payload));
+	pkt_adj_off(0, @tcp, 0, PAYLOAD_OFF, -str_len(payload));
 	print "\nafter header offset adjustment";
 	dumptcp();
 

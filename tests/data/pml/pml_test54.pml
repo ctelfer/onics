@@ -5,12 +5,12 @@ int pkt_splice(str p, str s)
 {
 	str post;
 
-	pn = str_seg(&p);
-	cutlen = str_len(&p);
-	off = str_addr(&p);
-	inslen = str_len(&s);
+	pn = str_seg(p);
+	cutlen = str_len(p);
+	off = str_addr(p);
+	inslen = str_len(s);
 
-	if (not str_ispkt(&p)) {
+	if (not str_ispkt(p)) {
 		return -1;
 	}
 
@@ -20,7 +20,7 @@ int pkt_splice(str p, str s)
 	} 
 
 	if (cutlen > inslen) {
-		pkt_cut_d(&p[0, cutlen - inslen]);
+		pkt_cut_d(p[0, cutlen - inslen]);
 	} else { 
 		pkt_ins_u(pn, off, inslen - cutlen);
 	}
@@ -75,7 +75,7 @@ void vlan_push(int pnum, int tpid, int tci)
 {
 	if (not $(pnum)eth)
 		return 0;
-	pkt_ins_d(pnum, str_addr(&$(pnum)eth) + 12, 4);
+	pkt_ins_d(pnum, str_addr($(pnum)eth[0]) + 12, 4);
 	$(pnum)eth[12,4] = (tpid << 16) | (tci & 0xFFFF);
 	parse_update($(pnum)eth);
 }
@@ -85,7 +85,7 @@ void vlan_pop(int pnum)
 {
 	if (not vlan_present(pnum))
 		return 0;
-	pkt_cut_u(&$(pnum)eth[12,4]);
+	pkt_cut_u($(pnum)eth[12,4]);
 }
 
 
@@ -97,7 +97,7 @@ BEGIN {
 	ip.daddr = 100.0.0.0;
 	udp.dport = 53;
 	udp.sport = 12345;
-	pkt_splice(&udp.payload, &"FOOBARBAZ");
+	pkt_splice(udp.payload, "FOOBARBAZ");
 	vlan_push(0, ETYPE_C_VLAN, 1000);
 	fix_lens(0);
 	fix_csums(0);

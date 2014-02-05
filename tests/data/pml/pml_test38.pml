@@ -2,7 +2,7 @@
 #
 
 {
-	pkt_ins_d(0, str_addr(&pkt.payload), 54);
+	pkt_ins_d(0, str_addr(pkt.payload), 54);
 	parse_push_front(0, @tcp);
 	parse_push_front(0, @ip);
 	parse_push_front(0, @eth);

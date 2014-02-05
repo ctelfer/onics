@@ -219,7 +219,7 @@ BEGIN {
 	#
 	# string eq against string reference
 	#
-	&sr = &s2;
+	&sr = s2;
 	if (s1 == sr) { 
 		print "SUCCESS string reference eq"; 
 	} else { 
@@ -232,7 +232,7 @@ BEGIN {
 		print "SUCCESS string reference not-eq"; 
 	}
 
-	&sr = &s3;
+	&sr = s3;
 	if (s1 == sr) {
 		print "ERROR string reference eq (eqlen) "; 
 	} else { 
@@ -245,7 +245,7 @@ BEGIN {
 		print "ERROR string reference fail not-eq (eqlen) "; 
 	}
 
-	&sr = &s4;
+	&sr = s4;
 	if (s1 == sr) { 
 		print "ERROR string reference fail eq (eqlen) "; 
 	} else { 

@@ -372,7 +372,7 @@ static int _i_str(struct pmlncg *cg, struct pml_call *c, struct cg_intr *intr)
 	abort_unless(f->arity == 1);
 	e = l_to_node(l_head(&pl->list));
 
-	if (e->base.type == PMLTT_LOCADDR) {
+	if (e->base.type == PMLTT_LOCATOR) {
 		rv = _cg_i_str_optimized(cg, (struct pml_locator *)e, intr);
 		if (rv < 0)
 			return -1;
@@ -1393,8 +1393,11 @@ static int typecast(struct pmlncg *cg, int otype, int ntype)
 		}
 		break;
 
-	/* NOTE nothing can be cast to STRREF */
 	case PML_ETYPE_STRREF:
+		abort_unless(otype == PML_ETYPE_BYTESTR);
+		/* nothing needed:  value of string is value for string ref */
+		break;
+
 	default:
 		abort_unless(0);
 	}
@@ -2549,47 +2552,6 @@ static int cg_locator(struct pmlncg *cg, struct pml_locator *loc, int etype)
 }
 
 
-static int cg_locaddr(struct pmlncg *cg, struct pml_locator *loc, int etype)
-{
-	ulong addr;
-	struct pml_literal *lit;
-	struct pml_variable *var;
-
-	switch (loc->reftype) {
-	case PML_REF_VAR:
-		var = loc->u.varref;
-		if (var->etype == PML_ETYPE_STRREF) {
-			if (cg_strref(cg, loc) < 0)
-				return -1;
-		} else {
-			abort_unless(var->vtype == PML_VTYPE_GLOBAL);
-			if (cg_memref(cg, loc) < 0)
-				return -1;
-		}
-		break;
-
-	case PML_REF_PKTFLD:
-		return cg_pfref(cg, loc, etype);
-
-	case PML_REF_LITERAL:
-		lit = loc->u.litref;
-		abort_unless(lit->type == PMLTT_BYTESTR);
-		addr = MEMADDR(lit->u.bytestr.addr, lit->u.bytestr.segnum);
-		PUSH(cg, addr);
-		PUSH(cg, lit->u.bytestr.len);
-		break;
-
-	default:
-		abort_unless(0);
-	}
-
-	if (typecast(cg, loc->etype, etype) < 0)
-		return -1;
-
-	return 0;
-}
-
-
 static int cg_rexmatch(struct pmlncg *cg, struct pml_op *op, int etype)
 {
 	struct pml_literal *lit;
@@ -2671,12 +2633,6 @@ static int w_expr_pre(union pml_node *n, void *auxp, void *xstk)
 		/* prune walk for locators:  cg_locator will walk its own */
 		/* sub-fields as needed.  */
 		if (cg_locator(ea->cg, &n->locator, es->etype) < 0)
-			return -1;
-		return 1;
-
-	case PMLTT_LOCADDR:
-		/* prune walk for locators:  no need to walk subfields */
-		if (cg_locaddr(ea->cg, &n->locator, es->etype) < 0)
 			return -1;
 		return 1;
 
@@ -3044,7 +3000,6 @@ int cg_assign_global_var(struct pmlncg *cg, struct pml_assign *a)
 		EMIT_NULL(cg, MOVE);
 	} else if (v->etype == PML_ETYPE_STRREF) {
 		if (loc->type == PMLTT_LOCADDR) {
-			abort_unless(e->expr.etype == PML_ETYPE_STRREF);
 			/* overwrite string ref */
 			if (cg_expr(cg, (union pml_node *)e,
 				    PML_ETYPE_STRREF) < 0)

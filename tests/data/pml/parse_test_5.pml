@@ -24,7 +24,7 @@ int true() {
 
 ?- ip -? { 
 	i = 1;
-	x = $(0)tcp;
+	x = $(1)tcp;
 	if ( true() ) {
 		drop;
 	}
@@ -33,7 +33,7 @@ int true() {
 
 ?- ip -? { 
 	i = 1;
-	x = $(0)tcp;
+	x = $(2)tcp;
 	if ( 1 and true() ) {
 		drop;
 	}
@@ -42,7 +42,7 @@ int true() {
 
 ?- ip -? { 
 	i = 1;
-	x = $(0,i)tcp;
+	x = $(3,i)tcp;
 	if ( 1 and true() ) {
 		drop;
 	}
@@ -51,7 +51,7 @@ int true() {
 
 ?- ip -? { 
 	i = 1;
-	if ( $(0,i)tcp and true() ) {
+	if ( $(4,i)tcp and true() ) {
 		drop;
 	}
 	send;

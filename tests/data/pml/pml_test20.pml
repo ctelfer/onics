@@ -6,14 +6,14 @@ str fp;
 str bp;
 
 BEGIN {
-	&fp = &foo;
+	&fp = foo;
 	if (fp == foo) {
 		print "foo agrees";
 	} else {
 		print "error: foo does not agree";
 	}
 
-	&bp = &bar;
+	&bp = bar;
 	if (bp[0, 8] == bar) {
 		print "bar agrees";
 	} else {

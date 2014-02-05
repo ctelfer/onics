@@ -6,12 +6,12 @@ int pkt_splice(str p, str s)
 {
 	str post;
 
-	pn = str_seg(&p);
-	cutlen = str_len(&p);
-	off = str_addr(&p);
-	inslen = str_len(&s);
+	pn = str_seg(p);
+	cutlen = str_len(p);
+	off = str_addr(p);
+	inslen = str_len(s);
 
-	if (not str_ispkt(&p)) {
+	if (not str_ispkt(p)) {
 		return -1;
 	}
 
@@ -21,7 +21,7 @@ int pkt_splice(str p, str s)
 	} 
 
 	if (cutlen > inslen) {
-		pkt_cut_d(&p[0, cutlen - inslen]);
+		pkt_cut_d(p[0, cutlen - inslen]);
 	} else { 
 		pkt_ins_u(pn, off, inslen - cutlen);
 	}

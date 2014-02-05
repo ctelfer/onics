@@ -5,12 +5,12 @@ int pkt_splice(str p, str s)
 {
 	str post;
 
-	pn = str_seg(&p);
-	cutlen = str_len(&p);
-	off = str_addr(&p);
-	inslen = str_len(&s);
+	pn = str_seg(p);
+	cutlen = str_len(p);
+	off = str_addr(p);
+	inslen = str_len(s);
 
-	if (not str_ispkt(&p)) {
+	if (not str_ispkt(p)) {
 		return -1;
 	}
 
@@ -20,7 +20,7 @@ int pkt_splice(str p, str s)
 	} 
 
 	if (cutlen > inslen) {
-		pkt_cut_d(&p[0, cutlen - inslen]);
+		pkt_cut_d(p[0, cutlen - inslen]);
 	} else { 
 		pkt_ins_u(pn, off, inslen - cutlen);
 	}
@@ -51,7 +51,7 @@ BEGIN {
 	ip.daddr = 192.168.0.1;
 	tcp.sport = 12345;
 	tcp.dport = 80;
-	pkt_splice(&tcp.payload, &"HTTP GET / 1.0\n\n");
+	pkt_splice(tcp.payload, "HTTP GET / 1.0\n\n");
 	fix_lens(0);
 	fix_csums(0);
 	send;

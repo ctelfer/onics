@@ -2,7 +2,7 @@
 #
 str pay[] = "hello world";
 BEGIN {
-	pkt_new(0, str_len(&pay));
+	pkt_new(0, str_len(pay));
 	parse_push_front(0, @tcp);
 	parse_push_front(0, @ip);
 	parse_push_front(0, @eth);

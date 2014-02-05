@@ -238,7 +238,6 @@ In PML an expression is one of:
   (In order of precedence)
 
   - '(' E ')'   : parenthesized expression
-  - '&' E	: string reference to E (value has type 'sref')
   - '-' E       : numerically negated expression
   - 'not' E	: logcal inversion (value is 0 or 1)
   - '~' E	: binary inversion (bit-wise inversion)
@@ -264,15 +263,12 @@ In PML an expression is one of:
   - E1 'or ' E2 : E1 or E2 (boolean comparison, value is 0 or 1)
 
 
-The type of an expression is usually 'int'.  There are four exceptions.
-A string reference expression (& E) has type 'sref'.  A byte string
-literal has type 'str'.  A function or inline call has a type of the
-return value of the function or inline (always 'int' for inlines).
-Finally, a locator expression's type is equal to the type value that the
-locator refers to.  (see below)
-
-The value of the expression E in a string reference operator must be a
-byte string or string reference. 
+The type of an expression is usually 'int'.  However, there are several
+exceptions.  A byte string literal has type 'str'.  A function or inline
+call has a type of the return value of the function or inline (always
+\'int' for inlines).  A locator expression's type is equal to the type
+value that the locator refers to.  All string references used in
+expressions have type 'str'.
 
 The match comparison operators (=~ and !~) perform different comparisons
 depending on the type of the right hand expression.  The left-hand 
@@ -317,6 +313,16 @@ following type conversion implicitly:
   mstr->int - convert the value and the mask of the masked string
 	      to 'int' as above and return the binary AND of the
 	      two resulting values.
+
+  str->sref - converts the string to a reference to the string.
+              This can occur in three ways:
+                1) when assigning a 'str' valued expression to an 
+                   'sref' variable by the '& VAR = EXPR' statement.
+                2) when passing a string to an sref parameter
+                   (denoted with type 'str') in a function call.
+                3) when returning a string in a function call with
+                   declared return type 'str' (which means sref in
+                   function call return types).
 
   str->void - discards the value
   int->void

@@ -98,7 +98,8 @@ static int typecheck(int stype, int dtype)
 	case PML_ETYPE_BYTESTR:
 		valid = dtype == PML_ETYPE_VOID ||
 		        dtype == PML_ETYPE_SCALAR || 
-		        dtype == PML_ETYPE_BYTESTR;
+		        dtype == PML_ETYPE_BYTESTR || 
+			dtype == PML_ETYPE_STRREF;
 		break;
 
 	case PML_ETYPE_MASKVAL:
@@ -1352,7 +1353,20 @@ struct pml_call *pml_call_alloc(struct pml_ast *ast, struct pml_function *func,
 	c->func = func;
 	c->args = args;
 	c->etype = func->rtype;
-	c->width = (c->etype == PML_ETYPE_SCALAR) ? SCALAR_SIZE : 0;
+	switch (c->etype) {
+	case PML_ETYPE_SCALAR:
+		c->width = SCALAR_SIZE;
+		break;
+	case PML_ETYPE_STRREF:
+		c->etype = PML_ETYPE_BYTESTR;
+		c->width = STRREF_SIZE;
+		break;
+	case PML_ETYPE_VOID:
+		c->width = 0;
+		break;
+	default:
+		abort_unless(0);
+	}
 	c->eflags = 0;
 	func->callers++;
 
@@ -1538,6 +1552,13 @@ static const char *ets(void *p) {
 	abort_unless(p);
 	abort_unless(e->etype <= PML_ETYPE_LAST);
 	return etype_strs[e->etype];
+}
+
+
+static const char *pts(struct pml_variable *v) {
+	abort_unless(v);
+	abort_unless(v->etype <= PML_ETYPE_LAST);
+	return etype_strs[v->etype];
 }
 
 
@@ -2496,16 +2517,12 @@ int pml_locator_resolve_nsref(struct pml_ast *ast, struct pml_locator *l)
 		l->reftype = PML_REF_PKTFLD;
 		/* Syntactic Sugar: */
 		/* a namespace with no offset or length is the same as */
-		/* an 'exists' reserved namespace if referred to by a */
-		/* locator or 'header' if referred to by a locaddr.  */
+		/* an 'exists' reserved namespace.  The presence of an */
+		/* address or length makes it refer to the parse field */
 		if (rpf == PML_RPF_NONE) {
 			if (l->off == NULL && l->len == NULL) {
-				if (l->type == PMLTT_LOCATOR) {
-					rpf = PML_RPF_EXISTS;
-				} else {
-					abort_unless(PMLTT_LOCADDR);
-					rpf = PML_RPF_PARSE;
-				}
+				abort_unless(l->type == PMLTT_LOCATOR);
+				rpf = PML_RPF_EXISTS;
 			} else {
 				rpf = PML_RPF_PARSE;
 			}
@@ -2841,7 +2858,7 @@ static int typecheck_call(struct pml_ast *ast, struct pml_call *c)
 		if (typecheck(a->expr.etype, p->etype) < 0) {
 			pml_ast_err(ast, "Argument '%s' to function '%s' is type"
 				         " '%s' instead of '%s'",
-				    p->name, f->name, ets(a), ets(p));
+				    p->name, f->name, ets(a), pts(p));
 			return -1;
 		}
 		pn = pn->next;
@@ -2950,20 +2967,11 @@ static int typecheck_node(struct pml_ast *ast, union pml_node *node,
 	case PMLTT_ASSIGN: {
 		struct pml_assign *a = &node->assign;
 		e = a->expr;
-		/* scalar -> bytestr is allowed for assignments */
-		/* note that strref variables have a location expr type of */
-		/* bytestr.  Only LOCADDR and function returns can have */
-		/* an expression type of STRREF.  */
+		/* scalar -> bytestr is allowed for assignments.  Note that */
+		/* strref variables have a location expr type of bytestr. */
 		if (a->loc->etype == PML_ETYPE_BYTESTR &&
 		    e->expr.etype == PML_ETYPE_SCALAR)
 			break;
-		/* A string reference can assign to a string reference even */
-		/* though a string reference's locator's type is BYTESTR */
-		if (e->expr.etype == PML_ETYPE_STRREF && 
-		    a->loc->type == PMLTT_LOCADDR) {
-			abort_unless(a->loc->etype == PML_ETYPE_STRREF);
-			break;
-		}
 		/* all others are for regular type conversion rules */
 		if (typecheck(e->expr.etype, a->loc->etype) < 0) {
 			pml_ast_err(ast, "incompatible assignment type: %s->%s",
@@ -3113,45 +3121,22 @@ static int resolve_node_post(union pml_node *node, void *ctxp, void *xstk)
 	case PMLTT_LOCADDR: {
 		struct pml_locator *l = (struct pml_locator *)node;
 
-		if (l->reftype != PML_REF_LITERAL)
-			if (resolve_locsym(ctx, l) < 0)
-				return -1;
+		if (resolve_locsym(ctx, l) < 0)
+			return -1;
 
-		if ( /* only globals and strref vars */
-		     ((l->reftype == PML_REF_VAR) && 
-		     ((l->u.varref->vtype != PML_VTYPE_GLOBAL) &&
-		      (l->u.varref->etype != PML_ETYPE_STRREF))) ||
+		abort_unless(l->pkt == NULL && l->idx == NULL &&
+			     l->off == NULL && l->len == NULL);
 
-		    ((l->reftype == PML_REF_PKTFLD) &&	/* resv non-bytefield */
-		     (l->rpfld != PML_RPF_NONE) &&
-		     !PML_RPF_IS_BYTESTR(l->rpfld)) ||
-
-		    ((l->reftype == PML_REF_PKTFLD) &&	/* packet bitfield */
-		     (l->rpfld == PML_RPF_NONE) &&
-		     NSF_IS_INBITS(l->u.nsref->flags)) ||
-
-		    ((l->reftype == PML_REF_LITERAL) &&	/* protocol non str */
-		     (l->u.litref->type != PMLTT_BYTESTR))
-		   ) {
+		if ((l->reftype != PML_REF_VAR) || 
+		    (l->u.varref->etype != PML_ETYPE_STRREF)) {
 			pml_ast_err(ctx->ast, 
 				    "'%s' is not an addressable field.\n",
 				    l->name);
 			return -1;
 		}
 
-		if (l->reftype == PML_REF_VAR) {
-			struct pml_expr_base *expr;
-			int eflags = PML_EFLAG_CONST|PML_EFLAG_PCONST;
+		l->eflags |= PML_EFLAG_CONST|PML_EFLAG_PCONST;
 
-			abort_unless(l->pkt == NULL && l->idx == NULL);
-			expr = &l->off->expr;
-			if (expr != NULL)
-				eflags &= expr->etype;
-			expr = &l->len->expr;
-			if (expr != NULL)
-				eflags &= expr->etype;
-			l->eflags |= eflags;
-		}
 		/* redundant? */
 		l->etype = PML_ETYPE_STRREF;
 		l->width = STRREF_SIZE;
@@ -4079,6 +4064,37 @@ static int pml_opt_l_cexpr(union pml_expr_u *e, void *astp)
 }
 
 
+static int is_literal_zero(union pml_expr_u *e)
+{
+	return e != NULL &&
+	       PML_EXPR_IS_SCALAR(e) &&
+	       e->literal.u.scalar == 0;
+}
+
+
+static int pml_opt_locator(struct pml_locator *l, void *astp)
+{
+	if ((pml_opt_e_cexpr(&l->pkt, astp) < 0) ||
+	    (pml_opt_e_cexpr(&l->idx, astp) < 0) ||
+	    (pml_opt_e_cexpr(&l->off, astp) < 0) ||
+	    (pml_opt_e_cexpr(&l->len, astp) < 0))
+		return -1;
+	if (is_literal_zero(l->pkt)) {
+		pmln_free((union pml_node *)l->pkt);
+		l->pkt = NULL;
+	}
+	if (is_literal_zero(l->idx)) {
+		pmln_free((union pml_node *)l->idx);
+		l->idx = NULL;
+	}
+	if (is_literal_zero(l->off)) {
+		pmln_free((union pml_node *)l->off);
+		l->off= NULL;
+	}
+	return 0;
+}
+
+
 static int pml_cexpr_walker(union pml_node *node, void *astp, void *xstk)
 {
 	struct list *n, *x;
@@ -4107,11 +4123,7 @@ static int pml_cexpr_walker(union pml_node *node, void *astp, void *xstk)
 
 	case PMLTT_LOCATOR:
 	case PMLTT_LOCADDR: {
-		struct pml_locator *l = &node->locator;
-		if ((pml_opt_e_cexpr(&l->pkt, astp) < 0) ||
-		    (pml_opt_e_cexpr(&l->idx, astp) < 0) ||
-		    (pml_opt_e_cexpr(&l->off, astp) < 0) ||
-		    (pml_opt_e_cexpr(&l->len, astp) < 0))
+		if (pml_opt_locator(&node->locator, astp) < 0)
 			return -1;
 	} break;
 
