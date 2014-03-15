@@ -1,60 +1,60 @@
-.TH "ppick" 1 "August 2013" "ONICS 1.0"
+.TH "pgrep" 1 "August 2013" "ONICS 1.0"
 .SH NAME
-ppick - Filter out packets from an XPKT stream.
+pgrep - Filter out packets from an XPKT stream.
 .P
 .SH SYNOPSYS
-\fBppick\fB \fIpattern\fP [\fIinfile\fP [\fIoutfile\fP]]
+\fBpgrep\fB \fIpattern\fP [\fI-only\fP] [\fIinfile\fP [\fIoutfile\fP]]
 .P
-\fBppick\fB \fIlow_pat\fP[::\fIhigh_pat\fP] [\fIinfile\fP [\fIoutfile\fP]]
+\fBpgrep\fB \fIlow_pat\fP \fI-to\fP \fIhigh_pat\fP
+[\fIinfile\fP [\fIoutfile\fP]]
 .P
 .SH DESCRIPTION
-\fBppick\fP is a thin wrapper script around pml(1) to make it simple to
+\fBpgrep\fP is a thin wrapper script around pml(1) to make it simple to
 select a subset from a stream of XPKT formatted packets.  By default,
-\fBppick\fP reads from standard input and writes to standard output.
+\fBpgrep\fP reads from standard input and writes to standard output.
 However, the user can override this by specifying \fIinfile\fP to read
 from and \fIoutfile\fP to write to.
 .P
 The caller can specify one or two patterns to match packets on.  The
 patterns can be a PML expression or a number.  If the pattern is a
 number, say \fIn\fP, then it matches the \fIn\fPth packet in the packet
-stream.  When \fBppick\fP has only a single pattern argument, then it
+stream.  When \fBpgrep\fP has only a single pattern argument, then it
 allows only packets that match \fIpattern\fP to pass through to the
-output.  When \fBppick\fP has two patterns separated by \fB::\fP, then
-\fBppick\fP allows packets in the range from the first packet to match
-\fIlow_pat\fP to the first packet to match \fIhigh_pat\fP inclusve
-through to the output.  \fBppick\fP can match multiple such ranges in a
-single stream.
+output.  When \fBpgrep\fP has two patterns, then \fBpgrep\fP allows
+packets in the range from the first packet to match \fIlow_pat\fP to the
+first packet to match \fIhigh_pat\fP inclusve through to the output.
+\fBpgrep\fP can match multiple such ranges in a single stream.
 .P
 .SH EXAMPLES
 .P
 Extract the 7th packet from a a file
 .nf
 
-        ppick 7 infile.xpkt outfile.xpkt
+        pgrep 7 infile.xpkt outfile.xpkt
 
 .fi
 Extract the IPv6 packets from a packet capture:
 .nf
 
-        ppick ip6 infile.xpkt outfile.xpkt
+        pgrep ip6 infile.xpkt outfile.xpkt
 
 .fi
 Extract packets 3 to 25 from a packet capture:
 .nf
 
-        ppick 3::25 infile.xpkt outfile.xpkt
+        pgrep 3 -to 25 infile.xpkt outfile.xpkt
 
 .fi
 Extract the packets between a TCP SYN packet and a TCP FIN packet:
 .nf
-        ppick "tcp and tcp.syn::tcp and tcp.fin" \
+        pgrep "tcp and tcp.syn" -to "tcp and tcp.fin" \
                 infile.xpkt outfile.xpkt
 
 .fi
 Dump the ICMP TTL Exceeded packets seen on eth0 to x2hpkt:
 .nf
 
-        pktin eth0 | ppick "icmp and icmp.type == 11" | x2hpkt
+        pktin eth0 | pgrep "icmp and icmp.type == 11" | x2hpkt
 
 .fi
 .P

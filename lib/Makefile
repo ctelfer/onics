@@ -1,6 +1,6 @@
 # Makefile for ONICS library scripts
 
-ALL_LIBS=mkpkt.pml vlan.pml
+ALL_LIBS=std.pml
 
 
 all: $(ALL_LIBS)

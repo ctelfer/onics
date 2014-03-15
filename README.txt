@@ -232,7 +232,7 @@ should be in strictly compliant bourne shell script.
 
     peseq - embed a sequence number into various fields in a packet stream.
 
-    ppick - a program to select a subset of packets from a stream.  This is
+    pgrep - a program to select a subset of packets from a stream.  This is
 	a PML script.
 
     pxseq - extract a sequence number from embedded fields in a packet stream.

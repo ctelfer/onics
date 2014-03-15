@@ -5,7 +5,9 @@ usage() {
 	exit 1
 }
 
-PMLSCRIPT="{
+PMLSCRIPT="
+	import \"std.pml\";
+	{
 	pkt_ins_d(0, str_addr(&pkt.payload), 20);
 	parse_push_front(0, @ip);
 "

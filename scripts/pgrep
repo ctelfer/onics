@@ -10,28 +10,40 @@ getrange() {
 }
 
 
-if [ $# -lt 1 -o $# -gt 3 -o "$1" = "-h" ]
-then
-	echo "usage: $0 PATTERN [INFILE [OUTFILE]]" >&2
-	echo "       $0 <lo>[::<hi>] [INFILE [OUTFILE]]" >&2
+usage() {
+	echo "usage: $0 PATTERN [-only] [INFILE [OUTFILE]]" >&2
+	echo "       $0 <lo> -to <hi> [INFILE [OUTFILE]]" >&2
 	exit 1
+
+}
+
+if [ $# -lt 1 -o $# -gt 5 -o "$1" = "-h" ]; then
+	usage
 fi
 
 
-if ! echo $1 | grep :: > /dev/null 2>&1
+if [ $# -lt 2 -o "$2" = "-only" ]
 then
 	MATCH=`getrange $1`
 	shift
+	if [ "$2" = "-only" ] ; then shift ; fi
 	exec pml -e "
+		import \"std.pml\";
 		int N=0; 
 		{ N=N+1; } 
 		?- not ($MATCH) -? { drop; }
 	" $*
 else
-	LO=`echo $1 | sed -e 's/::.*$//'`
-	HI=`echo $1 | sed -e 's/^.*:://'`
+	if [ $# -lt 3 -o "$2" != "-to" ]; then
+		usage
+	fi
+	LO=`getrange $1`
+	HI=`getrange $3`
+	shift
+	shift
 	shift
 	exec pml -e "
+		import \"std.pml\";
 		int N = 0;
 		int allow = 0;
 
