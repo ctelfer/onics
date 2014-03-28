@@ -46,6 +46,16 @@
 
 struct prparse;
 
+/*
+ * This structure is used as a bare-bones specification for a protocol parse.
+ * The protoparse library can request a protocol parser to generate such
+ * a specification (see the proto_parser_ops getspec() function).  
+ * Alternately, a user can provide a specification directly and request that
+ * the protocol parser create the parse accordingly.  The specification
+ * basically contains the protocol ID, the starting offset within some
+ * buffer for the PDU and parse, and the length of the 3 main parse regions:
+ * header, payload and trailer.  (any of which may be 0)
+ */
 struct prpspec {
 	uint			prid;
 	ulong			off;
@@ -54,44 +64,203 @@ struct prpspec {
 	ulong			tlen;
 };
 
+
+/*
+ * This is the main interace for a protocol parser.  A protocol parser
+ * must implement all 4.  Each function sets errno when they fail with
+ * an error of some sort.
+ */
 struct proto_parser_ops {
+
+	/*
+	 * Parse a blob of data that either file information or another
+	 * protocol parser has identified as being a PDU of this
+	 * type of protocol.  Return the new parse on success or NULL
+	 * on an error, setting errno appropriately.
+	 *
+	 * Parameters:
+	 * + reg  -- the parent region enclosing this blob of data.
+	 *           Usually the encapsulating protocol if one exists.
+	 * + buf  -- a pointer to the buffer containing the PDU.
+	 * + off  -- The offset of the start of the PDU within the buffer.
+	 * + maxlen -- The maximum length that this PDU might be starting
+	 *             from off.
+	 *
+	 * Returns a new protocol parse for the library to insert into
+	 * the list of parses or NULL on an error.
+	 */
 	struct prparse *	(*parse)(struct prparse *reg, byte_t *buf,
 					 ulong off, ulong maxlen);
 
+	/*
+	 * Determine the protocol of the next PDU ia buffer of data based
+	 * on information from known PDUs.  The parsing library calls
+	 * this function passing in an existing protocol parse created
+	 * by this protocol parser.  It also passes in the last child
+	 * of that parse or NULL if the parse has no children.  This
+	 * function must then return a protocol ID of the protcol that
+	 * follows this child in within the region, the starting offset
+	 * of the PDU and the maximum length that that PDU can occupy.
+	 *
+	 * Parameters:
+	 * + reg  -- The encapsulating region of the PDU.
+	 * + buf  -- The buffer containing the PDU.
+	 * + cld  -- The last child of 'reg' created or NULL if it has none.
+	 * + prid -- A pointer to hold protocol ID of the next PDU.
+	 * + off  -- A pointer to hold the starting offset of the next PDU.
+	 * + maxlen -- A pointer to hold the maximum length of the next PDU.
+	 *
+	 * Returns 0 if there are no further identifiable PDUs in this
+	 * region according to this protocol parser.  Returns 1 if the parser
+	 * was able to identify a PDU.  In this case, 'prid', 'off' and
+	 * 'maxlen' will all be set.  Otherwise their values are undefined.
+	 */
 	int			(*nxtcld)(struct prparse *reg, byte_t *buf,
 					  struct prparse *cld, uint *prid,
 					  ulong *off, ulong *maxlen);
 
+	/*
+	 * Generate a specification (struct prpspec) for a protocol parse for
+	 * this protocol.  The new protocol parse would either enclose an
+	 * existing parse or would be encapsulated within an existing parse.
+	 * 
+	 * Parameters:
+	 * + prp  -- the parse to either enclose in a new parse or create a
+	 *           new child parse of depending on the 'enclose' parameter.
+	 * + enclose -- if non-zero generate a specification for a parse
+	 *              enclosing the region of 'prp'.  Otherwise generate
+	 *              a spec for embeddeding a new protocol parse within
+	 *              the region of 'prp'.
+	 * + ps  -- The new specification, suitable for the add funtion.
+	 * 
+	 * Returns 0 if successful and -1 on a failure setting errno
+	 * appropriately.
+	 */
 	int			(*getspec)(struct prparse *prp, int enclose,
 					   struct prpspec *ps);
 
+	/*
+	 * Create a new protocol parse with offsets based on a specification
+	 * and insert it into the protocol parse chain.  The new parse
+	 * will either enclose the 'reg' parse or will be enclosed by it
+	 * depending on the 'enclose' parameter.  If the 'buf' parameter
+	 * is not NULL, then the function must also initialize the PDU
+	 * that this parse refers to with default values sufficient for
+	 * an error free parsing.
+	 *
+	 * Paramters:
+	 * + reg  -- the protocol parse to either enclose the new
+	 *           parse or be enclosed by the new parse.  Will
+	 *           never be the outermost parse if 'enclose' is non-zero.
+	 * + buf  -- a buffer to put the new PDU in.  This parameter
+	 *           can be NULL.  The function should still create a
+	 *           new parse based on the specification in this case.
+	 * + ps  -- The specification for the new parse and its PDU.
+	 *          This will contain offsets with 'buf' (if 'buf' is
+	 *          not NULL) and lengths for header, payload and trailer
+	 *          regions.
+	 * + enclose -- If set to non-zero the new parse and the new PDU
+	 *              should enclose the 'reg' parse and its PDU.
+	 *              Otherwise, 'reg' should be set to enclose the
+	 *              new parse and its PDU.
+	 *
+	 * Returns 0 on success and -1 on failure setting errno appropriately.
+	 */
 	int			(*add)(struct prparse *reg, byte_t *buf, 
 				       struct prpspec *ps, int enclose);
 };
 
+
+/*
+ * A structure for a protocol parser used internally.
+ */
 struct proto_parser {
 	uint			prid;
 	uint			valid;
 	struct proto_parser_ops *ops;
 };
 
-/* install a protocol parser to handle a particular protocol type */
+/* 
+ * Install a protocol parser to handle a particular protocol type.
+ * Returns 0 on success or -1 on error setting errno appropriately.
+ */
 int pp_register(uint prid, struct proto_parser_ops *ops);
 
-/* Get a protocol parser by protocol ID */
+/* 
+ * Find a protocol parser by protocol ID.
+ *
+ * Returns the protocol parser or NULL on failure.
+ */
 const struct proto_parser *pp_lookup(uint prid);
 
-/* unregister a protocol by protocol ID */
+/* 
+ * Unregister the protocol parser by protocol ID.
+ *
+ * Returns 0 on success and -1 on failure.
+ */
 int pp_unregister(uint prid);
 
 
 
+/*
+ * This is a table of function pointers that the protocol parser populates
+ * in every protocol parse it creates.  It basically encompasses the
+ * operations that every parse should be able to carry out on its
+ * corresponding PDU.
+ */
 struct prparse_ops {
+	/*
+	 * Re-parse the PDU using the same bounds for the PDU that are in
+	 * 'prp' and update the fields of the parse.
+	 *
+	 * Parameters:
+	 * + prp  -- The parse to update.
+	 * + buf  -- The buffer that contains the actual PDU data.
+	 */
 	void			(*update)(struct prparse *prp, byte_t *buf);
+
+	/*
+	 * Fix the length field(s) (if any) of this PDU according to the 
+	 * values in the the protocol parse.
+	 *
+	 * Parameters:
+	 * + prp  -- The parse referring to the PDU whose length to fix.
+	 * + buf  -- The buffer containing the actual PDU data.
+	 *
+	 * Returns 0 on success and -1 on error setting errno appropriately
+	 */
 	int			(*fixlen)(struct prparse *prp, byte_t *buf);
+
+	/*
+	 * Fix the checksum field(s) (if any) of this PDU according to the
+	 * values in the the protocol parse.
+	 *
+	 * Parameters:
+	 * + prp  -- The parse referring to the PDU whose length to fix.
+	 * + buf  -- The buffer containing the actual PDU data.
+	 * 
+	 * Returns 0 on success and -1 on error setting errno appropriately.
+	 */
 	int			(*fixcksum)(struct prparse *prp, byte_t *buf);
+
+	/*
+	 * Copy a protocol parse and return the copy.
+	 *
+	 * Parameters:
+	 * + prp  -- The protocol parse to copy.
+	 *
+	 * Returns the new protocol parse or NULL on an error setting errno
+	 * appropriately.
+	 */
 	struct prparse *	(*copy)(struct prparse *prp);
-	void			(*free)(struct prparse * prp);
+
+	/*
+	 * Free a protocol parse and its associated state.
+	 *
+	 * Parameters:
+	 * + prp  -- The protocol parse to free.
+	 */
+	void			(*free)(struct prparse *prp);
 };
 
 
@@ -150,14 +319,24 @@ struct prparse_ops {
 #define PRP_OFF_MAX (((ulong)-1) - 1)
 
 
+/*
+ * This structure represents a parse of a PDU.  Each parse contains
+ * at least 4 offsets for the start of the PDU, the start of the
+ * payload, the start of the trailer and the end of the packet.
+ * The parse may also have further offsets beyond this.  That is:
+ * noff >= 4 in a well-formed parse.  The protocol parser itself
+ * is responsible for ensuring that sufficient memory is allocated
+ * to contain the additional offsets plus any private state it
+ * wishes to maintain.
+ */
 struct prparse {
-	uint			prid;
-	uint			error;
-	struct prparse_ops *	ops;
-	struct list		node;
-	struct prparse *	region;
-	uint			noff;
-	ulong			offs[PRP_OI_MIN_NUM];
+	uint			prid;		/* protocol ID of the PDU */
+	uint			error;		/* bitmap of PRP_ERR_* */
+	struct prparse_ops *	ops;		/* table of parse func ptrs */
+	struct list		node;		/* linked list node */
+	struct prparse *	region;		/* the enclosing region */
+	uint			noff;		/* # of parse offsets (>=4) */
+	ulong			offs[PRP_OI_MIN_NUM];	/* the parse offsets */
 };
 #define prp_soff(_prp) ((_prp)->offs[PRP_OI_SOFF])
 #define prp_poff(_prp) ((_prp)->offs[PRP_OI_POFF])
@@ -268,8 +447,8 @@ int prp_parse_packet(struct prparse *base, byte_t *buf, uint firstprid);
 /*
  * Populate a default parse specification based on either enclosing
  * the given parse or inserting the spec within the payload of the
- * parse. The 'enclose' parameter.  If the function returns 0, then
- * the spec is poulated with values appropriate to pass to prp_add().
+ * parse. (based on the 'enclose' parameter.  If the function returns 0,
+ * then the spec is poulated with values appropriate to pass to prp_add().
  */
 int prp_get_spec(uint prid, struct prparse *prp, int enclose,
 		 struct prpspec *ps);
