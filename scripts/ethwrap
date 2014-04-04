@@ -8,7 +8,7 @@ usage() {
 PMLSCRIPT="
 	import \"std.pml\";
 	{
-	pkt_ins_d(0, str_addr(&pkt.payload), 14);
+	pkt_ins_d(0, str_addr(pkt.payload), 14);
 	parse_push_front(0, @eth);
 "
 
