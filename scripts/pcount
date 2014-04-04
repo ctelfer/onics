@@ -49,7 +49,7 @@ fi
 
 SCRIPT="int C = 0;
         int B = 0;
-	{ C = C + 1; B = B + str_len(&pkt.payload); $DROP }
+	{ C = C + 1; B = B + str_len(pkt.payload); $DROP }
 	$STATUS
 	END { $OUTMSG }"
 
