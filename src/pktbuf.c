@@ -135,7 +135,7 @@ struct pktbuf *pkb_create(ulong bufsize)
 	pkb->bufsize = bufsize;
 	pkb->xpkt = xmp;
 	pkb->xsize = pkb_xpkt_pool_size;
-	pkb->flags |= PKB_F_ALLOCED;
+	pkb->flags = PKB_F_ALLOCED;
 	pkb_reset(pkb);
 
 	return pkb;
@@ -359,8 +359,6 @@ int pkb_file_read(struct pktbuf **pkbp, FILE *fp)
 	/* In unpacked state, the hdr.len says there is no data: only tags */
 	x->hdr.len = x->hdr.tlen * 4 + XPKT_HLEN;
 
-	pkb->flags = 0;
-
 	*pkbp = pkb;
 
 	return 1;
@@ -434,8 +432,6 @@ int pkb_fd_read(struct pktbuf **pkbp, int fd)
 
 	/* In unpacked state, the hdr.len says there is no data: only tags */
 	x->hdr.len = x->hdr.tlen * 4 + XPKT_HLEN;
-
-	pkb->flags = 0;
 
 	*pkbp = pkb;
 
