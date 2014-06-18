@@ -444,6 +444,7 @@ void write_packets(struct list *pl)
 		pkb_pack(p);
 		if (pkb_file_write(p, outfile) < 0)
 			errsys("pkb_file_write(): ");
+		pkb_free(p);
 	}
 }
 

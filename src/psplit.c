@@ -291,6 +291,7 @@ void split_packets()
 		pkb_pack(p);
 		if (pkb_file_write(p, ff->fp) < 0)
 			errsys("pkb_file_write() of packet %lu: ", pn);
+		pkb_free(p);
 	}
 	if (rv < 0)
 		errsys("pkb_file_read() of packet %lu: ", pn);

@@ -118,6 +118,7 @@ int main(int argc, char *argv[])
 
 	if (pkb_file_write(pkb, g_outfile) < 0)
 		errsys("unable to write out packet");
+	pkb_free(pkb);
 
 	return 0;
 }
