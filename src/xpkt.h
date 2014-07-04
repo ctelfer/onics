@@ -125,6 +125,12 @@ void xpkt_pack_tag(struct xpkt_tag_hdr *xth);
  * Unpack and validate a set of xpkt tags from network byte order.
  * The validation step is necessary because the lengths of each
  * tag must be "ok" for the unpack to succeed.
+ *
+ * The 'tags' parameter must be a pointer to the start of the XPKT tags cast
+ * as a uint32_t.  The tlen must be the tag length in 32-bit words.  In
+ * other words, it must be the contents of the tag length field in the xpkt
+ * header.
+ * 
  * Returns:
  *   0 Success
  *  -1 Tag overflow
@@ -136,6 +142,12 @@ int xpkt_unpack_tags(uint32_t *tags, uint16_t tlen);
 
 /*
  * Validate xpkt tag specific attributes.
+ *
+ * The 'tags' parameter must be a pointer to the start of the XPKT tags cast
+ * as a uint32_t.  The tlen must be the tag length in 32-bit words.  In
+ * other words, it must be the contents of the tag length field in the xpkt
+ * header.
+ * 
  * Returns:
  *   0 Success
  *  -1 Duplicate tag where only one permitted;
@@ -144,8 +156,16 @@ int xpkt_unpack_tags(uint32_t *tags, uint16_t tlen);
 int xpkt_validate_tags(uint32_t *tags, uint16_t tlen);
 
 
-/* Pack a set of xpkt tags to network byte order.  This routine assumes that */
-/* the tags are valid. */
+/* 
+ * Pack a set of xpkt tags to network byte order.  This routine assumes that 
+ * the tags are valid. 
+ *
+ * The 'tags' parameter must be a pointer to the start of the XPKT tags cast
+ * as a uint32_t.  The tlen must be the tag length in 32-bit words.  In
+ * other words, it must be the contents of the tag length field in the xpkt
+ * header.
+ * 
+ */
 void xpkt_pack_tags(uint32_t *tags, uint16_t tlen);
 
 

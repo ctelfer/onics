@@ -121,7 +121,7 @@ void packet_loop()
 	struct pktbuf *p;
 	unsigned pktnum = 1;
 
-	while ((rv = pkb_file_read(&p, g_infile)) > 0) {
+	while ((rv = pkb_file_read_a(&p, g_infile, NULL, NULL)) > 0) {
 		do {
 			rv = write(g_ifsock, pkb_data(p), pkb_get_len(p));
 		} while (rv < 0 && errno == EINTR);

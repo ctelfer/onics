@@ -467,7 +467,7 @@ int main(int argc, char *argv[])
 	register_std_proto();
 	parse_args(argc, argv);
 
-	while ((rv = pkb_file_read(&p, infile)) > 0) {
+	while ((rv = pkb_file_read_a(&p, infile, NULL, NULL)) > 0) {
 		++pn;
 		if (pkb_parse(p) < 0)
 			err("Error parsing packet %lu\n", pn);
@@ -486,7 +486,7 @@ int main(int argc, char *argv[])
 		}
 	}
 	if (rv < 0)
-		errsys("pkb_file_read(): ");
+		errsys("pkb_file_read_a(): ");
 
 	return 0;
 }

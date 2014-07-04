@@ -113,7 +113,7 @@ int main(int argc, char *argv[])
 
 	pkb_init_pools(1);
 
-	while ((rv = pkb_fd_read(&p, infd)) > 0) {
+	while ((rv = pkb_fd_read_a(&p, infd, NULL, NULL)) > 0) {
 		++g_npkts;
 		fd = 1;
 		xif = (struct xpkt_tag_iface *)

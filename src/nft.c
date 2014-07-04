@@ -674,7 +674,7 @@ int main(int argc, char *argv[])
 				continue;
 		}
 
-		rv = pkb_fd_read(&pkb, ifd);
+		rv = pkb_fd_read_a(&pkb, ifd, NULL, NULL);
 		if (rv <= 0)
 			break;
 

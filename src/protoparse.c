@@ -1065,7 +1065,7 @@ int prp_adj_unused(struct prparse *reg)
 	}
 
 	ubounds(reg, &ustart, &uend);
-	if (ustart > uend) {
+	if (ustart >= uend) {
 		prp_poff(reg) = prp_soff(reg);
 		prp_toff(reg) = prp_eoff(reg);
 	} else {

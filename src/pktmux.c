@@ -101,7 +101,7 @@ int readpkt(void *arg, struct callback *cb)
 	struct xpkt_tag_iface xif;
 	int n;
 
-	if ((rv = pkb_fd_read(&p, ioe->fd)) <= 0) {
+	if ((rv = pkb_fd_read_a(&p, ioe->fd, NULL, NULL)) <= 0) {
 		if (rv < 0)
 			logsys(1, "Error reading from fd %d\n", ioe->fd);
 		ue_io_del(ioe);

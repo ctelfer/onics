@@ -342,7 +342,7 @@ static void pa_readfile(struct pktarr *pa, FILE *fp, const char *fn)
 	pa->npkts = 0;
 
 	pke = &pa->pkts[pa->npkts];
-	rv = pkb_file_read(&pke->pkt, fp);
+	rv = pkb_file_read_a(&pke->pkt, fp, NULL, NULL);
 	while (rv > 0) {
 		if (pkb_parse(pke->pkt) < 0)
 			err("unable to parse packet %lu\n", pa->npkts+1);
@@ -356,7 +356,7 @@ static void pa_readfile(struct pktarr *pa, FILE *fp, const char *fn)
 					    pa->pasz * sizeof(struct pktent));
 		}
 		pke = &pa->pkts[pa->npkts];
-		rv = pkb_file_read(&pke->pkt, fp);
+		rv = pkb_file_read_a(&pke->pkt, fp, NULL, NULL);
 	}
 
 	if (rv < 0)

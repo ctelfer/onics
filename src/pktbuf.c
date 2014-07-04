@@ -88,12 +88,23 @@ void pkb_init(struct pktbuf *pkb, void *buf, ulong bsize, void *xbuf,
 	abort_unless(xbuf != NULL);
 	abort_unless(xbsize >= XPKT_HLEN);
 
+	pkb->free = NULL;
 	pkb->buf = buf;
 	pkb->bufsize = bsize;
 	pkb->xpkt = xbuf;
 	pkb->xsize = xbsize;
 	pkb->flags = 0;
 	pkb_reset(pkb);
+}
+
+
+static void pkb_free_buf(void *ctx, struct pktbuf *pkb)
+{
+	(void)ctx;	/* unused */
+	prp_clear(&pkb->prp);
+	pc_free(pkb->xpkt);
+	pc_free(pkb->buf);
+	pc_free(pkb);
 }
 
 
@@ -131,14 +142,25 @@ struct pktbuf *pkb_create(ulong bufsize)
 	}
 
 	l_init(&pkb->entry);
+	pkb->free = &pkb_free_buf;
+	pkb->fctx = NULL;
 	pkb->buf = dp;
 	pkb->bufsize = bufsize;
 	pkb->xpkt = xmp;
 	pkb->xsize = pkb_xpkt_pool_size;
-	pkb->flags = PKB_F_ALLOCED;
 	pkb_reset(pkb);
 
 	return pkb;
+}
+
+
+static struct pktbuf *pkb_alloc_default(void *ctx, size_t xlen, size_t plen)
+{
+	if (xlen > pkb_xpkt_pool_size) {
+		errno = ENOMEM;
+		return NULL;
+	}
+	return pkb_create(plen);
 }
 
 
@@ -211,12 +233,8 @@ struct pktbuf *pkb_copy(struct pktbuf *opkb)
 
 void pkb_free(struct pktbuf *pkb)
 {
-	if (pkb && (pkb->flags & PKB_F_ALLOCED)) {
-		prp_clear(&pkb->prp);
-		pc_free(pkb->xpkt);
-		pc_free(pkb->buf);
-		pc_free(pkb);
-	}
+	if (pkb != NULL && pkb->free != NULL)
+		(*pkb->free)(pkb->fctx, pkb);
 }
 
 
@@ -299,18 +317,47 @@ void *pkb_data(struct pktbuf *pkb)
 
 #define HPADMIN		192
 #define TPADMIN		192
-int pkb_file_read(struct pktbuf **pkbp, FILE *fp)
+
+static int pkb_read_finish(struct pktbuf *pkb, struct xpkthdr *xh, uint rdoff)
+{
+	struct xpkt *x;
+	size_t tlen = xh->tlen * 4;
+
+	abort_unless(pkb && xh);
+
+	x = pkb->xpkt;
+	x->hdr = *xh;
+	memcpy(x->tags, pkb->buf + rdoff, tlen);
+	if (xpkt_unpack_tags(x->tags, x->hdr.tlen) < 0) {
+		errno = EIO;
+		return -1;
+	}
+	if (xpkt_validate_tags(x->tags, x->hdr.tlen) < 0) {
+		errno = EIO;
+		return -1;
+	}
+
+	prp_poff(&pkb->prp) = rdoff + tlen;
+	prp_toff(&pkb->prp) = rdoff + tlen + xpkt_data_len(x);
+
+	/* In unpacked state, the hdr.len says there is no data: only tags */
+	x->hdr.len = xpkt_doff(x);
+
+	return 1;
+}
+
+
+int pkb_file_read(struct pktbuf *pkb, FILE *fp)
 {
 	struct xpkthdr xh;
-	int errval;
-	struct pktbuf *pkb;
-	uint hpad = HPADMIN;
-	uint n;
-	uint off;
-	struct xpkt *x;
+	size_t hpad = HPADMIN;
+	size_t n;
+	size_t xhlen;
+	size_t off;
+	size_t rdlen;
 	size_t nr;
 
-	abort_unless(fp && pkbp);
+	abort_unless(fp && pkb);
 
 	if ((nr = fread(&xh, 1, XPKT_HLEN, fp)) < XPKT_HLEN)
 		return (nr == 0) ? 0 : -1;
@@ -320,50 +367,83 @@ int pkb_file_read(struct pktbuf **pkbp, FILE *fp)
 		return -1;
 	}
 
-	n = xh.tlen * 4 + XPKT_HLEN;
-	if (hpad < n)
-		hpad = n;
+	xhlen = xh.tlen * 4 + XPKT_HLEN;
+	if (hpad < xhlen)
+		hpad = xhlen;
 
-	off = dlt_offset(xh.dltype);
-	n = hpad + TPADMIN + off;
-	if ((xh.len > PKB_MAX_PKTLEN) ||
-	    (xh.len > PKB_MAX_DATA_LEN - n) ||
-	    (xh.tlen * 4 + XPKT_HLEN > pkb_xpkt_pool_size)) {
+	off = dlt_offset(xh.dltype) + hpad;
+	n = TPADMIN + off;
+
+	if (xhlen > pkb->xsize || pkb->bufsize < n ||
+	    xh.len > pkb->bufsize - n) {
 		errno = ENOMEM;
 		return -1;
 	}
 
-	if (!(pkb = pkb_create(xh.len + n)))
+	n = off - xh.tlen * 4;
+	rdlen = xh.len - XPKT_HLEN;
+	nr = fread(pkb->buf + n, 1, rdlen, fp);
+	if (nr < rdlen)
 		return -1;
 
-	n = hpad - xh.tlen * 4 + off;
-	nr = fread(pkb->buf + n, 1, xh.len - XPKT_HLEN, fp);
-	if (nr < xh.len - XPKT_HLEN)
-		goto err_have_buf;
+	return pkb_read_finish(pkb, &xh, n);
+}
 
-	x = pkb->xpkt;
-	x->hdr = xh;
-	memcpy(x->tags, pkb->buf + n, xh.tlen * 4);
-	if (xpkt_unpack_tags(x->tags, x->hdr.tlen) < 0) {
-		errno = EIO;
-		goto err_have_buf;
+
+int pkb_file_read_a(struct pktbuf **pkbp, FILE *fp, pkb_alloc_f alloc,
+		    void *ctx)
+{
+	struct xpkthdr xh;
+	int errval;
+	struct pktbuf *pkb;
+	size_t hpad = HPADMIN;
+	size_t n;
+	size_t off;
+	size_t xhlen;
+	size_t rdlen;
+	size_t nr;
+	int rv = 0;
+
+	abort_unless(fp && pkbp);
+
+	if (alloc == NULL) {
+		alloc = &pkb_alloc_default;
+		ctx = NULL;
 	}
-	if (xpkt_validate_tags(x->tags, x->hdr.tlen) < 0) {
+
+	if ((nr = fread(&xh, 1, XPKT_HLEN, fp)) < XPKT_HLEN)
+		return (nr == 0) ? 0 : -1;
+	xpkt_unpack_hdr(&xh);
+	if (xpkt_validate_hdr(&xh) < 0) {
 		errno = EIO;
-		goto err_have_buf;
+		return -1;
 	}
 
-	prp_poff(&pkb->prp) = hpad + off;
-	prp_toff(&pkb->prp) = hpad + off + xpkt_data_len(x);
+	xhlen = xh.tlen * 4 + XPKT_HLEN;
+	if (hpad < xhlen)
+		hpad = xhlen;
 
-	/* In unpacked state, the hdr.len says there is no data: only tags */
-	x->hdr.len = x->hdr.tlen * 4 + XPKT_HLEN;
+	off = dlt_offset(xh.dltype) + hpad;
+	n = TPADMIN + off;
+
+	pkb = (*alloc)(ctx, xhlen, n + xh.len);
+	if (pkb == NULL)
+		return -1;
+
+	n = off - xh.tlen * 4;
+	rdlen = xh.len - XPKT_HLEN;
+	nr = fread(pkb->buf + n, 1, rdlen, fp);
+	if (nr < rdlen)
+		goto err_free_pkb;
+
+	rv = pkb_read_finish(pkb, &xh, n);
+	if (rv < 0)
+		goto err_free_pkb;
 
 	*pkbp = pkb;
+	return rv;
 
-	return 1;
-
-err_have_buf:
+err_free_pkb:
 	errval = errno;
 	pkb_free(pkb);
 	errno = errval;
@@ -371,19 +451,17 @@ err_have_buf:
 }
 
 
-int pkb_fd_read(struct pktbuf **pkbp, int fd)
+int pkb_fd_read(struct pktbuf *pkb, int fd)
 {
 	struct xpkthdr xh;
-	int errval;
-	struct pktbuf *pkb;
-	uint hpad = HPADMIN;
-	uint n;
-	uint off;
-	long dlen;
-	struct xpkt *x;
+	size_t hpad = HPADMIN;
+	size_t n;
+	size_t off;
+	size_t xhlen;
+	ssize_t rdlen;
 	ssize_t nr;
 
-	abort_unless((fd >= 0) && pkbp);
+	abort_unless((fd >= 0) && pkb);
 
 	if ((nr = io_read(fd, &xh, XPKT_HLEN)) < XPKT_HLEN)
 		return (nr == 0) ? 0 : -1;
@@ -393,51 +471,82 @@ int pkb_fd_read(struct pktbuf **pkbp, int fd)
 		return -1;
 	}
 
-	n = xh.tlen * 4 + XPKT_HLEN;
-	if (hpad < n)
-		hpad = n;
+	xhlen = xh.tlen * 4 + XPKT_HLEN;
+	if (hpad < xhlen)
+		hpad = xhlen;
 
-	off = dlt_offset(xh.dltype);
-	n = hpad + TPADMIN + off;
-	if ((xh.len > PKB_MAX_PKTLEN) ||
-	    (xh.len > PKB_MAX_DATA_LEN - n) ||
-	    (xh.tlen * 4 + XPKT_HLEN > pkb_xpkt_pool_size)) {
+	off = dlt_offset(xh.dltype) + hpad;
+	n = TPADMIN + off;
+
+	if (xhlen > pkb->xsize || pkb->bufsize < n ||
+	    xh.len > pkb->bufsize - n) {
 		errno = ENOMEM;
 		return -1;
 	}
 
-	if (!(pkb = pkb_create(xh.len + n)))
+	n = off - xh.tlen * 4;
+	rdlen = xh.len - XPKT_HLEN;
+	nr = io_read(fd, pkb->buf + n, rdlen);
+	if (nr < rdlen)
 		return -1;
 
-	n = hpad - xh.tlen * 4 + off;
-	dlen = xh.len - XPKT_HLEN;
-	nr = io_read(fd, pkb->buf + n, dlen);
-	if (nr < dlen)
-		goto err_have_buf;
+	return pkb_read_finish(pkb, &xh, n);
+}
 
-	x = pkb->xpkt;
-	x->hdr = xh;
-	memcpy(x->tags, pkb->buf + n, xh.tlen * 4);
-	if (xpkt_unpack_tags(x->tags, x->hdr.tlen) < 0) {
-		errno = EIO;
-		goto err_have_buf;
+
+int pkb_fd_read_a(struct pktbuf **pkbp, int fd, pkb_alloc_f alloc, void *ctx)
+{
+	struct xpkthdr xh;
+	int errval;
+	struct pktbuf *pkb;
+	size_t hpad = HPADMIN;
+	size_t n;
+	size_t off;
+	size_t xhlen;
+	ssize_t rdlen;
+	ssize_t nr;
+	int rv;
+
+	abort_unless((fd >= 0) && pkbp);
+
+	if (alloc == NULL) {
+		alloc = &pkb_alloc_default;
+		ctx = NULL;
 	}
-	if (xpkt_validate_tags(x->tags, x->hdr.tlen) < 0) {
+
+	if ((nr = io_read(fd, &xh, XPKT_HLEN)) < XPKT_HLEN)
+		return (nr == 0) ? 0 : -1;
+	xpkt_unpack_hdr(&xh);
+	if (xpkt_validate_hdr(&xh) < 0) {
 		errno = EIO;
-		goto err_have_buf;
+		return -1;
 	}
 
-	prp_poff(&pkb->prp) = hpad + off;
-	prp_toff(&pkb->prp) = hpad + off + xpkt_data_len(x);
+	xhlen = xh.tlen * 4 + XPKT_HLEN;
+	if (hpad < xhlen)
+		hpad = xhlen;
 
-	/* In unpacked state, the hdr.len says there is no data: only tags */
-	x->hdr.len = x->hdr.tlen * 4 + XPKT_HLEN;
+	off = dlt_offset(xh.dltype) + hpad;
+	n = TPADMIN + off;
+
+	pkb = (*alloc)(ctx, xhlen, n + xh.len);
+	if (pkb == NULL)
+		return -1;
+
+	n = off - xh.tlen * 4;
+	rdlen = xh.len - XPKT_HLEN;
+	nr = io_read(fd, pkb->buf + n, rdlen);
+	if (nr < rdlen)
+		goto err_free_pkb;
+
+	rv = pkb_read_finish(pkb, &xh, n);
+	if (rv < 0)
+		goto err_free_pkb;
 
 	*pkbp = pkb;
+	return rv;
 
-	return 1;
-
-err_have_buf:
+err_free_pkb:
 	errval = errno;
 	pkb_free(pkb);
 	errno = errval;

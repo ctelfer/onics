@@ -131,7 +131,7 @@ int main(int argc, char *argv[])
 
 	pkb_init_pools(1);
 
-	if ((rv = pkb_file_read(&p, infile)) <= 0) {
+	if ((rv = pkb_file_read_a(&p, infile, NULL, NULL)) <= 0) {
 		if (rv == 0)
 			return 0;
 		if (rv < 0)
@@ -177,10 +177,10 @@ int main(int argc, char *argv[])
 		}
 		pkb_free(p);
 		++pktnum;
-	} while ((rv = pkb_file_read(&p, infile)) > 0);
+	} while ((rv = pkb_file_read_a(&p, infile, NULL, NULL)) > 0);
 
 	if (rv < 0)
-		errsys("pkb_file_read: ");
+		errsys("pkb_file_read_a: ");
 
 	if (g_dumper != NULL)
 		pcap_dump_close(g_dumper);

@@ -93,7 +93,7 @@ int main(int argc, char *argv[])
 
 	pkb_init_pools(1);
 
-	if ((rv = pkb_file_read(&pkb, infile)) <= 0) {
+	if ((rv = pkb_file_read_a(&pkb, infile, NULL, NULL)) <= 0) {
 		if (rv == 0)
 			return 0;
 		if (rv < 0)
@@ -141,10 +141,10 @@ int main(int argc, char *argv[])
 
 		pkb_free(pkb);
 		++pktnum;
-	} while ((rv = pkb_file_read(&pkb, infile)) > 0);
+	} while ((rv = pkb_file_read_a(&pkb, infile, NULL, NULL)) > 0);
 
 	if (rv < 0)
-		errsys("pkb_file_read: ");
+		errsys("pkb_file_read_a: ");
 
 	opc_close(pch);
 

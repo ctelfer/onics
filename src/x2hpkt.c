@@ -595,7 +595,7 @@ int main(int argc, char *argv[])
 
 	pkb_init_pools(1);
 
-	while ((rv = pkb_file_read(&pkb, infile)) > 0) {
+	while ((rv = pkb_file_read_a(&pkb, infile, NULL, NULL)) > 0) {
 		++g_pktnum;
 		pkb_parse(pkb);
 		dump_to_hex_packet(pkb);

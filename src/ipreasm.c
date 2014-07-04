@@ -557,7 +557,7 @@ int main(int argc, char *argv[])
 	parse_args(argc, argv);
 	init_tables();
 
-	while ((rv = pkb_file_read(&p, infile)) > 0) {
+	while ((rv = pkb_file_read_a(&p, infile, NULL, NULL)) > 0) {
 		++pn;
 		if (pkb_parse(p) < 0)
 			err("Error parsing packet %lu\n", pn);
@@ -572,7 +572,7 @@ int main(int argc, char *argv[])
 			errsys("pkb_file_write(): ");
 	}
 	if (rv < 0)
-		errsys("pkb_file_read(): ");
+		errsys("pkb_file_read_a(): ");
 
 	return 0;
 }

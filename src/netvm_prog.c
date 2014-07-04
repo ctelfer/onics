@@ -923,7 +923,7 @@ int nvmp_run_all(struct netvm *vm, struct netvm_program *prog, FILE *pin,
 					continue;
 			}
 			
-			rv = pkb_file_read(&p, pin);
+			rv = pkb_file_read_a(&p, pin, NULL, NULL);
 			if (rv <= 0)
 				break;
 

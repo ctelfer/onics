@@ -513,7 +513,7 @@ void run_with_packets(struct netvm *vm, int filter, struct meminit *mi,
 	int vmrv;
 	ulong rc;
 
-	while (pkb_file_read(&p, stdin) > 0) {
+	while (pkb_file_read_a(&p, stdin, NULL, NULL) > 0) {
 		if (pkb_parse(p) < 0)
 			errsys("Error parsing packets");
 		++npkt;

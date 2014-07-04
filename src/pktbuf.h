@@ -40,13 +40,19 @@ enum {
 #define PKB_MAX_PKTLEN  (65536 + 256)
 #define PKB_F_PACKED	0x1
 #define PKB_F_PARSED	0x2
-#define PKB_F_ALLOCED	0x4
 #define PKB_F_RESET_MASK	((ushort)~(PKB_F_PACKED|PKB_F_PARSED))
 
 #define PKB_CB_SIZE	64
 
+struct pktbuf;
+
+typedef struct pktbuf *(*pkb_alloc_f)(void *ctx, size_t xlen, size_t plen);
+typedef void (*pkb_free_f)(void *ctx, struct pktbuf *pkb);
+
 struct pktbuf {
 	struct list 	entry;
+	pkb_free_f	free;
+	void *		fctx;
 	byte_t *	buf;
 	ulong		bufsize;
 	struct xpkt *	xpkt;
@@ -57,6 +63,7 @@ struct pktbuf {
 	uint		flags;
 	byte_t		cb[PKB_CB_SIZE]; /* app can put what it wants here */
 };
+
 
 /* initialize the packet buffer subsystem */
 void pkb_init_pools(uint num_expected);
@@ -105,12 +112,20 @@ void pkb_set_dltype(struct pktbuf *pkb, uint16_t dltype);
 void *pkb_data(struct pktbuf *pkb);
 
 /* 
- * Read a packet from a file and allocate the buffer for it 
+ * Read a packet from a file into a packet buffer
  *      1 on successful read
  *      0 on EOF
  *     -1 on error
  */
-int pkb_file_read(struct pktbuf **pkb, FILE *fp);
+int pkb_file_read(struct pktbuf *pkb, FILE *fp);
+
+/* 
+ * Read a packet from a file descriptor into a packet buffer
+ *      1 on successful read
+ *      0 on EOF
+ *     -1 on error
+ */
+int pkb_fd_read(struct pktbuf *pkb, int fd);
 
 /* 
  * Read a packet from a file and allocate the buffer for it 
@@ -118,7 +133,16 @@ int pkb_file_read(struct pktbuf **pkb, FILE *fp);
  *      0 on EOF
  *     -1 on error
  */
-int pkb_fd_read(struct pktbuf **pkb, int fd);
+int pkb_file_read_a(struct pktbuf **pkb, FILE *fp, pkb_alloc_f alloc,
+		    void *ctx);
+
+/* 
+ * Read a packet from a file and allocate the buffer for it 
+ *      1 on successful read
+ *      0 on EOF
+ *     -1 on error
+ */
+int pkb_fd_read_a(struct pktbuf **pkb, int fd, pkb_alloc_f alloc, void *ctx);
 
 /* 
  * Pack a pktbuf in preparation for transmission 

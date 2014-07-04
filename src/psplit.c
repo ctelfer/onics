@@ -274,7 +274,7 @@ void split_packets()
 	struct flowfile *ff;
 	uint64_t fid;
 
-	while ((rv = pkb_file_read(&p, infile)) > 0) {
+	while ((rv = pkb_file_read_a(&p, infile, NULL, NULL)) > 0) {
 		++pn;
 
 		fid = INVALID_FID;
@@ -294,7 +294,7 @@ void split_packets()
 		pkb_free(p);
 	}
 	if (rv < 0)
-		errsys("pkb_file_read() of packet %lu: ", pn);
+		errsys("pkb_file_read_a() of packet %lu: ", pn);
 }
 
 

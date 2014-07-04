@@ -227,14 +227,14 @@ void read_packets(struct list *pl)
 	ulong pn = 0;
 
 	l_init(pl);
-	while ((rv = pkb_file_read(&p, infile)) > 0) {
+	while ((rv = pkb_file_read_a(&p, infile, NULL, NULL)) > 0) {
 		++pn;
 		if (pkb_parse(p) < 0)
 			err("Error parsing packet %lu\n", pn);
 		l_enq(pl, &p->entry);
 	}
 	if (rv < 0)
-		errsys("pkb_file_read(): ");
+		errsys("pkb_file_read_a(): ");
 }
 
 

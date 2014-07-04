@@ -536,7 +536,7 @@ int prp_cut(struct prparse *prp, byte_t *buf, ulong off, ulong len, int moveup);
 
 /*
  * expand or contract header/trailer within the encapsulating space
- * Note that the point adjustments can't overrun their adjacent boundaries.
+ * Note that an offset adjustment can't overrun its adjacent offsets.
  * prp_adj_plen() moves both the trailer offset and ending offset in unison.
  * It basically acts as shorthand for a common case of adding or chopping
  * payload to a particular packet. 
@@ -545,10 +545,10 @@ int prp_adj_off(struct prparse *prp, uint oid, long amt);/* adjust an offset */
 int prp_adj_plen(struct prparse *prp, long amt);	/* adjust C+D */
 
 /*
- * Adjust a region so that its payload starts on the first unused byte
- * at the beginning and it's trailer starts on unused byte at the end.
- * A byte is "used" if it falls within some parse within the region or
- * a dependent sub region.
+ * Adjust a region so that its payload starts on the first used byte at the
+ * beginning and it's trailer starts on first unused byte at the end.  A byte
+ * is "used" if it falls within some parse within the region or a dependent
+ * sub region.
  */
 int prp_adj_unused(struct prparse *prp);
 

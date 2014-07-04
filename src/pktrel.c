@@ -156,7 +156,7 @@ int main(int argc, char *argv[])
 	next = now;
 
 
-	while ((rv = pkb_fd_read(&p, infd)) > 0) {
+	while ((rv = pkb_fd_read_a(&p, infd, NULL, NULL)) > 0) {
 		now = tm_uget();
 		++g_npkts;
 
