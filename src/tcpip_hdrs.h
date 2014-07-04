@@ -550,9 +550,9 @@ struct icmp6h {
 #define ICMP6T_IS_ECHO(_t)	\
 	(((_t) == ICMP6T_ECHO_REQUEST) || ((_t) == ICMP6T_ECHO_REPLY))
 #define ICMP6T_IS_NDP(_t)	\
-	(((_t) >= ICMP6T_RSOLICIT) || ((_t) <= ICMP6T_NREDIR))
+	(((_t) >= ICMP6T_RSOLICIT) && ((_t) <= ICMP6T_NREDIR))
 #define ICMP6T_IS_NEIGH(_t)	\
-	(((_t) == ICMP6T_NSOLICIT) || ((_t) <= ICMP6T_NADVERT))
+	(((_t) == ICMP6T_NSOLICIT) || ((_t) == ICMP6T_NADVERT))
 
 
 
