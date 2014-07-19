@@ -488,7 +488,7 @@ void track_flows(struct flowtab *ft, struct pktbuf *pkb)
 		/* the timeout */
 		reverse_key(&rkey, &key);
 		pf = st_get_dptr(ft->flows, &rkey);
-		if (pf == NULL) {
+		if (pf == NULL || pf == f) {
 			f->flowid = next_flowid++;
 			dl_init(&f->toevt, tm_flow_timeout);
 			dl_ins(&ft->events, &f->toevt);
