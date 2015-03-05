@@ -1,0 +1,51 @@
+#!/bin/sh
+
+usage() { 
+	echo "usage: mktcp [(FILE|-|--) [STMT1 STMT2 ...]]"
+	echo "	FILE indicates to read payload from FILE"
+	echo "	\"-\" indicates to read payload from standard input"
+	echo "	\"--\" indicates no payload but modification strings follow"
+	echo "	STMT1 are PML statements to modify the packet"
+	exit 1
+}
+
+START='
+	parse_push_front(0, @tcp);
+	parse_push_front(0, @ip);
+	parse_push_front(0, @eth);
+
+	eth.src = 02:00:00:00:00:01;
+	eth.dst = 02:00:00:00:00:02;
+	ip.saddr = 192.168.0.1;
+	ip.daddr = 192.168.0.2;
+	ip.ttl = 64;
+	tcp.sport = 12345;
+	tcp.dport = 80;
+	tcp.ack = 1;
+	tcp.seqn = 12345678;
+	tcp.ackn = 87654321;
+'
+
+END='
+	fix_dltype(0);
+	fix_lens(0);
+	fix_csums(0);
+'
+
+if [ $# -gt 0 -a "$1" != "--" ] 
+then
+	[ "$1" = "-h" ] && usage
+	if [ "$1" != "-" ] 
+	then
+		F=$1
+		shift
+		rawpkt $F | pml -e "{ $START $* $END }"
+	else
+		shift
+		rawpkt | pml -e "{ $START $* $END }"
+	fi
+else
+	if [ $# -gt 0 ] ; then shift ; fi
+	pml -e "BEGIN { pkt_new(0, 0); $START $* $END send 0; }"
+fi
+

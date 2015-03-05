@@ -1,0 +1,86 @@
+.TH "mpkpt" 1 "March 2015" "ONICS 1.0"
+.SH NAME
+mktcp, mkudp, mkicmp
+- Create a generic packet in XPKT format.
+.P
+.SH SYNOPSYS
+\fBmkicmp\fP [(\fIinfile\fP|\fB-\fP|\fB--\fP)] [\fIstmt1\fP \fIstmt2\fP ...]
+.P
+\fBmktcp\fP [(\fIinfile\fP|\fB-\fP|\fB--\fP)] [\fIstmt1\fP \fIstmt2\fP ...]
+.P
+\fBmkudp\fP [(\fIinfile\fP|\fB-\fP|\fB--\fP)] [\fIstmt1\fP \fIstmt2\fP ...]
+.P
+.P
+.SH DESCRIPTION
+These utilities each generate a packet in XPKT format.  The packets they
+create have an Ethernet link layer, an IP header and then a transport
+layer header.  The \fBmkicmp\fP program generates an ICMP packet.  The
+\fBmktcp\fP program generates a TCP packet.  The \fBmkudp\fP program
+generates a UDP packet.  The resulting packets have default values for
+all of their header fields.  Each utility also alows the user to specify
+additional PML statements (see pml(1)) to execute after initial packet
+creation.  Finally, each programs will automatically correct length,
+checksum and datalink type fields for all packet headers before
+outputting the packet.
+.P
+.SH OPTIONS
+.P
+.IP "\fIinfile\fP"
+Read the packet payload data from \fIinfile\fP.
+.IP "\fB-\fP"
+Read the packet payload data from standard input.
+.IP "\fB--\fP"
+Specifies the end of options.  This option is used to generate an empty
+packet while indicating that there will still be PML statements
+modifying the packet.
+.P
+.SH EXAMPLES
+.P
+Create a simple, empty UDP packet from the command line:
+.nf
+
+        mkudp
+
+.fi
+.P
+Create a simple, empty UDP packet modifying some of its fields and
+saving to a file:
+.nf
+
+        mkudp -- "ip.saddr = 192.168.0.1; 
+		  udp.dport = 1234;" > udppkt.xpkt
+
+.fi
+.P
+Generate an ICMP ping request with a payload from a given text file
+and then send it out eth0:
+.nf
+
+	mkicmp icmp_payload_file.txt \\
+		"ip.daddr = 1.2.3.4; 
+		 eth.dst = 02:00:00:00:01;" | pktout eth0
+
+.fi
+.P
+A more complicated example building a TCP packet and sending it
+onto the wire:
+.nf
+
+        echo "Some payload data" | mktcp - "
+                ip.saddr = 192.168.0.1; 
+                ip.daddr = 10.0.0.3;
+                tcp.syn = 1;
+                tcp.dport = 443;
+                " | pktout eth0 
+
+
+.fi
+.P
+.SH AVAILABILITY
+These utilities should be available on all supported ONICS platforms.
+.P
+.SH AUTHOR
+Christopher A. Telfer <ctelfer@gmail.com>
+.P
+.SH "SEE ALSO"
+onics_proto(7), pml(1)
