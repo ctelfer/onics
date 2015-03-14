@@ -1706,7 +1706,7 @@ static int icmp6_add(struct prparse *reg, byte_t *buf, struct prpspec *ps,
 	struct icmp6h *icmp6;
 
 	prp = crtprp(sizeof(struct icmp6_parse), PRID_ICMP6, ps->off, ps->hlen,
-		     ps->plen, ps->tlen, &icmp_prparse_ops, PRP_ICMP6_NXFIELDS);
+		     ps->plen, ps->tlen, &icmpv6_prparse_ops, PRP_ICMP6_NXFIELDS);
 	if (!prp)
 		return -1;
 

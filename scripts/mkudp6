@@ -1,7 +1,7 @@
 #!/bin/sh
 
 usage() { 
-	echo "usage: mkicmp [(FILE|-|--) [MODSTR1...]]"
+	echo "usage: mkudp [(FILE|-|--) [MODSTR1...]]"
 	echo "	FILE indicates to read payload from FILE"
 	echo "	\"-\" indicates to read payload from standard input"
 	echo "	\"--\" indicates no payload but modification strings follow"
@@ -9,17 +9,17 @@ usage() {
 }
 
 START='
-	parse_push_front(0, @icmp);
-	parse_push_front(0, @ip);
+	parse_push_front(0, @udp);
+	parse_push_front(0, @ip6);
 	parse_push_front(0, @eth);
 
 	eth.src = 02:00:00:00:00:01;
 	eth.dst = 02:00:00:00:00:02;
-	ip.saddr = 192.168.0.1;
-	ip.daddr = 192.168.0.2;
-	ip.ttl = 64;
-	icmp.type = 8;
-	icmp.code = 0;
+	ip6.saddr = fe80::1;
+	ip6.daddr = fe80::2;
+	ip6.hoplim = 64;
+	udp.sport = 12345;
+	udp.dport = 53;
 '
 
 END='
