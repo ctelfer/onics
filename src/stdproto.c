@@ -468,7 +468,7 @@ static int arp_add(struct prparse *reg, byte_t *buf, struct prpspec *ps,
 			prp_toff(prp) = prp_eoff(prp) = prp_poff(prp) + 20;
 			prp->offs[PRP_ARPFLD_ETHARP] = prp_soff(prp);
 			arp = prp_header(prp, buf, struct arph);
-			pack(&arp, 8, "hhbbh", ARPT_ETHERNET, ETHTYPE_IP, 6, 4,
+			pack(arp, 8, "hhbbh", ARPT_ETHERNET, ETHTYPE_IP, 6, 4,
 			     ARPOP_REQUEST);
 		}
 	}
