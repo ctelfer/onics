@@ -33,9 +33,8 @@ int pkt_splice(str p, str s)
 }
 
 
-int mk_tcpipeth_pn(int pn) 
+int mk_tcp_pn(int pn) 
 {
-	len = 14 + 20 + 20;
 	pkt_new(pn, 2048-256);
 	parse_push_back(pn, @eth);
 	$(pn)eth.ethtype = 0x800;
@@ -47,15 +46,14 @@ int mk_tcpipeth_pn(int pn)
 }
 
 
-int mk_tcpipeth() 
+int mk_tcp() 
 {
-	return mk_tcpipeth_pn(0);
+	return mk_tcp_pn(0);
 }
 
 
-int mk_udpipeth_pn(int pn) 
+int mk_udp_pn(int pn) 
 {
-	len = 14 + 20 + 8;
 	pkt_new(pn, 2048-256);
 	parse_push_back(pn, @eth);
 	$(pn)eth.ethtype = 0x800;
@@ -67,9 +65,9 @@ int mk_udpipeth_pn(int pn)
 }
 
 
-int mk_udpipeth() 
+int mk_udp() 
 {
-	return mk_udpipeth_pn(0);
+	return mk_udp_pn(0);
 }
 
 
@@ -138,4 +136,103 @@ void vlan_pop_pn(int pn)
 void vlan_pop()
 {
 	vlan_pop_pn(0);
+}
+
+
+void fix()
+{
+	fix_lens(0);
+	fix_csums(0);
+	fix_dltype(0);
+}
+
+
+void fix_pn(int pn)
+{
+	fix_lens(pn);
+	fix_csums(pn);
+	fix_dltype(pn);
+}
+
+
+# RC4-based PRNG
+str rand_m[256];
+int rand_i;
+int rand_j;
+
+void rand_init(str k)
+{
+	int b;
+
+	rand_i = 0;
+	while (rand_i < 256) {
+		rand_m[rand_i, 1] = rand_i;
+		rand_i = rand_i + 1;
+	}
+
+	rand_i = 0;
+	rand_j = 0;
+	while (rand_i < 256) {
+		rand_j = (rand_j + rand_m[rand_i, 1] + k[rand_i % str_len(k), 1]) 
+			& 0xFF;
+		b = rand_m[rand_i, 1];
+		rand_m[rand_i, 1] = rand_m[rand_j, 1];
+		rand_m[rand_j, 1] = b;
+		rand_i = rand_i + 1;
+	}
+
+	rand_i = 0;
+	rand_j = 0;
+}
+
+
+int rand_byte()
+{
+	int b1;
+	int b2;
+
+	rand_i = (rand_i + 1) & 0xFF;
+	rand_j = (rand_j + rand_m[rand_i, 1]) & 0xFF;
+	b1 = rand_m[rand_i, 1];
+	b2 = rand_m[rand_j, 1];
+	rand_m[rand_i, 1] = b2;
+	rand_m[rand_j, 1] = b1;
+
+	return rand_m[(b1 + b2) & 0xFF, 1];
+}
+
+
+int rand_short()
+{
+	return rand_byte() << 8 | rand_byte();
+}
+
+
+int rand_int()
+{
+	return rand_byte() << 24 | rand_byte() << 16 |
+               rand_byte() << 8  | rand_byte();
+}
+
+
+const MAC_TYPE_ANY = 0;
+const MAC_TYPE_UNICAST = 1;
+const MAC_TYPE_LOC_UNICAST = 2;
+const MAC_TYPE_MULTICAST = 3;
+
+
+void rand_mac(str mac, int type)
+{
+	mac[0,1] = rand_byte();
+	if (type == MAC_TYPE_UNICAST)
+		mac[0,1] = mac[0,1] & 0xFC;
+	else if (type == MAC_TYPE_LOC_UNICAST)
+		mac[0,1] = mac[0,1] & 0xFE | 2;
+	else if (type == MAC_TYPE_MULTICAST)
+		mac[0,1] = mac[0,1] | 1;
+	mac[1,1] = rand_byte();
+	mac[2,1] = rand_byte();
+	mac[3,1] = rand_byte();
+	mac[4,1] = rand_byte();
+	mac[5,1] = rand_byte();
 }
