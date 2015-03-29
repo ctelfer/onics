@@ -51,47 +51,47 @@ Functions
    Function[intrinsic]: str_mkref() -- 4 args, 0-byte stack, return type=string reference
    Parameters & Variables -- 
       Variable: ispkt [param; width=4, addr=0]
-      Variable: seg [param; width=4, addr=1]
-      Variable: addr [param; width=4, addr=2]
-      Variable: len [param; width=4, addr=3]
+      Variable: seg [param; width=4, addr=4]
+      Variable: addr [param; width=4, addr=8]
+      Variable: len [param; width=4, addr=12]
    Body -- 
       (null)
    Function[intrinsic]: pkt_new() -- 2 args, 0-byte stack, return type=void
    Parameters & Variables -- 
       Variable: pnum [param; width=4, addr=0]
-      Variable: len [param; width=4, addr=1]
+      Variable: len [param; width=4, addr=4]
    Body -- 
       (null)
    Function[intrinsic]: pkt_new_z() -- 2 args, 0-byte stack, return type=void
    Parameters & Variables -- 
       Variable: pnum [param; width=4, addr=0]
-      Variable: len [param; width=4, addr=1]
+      Variable: len [param; width=4, addr=4]
    Body -- 
       (null)
    Function[intrinsic]: pkt_swap() -- 2 args, 0-byte stack, return type=void
    Parameters & Variables -- 
       Variable: pndst [param; width=4, addr=0]
-      Variable: pnsrc [param; width=4, addr=1]
+      Variable: pnsrc [param; width=4, addr=4]
    Body -- 
       (null)
    Function[intrinsic]: pkt_copy() -- 2 args, 0-byte stack, return type=void
    Parameters & Variables -- 
       Variable: pndst [param; width=4, addr=0]
-      Variable: pnsrc [param; width=4, addr=1]
+      Variable: pnsrc [param; width=4, addr=4]
    Body -- 
       (null)
    Function[intrinsic]: pkt_ins_u() -- 3 args, 0-byte stack, return type=void
    Parameters & Variables -- 
       Variable: pnum [param; width=4, addr=0]
-      Variable: off [param; width=4, addr=1]
-      Variable: len [param; width=4, addr=2]
+      Variable: off [param; width=4, addr=4]
+      Variable: len [param; width=4, addr=8]
    Body -- 
       (null)
    Function[intrinsic]: pkt_ins_d() -- 3 args, 0-byte stack, return type=void
    Parameters & Variables -- 
       Variable: pnum [param; width=4, addr=0]
-      Variable: off [param; width=4, addr=1]
-      Variable: len [param; width=4, addr=2]
+      Variable: off [param; width=4, addr=4]
+      Variable: len [param; width=4, addr=8]
    Body -- 
       (null)
    Function[intrinsic]: pkt_cut_u() -- 1 args, 0-byte stack, return type=void
@@ -112,18 +112,18 @@ Functions
    Function[intrinsic]: pkt_get_off() -- 4 args, 0-byte stack, return type=scalar
    Parameters & Variables -- 
       Variable: pnum [param; width=4, addr=0]
-      Variable: prid [param; width=4, addr=1]
-      Variable: idx [param; width=4, addr=2]
-      Variable: oid [param; width=4, addr=3]
+      Variable: prid [param; width=4, addr=4]
+      Variable: idx [param; width=4, addr=8]
+      Variable: oid [param; width=4, addr=12]
    Body -- 
       (null)
    Function[intrinsic]: pkt_adj_off() -- 5 args, 0-byte stack, return type=void
    Parameters & Variables -- 
       Variable: pnum [param; width=4, addr=0]
-      Variable: prid [param; width=4, addr=1]
-      Variable: idx [param; width=4, addr=2]
-      Variable: oid [param; width=4, addr=3]
-      Variable: amt [param; width=4, addr=4]
+      Variable: prid [param; width=4, addr=4]
+      Variable: idx [param; width=4, addr=8]
+      Variable: oid [param; width=4, addr=12]
+      Variable: amt [param; width=4, addr=16]
    Body -- 
       (null)
    Function[intrinsic]: pkt_nlists() -- 0 args, 0-byte stack, return type=scalar
@@ -138,31 +138,31 @@ Functions
    Function[intrinsic]: pkt_enq() -- 2 args, 0-byte stack, return type=void
    Parameters & Variables -- 
       Variable: list [param; width=4, addr=0]
-      Variable: pnum [param; width=4, addr=1]
+      Variable: pnum [param; width=4, addr=4]
    Body -- 
       (null)
    Function[intrinsic]: pkt_deq() -- 2 args, 0-byte stack, return type=void
    Parameters & Variables -- 
       Variable: list [param; width=4, addr=0]
-      Variable: pnum [param; width=4, addr=1]
+      Variable: pnum [param; width=4, addr=4]
    Body -- 
       (null)
    Function[intrinsic]: pkt_push() -- 2 args, 0-byte stack, return type=void
    Parameters & Variables -- 
       Variable: list [param; width=4, addr=0]
-      Variable: pnum [param; width=4, addr=1]
+      Variable: pnum [param; width=4, addr=4]
    Body -- 
       (null)
    Function[intrinsic]: pkt_pop() -- 2 args, 0-byte stack, return type=void
    Parameters & Variables -- 
       Variable: list [param; width=4, addr=0]
-      Variable: pnum [param; width=4, addr=1]
+      Variable: pnum [param; width=4, addr=4]
    Body -- 
       (null)
    Function[intrinsic]: parse_push_back() -- 2 args, 0-byte stack, return type=void
    Parameters & Variables -- 
       Variable: pnum [param; width=4, addr=0]
-      Variable: prid [param; width=4, addr=1]
+      Variable: prid [param; width=4, addr=4]
    Body -- 
       (null)
    Function[intrinsic]: parse_pop_back() -- 1 args, 0-byte stack, return type=void
@@ -173,7 +173,7 @@ Functions
    Function[intrinsic]: parse_push_front() -- 2 args, 0-byte stack, return type=void
    Parameters & Variables -- 
       Variable: pnum [param; width=4, addr=0]
-      Variable: prid [param; width=4, addr=1]
+      Variable: prid [param; width=4, addr=4]
    Body -- 
       (null)
    Function[intrinsic]: parse_pop_front() -- 1 args, 0-byte stack, return type=void
@@ -224,8 +224,8 @@ Functions
    Function[intrinsic]: meta_set_ts() -- 3 args, 0-byte stack, return type=void
    Parameters & Variables -- 
       Variable: pnum [param; width=4, addr=0]
-      Variable: sec [param; width=4, addr=1]
-      Variable: nsec [param; width=4, addr=2]
+      Variable: sec [param; width=4, addr=4]
+      Variable: nsec [param; width=4, addr=8]
    Body -- 
       (null)
    Function[intrinsic]: meta_get_presnap() -- 1 args, 0-byte stack, return type=scalar
@@ -236,7 +236,7 @@ Functions
    Function[intrinsic]: meta_set_presnap() -- 2 args, 0-byte stack, return type=void
    Parameters & Variables -- 
       Variable: pnum [param; width=4, addr=0]
-      Variable: val [param; width=4, addr=1]
+      Variable: val [param; width=4, addr=4]
    Body -- 
       (null)
    Function[intrinsic]: meta_get_inport() -- 1 args, 0-byte stack, return type=scalar
@@ -247,7 +247,7 @@ Functions
    Function[intrinsic]: meta_set_inport() -- 2 args, 0-byte stack, return type=void
    Parameters & Variables -- 
       Variable: pnum [param; width=4, addr=0]
-      Variable: val [param; width=4, addr=1]
+      Variable: val [param; width=4, addr=4]
    Body -- 
       (null)
    Function[intrinsic]: meta_get_outport() -- 1 args, 0-byte stack, return type=scalar
@@ -258,7 +258,7 @@ Functions
    Function[intrinsic]: meta_set_outport() -- 2 args, 0-byte stack, return type=void
    Parameters & Variables -- 
       Variable: pnum [param; width=4, addr=0]
-      Variable: val [param; width=4, addr=1]
+      Variable: val [param; width=4, addr=4]
    Body -- 
       (null)
    Function[intrinsic]: meta_get_flowid() -- 1 args, 0-byte stack, return type=scalar
@@ -269,7 +269,7 @@ Functions
    Function[intrinsic]: meta_set_flowid() -- 2 args, 0-byte stack, return type=void
    Parameters & Variables -- 
       Variable: pnum [param; width=4, addr=0]
-      Variable: val [param; width=4, addr=1]
+      Variable: val [param; width=4, addr=4]
    Body -- 
       (null)
    Function[intrinsic]: meta_get_class() -- 1 args, 0-byte stack, return type=scalar
@@ -280,7 +280,7 @@ Functions
    Function[intrinsic]: meta_set_class() -- 2 args, 0-byte stack, return type=void
    Parameters & Variables -- 
       Variable: pnum [param; width=4, addr=0]
-      Variable: val [param; width=4, addr=1]
+      Variable: val [param; width=4, addr=4]
    Body -- 
       (null)
    Function[intrinsic]: meta_get_seq() -- 1 args, 0-byte stack, return type=scalar
@@ -291,76 +291,76 @@ Functions
    Function[intrinsic]: meta_set_seq() -- 2 args, 0-byte stack, return type=void
    Parameters & Variables -- 
       Variable: pnum [param; width=4, addr=0]
-      Variable: val [param; width=4, addr=1]
+      Variable: val [param; width=4, addr=4]
    Body -- 
       (null)
    Function[intrinsic]: meta_has() -- 2 args, 0-byte stack, return type=scalar
    Parameters & Variables -- 
       Variable: pnum [param; width=4, addr=0]
-      Variable: type [param; width=4, addr=1]
+      Variable: type [param; width=4, addr=4]
    Body -- 
       (null)
    Function[intrinsic]: meta_add() -- 2 args, 0-byte stack, return type=void
    Parameters & Variables -- 
       Variable: pnum [param; width=4, addr=0]
-      Variable: type [param; width=4, addr=1]
+      Variable: type [param; width=4, addr=4]
    Body -- 
       (null)
    Function[intrinsic]: meta_add_info() -- 2 args, 0-byte stack, return type=void
    Parameters & Variables -- 
       Variable: pnum [param; width=4, addr=0]
-      Variable: numw [param; width=4, addr=1]
+      Variable: numw [param; width=4, addr=4]
    Body -- 
       (null)
    Function[intrinsic]: meta_rem() -- 2 args, 0-byte stack, return type=void
    Parameters & Variables -- 
       Variable: pnum [param; width=4, addr=0]
-      Variable: type [param; width=4, addr=1]
+      Variable: type [param; width=4, addr=4]
    Body -- 
       (null)
    Function[intrinsic]: meta_rd8() -- 3 args, 0-byte stack, return type=scalar
    Parameters & Variables -- 
       Variable: pnum [param; width=4, addr=0]
-      Variable: type [param; width=4, addr=1]
-      Variable: off [param; width=4, addr=2]
+      Variable: type [param; width=4, addr=4]
+      Variable: off [param; width=4, addr=8]
    Body -- 
       (null)
    Function[intrinsic]: meta_rd16() -- 3 args, 0-byte stack, return type=scalar
    Parameters & Variables -- 
       Variable: pnum [param; width=4, addr=0]
-      Variable: type [param; width=4, addr=1]
-      Variable: off [param; width=4, addr=2]
+      Variable: type [param; width=4, addr=4]
+      Variable: off [param; width=4, addr=8]
    Body -- 
       (null)
    Function[intrinsic]: meta_rd32() -- 3 args, 0-byte stack, return type=scalar
    Parameters & Variables -- 
       Variable: pnum [param; width=4, addr=0]
-      Variable: type [param; width=4, addr=1]
-      Variable: off [param; width=4, addr=2]
+      Variable: type [param; width=4, addr=4]
+      Variable: off [param; width=4, addr=8]
    Body -- 
       (null)
    Function[intrinsic]: meta_wr8() -- 4 args, 0-byte stack, return type=void
    Parameters & Variables -- 
       Variable: pnum [param; width=4, addr=0]
-      Variable: type [param; width=4, addr=1]
-      Variable: off [param; width=4, addr=2]
-      Variable: val [param; width=4, addr=3]
+      Variable: type [param; width=4, addr=4]
+      Variable: off [param; width=4, addr=8]
+      Variable: val [param; width=4, addr=12]
    Body -- 
       (null)
    Function[intrinsic]: meta_wr16() -- 4 args, 0-byte stack, return type=void
    Parameters & Variables -- 
       Variable: pnum [param; width=4, addr=0]
-      Variable: type [param; width=4, addr=1]
-      Variable: off [param; width=4, addr=2]
-      Variable: val [param; width=4, addr=3]
+      Variable: type [param; width=4, addr=4]
+      Variable: off [param; width=4, addr=8]
+      Variable: val [param; width=4, addr=12]
    Body -- 
       (null)
    Function[intrinsic]: meta_wr32() -- 4 args, 0-byte stack, return type=void
    Parameters & Variables -- 
       Variable: pnum [param; width=4, addr=0]
-      Variable: type [param; width=4, addr=1]
-      Variable: off [param; width=4, addr=2]
-      Variable: val [param; width=4, addr=3]
+      Variable: type [param; width=4, addr=4]
+      Variable: off [param; width=4, addr=8]
+      Variable: val [param; width=4, addr=12]
    Body -- 
       (null)
    Function[intrinsic]: exit() -- 1 args, 0-byte stack, return type=void
@@ -381,13 +381,13 @@ Functions
    Function[inline, intrinsic, pconst]: min() -- 2 args, 0-byte stack, return type=scalar
    Parameters & Variables -- 
       Variable: num1 [param; width=4, addr=0]
-      Variable: num2 [param; width=4, addr=1]
+      Variable: num2 [param; width=4, addr=4]
    Body -- 
       (null)
    Function[inline, intrinsic, pconst]: max() -- 2 args, 0-byte stack, return type=scalar
    Parameters & Variables -- 
       Variable: num1 [param; width=4, addr=0]
-      Variable: num2 [param; width=4, addr=1]
+      Variable: num2 [param; width=4, addr=4]
    Body -- 
       (null)
 -----------
@@ -396,8 +396,8 @@ Begin Rule
    Rule: (begin)
       Action Variables -- 
       Variable: x [local; width=4, addr=0]
-      Variable: y [local; width=4, addr=1]
-      Variable: z [local; width=4, addr=2]
+      Variable: y [local; width=4, addr=4]
+      Variable: z [local; width=4, addr=8]
    Action -- 
       List:
       -----
@@ -432,7 +432,7 @@ Begin Rule
          Right Operand -- 
             Locator: variable(y) [[]; width=4]
             Variable -- 
-               Variable: y [local; width=4, addr=1]
+               Variable: y [local; width=4, addr=4]
       True body -- 
          List:
          -----
@@ -447,7 +447,7 @@ Begin Rule
       Test -- 
          Locator: variable(y) [[]; width=4]
          Variable -- 
-            Variable: y [local; width=4, addr=1]
+            Variable: y [local; width=4, addr=4]
       True body -- 
          List:
          -----
@@ -561,7 +561,7 @@ Begin Rule
          Left Operand -- 
             Locator: variable(y) [[]; width=4]
             Variable -- 
-               Variable: y [local; width=4, addr=1]
+               Variable: y [local; width=4, addr=4]
          Right Operand -- 
             Scalar [[c]; width=4] -- width 4: 10 (10,0xa)
       True body -- 
@@ -580,11 +580,11 @@ Begin Rule
             Left Operand -- 
                Locator: variable(y) [[]; width=4]
                Variable -- 
-                  Variable: y [local; width=4, addr=1]
+                  Variable: y [local; width=4, addr=4]
             Right Operand -- 
                Locator: variable(z) [[]; width=4]
                Variable -- 
-                  Variable: z [local; width=4, addr=2]
+                  Variable: z [local; width=4, addr=8]
          -----
          Print Statement: type: string, width:0, flags:[n]
          Expression -- 
@@ -605,7 +605,7 @@ Begin Rule
          Test -- 
             Locator: variable(y) [[]; width=4]
             Variable -- 
-               Variable: y [local; width=4, addr=1]
+               Variable: y [local; width=4, addr=4]
          True body -- 
             List:
             -----

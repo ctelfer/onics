@@ -68,11 +68,6 @@
 #define SYMTABSIZE    256
 
 
-#define SCALAR_SIZE	4
-#define LG2_SCALAR_SIZE	2
-#define STRREF_SIZE	(SCALAR_SIZE * 2)
-#define LG2_STRREF_SIZE	(LG2_SCALAR_SIZE + 1)
-
 static ulong val32(struct pml_ast *ast, struct pml_retval *v);
 static const char *nts(int type);
 static struct pml_variable *pml_var_alloc_nc(struct pml_ast *ast, char *name, 
@@ -678,6 +673,7 @@ int pml_ast_add_intrinsic(struct pml_ast *ast, struct pml_intrinsic *intr)
 
 	if ((f->name = strdup(intr->name)) == NULL)
 		goto enomem;
+
 	for (i = 0; i < intr->arity; ++i) {
 		abort_unless(intr->params[i].name);
 		v = pml_var_alloc_nc(ast, intr->params[i].name, PML_VTYPE_PARAM,
@@ -693,8 +689,6 @@ int pml_ast_add_intrinsic(struct pml_ast *ast, struct pml_intrinsic *intr)
 	f->arity = intr->arity;
 	f->ieval = intr->eval;
 	f->flags = intr->flags | PML_FF_INTRINSIC;
-	f->pstksz = f->arity * sizeof(uint32_t);
-	f->vstksz = 0;
 
 	abort_unless(symtab_add(&ast->funcs, (struct pml_sym *)f) >= 0);
 
@@ -725,19 +719,21 @@ int pml_ast_add_var(struct pml_ast *ast, struct pml_variable *var)
 		return -1;
 
 	if (var->vtype != PML_VTYPE_CONST) {
-		/* NOTE: pad global vars to SCALAR_SIZE-byte sizes */
+		/* NOTE: pad global vars to PML_SCALAR_SIZE-byte sizes */
 		max = (uint32_t)-1 - ast->vars.addr_rw1 - ast->vars.addr_rw2;
-		if (rup2_32(var->width, LG2_SCALAR_SIZE) > max) {
+		if (rup2_32(var->width, PML_LG2_SCALAR_SIZE) > max) {
 			pml_ast_err(ast, 
 				    "global read-write address space overflow");
 			return -1;
 		}
 		if (var->init != NULL) {
 			var->addr = ast->vars.addr_rw1;
-			ast->vars.addr_rw1 += rup2_32(var->width, LG2_SCALAR_SIZE);
+			ast->vars.addr_rw1 +=
+				rup2_32(var->width, PML_LG2_SCALAR_SIZE);
 		} else { 
 			var->addr = ast->vars.addr_rw2;
-			ast->vars.addr_rw2 += rup2_32(var->width, LG2_SCALAR_SIZE);
+			ast->vars.addr_rw2 +=
+				rup2_32(var->width, PML_LG2_SCALAR_SIZE);
 		}
 	}
 
@@ -808,12 +804,16 @@ struct pml_variable *pml_func_lookup_param(struct pml_function *f, char *s)
 
 int pml_func_add_param(struct pml_function *f, struct pml_variable *v)
 {
+	ulong plen;
 	abort_unless(v && v->vtype == PML_VTYPE_PARAM);
 	if (symtab_add(&f->vars, (struct pml_sym *)v) < 0)
 		return -1;
 	v->addr = f->vars.addr_rw1;
-	f->vars.addr_rw1 += v->width / sizeof(uint32_t);
+	plen = (v->width + (PML_SCALAR_SIZE - 1)) / PML_SCALAR_SIZE;
+	plen *= PML_SCALAR_SIZE;
+	f->vars.addr_rw1 += plen;
 	v->func = f;
+	f->pstksz += plen;
 
 	return 0;
 }
@@ -822,12 +822,17 @@ int pml_func_add_param(struct pml_function *f, struct pml_variable *v)
 int pml_func_add_var(struct pml_symtab *t, struct pml_function *f,
 		     struct pml_variable *v)
 {
+	ulong vlen;
 	abort_unless(v && v->vtype == PML_VTYPE_LOCAL);
 	if (symtab_add(t, (struct pml_sym *)v) < 0)
 		return -1;
 	v->addr = t->addr_rw2;
-	t->addr_rw2 += (v->width + (SCALAR_SIZE - 1)) / SCALAR_SIZE;
+	vlen = (v->width + (PML_SCALAR_SIZE - 1)) / PML_SCALAR_SIZE;
+	vlen *= PML_SCALAR_SIZE;
+	t->addr_rw2 += vlen;
 	v->func = f;
+	if (f != NULL)
+		f->vstksz += vlen;
 
 	return 0;
 }
@@ -933,7 +938,7 @@ static union pml_node *_pmln_alloc(int type)
 		if (type == PMLTT_SCALAR) {
 			p->etype = PML_ETYPE_SCALAR;
 			p->u.scalar = 0;
-			p->width = SCALAR_SIZE;
+			p->width = PML_SCALAR_SIZE;
 		} else if (type == PMLTT_BYTESTR) {
 			p->etype = PML_ETYPE_BYTESTR;
 			p->u.bytestr.ispkt = 0;
@@ -958,7 +963,7 @@ static union pml_node *_pmln_alloc(int type)
 		struct pml_op *p = &np->op;
 		p->etype = PML_ETYPE_UNKNOWN;
 		p->eflags = 0;
-		p->width = SCALAR_SIZE;
+		p->width = PML_SCALAR_SIZE;
 		p->op = 0;
 		p->arg1 = NULL;
 		p->arg2 = NULL;
@@ -969,7 +974,7 @@ static union pml_node *_pmln_alloc(int type)
 		struct pml_call *p = &np->call;
 		p->etype = PML_ETYPE_SCALAR;
 		p->eflags = 0;
-		p->width = SCALAR_SIZE;
+		p->width = PML_SCALAR_SIZE;
 		p->func = NULL;
 		p->args = NULL;
 	} break;
@@ -983,7 +988,7 @@ static union pml_node *_pmln_alloc(int type)
 			p->width = 0;
 		} else {
 			p->etype = PML_ETYPE_STRREF;
-			p->width = STRREF_SIZE;
+			p->width = PML_STRREF_SIZE;
 		}
 		p->reftype = PML_REF_UNKNOWN;
 		p->rpfld = PML_RPF_NONE;
@@ -1236,7 +1241,7 @@ static int find_gstr_init_size(union pml_expr_u *init)
 	struct ns_bytestr *bs;
 
 	if (PML_EXPR_IS_SCALAR(init)) {
-		return SCALAR_SIZE;
+		return PML_SCALAR_SIZE;
 	} else if (PML_EXPR_IS_BYTESTR(init)) {
 		abort_unless(init->expr.type == PMLTT_BYTESTR);
 		lit = &init->literal;
@@ -1257,7 +1262,7 @@ static int find_gstr_init_size(union pml_expr_u *init)
 			return -1;
 
 		if (e->type == NST_SCALAR) {
-			return SCALAR_SIZE;
+			return PML_SCALAR_SIZE;
 		} else if (e->type == NST_BYTESTR) {
 			bs = (struct ns_bytestr *)e;
 			if (bs->value.len > INT_MAX)
@@ -1288,9 +1293,9 @@ struct pml_variable *pml_var_alloc(struct pml_ast *ast, char *name,
 	v->etype = etype;
 	v->vtype = vtype;
 	if (etype == PML_ETYPE_SCALAR) {
-		v->width = SCALAR_SIZE;
+		v->width = PML_SCALAR_SIZE;
 	} else if (etype == PML_ETYPE_STRREF) {
-		v->width = STRREF_SIZE;
+		v->width = PML_STRREF_SIZE;
 	} else {
 		if (size < 0) {
 			abort_unless(init != NULL);
@@ -1355,11 +1360,11 @@ struct pml_call *pml_call_alloc(struct pml_ast *ast, struct pml_function *func,
 	c->etype = func->rtype;
 	switch (c->etype) {
 	case PML_ETYPE_SCALAR:
-		c->width = SCALAR_SIZE;
+		c->width = PML_SCALAR_SIZE;
 		break;
 	case PML_ETYPE_STRREF:
 		c->etype = PML_ETYPE_BYTESTR;
-		c->width = STRREF_SIZE;
+		c->width = PML_STRREF_SIZE;
 		break;
 	case PML_ETYPE_VOID:
 		c->width = 0;
@@ -2432,12 +2437,12 @@ static void set_nsref_locator_type(struct pml_locator *l)
 			l->eflags |= PML_EFLAG_VARLEN;
 		} else {
 			l->etype = PML_ETYPE_SCALAR;
-			l->width = SCALAR_SIZE;
+			l->width = PML_SCALAR_SIZE;
 		}
 	} else {
 		if (NSF_IS_INBITS(nse->flags)) {
 			l->etype = PML_ETYPE_SCALAR;
-			l->width = SCALAR_SIZE;
+			l->width = PML_SCALAR_SIZE;
 		} else {
 			l->etype = PML_ETYPE_BYTESTR;
 			if (NSF_IS_VARLEN(nse->flags)) {
@@ -3139,7 +3144,7 @@ static int resolve_node_post(union pml_node *node, void *ctxp, void *xstk)
 
 		/* redundant? */
 		l->etype = PML_ETYPE_STRREF;
-		l->width = STRREF_SIZE;
+		l->width = PML_STRREF_SIZE;
 	} break;
 
 	case PMLTT_WHILE: {
@@ -3236,8 +3241,6 @@ int pml_resolve_refs(struct pml_ast *ast, union pml_node *node)
 		rv = resolve_node(&ctx, (union pml_node *)func->body);
 		if (rv < 0)
 			goto out;
-		func->pstksz = func->vars.addr_rw1 * sizeof(uint32_t);
-		func->vstksz = func->vars.addr_rw2 * sizeof(uint32_t);
 
 	} else if (node->base.type == PMLTT_FUNCTION) {
 		struct pml_function *inln = (struct pml_function *)node;
@@ -3252,7 +3255,6 @@ int pml_resolve_refs(struct pml_ast *ast, union pml_node *node)
 		rv = resolve_node(&ctx, (union pml_node *)inln->body);
 		if (rv < 0)
 			goto out;
-		inln->pstksz = inln->vars.addr_rw1 * sizeof(uint32_t);
 		if (PML_EXPR_IS_PCONST(inln->body))
 			inln->flags |= PML_FF_PCONST;
 		pe = (struct pml_expr_base *)inln->body;
@@ -3762,7 +3764,7 @@ static int e_locator(struct pml_ast *ast, struct pml_stack_frame *fr,
 		     union pml_node *node, struct pml_retval *r)
 {
 	struct pml_locator *l = (struct pml_locator *)node;
-	uint32_t off = 0, len = SCALAR_SIZE;
+	uint32_t off = 0, len = PML_SCALAR_SIZE;
 
 	if (l->reftype == PML_REF_VAR) {
 		struct pml_variable *v = l->u.varref;
@@ -3815,8 +3817,8 @@ static int e_locator(struct pml_ast *ast, struct pml_stack_frame *fr,
 			             v->vtype == PML_VTYPE_LOCAL);
 			abort_unless(l->etype == PML_ETYPE_SCALAR);
 			abort_unless(l->off == NULL && l->len == NULL);
-			if (fr->ssz < SCALAR_SIZE || 
-			    fr->ssz - SCALAR_SIZE < v->addr) {
+			if (fr->ssz < PML_SCALAR_SIZE || 
+			    fr->ssz - PML_SCALAR_SIZE < v->addr) {
 				pml_ast_err(ast,
 					    "eval: stack overflow in var '%s':"
 					    " stack size=%lu, var addr=%lu\n",
@@ -3824,7 +3826,7 @@ static int e_locator(struct pml_ast *ast, struct pml_stack_frame *fr,
 				return -1;
 			}
 			r->etype = PML_ETYPE_SCALAR;
-			p = fr->stack + v->addr * sizeof(uint32_t);
+			p = fr->stack + v->addr;
 			if (v->vtype == PML_VTYPE_LOCAL)
 				p += fr->psz;
 			r->val = *(uint32_t *)p;
@@ -3946,9 +3948,10 @@ void pml_ast_mem_init(struct pml_ast *ast)
 
 		vp = dyb->data + v->addr;
 		if (r.etype == PML_ETYPE_SCALAR) {
-			len = (v->width > SCALAR_SIZE ? SCALAR_SIZE : v->width);
+			len = (v->width > PML_SCALAR_SIZE ? 
+				PML_SCALAR_SIZE : v->width);
 			for (i = 0; i < len; ++i) {
-				shift = (SCALAR_SIZE - 1 - i) * 8;
+				shift = (PML_SCALAR_SIZE - 1 - i) * 8;
 				*vp++ = (r.val >> shift) & 0xFF;
 			}
 		} else if (r.etype == PML_ETYPE_BYTESTR) {
@@ -3986,7 +3989,7 @@ static int pml_opt_cexpr(union pml_expr_u *e, void *astp, union pml_expr_u **ne)
 				return -1;
 			lit->etype = PML_ETYPE_SCALAR;
 			lit->eflags = PML_EFLAG_CONST|PML_EFLAG_PCONST;
-			lit->width = SCALAR_SIZE;
+			lit->width = PML_SCALAR_SIZE;
 			lit->u.scalar = r.val;
 			break;
 

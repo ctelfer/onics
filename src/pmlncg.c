@@ -234,6 +234,27 @@ static int pib_add_ixyzw(struct pml_ibuf *b, uint8_t oc, uint8_t x, uint8_t y,
 #define LDSREF_LEN(_cg, _l) LDSREF_X((_cg), (_l), 1)
 
 
+static uint8_t retlen(struct pml_function *f)
+{
+	switch (f->rtype) {
+	case PML_ETYPE_VOID: return 0;
+	case PML_ETYPE_SCALAR: return 1;
+	case PML_ETYPE_BYTESTR: return 2; /* future */
+	case PML_ETYPE_MASKVAL: return 3; /* future */
+	case PML_ETYPE_STRREF: return 2;
+	default:
+		abort_unless(0);
+		return 255;
+	}
+}
+
+#define EMIT_RET_I(_cg, _f, _retlen) \
+	EMIT_XW((_cg), RET, _retlen, ((_f)->pstksz / PML_SCALAR_SIZE))
+
+#define EMIT_RET(_cg, _f) \
+	EMIT_XW((_cg), RET, retlen(_f), ((_f)->pstksz / PML_SCALAR_SIZE))
+
+
 static uint nexti(struct pml_ibuf *b)
 {
 	abort_unless(b);
@@ -245,11 +266,11 @@ static ulong lvaraddr(struct pml_variable *var)
 {
 	struct pml_function *func = var->func;
 	if (var->vtype == PML_VTYPE_LOCAL) {
-		return var->addr; /* above BP */
+		return var->addr / PML_SCALAR_SIZE; /* above BP */
 	} else if (PML_FUNC_IS_INLINE(func)) {
-		return var->addr + 1; /* below BP */
+		return var->addr / PML_SCALAR_SIZE + 1; /* below BP */
 	} else {
-		return var->addr + 2; /* below BP */
+		return var->addr / PML_SCALAR_SIZE + 2; /* below BP */
 	}
 }
 
@@ -690,7 +711,7 @@ static int _i_cg_mget(struct pmlncg *cg, struct pml_function *f,
 
 	/* [td] if no tag, then return -1  */
 	PUSH(cg, 0xFFFFFFFF);
-	EMIT_XW(cg, RET, 1, f->arity);
+	EMIT_RET_I(cg, f, 1);
 
 	/* [td] read the tag into the coprocessor mem */
 	PUSH(cg, NETVM_CPOC_LDTAG);
@@ -703,7 +724,7 @@ static int _i_cg_mget(struct pmlncg *cg, struct pml_function *f,
 	PUSH(cg, NETVM_CPI_XPKT);
 	EMIT_Z(cg, CPOP, x->len);
 
-	EMIT_XW(cg, RET, 1, f->arity);
+	EMIT_RET_I(cg, f, 1);
 
 	return 0;
 }
@@ -749,7 +770,7 @@ static int _i_cg_mset(struct pmlncg *cg, struct pml_function *f,
 	}
 	EMIT_W(cg, ADDI, 1);
 	EMIT_W(cg, BNZI, 2);
-	EMIT_XW(cg, RET, 0, f->arity);
+	EMIT_RET_I(cg, f, 0);
 
 	/* [td] clear the tag buffer */
 	PUSH(cg, NETVM_CPOC_CLRTBUF);
@@ -784,7 +805,7 @@ static int _i_cg_mset(struct pmlncg *cg, struct pml_function *f,
 	PUSH(cg, NETVM_CPI_XPKT);
 	EMIT_NULL(cg, CPOP);
 
-	EMIT_XW(cg, RET, 0, f->arity);
+	EMIT_RET_I(cg, f, 0);
 
 	return 0;
 }
@@ -834,7 +855,7 @@ static int _i_cg_meta(struct pmlncg *cg, struct pml_function *f,
 		PUSH(cg, NETVM_CPI_XPKT);
 		EMIT_NULL(cg, CPOP);
 		nr = (x->type == NETVM_CPOC_HASTAG);
-		EMIT_XW(cg, RET, nr, f->arity);
+		EMIT_RET_I(cg, f, nr);
 		break;
 
 	case NETVM_CPOC_RDTAG:
@@ -847,7 +868,7 @@ static int _i_cg_meta(struct pmlncg *cg, struct pml_function *f,
 		PUSH(cg, x->type);
 		PUSH(cg, NETVM_CPI_XPKT);
 		EMIT_Z(cg, CPOP, x->len);
-		EMIT_XW(cg, RET, 1, f->arity);
+		EMIT_RET_I(cg, f, 1);
 		break;
 
 	case NETVM_CPOC_WRTAG:
@@ -861,7 +882,7 @@ static int _i_cg_meta(struct pmlncg *cg, struct pml_function *f,
 		PUSH(cg, x->type);
 		PUSH(cg, NETVM_CPI_XPKT);
 		EMIT_Z(cg, CPOP, x->len);
-		EMIT_XW(cg, RET, 0, f->arity);
+		EMIT_RET_I(cg, f, 0);
 		break;
 	default:
 		abort_unless(0);
@@ -1290,16 +1311,16 @@ static int cg_scalar(struct pmlncg *cg, struct pml_literal *l)
 
 static int cg_bytestr(struct pmlncg *cg, struct pml_literal *l, int withlen)
 {
-	struct pml_bytestr *v;
+	struct pml_bytestr *bs;
 
 	abort_unless(cg && l);
-	v = &l->u.bytestr;
+	bs = &l->u.bytestr;
 
-	PUSH(cg, v->addr);
-	if (v->segnum != 0)
-		EMIT_W(cg, ORI, (v->segnum << NETVM_UA_SEG_OFF));
+	PUSH(cg, bs->addr);
+	if (bs->segnum != 0)
+		EMIT_W(cg, ORI, (bs->segnum << NETVM_UA_SEG_OFF));
 	if (withlen)
-		PUSH(cg, v->len);
+		PUSH(cg, bs->len);
 
 	return 0;
 }
@@ -1307,19 +1328,19 @@ static int cg_bytestr(struct pmlncg *cg, struct pml_literal *l, int withlen)
 
 static int cg_maskval(struct pmlncg *cg, struct pml_literal *l)
 {
-	struct pml_bytestr *v, *m;
+	struct pml_bytestr *val, *mask;
 
 	abort_unless(cg && l);
-	v = &l->u.maskval.val;
-	m = &l->u.maskval.mask;
+	val = &l->u.maskval.val;
+	mask = &l->u.maskval.mask;
 
-	PUSH(cg, v->addr);
-	if (v->segnum != 0)
-		EMIT_W(cg, ORI, (v->segnum << NETVM_UA_SEG_OFF));
-	PUSH(cg, m->addr);
-	if (v->segnum != 0)
-		EMIT_W(cg, ORI, (m->segnum << NETVM_UA_SEG_OFF));
-	PUSH(cg, m->len);
+	PUSH(cg, val->addr);
+	if (val->segnum != 0)
+		EMIT_W(cg, ORI, (val->segnum << NETVM_UA_SEG_OFF));
+	PUSH(cg, mask->addr);
+	if (mask->segnum != 0)
+		EMIT_W(cg, ORI, (mask->segnum << NETVM_UA_SEG_OFF));
+	PUSH(cg, mask->len);
 
 	return 0;
 }
@@ -2361,8 +2382,8 @@ static int cg_pfbytefield(struct pmlncg *cg, struct pml_locator *loc, int etype)
 
 
 	if (etype == PML_ETYPE_SCALAR && fixedlen) {
-		if (len > 4)
-			len = 4;
+		if (len > PML_SCALAR_SIZE)
+			len = PML_SCALAR_SIZE;
 		cgpd_init2(&cgpd, NETVM_OC_LDPD, len, loc);
 		return cg_pdop(cg, &cgpd);
 	} else {
@@ -2776,21 +2797,6 @@ static int cg_if(struct pmlncg *cg, struct pml_if *ifstmt)
 }
 
 
-static uint8_t retlen(struct pml_function *f)
-{
-	switch (f->rtype) {
-	case PML_ETYPE_VOID: return 0;
-	case PML_ETYPE_SCALAR: return 1;
-	case PML_ETYPE_BYTESTR: return 2; /* future */
-	case PML_ETYPE_MASKVAL: return 3; /* future */
-	case PML_ETYPE_STRREF: return 2;
-	default:
-		abort_unless(0);
-		return 255;
-	}
-}
-
-
 static int cg_cfmod(struct pmlncg *cg, struct pml_cfmod *cfm)
 {
 	struct pml_function *f;
@@ -2801,7 +2807,7 @@ static int cg_cfmod(struct pmlncg *cg, struct pml_cfmod *cfm)
 		abort_unless(f != NULL);
 		if (cg_expr(cg, (union pml_node *)cfm->expr, f->rtype) < 0)
 			return -1;
-		EMIT_XW(cg, RET, retlen(f), f->arity);
+		EMIT_RET(cg, f);
 		break;
 	case PML_CFM_BREAK:
 		EMIT_W(cg, BRI, 0);
@@ -3339,7 +3345,6 @@ static int cg_func(struct pmlncg *cg, struct pml_function *f)
 {
 	struct pml_ibuf *b = &cg->ibuf;
 	ulong vlen;
-	int rl;
 	struct cg_func_ctx *fc = (struct cg_func_ctx *)f->cgctx;
 
 	/* We don't support indirect calling at the moment, so it is safe */
@@ -3354,20 +3359,18 @@ static int cg_func(struct pmlncg *cg, struct pml_function *f)
 	fc->resolved = 1;
 
 	if (f->vstksz > 0) {
-		abort_unless(f->vstksz % 4 == 0);
-		vlen = f->vstksz / 4;
+		abort_unless(f->vstksz % PML_SCALAR_SIZE == 0);
+		vlen = f->vstksz / PML_SCALAR_SIZE;
 		EMIT_W(cg, ZPUSH, vlen);
 	}
 
 	if (cg_stmt(cg, f->body) < 0)
 		return -1;
 
-	rl = retlen(f);
-	if (retlen > 0) {
-		/* just to be safe */
+	if (retlen(f) > 0)
 		EMIT_W(cg, PUSH, 0);
-	}
-	EMIT_XW(cg, RET, rl, f->arity);
+
+	EMIT_RET(cg, f);
 
 	cg->curfunc = NULL;
 	return 0;
@@ -3456,7 +3459,7 @@ static int add_regexes(struct pmlncg *cg, struct pml_literal **rexarr,
 static int cg_begin_tick_end(struct pmlncg *cg)
 {
 	struct pml_rule *r;
-	ulong nvars;
+	ulong nwords;
 	struct pml_literal **rexarr;
 	ulong nrex;
 
@@ -3471,9 +3474,9 @@ static int cg_begin_tick_end(struct pmlncg *cg)
 
 		if (cg->ast->b_rule != NULL) {
 			r = cg->ast->b_rule;
-			nvars = r->vars.addr_rw2;
-			if (nvars > 0)
-				EMIT_W(cg, ZPUSH, nvars);
+			nwords = r->vars.addr_rw2 / PML_SCALAR_SIZE;
+			if (nwords > 0)
+				EMIT_W(cg, ZPUSH, nwords);
 			if (cg_stmt(cg, (union pml_node *)r->stmts) < 0)
 				return -1;
 		}
@@ -3484,9 +3487,9 @@ static int cg_begin_tick_end(struct pmlncg *cg)
 	if (cg->ast->t_rule != NULL) {
 		cg->prog->eps[NVMP_EP_TICK] = nexti(&cg->ibuf);
 		r = cg->ast->t_rule;
-		nvars = r->vars.addr_rw2;
-		if (nvars > 0)
-			EMIT_W(cg, ZPUSH, nvars);
+		nwords = r->vars.addr_rw2 / PML_SCALAR_SIZE;
+		if (nwords > 0)
+			EMIT_W(cg, ZPUSH, nwords);
 		if (cg_stmt(cg, (union pml_node *)r->stmts) < 0)
 			return -1;
 		EMIT_W(cg, HALT, NVMP_STATUS_DONE);
@@ -3495,9 +3498,9 @@ static int cg_begin_tick_end(struct pmlncg *cg)
 	if (cg->ast->e_rule != NULL) {
 		cg->prog->eps[NVMP_EP_END] = nexti(&cg->ibuf);
 		r = cg->ast->e_rule;
-		nvars = r->vars.addr_rw2;
-		if (nvars > 0)
-			EMIT_W(cg, ZPUSH, nvars);
+		nwords = r->vars.addr_rw2 / PML_SCALAR_SIZE;
+		if (nwords > 0)
+			EMIT_W(cg, ZPUSH, nwords);
 		if (cg_stmt(cg, (union pml_node *)r->stmts) < 0)
 			return -1;
 		EMIT_W(cg, HALT, NVMP_STATUS_DONE);
@@ -3516,7 +3519,7 @@ static int cg_rules(struct pmlncg *cg)
 	union pml_node *pat;
 	uint eaddr;
 	uint tbaddr = 0;
-	ulong nvars;
+	ulong nwords;
 
 	if (l_isempty(&cg->ast->p_rules))
 		return 0;
@@ -3526,7 +3529,7 @@ static int cg_rules(struct pmlncg *cg)
 	l_for_each(n, &cg->ast->p_rules) {
 		r = (struct pml_rule *)l_to_node(n);
 		pat = (union pml_node *)r->pattern;
-		nvars = r->vars.addr_rw2;
+		nwords= r->vars.addr_rw2 / PML_SCALAR_SIZE;
 
 		if (pat != NULL) {
 			if (cg_expr(cg, pat, PML_ETYPE_SCALAR) < 0)
@@ -3535,14 +3538,14 @@ static int cg_rules(struct pmlncg *cg)
 			EMIT_W(cg, BZI, 0);
 		}
 
-		if (nvars > 0)
-			EMIT_W(cg, ZPUSH, nvars);
+		if (nwords > 0)
+			EMIT_W(cg, ZPUSH, nwords);
 
 		if (cg_stmt(cg, (union pml_node *)r->stmts) < 0)
 			return -1;
 
-		if (nvars > 0)
-			EMIT_W(cg, POP, nvars);
+		if (nwords > 0)
+			EMIT_W(cg, POP, nwords);
 
 		eaddr = nexti(&cg->ibuf);
 		if (pat != NULL) {

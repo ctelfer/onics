@@ -185,6 +185,14 @@ enum {
 	PML_ETYPE_LAST = PML_ETYPE_STRREF,
 };
 
+
+/* Byte widths for different basic types */
+#define PML_SCALAR_SIZE		4
+#define PML_LG2_SCALAR_SIZE	2
+#define PML_STRREF_SIZE		(PML_SCALAR_SIZE * 2)
+#define PML_MASKVAL_SIZE	(PML_SCALAR_SIZE * 3)
+
+
 enum {
 	/* expression is constant */
 	PML_EFLAG_CONST	= 1,

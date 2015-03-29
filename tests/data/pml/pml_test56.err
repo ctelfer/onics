@@ -1,0 +1,10 @@
+Starting program parse
+done parsing:  optimizing the program
+Program has a valid START entry point
+Running netvm program to completion
+VM returned value 500000 (0x7a120)
+Stack: (SP = 1, BP = 0)
+	   0: 500000 (0x7a120)
+Halt status DONE: top of stack 500000
+No PACKET entry point: no packet read/write
+No END entry point
