@@ -603,9 +603,9 @@ int pml_check_func_proto(struct pml_ast *ast, struct pml_function *f1,
 		if (v1->etype != v2->etype || 
 		    v1->width != v2->width || 
 		    strcmp(v1->name, v2->name) != 0) {
-			pml_ast_err(ast, "Parameter %d in function '%s' does"
+			pml_ast_err(ast, "Parameter %d (%s/%s) in function '%s' does"
 					 " not match prototype declaration",
-				    f1->name, i+1);
+				    i+1, v1->name, v2->name, f1->name);
 			return -1;
 		}
 		n1 = n1->next;

@@ -476,9 +476,9 @@ out_func_hdr:
 funcproto(FO) ::= funchdr(FI) SEMICOLON. {
 	FO = pml_ast_lookup_func(ast, FI->name);
 	if (FO != NULL) {
-		FO = NULL;
 		pml_check_func_proto(ast, FO, FI);
 		pmln_free(FI);
+		FO = NULL;
 	} else {
 		FO = FI;
 	}

@@ -27,7 +27,12 @@ codegen() {
 	rm $TOUT/$base.nprg 
 
 	if [ $FAIL -eq 0 ] ; then
-		if ! [ -f data/pml/$base.nvas ]
+		if grep -i DEADC0DE $TOUT/$base.nvas > /dev/null 2>&1
+		then
+			echo "Found DEADCODE in $base.nvas."
+			echo "This should have been removed!"
+			ERR=1
+		elif ! [ -f data/pml/$base.nvas ]
 		then
 			echo $1 does not have a disassembly for comparison
 

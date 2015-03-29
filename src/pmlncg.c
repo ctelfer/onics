@@ -59,6 +59,7 @@ struct cg_pdesc {
 struct cg_func_ctx {
 	uint resolved;
 	uint addr;
+	uint called;
 };
 
 
@@ -3341,16 +3342,76 @@ int cg_stmt(struct pmlncg *cg, union pml_node *n)
 }
 
 
+static void cg_func_mark_walk(union pml_node *n);
+
+
+static int cg_func_mark_walker(union pml_node *n, void *ctx, void *xstk)
+{
+	struct pml_call *call;
+	struct pml_function *f;
+	struct cg_func_ctx *fc;
+
+	if (n->base.type != PMLTT_CALL)
+		return 0;
+	call = &n->call;
+	f = call->func;
+	abort_unless(f != NULL);
+	if (PML_FUNC_IS_INLINE(f))
+		return 0;
+	fc = (struct cg_func_ctx *)f->cgctx;
+	++fc->called;
+	if (fc->called == 1 && f->body != NULL)
+		cg_func_mark_walk(f->body);
+
+	return 0;
+}
+
+
+static void cg_func_mark_walk(union pml_node *n)
+{
+	pmln_walk(n, NULL, cg_func_mark_walker, NULL, NULL);
+}
+
+
+static void cg_mark_functions_used(struct pmlncg *cg)
+{
+	struct list *flist, *n;
+	struct cg_func_ctx *fc;
+	struct pml_rule *r;
+	struct pml_function *f;
+
+	flist = &cg->ast->funcs.list;
+	l_for_each(n, flist) {
+		f = (struct pml_function *)l_to_node(n);
+		fc = (struct cg_func_ctx *)f->cgctx;
+		fc->called = 0;
+	}
+
+	if (cg->ast->b_rule != NULL) {
+		cg_func_mark_walk((union pml_node *)cg->ast->b_rule->pattern);
+		cg_func_mark_walk((union pml_node *)cg->ast->b_rule->stmts);
+	}
+	if (cg->ast->t_rule != NULL) {
+		cg_func_mark_walk((union pml_node *)cg->ast->t_rule->pattern);
+		cg_func_mark_walk((union pml_node *)cg->ast->t_rule->stmts);
+	}
+	if (cg->ast->e_rule != NULL) {
+		cg_func_mark_walk((union pml_node *)cg->ast->e_rule->pattern);
+		cg_func_mark_walk((union pml_node *)cg->ast->e_rule->stmts);
+	}
+	l_for_each(n, &cg->ast->p_rules) {
+		r = (struct pml_rule *)l_to_node(n);
+		cg_func_mark_walk((union pml_node *)r->pattern);
+		cg_func_mark_walk((union pml_node *)r->stmts);
+	}
+}
+
+
 static int cg_func(struct pmlncg *cg, struct pml_function *f)
 {
 	struct pml_ibuf *b = &cg->ibuf;
 	ulong vlen;
 	struct cg_func_ctx *fc = (struct cg_func_ctx *)f->cgctx;
-
-	/* We don't support indirect calling at the moment, so it is safe */
-	/* to omit functions that don't actually have callers. */
-	if (f->callers == 0)
-		return 0;
 
 	abort_unless(cg->curfunc == NULL);
 	cg->curfunc = f;
@@ -3388,10 +3449,19 @@ static int cg_funcs(struct pmlncg *cg)
 	struct netvm_inst *inst;
 	struct cg_intr *intr;
 
+	cg_mark_functions_used(cg);
+
 	l_for_each(n, flist) {
 		f = (struct pml_function *)l_to_node(n);
-		if ((f->callers == 0) || PML_FUNC_IS_INLINE(f))
+		if (PML_FUNC_IS_INLINE(f))
 			continue;
+
+		/* We don't support indirect calling at the moment, so it is safe */
+		/* to omit functions that don't actually have callers. */
+		fc = (struct cg_func_ctx *)f->cgctx;
+		if (fc->called == 0)
+			continue;
+
 		if (PML_FUNC_IS_INTRINSIC(f)) {
 			intr = find_intrinsic(f);
 			if (intr == NULL) {
