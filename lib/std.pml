@@ -33,7 +33,7 @@ int pkt_splice(str p, str s)
 }
 
 
-int mk_tcp_pn(int pn) 
+void mk_tcp_pn(int pn) 
 {
 	pkt_new(pn, 2048-256);
 	parse_push_back(pn, @eth);
@@ -42,17 +42,16 @@ int mk_tcp_pn(int pn)
 	$(pn)ip.proto = 6;
 	parse_push_back(pn, @tcp);
 	fix_dltype(pn);
-	return 0;
 }
 
 
-int mk_tcp() 
+void mk_tcp() 
 {
-	return mk_tcp_pn(0);
+	mk_tcp_pn(0);
 }
 
 
-int mk_udp_pn(int pn) 
+void mk_udp_pn(int pn) 
 {
 	pkt_new(pn, 2048-256);
 	parse_push_back(pn, @eth);
@@ -61,13 +60,28 @@ int mk_udp_pn(int pn)
 	$(pn)ip.proto = 17;
 	parse_push_back(pn, @udp);
 	fix_dltype(pn);
-	return 0;
 }
 
 
-int mk_udp() 
+void mk_udp() 
 {
-	return mk_udp_pn(0);
+	mk_udp_pn(0);
+}
+
+
+void mk_arp_pn(int pn)
+{
+	pkt_new(pn, 14 + 28);
+	parse_push_back(pn, @eth);
+	$(pn)eth.ethtype = 0x806;
+	parse_push_back(pn, @arp);
+	fix_dltype(pn);
+}
+
+
+void mk_arp()
+{
+	mk_arp_pn(0);
 }
 
 
