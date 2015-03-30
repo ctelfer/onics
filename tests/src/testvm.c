@@ -1,6 +1,6 @@
 /*
  * ONICS
- * Copyright 2012 
+ * Copyright 2012-2015
  * Christopher Adam Telfer
  *
  * testvm.c -- Test the NetVM with some basic programs.

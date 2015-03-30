@@ -1,6 +1,6 @@
 /*
  * ONICS
- * Copyright 2013 
+ * Copyright 2013-2015
  * Christopher Adam Telfer
  *
  * nft.c -- Network Flow Tracker

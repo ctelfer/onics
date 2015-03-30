@@ -1,6 +1,6 @@
 /*
  * ONICS
- * Copyright 2012 
+ * Copyright 2012-2015
  * Christopher Adam Telfer
  *
  * testpmllex.c -- Unit test for the PML lexical analyzer.

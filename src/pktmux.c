@@ -1,6 +1,6 @@
 /*
  * ONICS
- * Copyright 2012-2013
+ * Copyright 2012-2015
  * Christopher Adam Telfer
  *
  * pktmux.c -- Multiplex packets from multiple input sources and mark

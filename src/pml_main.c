@@ -1,10 +1,9 @@
 /*
  * ONICS
- * Copyright 2012-2013
+ * Copyright 2012-2015
  * Christopher Adam Telfer
  *
  * pml_main.c -- Main file for the PML programming language/utility.
- *
  *
  *  This program is free software: you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by

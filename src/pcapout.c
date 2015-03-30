@@ -1,6 +1,6 @@
 /*
  * ONICS
- * Copyright 2012-2013
+ * Copyright 2012-2015
  * Christopher Adam Telfer
  *
  * pcapout.c -- Write an xpkt stream of packets to a pcap file or

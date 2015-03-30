@@ -1,6 +1,6 @@
 /*
  * ONICS
- * Copyright 2013
+ * Copyright 2013-2015
  * Christopher Adam Telfer
  *
  * pktout-linux.c -- Write packets out to an interface.

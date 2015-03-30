@@ -1,6 +1,6 @@
 /*
  * ONICS
- * Copyright 2013 
+ * Copyright 2013-2015
  * Christopher Adam Telfer
  *
  * psort.c -- Sort a set of packets according to a user specified key.

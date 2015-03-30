@@ -1,6 +1,6 @@
 /*
  * ONICS
- * Copyright 2013 
+ * Copyright 2013-2015
  * Christopher Adam Telfer
  *
  * psplit.c -- Split an XPKT stream into separate files by flow ID.
