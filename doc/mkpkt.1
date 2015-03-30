@@ -1,9 +1,11 @@
 .TH "mpkpt" 1 "March 2015" "ONICS 1.0"
 .SH NAME
-mktcp, mkudp, mkicmp
+mkarp, mkicmp, mkicmp6, mktcp, mktcp6 mkudp, mkudp6
 - Create a generic packet in XPKT format.
 .P
 .SH SYNOPSYS
+\fBmkarp\fP [\fIstmt1\fP \fIstmt2\fP ...]
+.P
 \fBmkicmp\fP [(\fIinfile\fP|\fB-\fP|\fB--\fP)] [\fIstmt1\fP \fIstmt2\fP ...]
 .P
 \fBmkicmp6\fP [(\fIinfile\fP|\fB-\fP|\fB--\fP)] [\fIstmt1\fP \fIstmt2\fP ...]
@@ -20,18 +22,19 @@ mktcp, mkudp, mkicmp
 .SH DESCRIPTION
 These utilities each generate a packet in XPKT format.  The packets they
 create have an Ethernet link layer followed by a nework layer header and
-thena transport layer header.  The \fBmkicmp\fP program generates an
-ICMP packet, \fBmktcp\fP generates a TCP packet, and \fBmkudp\fP
-generates a UDP packet.  Each of those programs has an IPv4 header for
-the network layer header.  Similarly, \fBmkicmp6\fP creates an ICMPv6
-packet, \fBmktcp6\fP creates a TCP packet with an IPv6 nework header and
-\fBmkudp6\fP creates a UDP packet.  Each of those tools produce packets
-with IPv6 network headers.  The resulting packets have default values
-for all of their header fields.  Each utility also alows the user to
-specify additional PML statements (see pml(1)) to execute after initial
-packet creation.  Finally, each program will automatically correct
-length, checksum and datalink type fields for all packet headers before
-outputting the packet.
+then a transport layer header (except for ARP packets).  The \fBmkarp\fP
+script generates a generic ARP over Ethernet packet.  The \fBmkicmp\fP
+program generates an ICMP packet, \fBmktcp\fP generates a TCP packet,
+and \fBmkudp\fP generates a UDP packet.  Each of those programs has an
+IPv4 header for the network layer header.  Similarly, \fBmkicmp6\fP
+creates an ICMPv6 packet, \fBmktcp6\fP creates a TCP packet with an IPv6
+nework header and \fBmkudp6\fP creates a UDP packet.  Each of those
+tools produce packets with IPv6 network headers.  The resulting packets
+have default values for all of their header fields.  Each utility also
+alows the user to specify additional PML statements (see pml(1)) to
+execute after initial packet creation.  Finally, each program will
+automatically correct length, checksum and datalink type fields for all
+packet headers before outputting the packet.
 .P
 .SH OPTIONS
 .P

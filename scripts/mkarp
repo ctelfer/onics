@@ -1,0 +1,20 @@
+#!/bin/sh
+
+usage() { 
+	echo "usage: mkarp [MODSTR1...]"
+	exit 1
+}
+
+START='
+	parse_push_front(0, @arp);
+	parse_push_front(0, @eth);
+
+	eth.src = 02:00:00:00:00:01;
+	eth.dst = ff:ff:ff:ff:ff:ff;
+	arp.sndpraddr = 192.168.0.1;
+	arp.sndhwaddr = 02:00:00:00:00:01;
+	arp.trgpraddr = 192.168.0.2;
+	fix_dltype(0);
+'
+
+pml -e "BEGIN { pkt_new(0, 0); $START $* send 0; }"

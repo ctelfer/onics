@@ -11,7 +11,7 @@ OPROTO_WRAP_DOCS= \
 	udpwrap.1
 
 MKPKT_WRAP_DOCS= \
-	mkicmp.1 mkicmp6.1 mktcp.1 mktcp6.1 mkudp.1 mkudp6.1
+	mkarp.1 mkicmp.1 mkicmp6.1 mktcp.1 mktcp6.1 mkudp.1 mkudp6.1
 
 MAN7_DOCS= onics.7 onics_proto.7
 

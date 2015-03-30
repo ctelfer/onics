@@ -430,8 +430,14 @@ static int arp_getspec(struct prparse *prp, int enclose, struct prpspec *ps)
 	ps->prid = PRID_ARP;
 	ps->tlen = 0;
 	if (enclose) {
-		errno = EINVAL;
-		return -1;
+		/* ARP can not enclose any real data */
+		if (prp_soff(prp) < 28 || prp_totlen(prp) != 0) {
+			errno = EINVAL;
+			return -1;
+		}
+		ps->off = prp_soff(prp) - 28;
+		ps->hlen = 8;
+		ps->plen = 20;
 	} else {
 		if (prp_plen(prp) < 28) {
 			errno = ENOSPC;
