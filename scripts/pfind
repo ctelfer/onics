@@ -4,7 +4,7 @@
 # Copyright 2014-2015
 # Christopher Adam Telfer
 #
-# pgrep - Select packets from a packet file/stream.
+# pfind - Select packets from a packet file/stream.
 #
 #
 #  This program is free software: you can redistribute it and/or modify
@@ -32,7 +32,7 @@ getrange() {
 
 
 usage() {
-	echo "usage: $0 PATTERN [-only] [INFILE [OUTFILE]]" >&2
+	echo "usage: $0 PATTERN [INFILE [OUTFILE]]" >&2
 	echo "       $0 <lo> -to <hi> [INFILE [OUTFILE]]" >&2
 	exit 1
 
@@ -43,8 +43,11 @@ if [ $# -lt 1 -o $# -gt 5 -o "$1" = "-h" ]; then
 fi
 
 
-if [ $# -lt 2 -o "$2" = "-only" ]
+if [ $# -lt 3 -o "$2" != "-to" ]
 then
+	if [ $# -eq 2 -a "$2" = "-to" ]; then
+		usage
+	fi
 	MATCH=`getrange $1`
 	shift
 	if [ "$2" = "-only" ] ; then shift ; fi
@@ -55,9 +58,6 @@ then
 		?- not ($MATCH) -? { drop; }
 	" $*
 else
-	if [ $# -lt 3 -o "$2" != "-to" ]; then
-		usage
-	fi
 	LO=`getrange $1`
 	HI=`getrange $3`
 	shift

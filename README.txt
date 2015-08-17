@@ -62,7 +62,7 @@ EXAMPLES
     pc2xpkt in.pcap out.xpkt
 
     # Extract the packets 3 through 10 from a packet stream
-    pgrep 3 10 file.xpkt 
+    pfind 3 -to 10 file.xpkt 
   
     # Read from an interface using libpcap and dump to an xpkt file
     pktin eth0 out.xpkt
@@ -195,7 +195,7 @@ work just about everywhere.
 
  * peseq - embed a sequence number into various fields in a packet stream
 
- * pgrep - a program to select a subset of packets from a stream
+ * pfind - a program to select a subset of packets from a stream
 
  * ptail - extract the last N packets from a packet stream
 

@@ -3,7 +3,7 @@
 ALL_SCRIPTS = \
 	      ethwrap icmp6wrap icmpwrap ip6wrap ipwrap mkicmp \
 	      mkicmp6 mktcp mktcp6 mkudp mkudp6 pcount peseq \
-	      pgrep preverse ptail pxseq tcpsess tcpwrap udpwrap \
+	      pfind preverse ptail pxseq tcpsess tcpwrap udpwrap \
 	      xtsscale
 
 all:
