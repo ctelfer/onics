@@ -40,9 +40,40 @@ uint16_t ones_sum(void *p, ulong len, uint16_t val)
 	uint16_t *hp, t;
 	byte_t *b;
 
+#if __i386__
+	uint32_t *wp;
+
+	/* Unrolled loop is about 50% faster */
+	wp = p;
+	while (len >= 64) {
+		asm("xor %%eax, %%eax\n" : : : "%eax");
+		asm("adc   (%0), %%eax\n" : : "r" (wp) : "%eax");
+		asm("adc  4(%0), %%eax\n" : : "r" (wp) : "%eax");
+		asm("adc  8(%0), %%eax\n" : : "r" (wp) : "%eax");
+		asm("adc 12(%0), %%eax\n" : : "r" (wp) : "%eax");
+		asm("adc 16(%0), %%eax\n" : : "r" (wp) : "%eax");
+		asm("adc 20(%0), %%eax\n" : : "r" (wp) : "%eax");
+		asm("adc 24(%0), %%eax\n" : : "r" (wp) : "%eax");
+		asm("adc 28(%0), %%eax\n" : : "r" (wp) : "%eax");
+		asm("adc 32(%0), %%eax\n" : : "r" (wp) : "%eax");
+		asm("adc 36(%0), %%eax\n" : : "r" (wp) : "%eax");
+		asm("adc 40(%0), %%eax\n" : : "r" (wp) : "%eax");
+		asm("adc 44(%0), %%eax\n" : : "r" (wp) : "%eax");
+		asm("adc 48(%0), %%eax\n" : : "r" (wp) : "%eax");
+		asm("adc 52(%0), %%eax\n" : : "r" (wp) : "%eax");
+		asm("adc 56(%0), %%eax\n" : : "r" (wp) : "%eax");
+		asm("adc 60(%0), %%eax\n" : : "r" (wp) : "%eax");
+		asm("mov %%eax, %0\n" : "=r" (sum) : : "%eax");
+		wp += 16;
+		len -= 64;
+	}
+	hp = (uint16_t *)wp;
+	sum = (sum & 0xFFFF) + (sum >> 16);
+#else
+	hp = (uint16_t *)p;
+#endif
 	/* main loop */
 	len >>= 1;
-	hp = (uint16_t *) p;
 	while (len--)
 		sum += *hp++;
 
@@ -54,10 +85,10 @@ uint16_t ones_sum(void *p, ulong len, uint16_t val)
 		sum += t;
 	}
 
-	while (sum >> 16)
-		sum = (sum & 0xFFFF) + (sum >> 16);
+	sum = (sum & 0xFFFF) + (sum >> 16);
+	sum = (sum & 0xFFFF) + (sum >> 16);
 
-	return (uint16_t) sum;
+	return (uint16_t)sum;
 }
 
 
