@@ -146,15 +146,15 @@ void value (meaning no return type).  A function executes a list of
 statements and can be recursive or mutually recursive with another
 function.
 .P
-An 'inline' contains only a single scalar expression and can not be
-recursive.  PML inlines are safe macros without side effects.  The
-compiler can even use constant propagation to determine an inline result
-at compile time provided every parameter to the inline is constant.
-Inlines can invoke other inlines but, again, can not recurse directly or
-indirectly.  An inline can invoke a function that invokes the inline.
-But this will not result in an inline expansion past the function call
-so the inline itself is not recursive.  The function in that case,
-however, is.
+An 'inline macro' contains only a single scalar expression and can not
+be recursive.  PML inline macros are safe macros without side effects.
+The compiler can even use constant propagation to determine an inline
+macro result at compile time provided every parameter to the inline
+macro is constant.  Inline macros can invoke other inline macross but,
+again, can not recurse directly or indirectly.  An inline macro can
+invoke a function that invokes the inline macro.  But this will not
+result in an inline macro expansion past the function call so the inline
+macro itself is not recursive.  The function in that case, however, is.
 .P
 An 'intrinsic' is a subroutine whose definition is outside of the PML
 language.  This provides function-style syntax for operations that the
@@ -175,7 +175,7 @@ a function prototype (needed for recursion)
 .IP "*"
 a function definition
 .IP "*"
-an inline
+an inline macro
 .IP "*"
 a constant
 .IP "*"
@@ -297,8 +297,8 @@ strings is not supported.
 .P
 A program can have local variable declarations at the beginning of the
 action portions of a rule or the body of a function.  Variable
-declarations may not appear in inlines.  Again, as mentioned, local
-variables can be integers and string references.  A rule action or
+declarations may not appear in inline macross.  Again, as mentioned,
+local variables can be integers and string references.  A rule action or
 function body may use variables of type 'int' without declaring them.
 Referencing a variable name in a function body or rule action statement
 that has no binding to a previously declared variable or
@@ -319,7 +319,7 @@ In PML an expression is one of:
   - a positive decimal integer
   - a hexadecimal integer preceeded by '0x'
   - a locator (see below)
-  - a function or inline call of the form:
+  - a function or inline macro call of the form:
 	<funcname> '(' [E1, E2...] ')'
   - a literal byte string:  
 	a double quoted string with usual C substitutions
@@ -362,10 +362,10 @@ In PML an expression is one of:
 .P
 The type of an expression is usually 'int'.  However, there are several
 exceptions.  A byte string literal has type 'str'.  A function or inline
-call has a type of the return value of the function or inline (always
-\'int' for inlines).  A locator expression's type is equal to the type
-value that the locator refers to.  All string references used in
-expressions have type 'str'.
+macro call has a type of the return value of the function or inline
+macro (always 'int' for inline macros).  A locator expression's type is
+equal to the type value that the locator refers to.  All string
+references used in expressions have type 'str'.
 .P
 The match comparison operators (=~ and !~) perform different comparisons
 depending on the type of the right hand expression.  The left-hand 
@@ -387,8 +387,8 @@ performs a regular expression mask of the pattern E2 against E1.
 .P
 Aside from the match and reference operators, all other operators
 require the types of their subexpressions to be 'int'.  Each expression
-argument in a function or inline call must have the same type as the 
-corresponding formal paramenter in the function declaration.
+argument in a function or inline macro call must have the same type as
+the corresponding formal paramenter in the function declaration.
 .P
 .SS "TYPE CONVERSION"
 PML will automatically attempt to convert an expression to the type
@@ -733,25 +733,27 @@ encountering a return statement, then the program returns a value of '0'
 if the return type is 'int' or an empty string reference if the type is
 \'sref'.  
 .P
-.SS "INLINE DECLARATIONS"
-An 'inline' is a special type of subroutine that must have a return type
-of 'int' and whose body is a single expression (that can be type cast to
-\'int') instead of a list of statements.  Upon invocation, an inline
-actually embeds the expansion of the expression in the PML program
-directly.  The compiler takes care to evaluate each parameter to the
-inline exactly once and the inline can not modify it.  
+.SS "INLINE MACRO DECLARATIONS"
+An 'inlinemacro ' is a special type of subroutine that must have a
+return type of 'int' and whose body is a single expression (that can be
+type cast to 'int') instead of a list of statements.  Upon invocation,
+an inline macro actually embeds the expansion of the expression in the
+PML program directly.  The compiler takes care to evaluate each
+parameter to the inline macro exactly once and the inline macro can not
+modify it.  
 .P
-So an 'inline' is a safe macro for arithmetic computations.  It does not 
-have the full cost of performing a function call.  More importantly, the
-restrictions on the inline make it possible to optimize using constant
-propagation (see OPTIMIZATION below).  If the arguments to an inline are
-known to be constant and all parts of the inline expression depend only
-on constants (as opposed to, say, global variables or packet values,
-etc..) then the compiler can simply precompute the result of the inline
-rather than having the program compute it every time.  This property
-also allows the program to invoke inlines in constant definitions.
+So an 'inline macro' is a safe macro for arithmetic computations.  It
+does not have the full cost of performing a function call.  More
+importantly, the restrictions on the inline macro make it possible to
+optimize using constant propagation (see OPTIMIZATION below).  If the
+arguments to an inline macro are known to be constant and all parts of
+the inline macro expression depend only on constants (as opposed to,
+say, global variables or packet values, etc..) then the compiler can
+simply precompute the result of the inline macro rather than having the
+program compute it every time.  This property also allows the program to
+invoke inline macros in constant definitions.
 .P
-An inline declaration takes the form:
+An inline macro declaration takes the form:
 .P
 .nf
   inline NAME ( [TYPE NAME [, TYPE NAME]...] ) { EXPR }
@@ -769,7 +771,7 @@ Example:
                                 #   initialize a const
   int D;
   { D = double(tcp.seq); }      # legal: call needn't be a constant 
-                                  expr here
+                                #   expr here
 .fi
 .P
 .SS "FORMATTED PRINTING"
@@ -1096,16 +1098,17 @@ a const
 .IP "*"
 a binary or unary operator whose operands are constant expressions
 .IP "*"
-a 'parameter constant inline' all of whose arguments are constant 
+a 'parameter-constant inline macro' all of whose arguments are constant
 expressions.
 .P
-A 'parameter constant inline' is an inline whose expression body
-would be a constant expression if all of the parameters were constant.
+A 'parameter-constant inline macro' is an inline macro whose expression
+body would be a constant expression if all of the parameters were
+constant.
 .P
 Assume the following declarations:
 .P
 .nf
-	inline double(int x) { x * x }
+	inline double(int x) { 2 * x }
 	inline somefunc(int x, int y) { (2 * x) % y }
 	inline isHTTP() { tcp and tcp.dport == 80 or tcp.sport == 80 }
 	const A = 5;
@@ -1134,8 +1137,9 @@ The following are not constant expressoins:
 	$(2)ip
 .fi
 .P
-The inlines 'double' and 'somefunc' above are parameter-constant inlines, but
-isHTTP is not.  A PML program may assign any constant expression to a 'const'.
+The inline macros 'double' and 'somefunc' above are parameter-constant
+inline macros, but isHTTP is not.  A PML program may assign any constant
+expression to a 'const'.
 .P
 .SH EXAMPLES
 Print "Hello World":
