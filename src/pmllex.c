@@ -209,6 +209,7 @@ struct pmllex *pmll_alloc(void)
 
 	l_init(&lex->inputs.ln);
 	lex->inputs.type = NTYPE;
+	lex->inputs.lineno = 0;
 	str_copy(lex->inputs.name, "*END OF INPUT*", sizeof(lex->inputs.name));
 	lex->inputs.inp = &null_inport;
 

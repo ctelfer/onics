@@ -259,6 +259,10 @@ struct asmctx {
 };
 
 
+/* MUST be declared here or via malloc().  Too big for the stack */
+struct asmctx asmctx;
+
+
 const char *epnames[NVMP_EP_NUMEP] = {
 	"start", "packet", "tick", "end"
 };
@@ -1392,7 +1396,6 @@ int main(int argc, char *argv[])
 	const char *ifn = "<stdin>";
 	FILE *infile = stdin;
 	FILE *outfile = stdout;
-	struct asmctx ctx;
 
 	optparse_reset(&optparser, argc, argv);
 	while ((rv = optparse_next(&optparser, &opt)) == 0) {
@@ -1433,12 +1436,12 @@ int main(int argc, char *argv[])
 
 
 	if (do_assemble) {
-		init_asmctx(&ctx);
-		if ((rv = assemble(&ctx, ifn, infile)) != 0)
+		init_asmctx(&asmctx);
+		if ((rv = assemble(&asmctx, ifn, infile)) != 0)
 			err("Exiting:  %d errors\n", rv);
 		fclose(infile);
-		emit_program(&ctx, outfile);
-		free_asmctx(&ctx);
+		emit_program(&asmctx, outfile);
+		free_asmctx(&asmctx);
 		fclose(outfile);
 	} else {
 		disassemble(infile, outfile);
