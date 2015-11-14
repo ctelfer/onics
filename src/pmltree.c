@@ -180,7 +180,7 @@ static int symtab_add(struct pml_symtab *t, struct pml_sym *sym)
 	if (ht_lkup(&t->tab, sym->name, &h) != NULL)
 		return -1;
 	hn = &sym->hn;
-	ht_ninit(hn, sym->name, sym);
+	ht_ninit(hn, sym->name);
 	ht_ins(&t->tab, hn, h);
 	l_enq(&t->list, &sym->ln);
 
@@ -851,9 +851,9 @@ int pml_ast_add_regex(struct pml_ast *ast, struct pml_literal *lit)
 void pml_ast_get_rexarr(struct pml_ast *ast, struct pml_literal ***larr,
 			ulong *alen)
 {
-	struct dynbuf *db = &ast->regexes;
-	*larr = (struct pml_literal **)db->data;
-	*alen = db->len / sizeof(struct pml_literal *);
+	struct dynbuf *dyb = &ast->regexes;
+	*larr = (struct pml_literal **)dyb->data;
+	*alen = dyb->len / sizeof(struct pml_literal *);
 }
 
 
@@ -1034,7 +1034,7 @@ static union pml_node *_pmln_alloc(int type)
 
 	case PMLTT_VAR: {
 		struct pml_variable *p = &np->variable;
-		ht_ninit(&p->hn, "", p);
+		ht_ninit(&p->hn, "");
 		p->vtype = PML_VTYPE_UNKNOWN;
 		p->etype = PML_ETYPE_UNKNOWN;
 		p->width = 0;
@@ -1045,7 +1045,7 @@ static union pml_node *_pmln_alloc(int type)
 
 	case PMLTT_FUNCTION: {
 		struct pml_function *p = &np->function;
-		ht_ninit(&p->hn, "", p);
+		ht_ninit(&p->hn, "");
 		if (symtab_init(&p->vars) < 0) {
 			symtab_destroy(&p->vars);
 			free(np);

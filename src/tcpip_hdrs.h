@@ -22,7 +22,6 @@
 #ifndef __tcpip_hdrs_h
 #define __tcpip_hdrs_h
 #include <cat/cat.h>
-#include <cat/cattypes.h>
 
 /* -- Address Type Structures -- */
 struct ethaddr {

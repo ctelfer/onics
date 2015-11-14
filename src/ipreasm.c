@@ -23,11 +23,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <cat/cat.h>
 #include <cat/optparse.h>
 #include <cat/pack.h>
 #include <cat/err.h>
 #include <cat/hash.h>
-#include <cat/cattypes.h>
 #include "pktbuf.h"
 #include "ns.h"
 #include "stdproto.h"
@@ -240,7 +240,7 @@ static struct fragent *fe_alloc(byte_t key[FEKSIZE])
 		free(fe);
 		return NULL;
 	}
-	ht_ninit(&fe->hn, &fe->key, fe);
+	ht_ninit(&fe->hn, &fe->key);
 	memcpy(fe->key, key, FEKSIZE);
 	fe->holes = -1;
 	fe->l2hlen = 0;
@@ -296,7 +296,7 @@ static struct fragent *fe_lkup(struct pktbuf *p)
 		build_v4_key(key, prp, p->buf);
 		hn = ht_lkup(&v4tab, key, &h);
 		if (hn != NULL) {
-			fe = hn->data;
+			fe = container(hn, struct fragent, hn);
 		} else {
 			fe = fe_alloc(key);
 			if (fe == NULL)
@@ -308,7 +308,7 @@ static struct fragent *fe_lkup(struct pktbuf *p)
 		build_v6_key(key, prp, p->buf);
 		hn = ht_lkup(&v6tab, key, &h);
 		if (hn != NULL) {
-			fe = hn->data;
+			fe = container(hn, struct fragent, hn);
 		} else {
 			fe = fe_alloc(key);
 			if (fe == NULL)

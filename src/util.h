@@ -21,7 +21,7 @@
  */
 #ifndef __util_h
 #define __util_h
-#include <cat/cattypes.h>
+#include <cat/cat.h>
 #include <cat/emit_format.h>
 #include <stdio.h>
 

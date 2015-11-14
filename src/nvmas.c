@@ -297,7 +297,7 @@ int find_const(struct htab *t, const char *name, ulong *v)
 	struct constant *c;
 	if ((hn = ht_lkup(t, name, NULL)) == NULL)
 		return 0;
-	c = hn->data;
+	c = container(hn, struct constant, hn);
 	if (v != NULL)
 		*v = c->val;
 	return 1;
@@ -307,7 +307,7 @@ int find_const(struct htab *t, const char *name, ulong *v)
 void add_const(struct htab *t, struct constant *c, const char *name, ulong v)
 {
 	c->val = v;
-	ht_ninit(&c->hn, estrdup(name), c);
+	ht_ninit(&c->hn, estrdup(name));
 	ht_ins_h(t, &c->hn);
 }
 

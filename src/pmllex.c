@@ -72,6 +72,11 @@ struct inputs {
 
 #define PMLLEX_MAXESTR		256
 
+struct kwnode {
+	struct hnode		hn;
+	struct keyword *	kw;
+};
+
 struct pmllex {
 	byte_t			s_sid[32];
 	byte_t			s_id[32];
@@ -80,7 +85,7 @@ struct pmllex {
 
 	struct htab 		kwtab;
 	struct hnode *		kwbk[32];
-	struct hnode 		kwnodes[32];
+	struct kwnode		kwnodes[32];
 
 	struct dynbuf		text;
 	struct dynbuf		strbuf;
@@ -102,7 +107,7 @@ struct pmllex {
 #define NOINPUT(_lex, _pi) (&(_pi)->ln == INLIST(_lex))
 
 
-struct kwtok {
+struct keyword {
 	const char *	name;
 	int		tok;
 } keywords[] = { 
@@ -180,8 +185,8 @@ static ulong lexslen(struct pmllex *lex)
 struct pmllex *pmll_alloc(void)
 {
 	struct pmllex *lex;
-	struct hnode *kwn;
-	struct kwtok *kw;
+	struct kwnode *kwn;
+	struct keyword *kw;
 
 	lex = malloc(sizeof(*lex));
 	if (lex == NULL)
@@ -198,8 +203,9 @@ struct pmllex *pmll_alloc(void)
 		ht_shash, NULL);
 
 	while (kw->name != NULL) {
-		ht_ninit(kwn, (char *)kw->name, kw);
-		ht_ins_h(&lex->kwtab, kwn);
+		kwn->kw = kw;
+		ht_ninit(&kwn->hn, (char *)kw->name);
+		ht_ins_h(&lex->kwtab, &kwn->hn);
 		++kwn;
 		++kw;
 	}
@@ -539,7 +545,6 @@ errv6:
 static int read_id(struct pmllex *lex, int ch)
 {
 	struct hnode *hn;
-	struct kwtok *kw;
 	char *ns;
 
 	do {
@@ -556,10 +561,8 @@ static int read_id(struct pmllex *lex, int ch)
 		TERMINATE(lex);
 
 		hn = ht_lkup(&lex->kwtab, lexstr(lex), NULL);
-		if (hn != NULL) {
-			kw = hn->data;
-			return kw->tok;
-		}
+		if (hn != NULL)
+			return container(hn, struct kwnode, hn)->kw->tok;
 
 		/* copy string to token */
 		lex->tokx.type = PMLLV_STRING;

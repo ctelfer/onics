@@ -85,7 +85,7 @@ struct flow {
 
 
 struct flowtab {
-	struct splay *		flows;
+	struct cstree *		flows;
 	struct dlist 		events;
 };
 
@@ -465,7 +465,7 @@ void track_flows(struct flowtab *ft, struct pktbuf *pkb)
 		return;
 
 	/* lookup and create flow */
-	f = st_get_dptr(ft->flows, &key);
+	f = cst_get(ft->flows, &key);
 
 	if (f != NULL) {
 
@@ -482,12 +482,12 @@ void track_flows(struct flowtab *ft, struct pktbuf *pkb)
 		f = ecalloc(sizeof(*f), 1);
 		f->key = key;
 		f->start = tm_uget();
-		st_put(ft->flows, &f->key, f);
+		cst_put(ft->flows, &f->key, f);
 
 		/* link two uni-directional flows but only the first has */
 		/* the timeout */
 		reverse_key(&rkey, &key);
-		pf = st_get_dptr(ft->flows, &rkey);
+		pf = cst_get(ft->flows, &rkey);
 		if (pf == NULL || pf == f) {
 			f->flowid = next_flowid++;
 			dl_init(&f->toevt, tm_flow_timeout);
@@ -538,14 +538,14 @@ static void gen_flow_updates(struct flowtab *ft)
 static void timeout_flow(struct flowtab *ft, struct flow *f)
 {
 	struct flow *pf;
-	st_clr(ft->flows, &f->key);
+	cst_del(ft->flows, &f->key);
 	f->end = tm_uget();
 	gen_flow_event(f, FEVT_END);
 	fflush(evtfile);
 
 	if (f->pair != NULL) {
 		pf = f->pair;
-		st_clr(ft->flows, &pf->key);
+		cst_del(ft->flows, &pf->key);
 		free(pf);
 	}
 	free(f);
@@ -573,9 +573,15 @@ void dispatch_time_events(struct flowtab *ft, cat_time_t elapsed)
 }
 
 
+DECLARE_BINARY_CMPF(flow_key_cmp, struct flow_key)
+
 static void ft_init(struct flowtab *ft)
 {
-	ft->flows = st_new(&estdmm, CAT_KT_BIN, sizeof(struct flow_key), 0);
+	struct cstree_attr attr = cst_std_attr_bkey;
+	attr.kcmp = &flow_key_cmp;
+	ft->flows = cst_new(&attr, 1);
+	if ( ft->flows == NULL )
+		errsys("Could not create flow table: ");
 	dl_init(&ft->events, tm_zero);
 	dl_init(&update_event, tm_update);
 	dl_ins(&ft->events, &update_event);

@@ -24,7 +24,6 @@
 
 #include <stdio.h>
 #include <cat/cat.h>
-#include <cat/cattypes.h>
 
 #define PMLLV_SCALAR	0
 #define PMLLV_STRING	1

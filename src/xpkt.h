@@ -22,7 +22,6 @@
 #ifndef __xpkt_h
 #define __xpkt_h
 #include <cat/cat.h>
-#include <cat/cattypes.h>
 #include "sysdeps.h"
 
 /*

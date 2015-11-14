@@ -22,7 +22,6 @@
 #ifndef __prototparse_h
 #define __prototparse_h
 #include <cat/cat.h>
-#include <cat/cattypes.h>
 #include <cat/list.h>
 #include "prid.h"
 

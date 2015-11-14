@@ -46,7 +46,7 @@
 #define MAXLIVE	256
 #define INVALID_FID (uint64_t)-1
 struct flowfile {
-	struct stnode	ste;
+	struct stnode	stn;
 	struct list	le;
 	char 		filename[MAXFNAME];
 	FILE *		fp;
@@ -54,6 +54,7 @@ struct flowfile {
 	uint64_t	flowid;
 };
 
+#define stn_to_ff(_stnp) container((_stnp), struct flowfile, stn)
 #define le_to_ff(_lep) container((_lep), struct flowfile, le)
 
 
@@ -61,7 +62,7 @@ const char *prefix = "flow.";
 const char *suffix = ".xpkt";
 FILE *infile;
 struct list lrulist;
-struct splay ffdict;
+struct sptree ffdict;
 ulong nlive = 0;
 int append_mode = 0;
 int remove_fid = 0;
@@ -200,9 +201,9 @@ struct flowfile *new_flowfile(uint64_t flowid)
 		cleanup();
 		err("filename too long!");
 	}
-	st_ninit(&ff->ste, &ff->flowid, ff);
+	st_ninit(&ff->stn, &ff->flowid);
 	l_init(&ff->le);
-	st_ins(&ffdict, &ff->ste);
+	st_ins(&ffdict, &ff->stn);
 
 	/* if we are not append mode then sanity check that the */
 	/* file does not already exist for sanity sake.  */
@@ -227,7 +228,7 @@ struct flowfile *find_flowfile(uint64_t flowid)
 
 	stn = st_lkup(&ffdict, &flowid);
 	if (stn != NULL)
-		ff = stn->data;
+		ff = stn_to_ff(stn);
 	else
 		ff = new_flowfile(flowid);
 

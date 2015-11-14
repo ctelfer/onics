@@ -23,7 +23,7 @@
 #define __opcap_h
 
 #include <stdio.h>
-#include <cat/cattypes.h>
+#include <cat/cat.h>
 #include "sysdeps.h"
 
 #define OPC_MAGIC		0xa1b2c3d4
