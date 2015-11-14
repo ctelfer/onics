@@ -40,7 +40,7 @@ uint16_t ones_sum(void *p, ulong len, uint16_t val)
 	uint16_t *hp, t;
 	byte_t *b;
 
-#if __i386__
+#if 0
 	uint32_t *wp;
 
 	/* Unrolled loop is about 50% faster */
@@ -63,6 +63,7 @@ uint16_t ones_sum(void *p, ulong len, uint16_t val)
 		asm("adc 52(%0), %%eax\n" : : "r" (wp) : "%eax");
 		asm("adc 56(%0), %%eax\n" : : "r" (wp) : "%eax");
 		asm("adc 60(%0), %%eax\n" : : "r" (wp) : "%eax");
+		asm("adc 0,      %%eax\n" : : "r" (wp) : "%eax");
 		asm("mov %%eax, %0\n" : "=r" (sum) : : "%eax");
 		wp += 16;
 		len -= 64;
