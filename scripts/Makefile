@@ -1,7 +1,7 @@
 # Makefile for ONICS scripts
 
 ALL_SCRIPTS = \
-	      ethwrap icmp6wrap icmpwrap ip6wrap ipwrap mkicmp \
+	      ethwrap icmp6wrap icmpwrap ip6wrap ipwrap mkarp mkicmp \
 	      mkicmp6 mktcp mktcp6 mkudp mkudp6 pcount peseq \
 	      pfind preverse ptail pxseq tcpsess tcpwrap udpwrap \
 	      xtsscale
