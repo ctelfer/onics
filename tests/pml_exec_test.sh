@@ -109,7 +109,9 @@ pml_test 37 $PDIR/onepkt.xpkt
 pml_test 38 $PDIR/raw.xpkt
 pml_test 39 NONE
 pml_test 40 NONE
-pml_test 41 PROG_"(cat $PDIR/onepkt.xpkt ; sleep 1 ; cat $PDIR/onev4onev6.xpkt)"
+# Test 41 omitted until I can make the output more reliable.
+# Right now it sometimes fails due to timing.
+# pml_test 41 PROG_"(cat $PDIR/onepkt.xpkt ; sleep 1 ; cat $PDIR/onev4onev6.xpkt)"
 pml_test 42 $PDIR/arpreq.xpkt
 pml_test 43 $PDIR/onev6pkt.xpkt
 pml_test 44 NONE

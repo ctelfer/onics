@@ -19,7 +19,7 @@ also simple to add support for new protocols and have all the tools in
 the suite automatically updated.  All scripts are written in pure Bourne
 shell.
 
-See LICENSE.txt for licensing for all the software.
+See LICENSE.txt for the free/libre open source licensing of this suite.
 
 
 
@@ -27,7 +27,12 @@ QUICK START
 ===========
 
  1) First download both Catlib and ONICS and put the distributions in
-    the same top level directory. 
+    the same top level directory.  You can find catlib at:
+      ** https://github.com/ctelfer/catlib
+      ** https://gitlab.com/catlib/catlib
+    Similarly, one can find ONICS at:
+      ** https://github.com/ctelfer/onics
+      ** https://gitlab.com/onics/onics
 
  2) Change to the catlib directory and type:
 
