@@ -56,13 +56,14 @@ then
 	then
 		F=$1
 		shift
-		rawpkt $F | pml -e "{ $START $* $END }"
+		rawpkt $F | pml -e "import \"std.pml\"; { $START $* $END }"
 	else
 		shift
-		rawpkt | pml -e "{ $START $* $END }"
+		rawpkt | pml -e "import \"std.pml\"; { $START $* $END }"
 	fi
 else
 	if [ $# -gt 0 ] ; then shift ; fi
-	pml -e "BEGIN { pkt_new(0, 0); $START $* $END send 0; }"
+	pml -e "import \"std.pml\";
+                BEGIN { pkt_new(0, 0); $START $* $END send 0; }"
 fi
 

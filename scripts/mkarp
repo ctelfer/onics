@@ -38,4 +38,5 @@ START='
 	fix_dltype(0);
 '
 
-pml -e "BEGIN { pkt_new(0, 0); $START $* send 0; }"
+pml -e "import \"std.pml\";
+        BEGIN { pkt_new(0, 0); $START $* send 0; }"
