@@ -15,5 +15,9 @@ install: $(ALL_SCRIPTS)
 	cp $(ALL_SCRIPTS) $${INSTALL_DIR} )
 
 uninstall:
-	for p in $(ALL_SCRIPTS) ; do rm -f $(INSTALL_DIR)/$$p ; done 
+	(INSTALL_PREFIX=$${INSTALL_PREFIX:-/usr/local} ; \
+	INSTALL_DIR=$${INSTALL_PREFIX}/bin ; \
+	for p in $(ALL_SCRIPTS) ; do \
+	echo "Removing $${INSTALL_DIR}/$$p" ; \
+	rm -f $${INSTALL_DIR}/$$p ; done)
 
