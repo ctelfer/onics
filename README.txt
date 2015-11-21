@@ -202,6 +202,8 @@ work just about everywhere.
 
  * pfind - a program to select a subset of packets from a stream
 
+ * phead - extract the first N packets from a packet stream
+
  * ptail - extract the last N packets from a packet stream
 
  * pxseq - extract a sequence number from embedded fields in a packet stream

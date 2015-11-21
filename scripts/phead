@@ -1,0 +1,49 @@
+#!/bin/sh
+#
+# ONICS
+# Copyright 2013-2015
+# Christopher Adam Telfer
+#
+# phead - Extract the last N packets from a file/stream.
+#
+#
+#  This program is free software: you can redistribute it and/or modify
+#  it under the terms of the GNU General Public License as published by
+#  the Free Software Foundation, either version 3 of the License, or
+#  (at your option) any later version.
+#
+#  This program is distributed in the hope that it will be useful,
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#  GNU General Public License for more details.
+#
+#  You should have received a copy of the GNU General Public License
+#  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#
+
+usage() {
+	echo "usage: $0 [-NUMPKTS] [INFILE [OUTFILE]]" >&2
+	exit 1
+}
+
+MAXPKTS=10
+
+if [ $# -gt 0 ] && echo $1 | grep "^-" > /dev/null 2>&1
+then
+	if ! echo $1 | grep "^-[0-9][0-9]*$" > /dev/null 2>&1
+	then
+		usage
+	fi
+
+	MAXPKTs=`echo $1 | sed -e 's/^-//'`
+	shift
+fi
+
+exec pml -e "
+	int N = 0;
+	{
+		N = N + 1;
+		if (N > $MAXPKTS) {
+			exit(0);
+		}
+	}" $*

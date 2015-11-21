@@ -1,0 +1,31 @@
+.TH "phead" 1 "August 2015" "ONICS 1.0"
+.SH NAME
+phead - Select the first N packets from a packet stream.
+.P
+.SH SYNOPSYS
+\fBphead\fB [\fB-\fP\fINUMPKTS\fP] [\fIinfile\fP [\fIoutfile\fP]]
+.P
+.SH DESCRIPTION
+\fBphead\fP is a thin wrapper script around pml(1) to extract the
+first N packets in a packet stream or file for some number N.  By default
+phead extracts 10 packets in a stream.  If invoked with 
+\fB-\fP\fINUMPKTS\fP where \fINUMPKTS\fP is a positive integer, then
+\fBphead\fP will select that many packets instead.
+.P
+.SH EXAMPLES
+.P
+Extract the first 7 packets from a file:
+.nf
+
+	phead -7 infile.xpkt outfile.xpkt
+
+.fi
+.P
+.SH AVAILABILITY
+This utility should be available on all supported ONICS platforms.
+.P
+.SH AUTHOR
+Christopher A. Telfer <ctelfer@gmail.com>
+.P
+.SH "SEE ALSO"
+pml(1), pcount(1), pfind(1), ptail(1)
