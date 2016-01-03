@@ -1,0 +1,67 @@
+.TH "gre-encap" 1 "January 2016" "ONICS 1.0"
+.SH NAME
+gre-encap
+- Wrap an XPKT formatted packet in GRE+IPv4+Ethernet headers
+.P
+.SH SYNOPSYS
+\fBgre-encap\fP [\fB-s\fP] [\fB-f\fP \fIinfile\fP] [\fIstmt1\fP \fIstmt2\fP ...]
+.P
+.P
+.SH DESCRIPTION
+This utility takes a stream of XPKT formatted packets and encapsulates
+them in a GRE tunnel set of headers consisting of an Ethernet header
+followed by an IPv4 header followed by a GRE header.  None of the GRE
+options (such as checksum, key or sequence number) will be included in
+the GRE header.  The \fBgre-encap\fP utility will copy the encapsulated
+stream to standard output.  As with other ONICS scripts, the user can
+specify additional PML statements to modify the packet fields during the
+encapsulation.  It is worth keeping in mind that these modifications
+will occur after encapsulation.  Thus references to protocol fields in
+\fBeth\fP, \fBip\fP, \fBgre\fP without indexing qualifiers will refer to
+the newly added headers.  See \fBpml(1)\fP for more information about
+accessing modifying inner headers in a packet.
+.P
+.SH OPTIONS
+.P
+.IP "\fB-s\fP"
+If there is a leading Ethernet header on the packet strip it first before
+encapsulating the new headers.
+.IP "\fB-f\fP \fIinfile\fP"
+Instead of reading the packet data from standard input, read the 
+packet data from \fIinfile\fP
+.P
+.SH EXAMPLES
+.P
+Create a simple UDP packet from the command line:
+.nf
+
+        echo "Hello World" | rawpkt | udpwrap | 
+                             ipwrap | gre-encap > file.xpkt
+
+.fi
+.P
+A more complicated example building an ICMP response to a TCP packet
+and then sending the packet:
+.nf
+
+        echo "Some payload data" | 
+                rawpkt                                          |
+                udpwrap  "udp.sport = 12345; udp.dport = 123;"  | 
+                ipwrap   "ip.saddr = 192.168.0.1; 
+                          ip.daddr = 10.0.0.3;"                 | 
+		gre-encap "ip.daddr = 192.168.0.1; 
+                           ip.saddr = 10.0.0.1;
+                	   eth.src = 00:11:22:33:44:55; 
+                           eth.dst = aa:bb:cc:dd:ee:ff;"        | 
+                pktout eth0
+
+.fi
+.P
+.SH AVAILABILITY
+This utility should be available on all supported ONICS platforms.
+.P
+.SH AUTHOR
+Christopher A. Telfer <ctelfer@gmail.com>
+.P
+.SH "SEE ALSO"
+onics_proto(7), rawpkt(1), pml(1), ethwrap(1), ipwrap(1), grewrap(1)

@@ -44,6 +44,8 @@ struct eth2h {
 #define ETHTYPE_ARP             0x0806
 #define ETHTYPE_C_VLAN          0x8100
 #define ETHTYPE_S_VLAN          0x88a8
+#define ETHTYPE_MPLS            0x8847
+#define ETHTYPE_MPLSMC          0x8848
 #define ETHHLEN                 14
 
 
@@ -686,5 +688,28 @@ struct icmp6_nd_opt_agtinfo {
 	uint16_t		halife;
 };
 #define ICMP6_ND_AGTINFO_OLEN	8
+
+
+struct greh {
+	uint8_t			flags;
+	uint8_t			version;
+	uint16_t		proto;
+};
+#define GRE_BASE_HLEN		4
+#define GRE_HLEN(greh) \
+	(GRE_BASE_HLEN + \
+	 (!!((greh)->flags & GRE_FLAG_CKSUM)) * 4 + \
+	 (!!((greh)->flags & GRE_FLAG_KEY)) * 4 + \
+	 (!!((greh)->flags & GRE_FLAG_SEQ)) * 4)
+#define GRE_FLAG_CKSUM		0x80
+#define GRE_FLAG_KEY		0x20
+#define GRE_FLAG_SEQ		0x10
+
+#define GRE_CKSUM_OFF(_flags)	GRE_HLEN
+#define GRE_KEY_OFF(_flags)	\
+	(GRE_BASE_HLEN + (!!((_flags) & GRE_FLAG_CKSUM)) * 4)
+#define GRE_SEQ_OFF(_flags)	\
+	(GRE_BASE_HLEN + (!!((_flags) & GRE_FLAG_CKSUM)) * 4 + \
+			 (!!((_flags) & GRE_FLAG_KEY)) * 4)
 
 #endif /* __tcpip_hdrs_h */

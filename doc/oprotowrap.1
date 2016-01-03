@@ -1,10 +1,16 @@
-.TH "oprotowrap" 1 "August 2013" "ONICS 1.0"
+.TH "oprotowrap" 1 "January 2016" "ONICS 1.0"
 .SH NAME
-ethwrap, ipwrap, ip6wrap, tcpwrap, udpwrap, icmpwrap, icmp6wrap 
+ethwrap, grewrap, icmpwrap, icmp6wrap, ipwrap, ip6wrap, tcpwrap, udpwrap
 - Wrap an XPKT formatted packet in a new header.
 .P
 .SH SYNOPSYS
 \fBethwrap\fP [\fB-f\fP \fIinfile\fP] [\fIstmt1\fP \fIstmt2\fP ...]
+.P
+\fBgrewrap\fP [\fB-f\fP \fIinfile\fP] [\fIstmt1\fP \fIstmt2\fP ...]
+.P
+\fBicmpwrap\fP [\fB-f\fP \fIinfile\fP] [\fIstmt1\fP \fIstmt2\fP ...]
+.P
+\fBicmp6wrap\fP [\fB-f\fP \fIinfile\fP] [\fIstmt1\fP \fIstmt2\fP ...]
 .P
 \fBipwrap\fP [\fB-f\fP \fIinfile\fP] [\fIstmt1\fP \fIstmt2\fP ...]
 .P
@@ -13,10 +19,6 @@ ethwrap, ipwrap, ip6wrap, tcpwrap, udpwrap, icmpwrap, icmp6wrap
 \fBtcpwrap\fP [\fB-f\fP \fIinfile\fP] [\fIstmt1\fP \fIstmt2\fP ...]
 .P
 \fBudpwrap\fP [\fB-f\fP \fIinfile\fP] [\fIstmt1\fP \fIstmt2\fP ...]
-.P
-\fBicmpwrap\fP [\fB-f\fP \fIinfile\fP] [\fIstmt1\fP \fIstmt2\fP ...]
-.P
-\fBicmp6wrap\fP [\fB-f\fP \fIinfile\fP] [\fIstmt1\fP \fIstmt2\fP ...]
 .P
 .P
 .SH DESCRIPTION
@@ -30,12 +32,22 @@ protocol fields to values other than the default.  Each script also
 fixes length, checksum and datalink type fields for the packets before
 outputting them.
 .P
-\fBethwrap\fP wraps each packet in an Ethernet II frame header.
-\fBipwrap\fP wraps an IPv4 header around each packet.  \fBip6wrap\fP
-wraps an IPv6 header around each packet.  \fBtcpwrap\fP wraps a TCP
-header around each packet.  \fBudpwrap\fP wraps each packet in a UDP
-header.  \fBicmpwrap\fP wraps each packet in an IPv4 ICMP header.
-Finally, \fBicmp6wrap\fP wraps an ICMPv6 header around each packet.
+.IP \fBethwrap\fP
+wraps each packet in an Ethernet II frame header
+.IP \fBgrewrap\fP
+wraps a GRE header around each packet.
+.IP \fBicmpwrap\fP
+wraps each packet in an IPv4 ICMP header
+.IP \fBicmp6wrap\fP
+wraps an ICMPv6 header around each packet
+.IP \fBipwrap\fP
+wraps an IPv4 header around each packet
+.IP \fBip6wrap\fP
+wraps an IPv6 header around each packet
+.IP \fBtcpwrap\fP
+wraps a TCP header around each packet
+.IP \fBudpwrap\fP
+wraps each packet in a UDP header
 .P
 .SH OPTIONS
 .P

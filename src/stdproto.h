@@ -99,4 +99,9 @@ void unregister_std_proto();
 #define PRP_ICMP6FLD_RADVIVL	(PRP_OI_EXTRA + 16)
 #define PRP_ICMP6FLD_AGTINFO	(PRP_OI_EXTRA + 17)
 
+#define PRP_GRE_NXFIELDS	3
+#define PRP_GREFLD_CKSUM	(PRP_OI_EXTRA + 0)
+#define PRP_GREFLD_KEY		(PRP_OI_EXTRA + 1)
+#define PRP_GREFLD_SEQ		(PRP_OI_EXTRA + 2)
+
 #endif /* __stdproto_h */

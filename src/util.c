@@ -1,6 +1,6 @@
 /*
  * ONICS
- * Copyright 2012-2015
+ * Copyright 2012-2016
  * Christopher Adam Telfer
  *
  * utils.c -- generic packet utility routines.
@@ -23,6 +23,7 @@
 #include <ctype.h>
 #include <cat/str.h>
 #include "util.h"
+#include "prid.h"
 #include "tcpip_hdrs.h"
 
 
@@ -405,6 +406,32 @@ int ethtostr(char *s, void *ea, size_t slen)
 	return snprintf(s, slen, "%02x:%02x:%02x:%02x:%02x:%02x",
 			p[0], p[1], p[2], p[3], p[4], p[5]);
 
+}
+
+
+uint etypetoprid(ushort etype)
+{
+	switch (etype) {
+	case ETHTYPE_IP:     return PRID_IPV4;
+	case ETHTYPE_IPV6:   return PRID_IPV6;
+	case ETHTYPE_ARP:    return PRID_ARP;
+	case ETHTYPE_MPLS:   return PRID_MPLS;
+	case ETHTYPE_MPLSMC: return PRID_MPLSMC;
+	default:	     return PRID_NONE;
+	}
+}
+
+
+ushort pridtoetype(uint prid)
+{
+	switch (prid) {
+	case PRID_IPV4:   return ETHTYPE_IP;
+	case PRID_IPV6:   return ETHTYPE_IPV6;
+	case PRID_ARP:    return ETHTYPE_ARP;
+	case PRID_MPLS:   return ETHTYPE_MPLS;
+	case PRID_MPLSMC: return ETHTYPE_MPLSMC;
+	default:	  return 0;
+	}
 }
 
 

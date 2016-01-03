@@ -39,6 +39,7 @@ extern struct prparse_ops icmp_prparse_ops;
 extern struct prparse_ops icmpv6_prparse_ops;
 extern struct prparse_ops udp_prparse_ops;
 extern struct prparse_ops tcp_prparse_ops;
+extern struct prparse_ops gre_prparse_ops;
 
 
 struct eth_parse {
@@ -80,6 +81,12 @@ struct tcp_parse {
 struct icmp6_parse {
 	struct prparse prp;
 	ulong xfields[PRP_ICMP6_NXFIELDS];
+};
+
+
+struct gre_parse {
+	struct prparse prp;
+	ulong xfields[PRP_GRE_NXFIELDS];
 };
 
 
@@ -250,29 +257,19 @@ int eth_nxtcld(struct prparse *reg, byte_t *buf, struct prparse *cld,
 	       uint *prid, ulong *off, ulong *maxlen)
 {
 	byte_t *p;
-	uint16_t etype;
+	uint x;
 
 	if (cld != NULL)
 		return 0;
 
 	abort_unless(buf);
 	abort_unless(reg->offs[PRP_ETHFLD_ETYPE] <= prp_poff(reg) - 2);
-	p = buf + reg->offs[PRP_ETHFLD_ETYPE];
-	etype = ntoh16x(p);
-	switch (etype) {
-	case ETHTYPE_IP:
-		*prid = PRID_IPV4;
-		break;
-	case ETHTYPE_IPV6:
-		*prid = PRID_IPV6;
-		break;
-	case ETHTYPE_ARP:
-		*prid = PRID_ARP;
-		break;
-	default:
-		return 0;
-	}
 
+	p = buf + reg->offs[PRP_ETHFLD_ETYPE];
+	x = etypetoprid(ntoh16x(p));
+	if (x == PRID_NONE)
+		return 0;
+	*prid = x;
 	*off = prp_poff(reg);
 	*maxlen = prp_plen(reg);
 	return 1;
@@ -309,20 +306,9 @@ static int eth_add(struct prparse *reg, byte_t *buf, struct prpspec *ps,
 		memset(prp_header(prp, buf, void), 0, prp_hlen(prp));
 		prp->offs[PRP_ETHFLD_ETYPE] = prp_poff(prp) - 2;
 		if (enclose) {
-			etype = 0;
 			cld = prp_next_in_region(prp, prp);
 			if (cld != NULL) {
-				switch (cld->prid) {
-				case PRID_IPV4:
-					etype = ETHTYPE_IP;
-					break;
-				case PRID_IPV6:
-					etype = ETHTYPE_IPV6;
-					break;
-				case PRID_ARP:
-					etype = ETHTYPE_ARP;
-					break;
-				}
+				etype = pridtoetype(cld->prid);
 				p = buf + prp_poff(prp) - 2;
 				hton16i(etype, p);
 			}
@@ -1892,6 +1878,151 @@ static int icmp6_fixcksum(struct prparse *prp, byte_t *buf)
 }
 
 
+/* -- ops for GRE type -- */
+static void gre_update(struct prparse *prp, byte_t *buf);
+
+static struct prparse *gre_parse(struct prparse *reg, byte_t *buf,
+				 ulong off, ulong maxlen)
+{
+	struct prparse *prp;
+	struct greh *gre = (struct greh *)(buf + off);
+	uint hlen = GRE_HLEN(gre);
+
+	prp = crtprp(sizeof(struct gre_parse), PRID_GRE, off, hlen,
+		     maxlen - hlen, 0, &gre_prparse_ops, PRP_GRE_NXFIELDS);
+	if (!prp)
+		return NULL;
+
+	prp->region = reg;
+	gre_update(prp, buf);
+
+	return prp;
+}
+
+
+int gre_nxtcld(struct prparse *reg, byte_t *buf, struct prparse *cld,
+	       uint *prid, ulong *off, ulong *maxlen)
+{
+	struct greh *gre;
+	uint x;
+
+	if (cld != NULL)
+		return 0;
+
+	gre = prp_header(reg, buf, struct greh);
+	x = etypetoprid(ntoh16x(&gre->proto));
+	if (x == PRID_NONE)
+		return 0;
+	*prid = x;
+	*off = prp_poff(reg);
+	*maxlen = prp_plen(reg);
+	return 1;
+}
+
+
+static int gre_getspec(struct prparse *prp, int enclose, struct prpspec *ps)
+{
+	return hdr_getspec(prp, enclose, ps, PRID_GRE, GRE_BASE_HLEN);
+}
+
+
+static int gre_add(struct prparse *reg, byte_t *buf, struct prpspec *ps,
+		   int enclose)
+{
+	struct prparse *prp, *cld;
+	uint16_t etype;
+	struct greh *gre;
+
+	abort_unless(reg && ps && ps->prid == PRID_GRE);
+	if (ps->hlen < GRE_BASE_HLEN) {
+		errno = EINVAL;
+		return -1;
+	}
+
+	prp = crtprp(sizeof(struct gre_parse), PRID_GRE, ps->off, ps->hlen,
+		     ps->plen, ps->tlen, &gre_prparse_ops, PRP_GRE_NXFIELDS);
+	if (!prp)
+		return -1;
+
+	prp_add_insert(reg, prp, enclose);
+	if (buf && prp_hlen(prp) >= GRE_BASE_HLEN) {
+		memset(prp_header(prp, buf, void), 0, prp_hlen(prp));
+		if (enclose) {
+			cld = prp_next_in_region(prp, prp);
+			if (cld != NULL) {
+				gre = prp_header(prp, buf, struct greh);
+				etype = pridtoetype(cld->prid);
+				hton16i(etype, &gre->proto);
+			}
+		}
+	}
+
+	return 0;
+}
+
+
+static void gre_update(struct prparse *prp, byte_t *buf)
+{
+	uint hlen;
+	struct greh *gre;
+	uint off;
+	ushort sum;
+
+	prp->error = 0;
+	resetxfields(prp);
+
+	if (prp_totlen(prp) < GRE_BASE_HLEN) {
+		prp->error |= PRP_ERR_TOOSMALL;
+		return;
+	}
+
+	gre = prp_header(prp, buf, struct greh);
+	hlen = GRE_HLEN(gre);
+	if (prp_totlen(prp) < hlen) {
+		prp->error |= PRP_ERR_TOOSMALL;
+		return;
+	}
+	prp_poff(prp) = prp_soff(prp) + hlen;
+
+	off = GRE_BASE_HLEN;
+	if ((gre->flags & GRE_FLAG_CKSUM) != 0) {
+		prp->offs[PRP_GREFLD_CKSUM] = prp_soff(prp) + off;
+		off += 4;
+		sum = ~ones_sum(gre, prp_totlen(prp), 0) & 0xFFFF;
+		if (sum != 0)
+			prp->error |= PRP_ERR_CKSUM;
+	}
+
+	if ((gre->flags & GRE_FLAG_KEY) != 0) {
+		prp->offs[PRP_GREFLD_KEY] = prp_soff(prp) + off;
+		off += 4;
+	}
+
+	if ((gre->flags & GRE_FLAG_SEQ) != 0)
+		prp->offs[PRP_GREFLD_SEQ] = prp_soff(prp) + off;
+}
+
+
+static int gre_fixcksum(struct prparse *prp, byte_t *buf)
+{
+	struct greh *gre;
+	uint16_t *sump;
+
+	abort_unless(prp);
+	gre = prp_header(prp, buf, struct greh);
+	if (prp_hlen(prp) < GRE_HLEN(gre))
+		return -1;
+	if ((gre->flags & GRE_FLAG_CKSUM) != 0) {
+		sump = (uint16_t *)(gre + 1);
+		*sump = 0;
+		*sump = ~ones_sum(gre, prp_totlen(prp), 0);
+	}
+	prp->error &= ~PRP_ERR_CKSUM;
+
+	return 0;
+}
+
+
 /* -- op structures for default initialization -- */
 struct proto_parser_ops eth_proto_parser_ops = {
 	eth_parse,
@@ -2014,6 +2145,20 @@ struct prparse_ops tcp_prparse_ops = {
 };
 
 
+struct proto_parser_ops gre_proto_parser_ops = {
+	gre_parse,
+	gre_nxtcld,
+	gre_getspec,
+	gre_add
+};
+
+struct prparse_ops gre_prparse_ops = {
+	gre_update,
+	default_fixlen,
+	gre_fixcksum,
+	default_copy,
+	default_free
+};
 
 
 /* --------- Namespaces ---------- */
@@ -3027,6 +3172,51 @@ struct ns_elem *stdproto_tcp_ns_elems[STDPROTO_NS_ELEN] = {
 };
 
 
+/* GRE Namespace */
+extern struct ns_elem *stdproto_gre_ns_elems[STDPROTO_NS_ELEN];
+static struct ns_namespace gre_ns = 
+	NS_NAMESPACE_I("gre", NULL, PRID_GRE, PRID_PCLASS_TUNNEL,
+		"Generic Routing Encapsulation", NULL,
+	       	stdproto_gre_ns_elems, array_length(stdproto_gre_ns_elems));
+
+static struct ns_pktfld gre_ns_c_flag =
+	NS_FBITFIELD_I("c_flag", &gre_ns, PRID_GRE, 0, 0, 1,
+		"Checksum Present", &ns_fmt_fbf, 0, 4);
+static struct ns_pktfld gre_ns_r_flag =
+	NS_FBITFIELD_I("r_flag", &gre_ns, PRID_GRE, 0, 1, 1,
+		"Reserved", &ns_fmt_fbf, 1, 4);
+static struct ns_pktfld gre_ns_k_flag =
+	NS_FBITFIELD_I("k_flag", &gre_ns, PRID_GRE, 0, 2, 1,
+		"Key Present", &ns_fmt_fbf, 2, 4);
+static struct ns_pktfld gre_ns_s_flag =
+	NS_FBITFIELD_I("s_flag", &gre_ns, PRID_GRE, 0, 3, 1,
+		"Seq Present", &ns_fmt_fbf, 3, 4);
+static struct ns_pktfld gre_ns_version =
+	NS_BITFIELD_I("vers", &gre_ns, PRID_GRE, 1, 5, 3,
+		"Version", &ns_fmt_dec);
+static struct ns_pktfld gre_ns_proto =
+	NS_BYTEFIELD_I("proto", &gre_ns, PRID_GRE, 2, 2,
+		"Protocol Type", &ns_fmt_hex);
+static struct ns_pktfld gre_ns_cksum =
+	NS_BYTEFIELD_IDX_I("cksum", &gre_ns, PRID_GRE, PRP_GREFLD_CKSUM, 0, 2,
+		"Checksum", &ns_fmt_hex);
+static struct ns_pktfld gre_ns_key =
+	NS_BYTEFIELD_IDX_I("key", &gre_ns, PRID_GRE, PRP_GREFLD_KEY, 0, 4,
+		"Key", &ns_fmt_dec);
+static struct ns_pktfld gre_ns_seq =
+	NS_BYTEFIELD_IDX_I("seq", &gre_ns, PRID_GRE, PRP_GREFLD_SEQ, 0, 4,
+		"Sequence Number", &ns_fmt_dec);
+
+
+struct ns_elem *stdproto_gre_ns_elems[STDPROTO_NS_ELEN] = {
+	(struct ns_elem *)&gre_ns_c_flag, (struct ns_elem *)&gre_ns_r_flag, 
+	(struct ns_elem *)&gre_ns_k_flag, (struct ns_elem *)&gre_ns_s_flag, 
+	(struct ns_elem *)&gre_ns_version, (struct ns_elem *)&gre_ns_proto, 
+	(struct ns_elem *)&gre_ns_cksum, (struct ns_elem *)&gre_ns_key, 
+	(struct ns_elem *)&gre_ns_seq
+};
+
+
 int register_std_proto()
 {
 	if (pp_register(PRID_ETHERNET2, &eth_proto_parser_ops) < 0)
@@ -3044,6 +3234,8 @@ int register_std_proto()
 	if (pp_register(PRID_UDP, &udp_proto_parser_ops) < 0)
 		goto fail;
 	if (pp_register(PRID_TCP, &tcp_proto_parser_ops) < 0)
+		goto fail;
+	if (pp_register(PRID_GRE, &gre_proto_parser_ops) < 0)
 		goto fail;
 
 	if (ns_add_elem(NULL, (struct ns_elem *)&pkt_ns) < 0)
@@ -3064,6 +3256,8 @@ int register_std_proto()
 		goto fail;
 	if (ns_add_elem(NULL, (struct ns_elem *)&tcp_ns) < 0)
 		goto fail;
+	if (ns_add_elem(NULL, (struct ns_elem *)&gre_ns) < 0)
+		goto fail;
 
 	return 0;
 fail:
@@ -3082,6 +3276,7 @@ void unregister_std_proto()
 	pp_unregister(PRID_ICMP6);
 	pp_unregister(PRID_UDP);
 	pp_unregister(PRID_TCP);
+	pp_unregister(PRID_GRE);
 
 	ns_rem_elem((struct ns_elem *)&pkt_ns);
 	ns_rem_elem((struct ns_elem *)&eth2_ns);
@@ -3092,4 +3287,5 @@ void unregister_std_proto()
 	ns_rem_elem((struct ns_elem *)&icmp6_ns);
 	ns_rem_elem((struct ns_elem *)&udp_ns);
 	ns_rem_elem((struct ns_elem *)&tcp_ns);
+	ns_rem_elem((struct ns_elem *)&gre_ns);
 }

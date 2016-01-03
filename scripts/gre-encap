@@ -1,0 +1,79 @@
+#!/bin/sh
+#
+# ONICS
+# Copyright 2012-2016
+# Christopher Adam Telfer
+#
+# grewrap - Wrap a packet in GRE+IP+Eth headers.
+#
+#
+#  This program is free software: you can redistribute it and/or modify
+#  it under the terms of the GNU General Public License as published by
+#  the Free Software Foundation, either version 3 of the License, or
+#  (at your option) any later version.
+#
+#  This program is distributed in the hope that it will be useful,
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#  GNU General Public License for more details.
+#
+#  You should have received a copy of the GNU General Public License
+#  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#
+
+usage() {
+	echo "usage: $0 [-s] [-f file] [stmt1 stmt2 ...]">&2
+	echo "	The -s option strips the leading ethernet header if present" >&2
+	exit 1
+}
+
+INFILE=""
+PMLSCRIPT=""
+
+if [ $# -gt 0 ]
+then
+	[ "$1" = "-h" ] && usage
+
+	if [ "$1" = "-s" ]
+	then
+		PMLSCRIPT="
+if (eth and eth.index == 1) {
+	pkt_cut_u(eth.header);
+	parse_pop_front(0);
+}
+"
+		shift
+	fi
+
+	if [ "$1" = "-f" ]
+	then
+		[ $# -lt 2 ] && usage
+		INFILE="$2"
+		shift
+		shift
+	fi
+fi
+
+PMLSCRIPT="
+	import \"std.pml\";
+	{
+	$PMLSCRIPT
+	pkt_ins_d(0, str_addr(pkt.payload), 38);
+	parse_push_front(0, @gre);
+	parse_push_front(0, @ip);
+	parse_push_front(0, @eth);
+"
+
+for S
+do
+	PMLSCRIPT="$PMLSCRIPT
+$S"
+done
+
+PMLSCRIPT="$PMLSCRIPT
+	fix_dltype(0);
+	fix_lens(0);
+	fix_csums(0);
+}"
+
+exec pml -e "$PMLSCRIPT" $INFILE

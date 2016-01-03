@@ -96,6 +96,13 @@ ulong be32val(void *p, size_t len);
 /* modulo 2^(min(4, len) * 8) */
 void wrbe32(void *p, size_t len, ulong val);
 
+/* Returns the associated PRID for a given ethertype */
+/* Returns PRID_NONE if there is no corresponding PRID. */
+uint etypetoprid(ushort etype);
+
+/* Returns the associated ethertype for a given PRID */
+/* Returns 0 if there is no corresponding ethertype. */
+ushort pridtoetype(uint prid);
 
 /* returns the number of characters written or short count on error.  */
 /* should always return 17 characters and slen should always be 18. */
