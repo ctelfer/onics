@@ -1912,6 +1912,8 @@ static int cg_pdop(struct pmlncg *cg, struct cg_pdesc *cgpd)
 		if (loff.onstack)
 			EMIT_NULL(cg, OR);
 
+		if (lidx.onstack)
+			EMIT_XW(cg, SWAP, 0, 1);
 		PUSH(cg, w1);
 		if (lidx.onstack)
 			EMIT_NULL(cg, OR);
