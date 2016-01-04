@@ -1,0 +1,40 @@
+.TH "ppophdr" 1 "January 2016" "ONICS 1.0"
+.SH NAME
+ppophdr - Filter out packets from an XPKT stream.
+.P
+.SH SYNOPSYS
+\fBppophdr\fB [\fB-n\fP \fInumhdrs\fP] [\fIinfile\fP [\fIoutfile\fP]]
+.P
+.SH DESCRIPTION
+The \fBppophdr\fP utility removes the outermost header or headers from
+each packet in a stream of XPKT packets.  By default, \fBppophdr\fP
+removes only the outermost header from each packet.  However, if the
+user specifies \fPnumhdrs\fP then \fBppophdr\fP removes that many
+headers instead.  The utility reads from standard input and writes to
+standard output unless overridden by the \fBinfile\fP and/or
+\fBoutfile\fP arguments.
+.P
+.SH EXAMPLES
+.P
+Create a TCP+IP+Ethernet packet but then strip out the Ethernet header:
+.nf
+
+        mktcp | ppophdr | x2hpkt
+
+.fi
+Strip all the datalink headers from all the packets in input.txt and
+write the results to output.txt:
+.nf
+
+        pophdr infile.txt outfile.txt
+
+.fi
+.P
+.SH AVAILABILITY
+This utility should be available on all supported ONICS platforms.
+.P
+.SH AUTHOR
+Christopher A. Telfer <ctelfer@gmail.com>
+.P
+.SH "SEE ALSO"
+pml(1)

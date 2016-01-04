@@ -1,0 +1,66 @@
+#!/bin/sh
+#
+# ONICS
+# Copyright 2016
+# Christopher Adam Telfer
+#
+# ppophdr - remove the outermost headers from a packet
+#
+#
+#  This program is free software: you can redistribute it and/or modify
+#  it under the terms of the GNU General Public License as published by
+#  the Free Software Foundation, either version 3 of the License, or
+#  (at your option) any later version.
+#
+#  This program is distributed in the hope that it will be useful,
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#  GNU General Public License for more details.
+#
+#  You should have received a copy of the GNU General Public License
+#  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#
+
+usage() {
+	echo "usage: $0 [-n num] [INFILE [OUTFILE]]">&2
+	exit 1
+}
+
+NPOP=1
+
+if [ $# -gt 0 ]
+then
+	[ "$1" = "-h" ] && usage
+	if [ "$1" = "-n" ]
+	then
+		[ $# -lt 2 ] && usage
+		NPOP="$2"
+		shift
+		shift
+	fi
+fi
+
+POP="
+	if (\$(0,1)pdu) {
+		pkt_cut_u(\$(0,1)pdu.header);
+		parse_pop_front(0);
+	}
+"
+
+PMLSCRIPT="
+import \"std.pml\";
+{
+"
+
+while [ $NPOP -gt 0 ]
+do
+	PMLSCRIPT="$PMLSCRIPT
+		   $POP"
+	NPOP=`expr $NPOP - 1`
+done
+
+PMLSCRIPT="$PMLSCRIPT
+	fix_dltype(0);
+}"
+
+exec pml -e "$PMLSCRIPT" $*

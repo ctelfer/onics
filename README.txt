@@ -7,7 +7,7 @@ The intent of these tools is to make it possible to manipulate packets
 on the command line in a UNIX-shell like fashion the same way one can
 manipulate text with programs like sed, awk, cat, tr, etc.  In fact,
 many of said command line tools and be used with the ONICS tool suite if
-done properly.  There are currently 21 binary tools and 25 Bourne shell
+done properly.  There are currently 21 binary tools and 26 Bourne shell
 scripts in the repository.
 
 This tool suite comes with regression tests, examples, complete manpages
@@ -209,6 +209,8 @@ work just about everywhere.
  * pfind - a program to select a subset of packets from a stream
 
  * phead - extract the first N packets from a packet stream
+
+ * ppophdr - pop the outermost headers from each packet in a packet stream
 
  * ptail - extract the last N packets from a packet stream
 

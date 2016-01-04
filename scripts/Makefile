@@ -3,8 +3,8 @@
 ALL_SCRIPTS = \
 	      ethwrap gre-decap gre-encap grewrap icmp6wrap icmpwrap \
 	      ip6wrap ipwrap mkarp mkicmp mkicmp6 mktcp mktcp6 mkudp \
-	      mkudp6 pcount peseq pfind phead preverse ptail pxseq \
-	      tcpsess tcpwrap udpwrap xtsscale
+	      mkudp6 pcount peseq pfind phead ppophdr preverse ptail \
+	      pxseq tcpsess tcpwrap udpwrap xtsscale
 
 all:
 
