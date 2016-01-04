@@ -25,6 +25,99 @@ also be able to dynamically load additional protocol libraries at
 load time enabling users to add additional parsers for their own custom
 needs.
 .P
+.SH PROTOCOL DATA UNITS
+.P
+The \fBONICS\fP tools parse packets into regions called protocol data
+units (PDUs).  Each PDU corresponds to a view of packet data from the
+perspective of a particular protocol.  For example, the \fBip\fP
+protocol type refers to an IP datagram portion of a packet.  This
+includes both the IP header and the IP payload itself including any
+transport headers and so forth.
+.P
+All PDUs share certain fields in common.  For starters, each PDU has a
+header region, a payload region and a trailer region.  The header region
+refers to the portion of the packet corresponding to the header for the
+PDUs protocol.  Similarly the payload region refers to the data that the
+protocol carries.  Finally, the trailer refers to protocol data at the
+end of the PDU.  The header must always precede the payload which must
+always preced the trailer.  The \fBONICS\fP software enforces this
+restriction.  Any of the regions may be empty.  However, note that just
+because a region contains no bytes does not mean that it doesn't "exist"
+from the perspective of the PDU.   For example, an IP datagram will not
+have a trailer portion, but an IP PDU will still refer to a 0-byte
+region starting at the end of the datagram.
+.P
+Each PDU has a protocol ID (abbreviated PRID) that identifies protocol
+of the PDU.  In \fBONICS\fP a PRID is a unified numbering space uniquely
+identifying protocols from different numbering spaces.  It includes, for
+example, IEEE Ethernet types, IP/IPv6 protocol types and IETF address
+families.  PDUs also have common error flags indicating any problems in
+the formatting of the PDU data outside of the protocol.  
+.P
+Each PDU also has an index which refers to its order within the packet
+relative to the other PDUs.  \fBONICS\fP orders PDUs by the location of
+their first bytes within the packet.  The PDU with index 0 in a given
+packet is a special PDU named \fBpkt\fP (see below).  The parsed PDUs
+for the rest of the packets are indexed starting at 1.  Thus if a packet
+contains a parsed Ethernet, IP and TCP header (in that order), the
+Ethernet PDU will have index 1, the IP PDU will have index 2 and the TCP
+PDU will have index 3.
+.P
+The protocols \fBpkt\fP and \fBpdu\fP are not true protocols.
+Nevertheless, software can interact with these fields in much the same
+way as regular network protocols.  Each forms a namespace by which to
+reference regions of a given packet.  The \fBpkt\fP region denotes an
+entire packet buffer.  It always "exists" if the packet itself exists
+when software references this field.  This means that software can test
+whether a given packet exists through this field.  For example:
+.nf
+
+	if ($(1)pkt)
+
+.fi
+tests whether a packet is present in slot 1 of the current working set.
+The header region of \fBpkt\fP refers to the unused portion of the
+packet buffer that precedes the start of the packet.  Similarly
+\fBpkt.payload\fP refers to the entire body of the packet including all
+of its network headers and \fBpkt.trailer\fP refers to the unused space
+at the end of the packet buffer following the packet.  Even if there are
+no parsed headers in a given packet, software can access the raw packet
+data through \fBpkt\fP.
+.P
+The \fBpdu\fP protocol provides a way to access packet PDUs without
+knowing the name or type of each PDU.  The first \fBpdu\fP (numbered
+0) namespace refers to the \fBpkt\fP protocol parse as above and is
+always present if the packet itself is present.  The remaining parsed
+PDUs in the packet are \fBpdu\fP instances 1, 2, 3, etc...  So if the
+first header on a packet is an ethernet header, then the second
+\fBpdu\fP instance (numbered 1) refers to the same PDU as the first
+\fBeth\fP instance.  That is:
+.nf
+
+	$(0, 1)pdu
+
+.fi
+and
+.nf
+
+	$(0, 0)eth
+
+.fi
+or just
+.nf
+
+	eth
+
+.fi
+all refer to the same parsed PDU.  Software in PML can test for the type
+of a given PDU by using the \fBprid\fP field.  For example:
+.nf
+
+	if ($(0, 2)pdu.prid == @ip)
+
+.fi
+tests whether the second PDU in the packet is an IP datagram.
+.P
 .SH PROTOCOL LIST
 .P
 Below is the list of the protocols and protocol fields that the
@@ -33,7 +126,7 @@ type "PML field" are only accessible within pml(1) or within scripts
 that allow one to pass in PML code as parameters.  (e.g. ethwrap(1),
 tcpwrap(1), etc...)  Additionally, PML can test for the existance of
 every regular packet field and protocol name aside from the fields
-marked (PML only) below.  For example, one can test for \fBudp.exists\fP
+marked "PML field" below.  For example, one can test for \fBudp.exists\fP
 or \fBtcp.mss.exists\fP in PML.
+.P
 .nf
-

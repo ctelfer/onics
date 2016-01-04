@@ -2174,12 +2174,12 @@ static struct ns_namespace pkt_ns =
 struct ns_elem *stdproto_pkt_ns_elems[STDPROTO_NS_ELEN];
 
 /* Header Namespace */
-extern struct ns_elem *stdproto_hdr_ns_elems[STDPROTO_NS_ELEN];
-static struct ns_namespace hdr_ns =
-	NS_NAMESPACE_I("hdr", NULL, PRID_ANY, PRID_NONE,
-		"Protocol Header Parse", NULL, stdproto_hdr_ns_elems,
-		array_length(stdproto_hdr_ns_elems));
-struct ns_elem *stdproto_hdr_ns_elems[STDPROTO_NS_ELEN];
+extern struct ns_elem *stdproto_pdu_ns_elems[STDPROTO_NS_ELEN];
+static struct ns_namespace pdu_ns =
+	NS_NAMESPACE_I("pdu", NULL, PRID_ANY, PRID_NONE,
+		"Protocol Data Unit", NULL, stdproto_pdu_ns_elems,
+		array_length(stdproto_pdu_ns_elems));
+struct ns_elem *stdproto_pdu_ns_elems[STDPROTO_NS_ELEN];
 
 /* Ethernet Namespace */
 extern struct ns_elem *stdproto_eth2_ns_elems[STDPROTO_NS_ELEN];
@@ -3248,7 +3248,7 @@ int register_std_proto()
 
 	if (ns_add_elem(NULL, (struct ns_elem *)&pkt_ns) < 0)
 		goto fail;
-	if (ns_add_elem(NULL, (struct ns_elem *)&hdr_ns) < 0)
+	if (ns_add_elem(NULL, (struct ns_elem *)&pdu_ns) < 0)
 		goto fail;
 	if (ns_add_elem(NULL, (struct ns_elem *)&eth2_ns) < 0)
 		goto fail;
@@ -3289,7 +3289,7 @@ void unregister_std_proto()
 	pp_unregister(PRID_GRE);
 
 	ns_rem_elem((struct ns_elem *)&pkt_ns);
-	ns_rem_elem((struct ns_elem *)&hdr_ns);
+	ns_rem_elem((struct ns_elem *)&pdu_ns);
 	ns_rem_elem((struct ns_elem *)&eth2_ns);
 	ns_rem_elem((struct ns_elem *)&arp_ns);
 	ns_rem_elem((struct ns_elem *)&ipv4_ns);

@@ -21,7 +21,7 @@ ALL_DOCS= $(MAN1_DOCS) $(MAN7_DOCS)
 
 all: $(ALL_DOCS)
 
-onics_proto.7: onics_stdproto_list.txt
+onics_proto.7: onics_stdproto_list.txt onics_proto_pre.7 onics_proto_post.7
 	cat onics_proto_pre.7 onics_stdproto_list.txt \
 	    onics_proto_post.7 > onics_proto.7
 
