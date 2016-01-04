@@ -4,7 +4,7 @@
 # Copyright 2012-2016
 # Christopher Adam Telfer
 #
-# gre-encap - Wrap a packet in GRE+IP+Eth headers.
+# gre-decap - Decapsulate GRE packets.
 #
 #
 #  This program is free software: you can redistribute it and/or modify
@@ -22,7 +22,7 @@
 #
 
 usage() {
-	echo "usage: $0 [-s] [-f file] [stmt1 stmt2 ...]">&2
+	echo "usage: $0 [-f file] [stmt1 stmt2 ...]">&2
 	echo "	The -s option strips the leading ethernet header if present" >&2
 	exit 1
 }
@@ -33,17 +33,6 @@ PMLSCRIPT=""
 if [ $# -gt 0 ]
 then
 	[ "$1" = "-h" ] && usage
-
-	if [ "$1" = "-s" ]
-	then
-		PMLSCRIPT="
-if (eth and eth.index == 1) {
-	pkt_cut_u(eth.header);
-	parse_pop_front(0);
-}
-"
-		shift
-	fi
 
 	if [ "$1" = "-f" ]
 	then
@@ -57,11 +46,15 @@ fi
 PMLSCRIPT="
 	import \"std.pml\";
 	{
-	$PMLSCRIPT
-	pkt_ins_d(0, str_addr(pkt.payload), 38);
-	parse_push_front(0, @gre);
-	parse_push_front(0, @ip);
-	parse_push_front(0, @eth);
+	  if (eth and eth.index == 1 and
+	      ip and ip.index == 2 and 
+	      gre and gre.index == 3
+	     ) {
+	    len = eth.hlen + ip.hlen + gre.hlen;
+	    pkt_cut_u(eth[0, len]);
+	    parse_pop_front(0);
+	    parse_pop_front(0);
+	    parse_pop_front(0);
 "
 
 for S
@@ -71,9 +64,10 @@ $S"
 done
 
 PMLSCRIPT="$PMLSCRIPT
-	fix_dltype(0);
-	fix_lens(0);
-	fix_csums(0);
-}"
+	    fix_dltype(0);
+	    fix_lens(0);
+	    fix_csums(0);
+	  }
+        }"
 
 exec pml -e "$PMLSCRIPT" $INFILE

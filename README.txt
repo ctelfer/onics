@@ -7,17 +7,17 @@ The intent of these tools is to make it possible to manipulate packets
 on the command line in a UNIX-shell like fashion the same way one can
 manipulate text with programs like sed, awk, cat, tr, etc.  In fact,
 many of said command line tools and be used with the ONICS tool suite if
-done properly.  There are currently 21 binary tools and 22 Bourne shell
+done properly.  There are currently 21 binary tools and 25 Bourne shell
 scripts in the repository.
 
 This tool suite comes with regression tests, examples, complete manpages
 and extended libraries to improve programmabilitiy.  All binaries are
-written in pure ANSI-89 C code most have no external dependencies
+written in pure ANSI-89 C code.  Most have no external dependencies
 outside of libc and catlib (see below).  The few that do will not be
 compiled or installed if their dependencies are not detected.  It is
 also simple to add support for new protocols and have all the tools in
 the suite automatically updated.  All scripts are written in pure Bourne
-shell.
+Shell.
 
 See LICENSE.txt for the free/libre open source licensing of this suite.
 
@@ -172,15 +172,21 @@ There are also various scripts built on the binary tools.  All of these
 scripts should be in strictly compliant Bourne shell.  So they should
 work just about everywhere.
 
- * ethwrap - wrap a packet in an ethernet frame header
+ * ethwrap - wrap packets in an ethernet frame header
 
- * ipwrap  - wrap a packet in an IPv4 header
+ * gre-decap - decapsulate GRE+IP+Etherent packets
 
- * ip6wrap - wrap a packet in an IPv6 header
+ * gre-encap - encapsulate packets in GRE+IP+Etherent headers
 
- * icmpwrap - wrap a packet in an ICMP header
+ * grewrap - wrap packets in an GRE header
 
- * icmp6wrap - wrap a packet in an ICMPv6 header
+ * ipwrap  - wrap packets in an IPv4 header
+
+ * ip6wrap - wrap packets in an IPv6 header
+
+ * icmpwrap - wrap packets in an ICMP header
+
+ * icmp6wrap - wrap packets in an ICMPv6 header
 
  * mkarp - create an ARP packet
 
@@ -210,9 +216,9 @@ work just about everywhere.
 
  * tcpsess - generate a partial or complete TCP stream from data files
 
- * tcpwrap - wrap a packet in a TCP header
+ * tcpwrap - wrap packets in a TCP header
 
- * udpwrap - wrap a packet in a UDP header
+ * udpwrap - wrap packets in a UDP header
 
  * xtsscale - scale the timestamps for a stream of packets
 
