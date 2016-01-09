@@ -58,7 +58,6 @@ PMLSCRIPT="
 	import \"std.pml\";
 	{
 	$PMLSCRIPT
-	pkt_ins_d(0, str_addr(pkt.payload), 38);
 	parse_push_front(0, @gre);
 	parse_push_front(0, @ip);
 	parse_push_front(0, @eth);

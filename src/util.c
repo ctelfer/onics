@@ -415,6 +415,7 @@ uint etypetoprid(ushort etype)
 	case ETHTYPE_IP:     return PRID_IPV4;
 	case ETHTYPE_IPV6:   return PRID_IPV6;
 	case ETHTYPE_ARP:    return PRID_ARP;
+	case ETHTYPE_TEB:    return PRID_ETHERNET2;
 	case ETHTYPE_MPLS:   return PRID_MPLS;
 	case ETHTYPE_MPLSMC: return PRID_MPLSMC;
 	default:	     return PRID_NONE;
@@ -425,12 +426,13 @@ uint etypetoprid(ushort etype)
 ushort pridtoetype(uint prid)
 {
 	switch (prid) {
-	case PRID_IPV4:   return ETHTYPE_IP;
-	case PRID_IPV6:   return ETHTYPE_IPV6;
-	case PRID_ARP:    return ETHTYPE_ARP;
-	case PRID_MPLS:   return ETHTYPE_MPLS;
-	case PRID_MPLSMC: return ETHTYPE_MPLSMC;
-	default:	  return 0;
+	case PRID_IPV4:      return ETHTYPE_IP;
+	case PRID_IPV6:      return ETHTYPE_IPV6;
+	case PRID_ARP:       return ETHTYPE_ARP;
+	case PRID_ETHERNET2: return ETHTYPE_TEB;
+	case PRID_MPLS:      return ETHTYPE_MPLS;
+	case PRID_MPLSMC:    return ETHTYPE_MPLSMC;
+	default:	     return 0;
 	}
 }
 

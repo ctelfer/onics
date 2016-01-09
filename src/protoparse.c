@@ -74,6 +74,7 @@ struct proto_parser dlt_proto_parsers[PRID_PER_PF] = {
 };
 struct proto_parser net_proto_parsers[PRID_PER_PF];
 struct proto_parser inet_proto_parsers[PRID_PER_PF];
+struct proto_parser pver_proto_parsers[PRID_PER_PF];
 struct proto_parser pp_proto_parsers[PRID_PER_PF] = {
 	{PRID_NONE, 1, &none_proto_parser_ops},
 	{PRID_DATA, 1, &data_proto_parser_ops},
@@ -119,6 +120,8 @@ static struct proto_parser *_pp_lookup(uint prid)
 		return &net_proto_parsers[PRID_PROTO(prid)];
 	case PRID_PF_DLT:
 		return &dlt_proto_parsers[PRID_PROTO(prid)];
+	case PRID_PF_PVER:
+		return &pver_proto_parsers[PRID_PROTO(prid)];
 	case PRID_PF_RES:
 		if (PRID_PROTO(prid) >= PRID_META_MIN_PROTO)
 			return NULL;
@@ -841,6 +844,8 @@ int prp_insert(struct prparse *prp, byte_t *buf, ulong off, ulong len,
 		for (prp = prp_next(prp); 
 		     !prp_list_end(prp); 
 		     prp = prp_next(prp)) {
+			if (prp_eoff(prp) < off)
+				continue;
 			for (i = 0; i < prp->noff; ++i) {
 				if ((prp->offs[i] != PRP_OFF_INVALID) &&
 				    (prp->offs[i] >= off))
@@ -865,6 +870,8 @@ int prp_insert(struct prparse *prp, byte_t *buf, ulong off, ulong len,
 		for (prp = prp_next(prp); 
 		     !prp_list_end(prp); 
 		     prp = prp_next(prp)) {
+			if (prp_soff(prp) >= off)
+				continue;
 			for (i = 0; i < prp->noff; ++i) {
 				if ((prp->offs[i] != PRP_OFF_INVALID) &&
 				    (prp->offs[i] < off))

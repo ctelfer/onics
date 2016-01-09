@@ -1,7 +1,7 @@
 #!/bin/sh
 #
 # ONICS
-# Copyright 2012-2016
+# Copyright 2016
 # Christopher Adam Telfer
 #
 # grewrap - Wrap a packet in a GRE header.
@@ -29,7 +29,6 @@ usage() {
 PMLSCRIPT="
 	import \"std.pml\";
 	{
-	pkt_ins_d(0, str_addr(pkt.payload), 4);
 	parse_push_front(0, @gre);
 "
 

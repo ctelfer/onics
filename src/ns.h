@@ -228,12 +228,23 @@ struct ns_maskstr {
 #define NS_MASKSTR_I(name, par, prid, val, mask)			\
 	NS_MASKSTR_I_LEN(name, par, prid, val, mask, array_length(val))
 
-const struct ns_namespace *ns_get_root(void);
-int ns_add_elem(struct ns_namespace *ns, struct ns_elem *e);
-void ns_rem_elem(struct ns_elem *e);
-struct ns_elem *ns_lookup(struct ns_namespace *ns, const char *name);
-struct ns_namespace *ns_lookup_by_prid(uint prid);
 
+/* Namespace management functions */
+
+/* Get a pointer to the root namespace */
+const struct ns_namespace *ns_get_root(void);
+
+/* Add an element to the namespace.  Default to root namespace if ns == NULL */
+int ns_add_elem(struct ns_namespace *ns, struct ns_elem *e);
+
+/* Remove an element from its namespace. */
+void ns_rem_elem(struct ns_elem *e);
+
+/* Look up a namespace element by fully qualified name. */
+struct ns_elem *ns_lookup(struct ns_namespace *ns, const char *name);
+
+/* Look up a namespace by its base protocol ID. */
+struct ns_namespace *ns_lookup_by_prid(uint prid);
 
 
 /* Field format functions */

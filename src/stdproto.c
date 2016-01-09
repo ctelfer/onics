@@ -1,6 +1,6 @@
 /*
  * ONICS
- * Copyright 2012-2015
+ * Copyright 2012-2016
  * Christopher Adam Telfer
  *
  * stdproto.c -- Standard library of Internet protocol parsers.
@@ -1885,11 +1885,20 @@ static struct prparse *gre_parse(struct prparse *reg, byte_t *buf,
 				 ulong off, ulong maxlen)
 {
 	struct prparse *prp;
-	struct greh *gre = (struct greh *)(buf + off);
-	uint hlen = GRE_HLEN(gre);
+	struct greh *gre;
+	uint prid = PRID_GRE;
+	ushort proto;
 
-	prp = crtprp(sizeof(struct gre_parse), PRID_GRE, off, hlen,
-		     maxlen - hlen, 0, &gre_prparse_ops, PRP_GRE_NXFIELDS);
+	if (maxlen >= NVGRE_HLEN) {
+		gre = (struct greh *)(buf + off);
+		proto = ntoh16x(&gre->proto);
+		if (GRE_VERSION(gre) == 0 && proto == ETHTYPE_TEB &&
+		    GRE_FLAGS(gre) == GRE_FLAG_KEY)
+			prid = PRID_NVGRE;
+	}
+
+	prp = crtprp(sizeof(struct gre_parse), prid, off, 0, maxlen, 0,
+		     &gre_prparse_ops, PRP_GRE_NXFIELDS);
 	if (!prp)
 		return NULL;
 
@@ -1967,19 +1976,23 @@ static void gre_update(struct prparse *prp, byte_t *buf)
 	struct greh *gre;
 	uint off;
 	ushort sum;
+	ulong len;
+	ushort proto;
 
 	prp->error = 0;
 	resetxfields(prp);
 
-	if (prp_totlen(prp) < GRE_BASE_HLEN) {
+	prp->prid = PRID_GRE;
+	len = prp_totlen(prp);
+	if (len < GRE_BASE_HLEN) {
 		prp->error |= PRP_ERR_TOOSMALL;
 		return;
 	}
 
 	gre = prp_header(prp, buf, struct greh);
 	hlen = GRE_HLEN(gre);
-	if (prp_totlen(prp) < hlen) {
-		prp->error |= PRP_ERR_TOOSMALL;
+	if (len < hlen) {
+		prp->error |= PRP_ERR_HLEN;
 		return;
 	}
 	prp_poff(prp) = prp_soff(prp) + hlen;
@@ -2000,6 +2013,15 @@ static void gre_update(struct prparse *prp, byte_t *buf)
 
 	if ((gre->flags & GRE_FLAG_SEQ) != 0)
 		prp->offs[PRP_GREFLD_SEQ] = prp_soff(prp) + off;
+
+	if (GRE_VERSION(gre) != 0) {
+		prp->error |= PRP_ERR_INVALID;
+	} else {
+		/* check for NVGRE */
+		proto = ntoh16x(&gre->proto);
+		if (proto == ETHTYPE_TEB && GRE_FLAGS(gre) == GRE_FLAG_KEY)
+			prp->prid = PRID_NVGRE;
+	}
 }
 
 
@@ -3225,6 +3247,47 @@ struct ns_elem *stdproto_gre_ns_elems[STDPROTO_NS_ELEN] = {
 };
 
 
+/* NVGRE Namespace */
+extern struct ns_elem *stdproto_nvgre_ns_elems[STDPROTO_NS_ELEN];
+static struct ns_namespace nvgre_ns = 
+	NS_NAMESPACE_I("nvgre", NULL, PRID_NVGRE, PRID_PCLASS_TUNNEL,
+		"Network Virtualization Generic Routing Encapsulation", NULL,
+	       	stdproto_nvgre_ns_elems, array_length(stdproto_nvgre_ns_elems));
+
+static struct ns_pktfld nvgre_ns_c_flag =
+	NS_FBITFIELD_I("c_flag", &nvgre_ns, PRID_NVGRE, 0, 0, 1,
+	      "Checksum Present", &ns_fmt_fbf, 0, 4);
+static struct ns_pktfld nvgre_ns_r_flag =
+	NS_FBITFIELD_I("r_flag", &nvgre_ns, PRID_NVGRE, 0, 1, 1, "Reserved",
+		&ns_fmt_fbf, 1, 4);
+static struct ns_pktfld nvgre_ns_k_flag =
+	NS_FBITFIELD_I("k_flag", &nvgre_ns, PRID_NVGRE, 0, 2, 1, "Key Present",
+		&ns_fmt_fbf, 2, 4);
+static struct ns_pktfld nvgre_ns_s_flag =
+	NS_FBITFIELD_I("s_flag", &nvgre_ns, PRID_NVGRE, 0, 3, 1, "Seq Present",
+		&ns_fmt_fbf, 3, 4);
+static struct ns_pktfld nvgre_ns_version =
+	NS_BITFIELD_I("vers", &nvgre_ns, PRID_NVGRE, 1, 5, 3, "Version",
+		&ns_fmt_dec);
+static struct ns_pktfld nvgre_ns_proto =
+	NS_BYTEFIELD_I("proto", &nvgre_ns, PRID_NVGRE, 2, 2, "Protocol Type",
+		&ns_fmt_hex);
+static struct ns_pktfld nvgre_ns_vsid =
+	NS_BYTEFIELD_I("vsid", &nvgre_ns, PRID_NVGRE, 4, 3, "Virtual Subnet ID",
+		&ns_fmt_dec);
+static struct ns_pktfld nvgre_ns_flowid =
+	NS_BYTEFIELD_I("flowid", &nvgre_ns, PRID_NVGRE, 7, 1, "Flow ID",
+		&ns_fmt_dec);
+
+
+struct ns_elem *stdproto_nvgre_ns_elems[STDPROTO_NS_ELEN] = {
+	(struct ns_elem *)&nvgre_ns_c_flag, (struct ns_elem *)&nvgre_ns_r_flag,
+	(struct ns_elem *)&nvgre_ns_k_flag, (struct ns_elem *)&nvgre_ns_s_flag,
+	(struct ns_elem *)&nvgre_ns_version, (struct ns_elem *)&nvgre_ns_proto,
+	(struct ns_elem *)&nvgre_ns_vsid, (struct ns_elem *)&nvgre_ns_flowid, 
+};
+
+
 int register_std_proto()
 {
 	if (pp_register(PRID_ETHERNET2, &eth_proto_parser_ops) < 0)
@@ -3244,6 +3307,8 @@ int register_std_proto()
 	if (pp_register(PRID_TCP, &tcp_proto_parser_ops) < 0)
 		goto fail;
 	if (pp_register(PRID_GRE, &gre_proto_parser_ops) < 0)
+		goto fail;
+	if (pp_register(PRID_NVGRE, &gre_proto_parser_ops) < 0)
 		goto fail;
 
 	if (ns_add_elem(NULL, (struct ns_elem *)&pkt_ns) < 0)
@@ -3268,6 +3333,8 @@ int register_std_proto()
 		goto fail;
 	if (ns_add_elem(NULL, (struct ns_elem *)&gre_ns) < 0)
 		goto fail;
+	if (ns_add_elem(NULL, (struct ns_elem *)&nvgre_ns) < 0)
+		goto fail;
 
 	return 0;
 fail:
@@ -3287,6 +3354,7 @@ void unregister_std_proto()
 	pp_unregister(PRID_UDP);
 	pp_unregister(PRID_TCP);
 	pp_unregister(PRID_GRE);
+	pp_unregister(PRID_NVGRE);
 
 	ns_rem_elem((struct ns_elem *)&pkt_ns);
 	ns_rem_elem((struct ns_elem *)&pdu_ns);
@@ -3299,4 +3367,5 @@ void unregister_std_proto()
 	ns_rem_elem((struct ns_elem *)&udp_ns);
 	ns_rem_elem((struct ns_elem *)&tcp_ns);
 	ns_rem_elem((struct ns_elem *)&gre_ns);
+	ns_rem_elem((struct ns_elem *)&nvgre_ns);
 }

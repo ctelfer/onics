@@ -42,6 +42,7 @@ struct eth2h {
 #define ETHTYPE_IP              0x0800
 #define ETHTYPE_IPV6            0x86DD
 #define ETHTYPE_ARP             0x0806
+#define ETHTYPE_TEB             0x6558	/* Transparent Ethernet Bridging */
 #define ETHTYPE_C_VLAN          0x8100
 #define ETHTYPE_S_VLAN          0x88a8
 #define ETHTYPE_MPLS            0x8847
@@ -696,14 +697,18 @@ struct greh {
 	uint16_t		proto;
 };
 #define GRE_BASE_HLEN		4
-#define GRE_HLEN(greh) \
+#define GRE_HLEN(_gre) \
 	(GRE_BASE_HLEN + \
-	 (!!((greh)->flags & GRE_FLAG_CKSUM)) * 4 + \
-	 (!!((greh)->flags & GRE_FLAG_KEY)) * 4 + \
-	 (!!((greh)->flags & GRE_FLAG_SEQ)) * 4)
+	 (!!((_gre)->flags & GRE_FLAG_CKSUM)) * 4 + \
+	 (!!((_gre)->flags & GRE_FLAG_KEY)) * 4 + \
+	 (!!((_gre)->flags & GRE_FLAG_SEQ)) * 4)
+#define GRE_FLAG_MSK		0xB0
+#define GRE_FLAGS(_gre)		((_gre)->flags & GRE_FLAG_MSK)
 #define GRE_FLAG_CKSUM		0x80
 #define GRE_FLAG_KEY		0x20
 #define GRE_FLAG_SEQ		0x10
+#define GRE_VERS_MSK		0x7
+#define GRE_VERSION(_gre)	((_gre)->version & GRE_VERS_MSK)
 
 #define GRE_CKSUM_OFF(_flags)	GRE_HLEN
 #define GRE_KEY_OFF(_flags)	\
@@ -711,5 +716,26 @@ struct greh {
 #define GRE_SEQ_OFF(_flags)	\
 	(GRE_BASE_HLEN + (!!((_flags) & GRE_FLAG_CKSUM)) * 4 + \
 			 (!!((_flags) & GRE_FLAG_KEY)) * 4)
+
+struct nvgreh {
+	uint8_t			flags;
+	uint8_t			version;
+	uint16_t		proto;
+	uint32_t		vsidflow;
+};
+
+#define NVGRE_HLEN		8
+#define NVGRE_FLAG_MSK		0xB0
+#define NVGRE_FLAGS(_gre)	((_gre)->flags & NVGRE_FLAG_MSK)
+#define NVGRE_VERS_MSK		0x7
+#define NVGRE_VERSION(_gre)	((_gre)->version & NVGRE_VERS_MSK)
+#define NVGRE_FLOW_SHF		0
+#define NVGRE_FLOW_MSK		0xFF
+#define NVGRE_VSID_SHF		8
+#define NVGRE_VSID_MSK		0xFFFFFF
+#define NVGRE_FLOW(_nvgre) \
+	(((_nvgre)->vsidflow >> NVGRE_FLOW_SHF) & NVGRE_FLOW_MSK)
+#define NVGRE_VSID(_nvgre) \
+	(((_nvgre)->vsidflow >> NVGRE_VSID_SHF) & NVGRE_VSID_MSK)
 
 #endif /* __tcpip_hdrs_h */

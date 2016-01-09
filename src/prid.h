@@ -30,6 +30,7 @@
 #define PRID_PF_INET		0
 #define PRID_PF_NET		1
 #define PRID_PF_DLT		2
+#define PRID_PF_PVER		3
 #define PRID_PF_RES		255
 #define PRID_PER_PF		256
 
@@ -93,6 +94,10 @@
 #define PRID_AH			PRID_BUILD(PRID_PF_INET, 51)
 #define PRID_ICMP6		PRID_BUILD(PRID_PF_INET, 58)
 #define PRID_SCTP		PRID_BUILD(PRID_PF_INET, 132)
+
+/* Protocol built as specific extensions or sub-versions on other protocols */
+
+#define PRID_NVGRE		PRID_BUILD(PRID_PF_PVER, 0)
 
 
 #endif /* __prid_h */
