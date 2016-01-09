@@ -1,25 +1,30 @@
 .TH "gre-decap" 1 "January 2016" "ONICS 1.0"
 .SH NAME
 gre-decap
-- Decapsulate GRE+IPv4+Ethernet encapsulated XPKT packets
+- Decapsulate [NV]GRE+IPv4+Ethernet encapsulated XPKT packets
 .P
 .SH SYNOPSYS
-\fBgre-decap\fP [\fB-f\fP \fIinfile\fP] [\fIstmt1\fP \fIstmt2\fP ...]
+\fBgre-decap\fP [\fB-n\fP] [\fB-f\fP \fIinfile\fP] [\fIstmt1\fP \fIstmt2\fP ...]
 .P
 .P
 .SH DESCRIPTION
 This utility takes a stream of XPKT formatted packets and for each
-packet that is encapsulated in a GRE+IP+Ethernet tunnlel, it decapsulates
-the packet.  The \fBgre-decap\fP utility will then copy the decapsulated
-stream to standard output.  As with other ONICS scripts, the user can
-specify additional PML statements to modify the packet fields during the
-encapsulation.  It is worth keeping in mind that these modifications
-will occur after decapsulation.  Thus references to protocol fields in
-\fBip\fP, \fBgre\fP will refer to the inner headers of the resutling packets.
-Also note that the modification statements will only apply to packets that
-the script decapsulates; they will not modify other packets.
+packet that is encapsulated in a GRE+IP+Ethernet tunnlel, it
+decapsulates the packet.  The \fBgre-decap\fP utility will then copy the
+decapsulated stream to standard output.  As with other ONICS scripts,
+the user can specify additional PML statements to modify the packet
+fields during the encapsulation.  It is worth keeping in mind that these
+modifications will occur after decapsulation.  Thus references to
+protocol fields in \fBip\fP or \fBgre\fP (or alternately \fBeth\fP,
+\fBip\fP and \fBnvgre\fP if the \fB-n\fP option is present) will refer
+to the inner headers of the resutling packets.  Also note that the
+modification statements will only apply to packets that the script
+decapsulates; they will not modify other packets.
 .P
 .SH OPTIONS
+.P
+.IP "\fB-n\fP"
+Decapsulate NVGRE packets instead of regular GRE packets.
 .P
 .IP "\fB-f\fP \fIinfile\fP"
 Instead of reading the packet data from standard input, read the 
@@ -43,5 +48,4 @@ This utility should be available on all supported ONICS platforms.
 Christopher A. Telfer <ctelfer@gmail.com>
 .P
 .SH "SEE ALSO"
-onics_proto(7), rawpkt(1), pml(1), ethwrap(1), ipwrap(1), gre-decap(1),
-grewrap(1)
+onics_proto(7), rawpkt(1), pml(1), ethwrap(1), ipwrap(1), gre-decap(1)

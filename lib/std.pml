@@ -1,6 +1,6 @@
 #
 # ONICS
-# Copyright 2014-2015
+# Copyright 2014-2016
 # Christopher Adam Telfer
 #
 # std.pml - standard library utilities for PML
@@ -120,7 +120,7 @@ inline host_pn(int pn, str addr) {
 inline host(str addr) { host_pn(0, addr) }
 
 #
-# VLAN Constants and utilities
+# Ethernet constants and utilities
 #
 
 const ETYPE_C_VLAN = 0x8100;
@@ -184,6 +184,73 @@ void fix_pn(int pn)
 	fix_lens(pn);
 	fix_csums(pn);
 	fix_dltype(pn);
+}
+
+
+#
+# Wrap utilities
+#
+
+void eth_wrap()
+{
+	parse_push_front(0, @eth);
+	fix_dltype(0);
+}
+
+
+void ip_wrap()
+{
+	parse_push_front(0, @ip);
+	fix_dltype(0);
+}
+
+
+void ip6_wrap()
+{
+	parse_push_front(0, @ip6);
+	fix_dltype(0);
+}
+
+
+void icmp_wrap()
+{
+	parse_push_front(0, @icmp);
+	fix_dltype(0);
+}
+
+
+void icmp6_wrap()
+{
+	parse_push_front(0, @icmp6);
+	fix_dltype(0);
+}
+
+
+void tcp_wrap()
+{
+	parse_push_front(0, @tcp);
+	fix_dltype(0);
+}
+
+
+void udp_wrap()
+{
+	parse_push_front(0, @udp);
+	fix_dltype(0);
+}
+
+
+void gre_wrap()
+{
+	parse_push_front(0, @gre);
+	fix_dltype(0);
+}
+
+
+void nvgre_wrap()
+{
+	parse_push_front(0, @nvgre);
+	fix_dltype(0);
 }
 
 

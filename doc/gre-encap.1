@@ -1,10 +1,10 @@
 .TH "gre-encap" 1 "January 2016" "ONICS 1.0"
 .SH NAME
 gre-encap
-- Wrap an XPKT formatted packet in GRE+IPv4+Ethernet headers
+- Wrap an XPKT formatted packet in [NV]GRE+IPv4+Ethernet headers
 .P
 .SH SYNOPSYS
-\fBgre-encap\fP [\fB-s\fP] [\fB-f\fP \fIinfile\fP] [\fIstmt1\fP \fIstmt2\fP ...]
+\fBgre-encap\fP [\fB-s\fP|\fB-n\fP] [\fB-f\fP \fIinfile\fP] [\fIstmt1\fP \fIstmt2\fP ...]
 .P
 .P
 .SH DESCRIPTION
@@ -17,15 +17,21 @@ stream to standard output.  As with other ONICS scripts, the user can
 specify additional PML statements to modify the packet fields during the
 encapsulation.  It is worth keeping in mind that these modifications
 will occur after encapsulation.  Thus references to protocol fields in
-\fBeth\fP, \fBip\fP, \fBgre\fP without indexing qualifiers will refer to
-the newly added headers.  See \fBpml(1)\fP for more information about
-accessing modifying inner headers in a packet.
+\fBeth\fP, \fBip\fP, \fBgre\fP or \fBnvgre\fP  without indexing
+qualifiers will refer to the newly added headers.  See \fBpml(1)\fP for
+more information about accessing modifying inner headers in a packet.
 .P
 .SH OPTIONS
 .P
 .IP "\fB-s\fP"
 If there is a leading Ethernet header on the packet strip it first before
-encapsulating the new headers.
+encapsulating the new headers.  This option is mutually exclusive with
+\fB-n\fP.
+.IP "\fB-n\fP"
+Encapsulate using NVGRE instead of GRE.  Packets that do not start with
+an Ethernet header in the packet stream will remain unaffected since
+NVGRE requires an inner Ethernet header.  This option is mutually
+exclusive with \fB-s\fP.
 .IP "\fB-f\fP \fIinfile\fP"
 Instead of reading the packet data from standard input, read the 
 packet data from \fIinfile\fP
@@ -40,8 +46,8 @@ Create a simple UDP packet from the command line:
 
 .fi
 .P
-A more complicated example building an ICMP response to a TCP packet
-and then sending the packet:
+A more complicated example building a tunnelled UDP packet and
+then sending the packet:
 .nf
 
         echo "Some payload data" | 
@@ -49,7 +55,7 @@ and then sending the packet:
                 udpwrap  "udp.sport = 12345; udp.dport = 123;"  | 
                 ipwrap   "ip.saddr = 192.168.0.1; 
                           ip.daddr = 10.0.0.3;"                 | 
-		gre-encap "ip.daddr = 192.168.0.1; 
+                gre-encap "ip.daddr = 192.168.0.1; 
                            ip.saddr = 10.0.0.1;
                 	   eth.src = 00:11:22:33:44:55; 
                            eth.dst = aa:bb:cc:dd:ee:ff;"        | 
@@ -57,6 +63,13 @@ and then sending the packet:
 
 .fi
 .P
+The following would create an NVGRE encapsulated UDP/IP/Eth packet.
+.nf
+
+        echo "Hello World" | rawpkt | udpwrap | 
+                             ipwrap | ethwrap | gre-encap -n > file.xpkt
+
+.fi
 .SH AVAILABILITY
 This utility should be available on all supported ONICS platforms.
 .P
@@ -64,5 +77,4 @@ This utility should be available on all supported ONICS platforms.
 Christopher A. Telfer <ctelfer@gmail.com>
 .P
 .SH "SEE ALSO"
-onics_proto(7), rawpkt(1), pml(1), ethwrap(1), ipwrap(1), gre-decap(1),
-grewrap(1)
+onics_proto(7), rawpkt(1), pml(1), ethwrap(1), ipwrap(1), gre-decap(1)

@@ -650,9 +650,8 @@ static int ipv4_add(struct prparse *reg, byte_t *buf, struct prpspec *ps,
 		ip->proto = IPPROT_RESERVED;
 		if (enclose) {
 			cld = prp_next_in_region(prp, prp);
-			if (cld != NULL && 
-			    PRID_FAMILY(cld->prid) == PRID_PF_INET)
-				ip->proto = PRID_PROTO(cld->prid);
+			if (cld != NULL)
+				ip->proto = pridtoiptype(cld->prid);
 		}
 		ip->cksum = ~ones_sum(ip, IPH_HLEN(*ip), 0);
 	}
@@ -1526,9 +1525,8 @@ static int ipv6_add(struct prparse *reg, byte_t *buf, struct prpspec *ps,
 		ip6->nxthdr = IPPROT_RESERVED;
 		if (enclose) {
 			cld = prp_next_in_region(prp, prp);
-			if (cld != NULL && 
-			    PRID_FAMILY(cld->prid) == PRID_PF_INET)
-				ip6->nxthdr = PRID_PROTO(cld->prid);
+			if (cld != NULL)
+				ip6->nxthdr = pridtoiptype(cld->prid);
 		}
 	}
 
@@ -2045,6 +2043,48 @@ static int gre_fixcksum(struct prparse *prp, byte_t *buf)
 }
 
 
+static int nvgre_getspec(struct prparse *prp, int enclose, struct prpspec *ps)
+{
+	return hdr_getspec(prp, enclose, ps, PRID_NVGRE, NVGRE_HLEN);
+}
+
+
+static int nvgre_add(struct prparse *reg, byte_t *buf, struct prpspec *ps,
+		     int enclose)
+{
+	struct prparse *prp, *cld;
+	uint16_t etype;
+	struct nvgreh *nvgre;
+
+	abort_unless(reg && ps && ps->prid == PRID_NVGRE);
+	if (ps->hlen != NVGRE_HLEN) {
+		errno = EINVAL;
+		return -1;
+	}
+
+	prp = crtprp(sizeof(struct gre_parse), PRID_NVGRE, ps->off, ps->hlen,
+		     ps->plen, ps->tlen, &gre_prparse_ops, PRP_GRE_NXFIELDS);
+	if (!prp)
+		return -1;
+
+	prp_add_insert(reg, prp, enclose);
+	if (buf && prp_hlen(prp) == NVGRE_HLEN) {
+		nvgre = prp_header(prp, buf, struct nvgreh);
+		memset(nvgre, 0, NVGRE_HLEN);
+		nvgre->flags = GRE_FLAG_KEY;
+		if (enclose) {
+			cld = prp_next_in_region(prp, prp);
+			if (cld != NULL) {
+				etype = pridtoetype(cld->prid);
+				hton16i(etype, &nvgre->proto);
+			}
+		}
+	}
+
+	return 0;
+}
+
+
 /* -- op structures for default initialization -- */
 struct proto_parser_ops eth_proto_parser_ops = {
 	eth_parse,
@@ -2180,6 +2220,14 @@ struct prparse_ops gre_prparse_ops = {
 	gre_fixcksum,
 	default_copy,
 	default_free
+};
+
+
+struct proto_parser_ops nvgre_proto_parser_ops = {
+	gre_parse,
+	gre_nxtcld,
+	nvgre_getspec,
+	nvgre_add
 };
 
 
@@ -3308,7 +3356,7 @@ int register_std_proto()
 		goto fail;
 	if (pp_register(PRID_GRE, &gre_proto_parser_ops) < 0)
 		goto fail;
-	if (pp_register(PRID_NVGRE, &gre_proto_parser_ops) < 0)
+	if (pp_register(PRID_NVGRE, &nvgre_proto_parser_ops) < 0)
 		goto fail;
 
 	if (ns_add_elem(NULL, (struct ns_elem *)&pkt_ns) < 0)

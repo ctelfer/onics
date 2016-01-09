@@ -22,17 +22,36 @@
 #
 
 usage() {
-	echo "usage: $0 [-f file] [stmt1 stmt2 ...]">&2
-	echo "	The -s option strips the leading ethernet header if present" >&2
+	echo "usage: $0 [-n] [-f file] [stmt1 stmt2 ...]">&2
+	echo "	The -n option specifies to decapsulate NVGRE packets" >&2
 	exit 1
 }
 
 INFILE=""
 PMLSCRIPT=""
+PROLOG="
+if (eth and eth.index == 1 and
+    ip and ip.index == 2 and 
+    gre and gre.index == 3
+   ) {
+    len = eth.hlen + ip.hlen + gre.hlen;
+"
 
 if [ $# -gt 0 ]
 then
 	[ "$1" = "-h" ] && usage
+
+	if [ "$1" = "-n" ]
+	then
+		PROLOG="
+if (eth and eth.index == 1 and
+    ip and ip.index == 2 and 
+    nvgre and nvgre.index == 3
+   ) {
+    len = eth.hlen + ip.hlen + nvgre.hlen;
+"
+		shift
+	fi
 
 	if [ "$1" = "-f" ]
 	then
@@ -46,11 +65,7 @@ fi
 PMLSCRIPT="
 	import \"std.pml\";
 	{
-	  if (eth and eth.index == 1 and
-	      ip and ip.index == 2 and 
-	      gre and gre.index == 3
-	     ) {
-	    len = eth.hlen + ip.hlen + gre.hlen;
+	  $PROLOG
 	    pkt_cut_u(eth[0, len]);
 	    parse_pop_front(0);
 	    parse_pop_front(0);

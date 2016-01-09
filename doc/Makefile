@@ -8,8 +8,7 @@ MAN1_DOCS= \
 	tcpsess.1 x2hpkt.1 xpkt2pc.1 xtsscale.1
 
 OPROTO_WRAP_DOCS= \
-	ethwrap.1 grewrap.1 ipwrap.1 ip6wrap.1 icmpwrap.1 icmp6wrap.1 \
-	tcpwrap.1 udpwrap.1
+	ethwrap.1 ipwrap.1 ip6wrap.1 icmpwrap.1 icmp6wrap.1 tcpwrap.1 udpwrap.1
 
 MKPKT_WRAP_DOCS= \
 	mkarp.1 mkicmp.1 mkicmp6.1 mktcp.1 mktcp6.1 mkudp.1 mkudp6.1

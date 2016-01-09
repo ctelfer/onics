@@ -4,7 +4,7 @@
 # Copyright 2012-2016
 # Christopher Adam Telfer
 #
-# gre-encap - Wrap a packet in GRE+IP+Eth headers.
+# gre-encap - Wrap a packet in [NV]GRE+IP+Eth headers.
 #
 #
 #  This program is free software: you can redistribute it and/or modify
@@ -22,13 +22,18 @@
 #
 
 usage() {
-	echo "usage: $0 [-s] [-f file] [stmt1 stmt2 ...]">&2
+	echo "usage: $0 [-s|-n] [-f file] [stmt1 stmt2 ...]">&2
 	echo "	The -s option strips the leading ethernet header if present" >&2
+	echo "	The -n option makes the header NVGRE instead of GRE" >&2
+	echo "    This option will only encapsulate packets whose outermost" >&2
+	echo "    header is ethernet.  It is mutually exclusive with -n." >&2
 	exit 1
 }
 
 INFILE=""
 PMLSCRIPT=""
+GPROTO="@gre"
+LEN=38
 
 if [ $# -gt 0 ]
 then
@@ -43,6 +48,14 @@ if (eth and eth.index == 1) {
 }
 "
 		shift
+	elif [ "$1" = "-n" ]
+	then
+		PMLSCRIPT="
+if (not eth or eth.index != 1) { next; }
+"
+		GPROTO="@nvgre"
+		LEN=42
+		shift
 	fi
 
 	if [ "$1" = "-f" ]
@@ -55,10 +68,10 @@ if (eth and eth.index == 1) {
 fi
 
 PMLSCRIPT="
-	import \"std.pml\";
-	{
+import \"std.pml\";
+{
 	$PMLSCRIPT
-	parse_push_front(0, @gre);
+	parse_push_front(0, $GPROTO);
 	parse_push_front(0, @ip);
 	parse_push_front(0, @eth);
 "

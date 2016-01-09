@@ -1,12 +1,10 @@
 .TH "oprotowrap" 1 "January 2016" "ONICS 1.0"
 .SH NAME
-ethwrap, grewrap, icmpwrap, icmp6wrap, ipwrap, ip6wrap, tcpwrap, udpwrap
+ethwrap, icmpwrap, icmp6wrap, ipwrap, ip6wrap, tcpwrap, udpwrap
 - Wrap an XPKT formatted packet in a new header.
 .P
 .SH SYNOPSYS
 \fBethwrap\fP [\fB-f\fP \fIinfile\fP] [\fIstmt1\fP \fIstmt2\fP ...]
-.P
-\fBgrewrap\fP [\fB-f\fP \fIinfile\fP] [\fIstmt1\fP \fIstmt2\fP ...]
 .P
 \fBicmpwrap\fP [\fB-f\fP \fIinfile\fP] [\fIstmt1\fP \fIstmt2\fP ...]
 .P
@@ -34,8 +32,6 @@ outputting them.
 .P
 .IP \fBethwrap\fP
 wraps each packet in an Ethernet II frame header
-.IP \fBgrewrap\fP
-wraps a GRE header around each packet.
 .IP \fBicmpwrap\fP
 wraps each packet in an IPv4 ICMP header
 .IP \fBicmp6wrap\fP

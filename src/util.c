@@ -437,6 +437,19 @@ ushort pridtoetype(uint prid)
 }
 
 
+uchar pridtoiptype(uint prid)
+{
+	if (PRID_FAMILY(prid) == PRID_PF_INET) {
+		return PRID_PROTO(prid);
+	} else if (PRID_FAMILY(prid) == PRID_PF_PVER) {
+		if (prid == PRID_NVGRE) {
+			return IPPROT_GRE;
+		}
+	}
+	return IPPROT_RESERVED;
+}
+
+
 int iptostr(char *s, void *ipa, size_t slen)
 {
 	byte_t *p = ipa;
