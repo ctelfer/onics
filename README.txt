@@ -7,7 +7,7 @@ The intent of these tools is to make it possible to manipulate packets
 on the command line in a UNIX-shell like fashion the same way one can
 manipulate text with programs like sed, awk, cat, tr, etc.  In fact,
 many of said command line tools and be used with the ONICS tool suite if
-done properly.  There are currently 21 binary tools and 25 Bourne shell
+done properly.  There are currently 21 binary tools and 27 Bourne shell
 scripts in the repository.
 
 This tool suite comes with regression tests, examples, complete manpages
@@ -174,9 +174,9 @@ work just about everywhere.
 
  * ethwrap - wrap packets in an ethernet frame header
 
- * gre-decap - decapsulate GRE+IP+Etherent packets
+ * gre-decap - decapsulate [NV]GRE+IP+Etherent packets
 
- * gre-encap - encapsulate packets in GRE+IP+Etherent headers
+ * gre-encap - encapsulate packets in [NV]GRE+IP+Etherent headers
 
  * ipwrap  - wrap packets in an IPv4 header
 
@@ -219,6 +219,10 @@ work just about everywhere.
  * tcpwrap - wrap packets in a TCP header
 
  * udpwrap - wrap packets in a UDP header
+
+ * vxlan-decap - decapsulate VXLAN+UDP+IP+Etherent packets
+
+ * vxlan-encap - encapsulate packets in VXLAN+UDP+IP+Etherent headers
 
  * xtsscale - scale the timestamps for a stream of packets
 

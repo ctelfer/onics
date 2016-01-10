@@ -1,4 +1,4 @@
-.TH "onics" 7 "August 2015" "ONICS 1.0"
+.TH "onics" 7 "January 2016" "ONICS 1.0"
 .SH NAME
 ONICS - Open Network Inspection Command Suite
 .P
@@ -8,7 +8,7 @@ ONICS - Open Network Inspection Command Suite
 .SH DESCRIPTION
 \fBONICS\fP is a command line tool suite along with the code building
 blocks for those tools to capture, dissect, manipulate and send network
-data.  The tool suite currently consists of 21 binaries and 25 scripts
+data.  The tool suite currently consists of 21 binaries and 27 scripts
 built on those programs.  The idea is for these utilities to be the
 equivalent of programs like grep, sed, awk, etc. for packets instead of
 lines of text.  The programs, as a rule use the XPKT format for packet
@@ -21,9 +21,9 @@ of the programs work on both packet traces as well as live traffic.
 .IP \fBethwrap\fP
 Wrap packets in an Ethernet header.
 .IP \fBgre-decap\fP
-Decapsulate GRE+IP+Ethernet encapsulated packets.
+Decapsulate [NV]GRE+IP+Ethernet encapsulated packets.
 .IP \fBgre-encap\fP
-Encapsulate packets in GRE+IP+Ethernet headers.
+Encapsulate packets in [NV]GRE+IP+Ethernet headers.
 .IP \fBh2xpkt\fP
 Convert a hex packet to an XPKT.
 .IP \fBicmp6wrap\fP
@@ -107,6 +107,10 @@ Generate a full TCP stream from a set of files.
 Wrap packets in an TCP header.
 .IP \fBudpwrap\fP
 Wrap packets in an UDP header.
+.IP \fBvxlan-decap\fP
+Decapsulate VXLAN+UDP+IP+Ethernet encapsulated packets.
+.IP \fBvxlan-encap\fP
+Encapsulate packets in VXLAN+UDP+IP+Ethernet headers.
 .IP \fBx2hpkt\fP
 Convert a stream of XPKT packets to hex packets.
 .IP \fBxpkt2pc\fP
