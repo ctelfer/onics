@@ -41,6 +41,7 @@ START='
 	ip.ttl = 64;
 	udp.sport = 12345;
 	udp.dport = 53;
+	udp.cksum = 1;  # Force update by default
 '
 
 END='

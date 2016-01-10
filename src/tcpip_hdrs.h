@@ -738,4 +738,18 @@ struct nvgreh {
 #define NVGRE_VSID(_nvgre) \
 	(((_nvgre)->vsidflow >> NVGRE_VSID_SHF) & NVGRE_VSID_MSK)
 
+
+struct vxlanh {
+	uint32_t		flags;
+	uint32_t		vni;
+};
+
+#define VXLAN_HLEN		8
+#define VXLAN_FLAG_MSK		0x08000000
+#define VXLAN_FLAG_VNI		0x08000000
+#define VXLAN_VNI_MSK		0x00FFFFFF
+#define VXLAN_VNI_SHF		8
+#define VXLAN_VNI(_vxh)		(((_vxh)->vni >> VXLAN_VNI_SHF) & VXLAN_VNI_MSK)
+#define VXLAN_PORT		4789
+
 #endif /* __tcpip_hdrs_h */

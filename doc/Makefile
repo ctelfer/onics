@@ -5,7 +5,7 @@ MAN1_DOCS= \
 	nvmpf.1 oprotowrap.1 mkpkt.1 pc2xpkt.1 pcapin.1 pcapout.1 pcount.1 \
 	pdiff.1 phead.1 pktdemux.1 pktin.1 pktmux.1 pktout.1 pktrel.1 pml.1 \
 	pfind.1 ppophdr.1 preverse.1 psort.1 psplit.1 ptail.1 rawpkt.1 \
-	tcpsess.1 x2hpkt.1 xpkt2pc.1 xtsscale.1
+	tcpsess.1 vxlan-encap.1 vxlan-decap.1 x2hpkt.1 xpkt2pc.1 xtsscale.1
 
 OPROTO_WRAP_DOCS= \
 	ethwrap.1 ipwrap.1 ip6wrap.1 icmpwrap.1 icmp6wrap.1 tcpwrap.1 udpwrap.1

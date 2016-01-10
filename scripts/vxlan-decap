@@ -1,10 +1,10 @@
 #!/bin/sh
 #
 # ONICS
-# Copyright 2013-2015
+# Copyright 2012-2016
 # Christopher Adam Telfer
 #
-# udpwrap - Wrap a packet in a UDP header.
+# gre-decap - Decapsulate GRE packets.
 #
 #
 #  This program is free software: you can redistribute it and/or modify
@@ -26,19 +26,20 @@ usage() {
 	exit 1
 }
 
-# Be sure to force a checksum update by default
-PMLSCRIPT="
-	import \"std.pml\";
-	{
-	parse_push_front(0, @udp);
-	udp.cksum = 1;
-"
-
 INFILE=""
+PMLSCRIPT=""
+PROLOG="
+if (eth and eth.index == 1 and
+    ip and ip.index == 2 and 
+    udp and udp.index == 3 and
+    vxlan and vxlan.index == 4) {
+    len = eth.hlen + ip.hlen + udp.hlen + vxlan.hlen;
+"
 
 if [ $# -gt 0 ]
 then
 	[ "$1" = "-h" ] && usage
+
 	if [ "$1" = "-f" ]
 	then
 		[ $# -lt 2 ] && usage
@@ -48,6 +49,17 @@ then
 	fi
 fi
 
+PMLSCRIPT="
+	import \"std.pml\";
+	{
+	  $PROLOG
+	    pkt_cut_u(eth[0, len]);
+	    parse_pop_front(0);
+	    parse_pop_front(0);
+	    parse_pop_front(0);
+	    parse_pop_front(0);
+"
+
 for S
 do
 	PMLSCRIPT="$PMLSCRIPT
@@ -55,8 +67,10 @@ $S"
 done
 
 PMLSCRIPT="$PMLSCRIPT
-	fix_lens(0);
-	fix_dltype(0);
-}"
+	    fix_dltype(0);
+	    fix_lens(0);
+	    fix_csums(0);
+	  }
+        }"
 
 exec pml -e "$PMLSCRIPT" $INFILE

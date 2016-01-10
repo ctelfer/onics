@@ -1,0 +1,47 @@
+.TH "vxlan-decap" 1 "January 2016" "ONICS 1.0"
+.SH NAME
+vxlan-decap
+- Decapsulate VXLAN+UDP+IPv4+Ethernet encapsulated XPKT packets
+.P
+.SH SYNOPSYS
+\fBvxlan-decap\fP [\fB-f\fP \fIinfile\fP] [\fIstmt1\fP \fIstmt2\fP ...]
+.P
+.P
+.SH DESCRIPTION
+This utility takes a stream of XPKT formatted packets and for each
+packet that is encapsulated in a VXLAN+UDP+IP+Ethernet tunnel, it
+decapsulates the packet.  The \fBvxlan-decap\fP utility will then copy
+the decapsulated stream to standard output.  As with other ONICS
+scripts, the user can specify additional PML statements to modify the
+packet fields during the decapsulation.  It is worth keeping in mind
+that these modifications will occur after decapsulation.  Thus
+references to protocol fields in \fBeth\fP, \fBip\fP, \fBudp\fP and
+\fBvxlan\fP will refer to the inner headers of the resutling packets.
+Also note that the modification statements will only apply to packets
+that the script decapsulates; they will not modify other packets.
+.P
+.SH OPTIONS
+.P
+.IP "\fB-f\fP \fIinfile\fP"
+Instead of reading the packet data from standard input, read the 
+packet data from \fIinfile\fP
+.P
+.SH EXAMPLES
+.P
+This would create a UDP/IP packet, encapsulate and then decapsulate it
+again before saving it.
+.nf
+
+        echo "Hello World" | rawpkt | udpwrap | 
+                             ipwrap | vxlan-encap | vxlan-decap > file.xpkt
+
+.fi
+.P
+.SH AVAILABILITY
+This utility should be available on all supported ONICS platforms.
+.P
+.SH AUTHOR
+Christopher A. Telfer <ctelfer@gmail.com>
+.P
+.SH "SEE ALSO"
+onics_proto(7), rawpkt(1), pml(1), ethwrap(1), ipwrap(1), vxlan-decap(1)

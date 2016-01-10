@@ -40,6 +40,8 @@ extern struct prparse_ops icmpv6_prparse_ops;
 extern struct prparse_ops udp_prparse_ops;
 extern struct prparse_ops tcp_prparse_ops;
 extern struct prparse_ops gre_prparse_ops;
+extern struct prparse_ops nvgre_prparse_ops;
+extern struct prparse_ops vxlan_prparse_ops;
 
 
 struct eth_parse {
@@ -821,6 +823,37 @@ static struct prparse *udp_parse(struct prparse *reg, byte_t *buf,
 }
 
 
+static int udp_nxtcld(struct prparse *reg, byte_t *buf, struct prparse *cld,
+		      uint *prid, ulong *off, ulong *maxlen)
+{
+	struct udph *udp;
+	ushort dport;
+
+	if (cld != NULL)
+		return 0;
+
+	/* Look for tunnel encapsulations over UDP */
+	udp = prp_header(reg, buf, struct udph);
+	dport = ntoh16x(&udp->dport);
+
+	/* 
+	 * VXLAN must be:
+	 *   - on the right port
+	 *   - have enough room for the header
+	 *   - match the correct fixed value in the first word
+	 */
+	if (dport == VXLAN_PORT && prp_plen(reg) >= VXLAN_HLEN &&
+	    hton32(*(uint32_t *)prp_payload(reg, buf)) == VXLAN_FLAG_VNI) {
+		*prid = PRID_VXLAN;
+		*off = prp_poff(reg);
+		*maxlen = prp_plen(reg);
+		return 1;
+	} else {
+		return 0;
+	}
+}
+
+
 static int udp_getspec(struct prparse *prp, int enclose, struct prpspec *ps)
 {
 	return hdr_getspec(prp, enclose, ps, PRID_UDP, UDPH_LEN);
@@ -830,7 +863,7 @@ static int udp_getspec(struct prparse *prp, int enclose, struct prpspec *ps)
 static int udp_add(struct prparse *reg, byte_t *buf, struct prpspec *ps,
 		   int enclose)
 {
-	struct prparse *prp;
+	struct prparse *prp, *cld;
 	struct udph *udp;
 
 	(void)enclose;
@@ -849,6 +882,12 @@ static int udp_add(struct prparse *reg, byte_t *buf, struct prpspec *ps,
 		memset(prp_header(prp, buf, void), 0, prp_hlen(prp));
 		udp = prp_header(prp, buf, struct udph);
 		hton16i(prp_totlen(prp), &udp->len);
+		/* check for known protocols within UDP */
+		cld = prp_next_in_region(prp, prp);
+		if (cld != NULL) {
+			if (cld->prid == PRID_VXLAN)
+				hton16i(VXLAN_PORT, &udp->dport);
+		}
 	}
 
 	return 0;
@@ -901,8 +940,10 @@ static int udp_fixcksum(struct prparse *prp, byte_t *buf)
 
 	if ((prp_hlen(prp) != UDPH_LEN) || (ipprp == NULL))
 		return -1;
-	udp->cksum = 0;
-	udp->cksum = pseudo_cksum(prp, ipprp, buf, IPPROT_UDP);
+	if (udp->cksum != 0) {
+		udp->cksum = 0;
+		udp->cksum = pseudo_cksum(prp, ipprp, buf, IPPROT_UDP);
+	}
 	prp->error &= ~PRP_ERR_CKSUM;
 
 	return 0;
@@ -2085,6 +2126,94 @@ static int nvgre_add(struct prparse *reg, byte_t *buf, struct prpspec *ps,
 }
 
 
+/* -- ops for VXLAN type -- */
+static void vxlan_update(struct prparse *prp, byte_t *buf);
+
+static struct prparse *vxlan_parse(struct prparse *reg, byte_t *buf,
+				   ulong off, ulong maxlen)
+{
+	struct prparse *prp;
+
+	prp = crtprp(sizeof(struct prparse), PRID_VXLAN, off, 0, maxlen, 0,
+		     &vxlan_prparse_ops, 0);
+	if (!prp)
+		return NULL;
+	prp->region = reg;
+	vxlan_update(prp, buf);
+
+	return prp;
+}
+
+
+int vxlan_nxtcld(struct prparse *reg, byte_t *buf, struct prparse *cld,
+	         uint *prid, ulong *off, ulong *maxlen)
+{
+	if (cld != NULL || prp_plen(reg) < ETHHLEN)
+		return 0;
+	*prid = PRID_ETHERNET2;
+	*off = prp_poff(reg);
+	*maxlen = prp_plen(reg);
+	return 1;
+}
+
+
+static int vxlan_getspec(struct prparse *prp, int enclose, struct prpspec *ps)
+{
+	return hdr_getspec(prp, enclose, ps, PRID_VXLAN, VXLAN_HLEN);
+}
+
+
+static int vxlan_add(struct prparse *reg, byte_t *buf, struct prpspec *ps,
+		     int enclose)
+{
+	struct prparse *prp;
+	struct vxlanh *vxh;
+
+	abort_unless(reg && ps && ps->prid == PRID_VXLAN);
+	if (ps->hlen < VXLAN_HLEN) {
+		errno = EINVAL;
+		return -1;
+	}
+
+	prp = crtprp(sizeof(struct prparse), PRID_VXLAN, ps->off, ps->hlen,
+		     ps->plen, ps->tlen, &vxlan_prparse_ops, 0);
+	if (!prp)
+		return -1;
+
+	prp_add_insert(reg, prp, enclose);
+	if (buf) {
+		vxh = prp_header(prp, buf, struct vxlanh);
+		memset(vxh, 0, VXLAN_HLEN);
+		hton32i(VXLAN_FLAG_VNI, &vxh->flags);
+	}
+
+	return 0;
+}
+
+
+static void vxlan_update(struct prparse *prp, byte_t *buf)
+{
+	uint len;
+	struct vxlanh *vxh;
+	ulong flags;
+
+	prp->error = 0;
+	resetxfields(prp);
+
+	len = prp_totlen(prp);
+	if (len < VXLAN_HLEN) {
+		prp->error |= PRP_ERR_TOOSMALL;
+		return;
+	}
+
+	prp_poff(prp) = prp_soff(prp) + VXLAN_HLEN;
+	vxh = prp_header(prp, buf, struct vxlanh);
+	flags = hton32(vxh->flags);
+	if ((flags & VXLAN_FLAG_MSK) != VXLAN_FLAG_VNI)
+		prp->error |= PRP_ERR_INVALID;
+}
+
+
 /* -- op structures for default initialization -- */
 struct proto_parser_ops eth_proto_parser_ops = {
 	eth_parse,
@@ -2178,7 +2307,7 @@ struct prparse_ops icmpv6_prparse_ops = {
 
 struct proto_parser_ops udp_proto_parser_ops = {
 	udp_parse,
-	default_nxtcld,
+	udp_nxtcld,
 	udp_getspec,
 	udp_add
 };
@@ -2228,6 +2357,22 @@ struct proto_parser_ops nvgre_proto_parser_ops = {
 	gre_nxtcld,
 	nvgre_getspec,
 	nvgre_add
+};
+
+
+struct proto_parser_ops vxlan_proto_parser_ops = {
+	vxlan_parse,
+	vxlan_nxtcld,
+	vxlan_getspec,
+	vxlan_add
+};
+
+struct prparse_ops vxlan_prparse_ops = {
+	vxlan_update,
+	default_fixlen,
+	default_fixcksum,
+	default_copy,
+	default_free
 };
 
 
@@ -3336,6 +3481,26 @@ struct ns_elem *stdproto_nvgre_ns_elems[STDPROTO_NS_ELEN] = {
 };
 
 
+/* VXLAN Namespace */
+extern struct ns_elem *stdproto_vxlan_ns_elems[STDPROTO_NS_ELEN];
+static struct ns_namespace vxlan_ns = 
+	NS_NAMESPACE_I("vxlan", NULL, PRID_VXLAN, PRID_PCLASS_TUNNEL,
+		"Virtual Extensible LAN", NULL,
+	       	stdproto_vxlan_ns_elems, array_length(stdproto_vxlan_ns_elems));
+
+static struct ns_pktfld vxlan_ns_vni_flag =
+	NS_BITFIELD_I("vni_flag", &vxlan_ns, PRID_VXLAN, 0, 4, 1, "VNI Present",
+		&ns_fmt_dec);
+static struct ns_pktfld vxlan_ns_vni =
+	NS_BYTEFIELD_I("vsid", &vxlan_ns, PRID_VXLAN, 4, 3, "Virtual Network ID",
+		&ns_fmt_dec);
+
+
+struct ns_elem *stdproto_vxlan_ns_elems[STDPROTO_NS_ELEN] = {
+	(struct ns_elem *)&vxlan_ns_vni_flag, (struct ns_elem *)&vxlan_ns_vni,
+};
+
+
 int register_std_proto()
 {
 	if (pp_register(PRID_ETHERNET2, &eth_proto_parser_ops) < 0)
@@ -3357,6 +3522,8 @@ int register_std_proto()
 	if (pp_register(PRID_GRE, &gre_proto_parser_ops) < 0)
 		goto fail;
 	if (pp_register(PRID_NVGRE, &nvgre_proto_parser_ops) < 0)
+		goto fail;
+	if (pp_register(PRID_VXLAN, &vxlan_proto_parser_ops) < 0)
 		goto fail;
 
 	if (ns_add_elem(NULL, (struct ns_elem *)&pkt_ns) < 0)
@@ -3383,6 +3550,8 @@ int register_std_proto()
 		goto fail;
 	if (ns_add_elem(NULL, (struct ns_elem *)&nvgre_ns) < 0)
 		goto fail;
+	if (ns_add_elem(NULL, (struct ns_elem *)&vxlan_ns) < 0)
+		goto fail;
 
 	return 0;
 fail:
@@ -3403,6 +3572,7 @@ void unregister_std_proto()
 	pp_unregister(PRID_TCP);
 	pp_unregister(PRID_GRE);
 	pp_unregister(PRID_NVGRE);
+	pp_unregister(PRID_VXLAN);
 
 	ns_rem_elem((struct ns_elem *)&pkt_ns);
 	ns_rem_elem((struct ns_elem *)&pdu_ns);
@@ -3416,4 +3586,5 @@ void unregister_std_proto()
 	ns_rem_elem((struct ns_elem *)&tcp_ns);
 	ns_rem_elem((struct ns_elem *)&gre_ns);
 	ns_rem_elem((struct ns_elem *)&nvgre_ns);
+	ns_rem_elem((struct ns_elem *)&vxlan_ns);
 }

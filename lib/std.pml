@@ -187,6 +187,25 @@ void fix_pn(int pn)
 }
 
 
+void hdr_pop()
+{
+	parse_pop_front(0);
+}
+
+
+void hdr_pop_pn(int pn)
+{
+	parse_pop_front(pn);
+}
+
+
+#
+# VXLAN constants
+#
+
+const VXLAN_PORT = 4789;
+
+
 #
 # Wrap utilities
 #
@@ -247,10 +266,93 @@ void gre_wrap()
 }
 
 
+void gre_encap()
+{
+	parse_push_front(0, @gre);
+	parse_push_front(0, @ip);
+	parse_push_front(0, @eth);
+	fix_dltype(0);
+}
+
+
+void gre_decap()
+{
+	if (eth and eth.index == 1 and
+	    ip and ip.index == 2 and
+	    gre and gre.index == 3) {
+		len = eth.hlen + ip.hlen + gre.hlen;
+		pkt_cut_u(eth[0, len]);
+		parse_pop_front(0);
+		parse_pop_front(0);
+		parse_pop_front(0);
+		fix_dltype(0);
+	}
+}
+
+
 void nvgre_wrap()
 {
 	parse_push_front(0, @nvgre);
 	fix_dltype(0);
+}
+
+
+void nvgre_encap()
+{
+	parse_push_front(0, @nvgre);
+	parse_push_front(0, @ip);
+	parse_push_front(0, @eth);
+	fix_dltype(0);
+}
+
+
+void nvgre_decap()
+{
+	if (eth and eth.index == 1 and
+	    ip and ip.index == 2 and
+	    nvgre and nvgre.index == 3) {
+		len = eth.hlen + ip.hlen + nvgre.hlen;
+		pkt_cut_u(eth[0, len]);
+		parse_pop_front(0);
+		parse_pop_front(0);
+		parse_pop_front(0);
+		fix_dltype(0);
+	}
+}
+
+
+void vxlan_wrap()
+{
+	parse_push_front(0, @vxlan);
+	fix_dltype(0);
+}
+
+
+void vxlan_encap()
+{
+	parse_push_front(0, @vxlan);
+	parse_push_front(0, @udp);
+	udp.dport = VXLAN_PORT;
+	parse_push_front(0, @ip);
+	parse_push_front(0, @eth);
+	fix_dltype(0);
+}
+
+
+void vxlan_decap()
+{
+	if (eth and eth.index == 1 and
+	    ip and ip.index == 2 and
+	    udp and udp.index == 3 and udp.dport == VXLAN_PORT and
+	    vxlan and vxlan.index == 4) {
+		len = eth.hlen + ip.hlen + udp.hlen + vxlan.hlen;
+		pkt_cut_u(eth[0, len]);
+		parse_pop_front(0);
+		parse_pop_front(0);
+		parse_pop_front(0);
+		parse_pop_front(0);
+		fix_dltype(0);
+	}
 }
 
 

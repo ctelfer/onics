@@ -97,6 +97,7 @@ BEGIN {
 	ip.daddr = 100.0.0.0;
 	udp.dport = 53;
 	udp.sport = 12345;
+	udp.cksum = 1;
 	pkt_splice(udp.payload, "FOOBARBAZ");
 	vlan_push(0, ETYPE_C_VLAN, 1000);
 	fix_lens(0);

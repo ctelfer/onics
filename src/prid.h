@@ -98,6 +98,7 @@
 /* Protocol built as specific extensions or sub-versions on other protocols */
 
 #define PRID_NVGRE		PRID_BUILD(PRID_PF_PVER, 0)
+#define PRID_VXLAN		PRID_BUILD(PRID_PF_PVER, 1)
 
 
 #endif /* __prid_h */

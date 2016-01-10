@@ -1,10 +1,10 @@
 #!/bin/sh
 #
 # ONICS
-# Copyright 2013-2015
+# Copyright 2012-2016
 # Christopher Adam Telfer
 #
-# udpwrap - Wrap a packet in a UDP header.
+# vxlan-encap - Wrap a packet in VXLAN+UDP+IP+Eth headers.
 #
 #
 #  This program is free software: you can redistribute it and/or modify
@@ -26,19 +26,12 @@ usage() {
 	exit 1
 }
 
-# Be sure to force a checksum update by default
-PMLSCRIPT="
-	import \"std.pml\";
-	{
-	parse_push_front(0, @udp);
-	udp.cksum = 1;
-"
-
 INFILE=""
 
 if [ $# -gt 0 ]
 then
 	[ "$1" = "-h" ] && usage
+
 	if [ "$1" = "-f" ]
 	then
 		[ $# -lt 2 ] && usage
@@ -48,6 +41,15 @@ then
 	fi
 fi
 
+PMLSCRIPT="
+import \"std.pml\";
+{
+	parse_push_front(0, @vxlan);
+	parse_push_front(0, @udp);
+	parse_push_front(0, @ip);
+	parse_push_front(0, @eth);
+"
+
 for S
 do
 	PMLSCRIPT="$PMLSCRIPT
@@ -55,8 +57,9 @@ $S"
 done
 
 PMLSCRIPT="$PMLSCRIPT
-	fix_lens(0);
 	fix_dltype(0);
+	fix_lens(0);
+	fix_csums(0);
 }"
 
 exec pml -e "$PMLSCRIPT" $INFILE
