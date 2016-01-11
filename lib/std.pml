@@ -40,7 +40,7 @@ int pkt_splice(str p, str s)
 
 	if (cutlen > inslen) {
 		pkt_cut_d(p[0, cutlen - inslen]);
-	} else { 
+	} else {
 		pkt_ins_u(pn, off, inslen - cutlen);
 	}
 
@@ -356,7 +356,120 @@ void vxlan_decap()
 }
 
 
+#
+# MPLS Labels
+#
+
+inline mpls_nlabels() { str_len(mpls.header) / 4 }
+
+inline mpls_get_label(int l) { mpls.header[(l * 4), 3] >> 4 }
+
+inline mpls_get_tc(int l) { (mpls.header[(l * 4) + 2, 1] >> 1) & 0x7 }
+
+inline mpls_get_bos(int l) { mpls.header[(l * 4) + 2, 1] & 0x1 }
+
+inline mpls_get_ttl(int l) { mpls.header[(l * 4) + 3, 1] & 0xFF }
+
+void mpls_set_label(int l, int x) {
+	old = mpls.header[(l * 4), 4]; 
+	mpls.header[(l * 4), 4] = (old & 0x00000FFF) | ((x & 0xFFFFF) << 12);
+}
+
+void mpls_set_tc(int l, int x) {
+	old = mpls.header[(l * 4), 4]; 
+	mpls.header[(l * 4), 4] = (old & 0xFFFFF1FF) | ((x & 0x7) << 9);
+}
+
+void mpls_set_bos(int l, int x) {
+	old = mpls.header[(l * 4), 4]; 
+	mpls.header[(l * 4), 4] = (old & 0xFFFFFEFF) | ((x & 0x1) << 8);
+}
+
+void mpls_set_ttl(int l, int x) {
+	old = mpls.header[(l * 4), 4]; 
+	mpls.header[(l * 4), 4] = (old & 0xFFFFFF00) | (x & 0xFF);
+}
+
+inline mpls_nlabels_pn(int pn) {
+	str_len($(pn)mpls.header) / 4
+}
+
+inline mpls_get_label_pn(int pn, int l) {
+	$(pn)mpls.header[(l * 4), 3] >> 4
+}
+
+inline mpls_get_tc_pn(int pn, int l) {
+	($(pn)mpls.header[(l * 4) + 2, 1] >> 1) & 0x7
+}
+
+inline mpls_get_bos_pn(int pn, int l) {
+	$(pn)mpls.header[(l * 4) + 2, 1] & 0x1
+}
+
+inline mpls_get_ttl_pn(int pn, int l) {
+	$(pn)mpls.header[(l * 4) + 3, 1] & 0xFF
+}
+
+void mpls_set_label_pn(int pn, int l, int x) {
+	old = $(pn)mpls.header[(l * 4), 4]; 
+	$(pn)mpls.header[(l * 4), 4] = (old & 0x00000FFF) | ((x & 0xFFFFF) << 12);
+}
+
+void mpls_set_tc_pn(int pn, int l, int x) {
+	old = $(pn)mpls.header[(l * 4), 4]; 
+	$(pn)mpls.header[(l * 4), 4] = (old & 0xFFFFF1FF) | ((x & 0x7) << 9);
+}
+
+void mpls_set_bos_pn(int pn, int l, int x) {
+	old = $(pn)mpls.header[(l * 4), 4]; 
+	$(pn)mpls.header[(l * 4), 4] = (old & 0xFFFFFEFF) | ((x & 0x1) << 8);
+}
+
+void mpls_set_ttl_pn(int pn, int l, int x) {
+	old = $(pn)mpls.header[(l * 4), 4]; 
+	$(pn)mpls.header[(l * 4), 4] = (old & 0xFFFFFF00) | (x & 0xFF);
+}
+
+void mpls_push_pn(int pn, int label, int tc, int ttl)
+{
+	val = ((label & 0xFFFFF) << 12) | ((tc & 0x7) << 9) | (ttl & 0xFF);
+	if (not $(pn)mpls) {
+		parse_push_front(pn, @mpls);
+		fix_dltype(pn);
+		val = val | 0x100;
+	} else {
+		pkt_ins_d(pn, str_addr($(pn)mpls.header), 4);
+		pkt_adj_off(pn, @mpls, 0, 0, -4);
+	}
+	$(pn)mpls[0, 4] = val;
+}
+
+int mpls_pop_pn(int pn)
+{
+	val = 0;
+	if ($(pn)mpls and $(pn)mpls.index == 1) {
+		val = $(pn)mpls[0, 4];
+		pkt_cut_u($(pn)mpls.header[0, 4]);
+		if (str_len($(pn)mpls.header) <= 0)
+			parse_pop_front(pn);
+	}
+	return val;
+}
+
+void mpls_push(int label, int tc, int ttl)
+{
+	mpls_push_pn(0, label, tc, ttl);
+}
+
+int mpls_pop()
+{
+	return mpls_pop_pn(0);
+}
+
+
+#
 # RC4-based PRNG
+#
 str rand_m[256];
 int rand_i;
 int rand_j;

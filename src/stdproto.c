@@ -42,6 +42,7 @@ extern struct prparse_ops tcp_prparse_ops;
 extern struct prparse_ops gre_prparse_ops;
 extern struct prparse_ops nvgre_prparse_ops;
 extern struct prparse_ops vxlan_prparse_ops;
+extern struct prparse_ops mpls_prparse_ops;
 
 
 struct eth_parse {
@@ -2214,6 +2215,133 @@ static void vxlan_update(struct prparse *prp, byte_t *buf)
 }
 
 
+/* -- ops for MPLS type -- */
+static void mpls_update(struct prparse *prp, byte_t *buf);
+
+static struct prparse *mpls_parse(struct prparse *reg, byte_t *buf,
+				  ulong off, ulong maxlen)
+{
+	struct prparse *prp;
+
+	prp = crtprp(sizeof(struct eth_parse), PRID_MPLS, off, 0,
+		     maxlen, 0, &mpls_prparse_ops, PRP_MPLS_NXFIELDS);
+	if (!prp)
+		return NULL;
+
+	prp->region = reg;
+	mpls_update(prp, buf);
+
+	return prp;
+}
+
+
+int mpls_nxtcld(struct prparse *reg, byte_t *buf, struct prparse *cld,
+	        uint *prid, ulong *off, ulong *maxlen)
+{
+	byte_t *p;
+	struct ipv4h *ip;
+	struct ipv6h *ip6;
+
+	if (cld != NULL || prp_plen(reg) < IPH_MINLEN)
+		return 0;
+
+	abort_unless(buf);
+
+	p = prp_payload(reg, buf);
+	if ((*p & 0xF0) == 0x40) {
+		ip = (struct ipv4h *)p;
+		if (IPH_HLEN(*ip) >= IPH_MINLEN && 
+		    IPH_HLEN(*ip) <= prp_plen(reg) &&
+		    ntoh16(ip->len) <= prp_plen(reg)) {
+			*prid = PRID_IPV4;
+			*off = prp_poff(reg);
+			*maxlen = prp_plen(reg);
+			return 1;
+		}
+	} else if ((*p & 0xF0) == 0x60 && prp_plen(reg) >= IPV6H_LEN) {
+		ip6 = (struct ipv6h *)p;
+		if (ntoh16(ip6->len) <= prp_plen(reg) - IPV6H_LEN) {
+			*prid = PRID_IPV6;
+			*off = prp_poff(reg);
+			*maxlen = prp_plen(reg);
+			return 1;
+		}
+	}
+	return 0;
+}
+
+
+static int mpls_getspec(struct prparse *prp, int enclose, struct prpspec *ps)
+{
+	return hdr_getspec(prp, enclose, ps, PRID_MPLS, MPLS_HLEN);
+}
+
+
+static int mpls_add(struct prparse *reg, byte_t *buf, struct prpspec *ps,
+		    int enclose)
+{
+	struct prparse *prp;
+	struct mpls_label *mpls;
+	uint i;
+	uint nlabels;
+
+	abort_unless(reg && ps && ps->prid == PRID_MPLS);
+	if (ps->hlen < MPLS_HLEN || (ps->hlen % MPLS_HLEN) != 0) {
+		errno = EINVAL;
+		return -1;
+	}
+
+	prp = crtprp(sizeof(struct eth_parse), PRID_MPLS, 
+		     ps->off, ps->hlen, ps->plen, ps->tlen,
+		     &eth_prparse_ops, PRP_MPLS_NXFIELDS);
+	if (!prp)
+		return -1;
+
+	prp_add_insert(reg, prp, enclose);
+	if (buf && prp_hlen(prp) >= MPLS_HLEN) {
+		mpls = prp_header(prp, buf, struct mpls_label);
+		memset(mpls, 0, prp_hlen(prp));
+		nlabels = prp_hlen(prp) / MPLS_HLEN;
+		for (i = 0; i < nlabels; ++i)
+			mpls[i].label = (64 << MPLS_TTL_SHF);
+		mpls[nlabels-1].label |= (1 << MPLS_BOS_SHF);
+	}
+
+	return 0;
+}
+
+
+static void mpls_update(struct prparse *prp, byte_t *buf)
+{
+	ulong max;
+	ulong i;
+	struct mpls_label *mpls;
+
+	prp->error = 0;
+	resetxfields(prp);
+
+	if (prp_totlen(prp) < MPLS_HLEN) {
+		prp->error |= PRP_ERR_TOOSMALL;
+		return;
+	}
+
+	prp_poff(prp) = prp_soff(prp);
+	max = prp_totlen(prp) / MPLS_HLEN;
+	mpls = prp_header(prp, buf, struct mpls_label);
+	i = 0;
+	while (i < max) {
+		if (i > 0 && i < PRP_MPLS_NXFIELDS)
+			prp->offs[PRP_OI_EXTRA + i] = prp_poff(prp);
+		prp_poff(prp) += MPLS_HLEN;
+		if (MPLS_BOS(ntoh32(mpls->label)))
+			return;
+		++i;
+		++mpls;
+	}
+	prp->error |= PRP_ERR_INVALID;
+}
+
+
 /* -- op structures for default initialization -- */
 struct proto_parser_ops eth_proto_parser_ops = {
 	eth_parse,
@@ -2335,7 +2463,6 @@ struct prparse_ops tcp_prparse_ops = {
 	tcp_free
 };
 
-
 struct proto_parser_ops gre_proto_parser_ops = {
 	gre_parse,
 	gre_nxtcld,
@@ -2351,14 +2478,12 @@ struct prparse_ops gre_prparse_ops = {
 	default_free
 };
 
-
 struct proto_parser_ops nvgre_proto_parser_ops = {
 	gre_parse,
 	gre_nxtcld,
 	nvgre_getspec,
 	nvgre_add
 };
-
 
 struct proto_parser_ops vxlan_proto_parser_ops = {
 	vxlan_parse,
@@ -2369,6 +2494,21 @@ struct proto_parser_ops vxlan_proto_parser_ops = {
 
 struct prparse_ops vxlan_prparse_ops = {
 	vxlan_update,
+	default_fixlen,
+	default_fixcksum,
+	default_copy,
+	default_free
+};
+
+struct proto_parser_ops mpls_proto_parser_ops = {
+	mpls_parse,
+	mpls_nxtcld,
+	mpls_getspec,
+	mpls_add
+};
+
+struct prparse_ops mpls_prparse_ops = {
+	mpls_update,
 	default_fixlen,
 	default_fixcksum,
 	default_copy,
@@ -3501,6 +3641,114 @@ struct ns_elem *stdproto_vxlan_ns_elems[STDPROTO_NS_ELEN] = {
 };
 
 
+/* MPLS Namespace */
+extern struct ns_elem *stdproto_mpls_ns_elems[STDPROTO_NS_ELEN];
+static struct ns_namespace mpls_ns = 
+	NS_NAMESPACE_I("mpls", NULL, PRID_MPLS, PRID_PCLASS_TUNNEL,
+		"Multi-Protocol Label Switching", NULL,
+		stdproto_mpls_ns_elems, array_length(stdproto_mpls_ns_elems));
+
+static struct ns_pktfld mpls_ns_label =
+	NS_BITFIELD_I("label", &mpls_ns, PRID_MPLS, 0, 0, 20, "Label",
+		&ns_fmt_dec);
+static struct ns_pktfld mpls_ns_tc =
+	NS_BITFIELD_I("tc", &mpls_ns, PRID_MPLS, 2, 4, 3,
+		"Traffic Class", &ns_fmt_dec);
+static struct ns_pktfld mpls_ns_bos =
+	NS_BITFIELD_I("bos", &mpls_ns, PRID_MPLS, 2, 7, 1,
+		"Bottom of Stack", &ns_fmt_dec);
+static struct ns_pktfld mpls_ns_ttl =
+	NS_BYTEFIELD_I("ttl", &mpls_ns, PRID_MPLS, 3, 1, "Time to Live",
+		&ns_fmt_dec);
+
+extern struct ns_elem *stdproto_mpls_lbl1_ns_elems[STDPROTO_NS_SUB_ELEN];
+extern struct ns_elem *stdproto_mpls_lbl2_ns_elems[STDPROTO_NS_SUB_ELEN];
+extern struct ns_elem *stdproto_mpls_lbl3_ns_elems[STDPROTO_NS_SUB_ELEN];
+extern struct ns_elem *stdproto_mpls_lbl4_ns_elems[STDPROTO_NS_SUB_ELEN];
+extern struct ns_elem *stdproto_mpls_lbl5_ns_elems[STDPROTO_NS_SUB_ELEN];
+extern struct ns_elem *stdproto_mpls_lbl6_ns_elems[STDPROTO_NS_SUB_ELEN];
+extern struct ns_elem *stdproto_mpls_lbl7_ns_elems[STDPROTO_NS_SUB_ELEN];
+
+static struct ns_namespace mpls_lbl1_ns = 
+	NS_NAMESPACE_IDX_I("mpls1", &mpls_ns, PRID_MPLS, PRID_NONE,
+		PRP_MPLSFLD_LBL1, 4, "MPLS Label 1", NULL,
+		stdproto_mpls_lbl1_ns_elems,
+		array_length(stdproto_mpls_lbl1_ns_elems));
+static struct ns_pktfld mpls_lbl1_label =
+	NS_BITFIELD_IDX_I("label", &mpls_lbl1_ns, PRID_MPLS,
+		PRP_MPLSFLD_LBL1, 0, 0, 20, "Label", &ns_fmt_dec);
+static struct ns_pktfld mpls_lbl1_tc =
+	NS_BITFIELD_IDX_I("tc", &mpls_lbl1_ns, PRID_MPLS,
+		PRP_MPLSFLD_LBL1, 2, 4, 3, "Traffic Class", &ns_fmt_dec);
+static struct ns_pktfld mpls_lbl1_bos =
+	NS_BITFIELD_IDX_I("bos", &mpls_lbl1_ns, PRID_MPLS,
+		PRP_MPLSFLD_LBL1, 2, 7, 1, "Bottom of Stack", &ns_fmt_dec);
+static struct ns_pktfld mpls_lbl1_ttl =
+	NS_BYTEFIELD_IDX_I("ttl", &mpls_lbl1_ns, PRID_MPLS,
+		PRP_MPLSFLD_LBL1, 3, 1, "Time to Live", &ns_fmt_dec);
+
+struct ns_elem *stdproto_mpls_lbl1_ns_elems[STDPROTO_NS_SUB_ELEN] = {
+	(struct ns_elem *)&mpls_lbl1_label, (struct ns_elem *)&mpls_lbl1_tc,
+	(struct ns_elem *)&mpls_lbl1_bos, (struct ns_elem *)&mpls_lbl1_ttl,
+};
+
+
+static struct ns_namespace mpls_lbl2_ns = 
+	NS_NAMESPACE_IDX_I("mpls2", &mpls_ns, PRID_MPLS, PRID_NONE,
+		PRP_MPLSFLD_LBL1, 4, "MPLS Label 1", NULL,
+		stdproto_mpls_lbl2_ns_elems,
+		array_length(stdproto_mpls_lbl2_ns_elems));
+static struct ns_pktfld mpls_lbl2_label =
+	NS_BITFIELD_IDX_I("label", &mpls_lbl2_ns, PRID_MPLS,
+		PRP_MPLSFLD_LBL1, 0, 0, 20, "Label", &ns_fmt_dec);
+static struct ns_pktfld mpls_lbl2_tc =
+	NS_BITFIELD_IDX_I("tc", &mpls_lbl2_ns, PRID_MPLS,
+		PRP_MPLSFLD_LBL1, 2, 4, 3, "Traffic Class", &ns_fmt_dec);
+static struct ns_pktfld mpls_lbl2_bos =
+	NS_BITFIELD_IDX_I("bos", &mpls_lbl2_ns, PRID_MPLS,
+		PRP_MPLSFLD_LBL1, 2, 7, 1, "Bottom of Stack", &ns_fmt_dec);
+static struct ns_pktfld mpls_lbl2_ttl =
+	NS_BYTEFIELD_IDX_I("ttl", &mpls_lbl2_ns, PRID_MPLS,
+		PRP_MPLSFLD_LBL1, 3, 1, "Time to Live", &ns_fmt_dec);
+
+struct ns_elem *stdproto_mpls_lbl2_ns_elems[STDPROTO_NS_SUB_ELEN] = {
+	(struct ns_elem *)&mpls_lbl2_label, (struct ns_elem *)&mpls_lbl2_tc,
+	(struct ns_elem *)&mpls_lbl2_bos, (struct ns_elem *)&mpls_lbl2_ttl,
+};
+
+
+static struct ns_namespace mpls_lbl3_ns = 
+	NS_NAMESPACE_IDX_I("mpls3", &mpls_ns, PRID_MPLS, PRID_NONE,
+		PRP_MPLSFLD_LBL1, 4, "MPLS Label 1", NULL,
+		stdproto_mpls_lbl3_ns_elems,
+		array_length(stdproto_mpls_lbl3_ns_elems));
+static struct ns_pktfld mpls_lbl3_label =
+	NS_BITFIELD_IDX_I("label", &mpls_lbl3_ns, PRID_MPLS,
+		PRP_MPLSFLD_LBL1, 0, 0, 20, "Label", &ns_fmt_dec);
+static struct ns_pktfld mpls_lbl3_tc =
+	NS_BITFIELD_IDX_I("tc", &mpls_lbl3_ns, PRID_MPLS,
+		PRP_MPLSFLD_LBL1, 2, 4, 3, "Traffic Class", &ns_fmt_dec);
+static struct ns_pktfld mpls_lbl3_bos =
+	NS_BITFIELD_IDX_I("bos", &mpls_lbl3_ns, PRID_MPLS,
+		PRP_MPLSFLD_LBL1, 2, 7, 1, "Bottom of Stack", &ns_fmt_dec);
+static struct ns_pktfld mpls_lbl3_ttl =
+	NS_BYTEFIELD_IDX_I("ttl", &mpls_lbl3_ns, PRID_MPLS,
+		PRP_MPLSFLD_LBL1, 3, 1, "Time to Live", &ns_fmt_dec);
+
+struct ns_elem *stdproto_mpls_lbl3_ns_elems[STDPROTO_NS_SUB_ELEN] = {
+	(struct ns_elem *)&mpls_lbl3_label, (struct ns_elem *)&mpls_lbl3_tc,
+	(struct ns_elem *)&mpls_lbl3_bos, (struct ns_elem *)&mpls_lbl3_ttl,
+};
+
+
+struct ns_elem *stdproto_mpls_ns_elems[STDPROTO_NS_ELEN] = {
+	(struct ns_elem *)&mpls_ns_label, (struct ns_elem *)&mpls_ns_tc,
+	(struct ns_elem *)&mpls_ns_bos, (struct ns_elem *)&mpls_ns_ttl,
+	(struct ns_elem *)&mpls_lbl1_ns, (struct ns_elem *)&mpls_lbl2_ns,
+	(struct ns_elem *)&mpls_lbl3_ns, 
+};
+
+
 int register_std_proto()
 {
 	if (pp_register(PRID_ETHERNET2, &eth_proto_parser_ops) < 0)
@@ -3524,6 +3772,8 @@ int register_std_proto()
 	if (pp_register(PRID_NVGRE, &nvgre_proto_parser_ops) < 0)
 		goto fail;
 	if (pp_register(PRID_VXLAN, &vxlan_proto_parser_ops) < 0)
+		goto fail;
+	if (pp_register(PRID_MPLS, &mpls_proto_parser_ops) < 0)
 		goto fail;
 
 	if (ns_add_elem(NULL, (struct ns_elem *)&pkt_ns) < 0)
@@ -3552,6 +3802,8 @@ int register_std_proto()
 		goto fail;
 	if (ns_add_elem(NULL, (struct ns_elem *)&vxlan_ns) < 0)
 		goto fail;
+	if (ns_add_elem(NULL, (struct ns_elem *)&mpls_ns) < 0)
+		goto fail;
 
 	return 0;
 fail:
@@ -3573,6 +3825,7 @@ void unregister_std_proto()
 	pp_unregister(PRID_GRE);
 	pp_unregister(PRID_NVGRE);
 	pp_unregister(PRID_VXLAN);
+	pp_unregister(PRID_MPLS);
 
 	ns_rem_elem((struct ns_elem *)&pkt_ns);
 	ns_rem_elem((struct ns_elem *)&pdu_ns);
@@ -3587,4 +3840,5 @@ void unregister_std_proto()
 	ns_rem_elem((struct ns_elem *)&gre_ns);
 	ns_rem_elem((struct ns_elem *)&nvgre_ns);
 	ns_rem_elem((struct ns_elem *)&vxlan_ns);
+	ns_rem_elem((struct ns_elem *)&mpls_ns);
 }

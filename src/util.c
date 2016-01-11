@@ -417,7 +417,7 @@ uint etypetoprid(ushort etype)
 	case ETHTYPE_ARP:    return PRID_ARP;
 	case ETHTYPE_TEB:    return PRID_ETHERNET2;
 	case ETHTYPE_MPLS:   return PRID_MPLS;
-	case ETHTYPE_MPLSMC: return PRID_MPLSMC;
+	case ETHTYPE_MPLSMC: return PRID_MPLS;
 	default:	     return PRID_NONE;
 	}
 }
@@ -431,7 +431,6 @@ ushort pridtoetype(uint prid)
 	case PRID_ARP:       return ETHTYPE_ARP;
 	case PRID_ETHERNET2: return ETHTYPE_TEB;
 	case PRID_MPLS:      return ETHTYPE_MPLS;
-	case PRID_MPLSMC:    return ETHTYPE_MPLSMC;
 	default:	     return 0;
 	}
 }

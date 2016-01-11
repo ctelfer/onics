@@ -752,4 +752,28 @@ struct vxlanh {
 #define VXLAN_VNI(_vxh)		(((_vxh)->vni >> VXLAN_VNI_SHF) & VXLAN_VNI_MSK)
 #define VXLAN_PORT		4789
 
+struct mpls_label {
+	uint32_t		label;
+};
+
+#define MPLS_HLEN		4
+#define MPLS_LABEL_SHF		12
+#define MPLS_LABEL_MSK		0xFFFFF
+#define MPLS_TC_SHF		9
+#define MPLS_TC_MSK		0x7
+#define MPLS_BOS_SHF		8
+#define MPLS_BOS_MSK		0x1
+#define MPLS_TTL_SHF		0
+#define MPLS_TTL_MSK		0xFF
+
+#define MPLS_LABEL(_lbl) \
+	(((_lbl) >> MPLS_LABEL_SHF) & MPLS_LABEL_MSK)
+#define MPLS_TC(_lbl) \
+	(((_lbl) >> MPLS_TC_SHF) & MPLS_TC_MSK)
+#define MPLS_BOS(_lbl)	\
+	(((_lbl) >> MPLS_BOS_SHF) & MPLS_BOS_MSK)
+#define MPLS_TTL(_lbl) \
+	(((_lbl) >> MPLS_TTL_SHF) & MPLS_TTL_MSK)
+
+
 #endif /* __tcpip_hdrs_h */

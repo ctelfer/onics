@@ -367,7 +367,7 @@ prog ::= decllist. {
 }
 
 /* Declarations */
-decllist ::= decl decllist. /* nothing to do: resolved below. */
+decllist ::= decllist decl. /* nothing to do: resolved below. */
 
 decllist ::= . /* nothing to do */
 

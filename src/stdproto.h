@@ -104,4 +104,9 @@ void unregister_std_proto();
 #define PRP_GREFLD_KEY		(PRP_OI_EXTRA + 1)
 #define PRP_GREFLD_SEQ		(PRP_OI_EXTRA + 2)
 
+#define PRP_MPLS_NXFIELDS	3
+#define PRP_MPLSFLD_LBL1	(PRP_OI_EXTRA + 0)
+#define PRP_MPLSFLD_LBL2	(PRP_OI_EXTRA + 1)
+#define PRP_MPLSFLD_LBL3	(PRP_OI_EXTRA + 2)
+
 #endif /* __stdproto_h */

@@ -82,8 +82,6 @@
 #define PRID_IPV4		PRID_BUILD(PRID_PF_NET, 0)
 #define PRID_IPV6		PRID_BUILD(PRID_PF_NET, 1)
 #define PRID_ARP		PRID_BUILD(PRID_PF_NET, 2)
-#define PRID_MPLS		PRID_BUILD(PRID_PF_NET, 3)
-#define PRID_MPLSMC		PRID_BUILD(PRID_PF_NET, 4)
 
 /* any IP protocol has a PRID of PRIT_BUILD(PRID_PF_INET, ip_proto) */
 #define PRID_ICMP		PRID_BUILD(PRID_PF_INET, 1)
@@ -94,6 +92,7 @@
 #define PRID_AH			PRID_BUILD(PRID_PF_INET, 51)
 #define PRID_ICMP6		PRID_BUILD(PRID_PF_INET, 58)
 #define PRID_SCTP		PRID_BUILD(PRID_PF_INET, 132)
+#define PRID_MPLS		PRID_BUILD(PRID_PF_INET, 137)
 
 /* Protocol built as specific extensions or sub-versions on other protocols */
 
