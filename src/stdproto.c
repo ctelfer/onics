@@ -2303,8 +2303,8 @@ static int mpls_add(struct prparse *reg, byte_t *buf, struct prpspec *ps,
 		memset(mpls, 0, prp_hlen(prp));
 		nlabels = prp_hlen(prp) / MPLS_HLEN;
 		for (i = 0; i < nlabels; ++i)
-			mpls[i].label = (64 << MPLS_TTL_SHF);
-		mpls[nlabels-1].label |= (1 << MPLS_BOS_SHF);
+			mpls[i].label = hton32(64 << MPLS_TTL_SHF);
+		mpls[nlabels-1].label |= hton32(1 << MPLS_BOS_SHF);
 	}
 
 	return 0;
