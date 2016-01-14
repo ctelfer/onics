@@ -2795,6 +2795,9 @@ static struct ns_pktfld ipv6_ns_saddr =
 static struct ns_pktfld ipv6_ns_daddr =
 	NS_BYTEFIELD_I("daddr", &ipv6_ns, PRID_IPV6, 24, 16,
 		"Destination Address", &ns_fmt_ipv6a);
+static struct ns_pktfld ipv6_ns_xnxthdr =
+	NS_BYTEFIELD_IDX_I("xnxthdr", &ipv6_ns, PRID_IPV6,
+		PRP_IPV6FLD_NXTHDR, 0, 1, "Final Next Header", &ns_fmt_dec);
 static struct ns_pktfld ipv6_ns_exth =
 	NS_BYTEFIELD_VARLEN_I("exth", &ipv6_ns, PRID_IPV6, PRP_OI_SOFF, 40,
 		PRP_OI_POFF,
@@ -2805,7 +2808,7 @@ struct ns_elem *stdproto_ipv6_ns_elems[STDPROTO_NS_ELEN] = {
 	(struct ns_elem *)&ipv6_ns_flowid, (struct ns_elem *)&ipv6_ns_len,
 	(struct ns_elem *)&ipv6_ns_nxthdr, (struct ns_elem *)&ipv6_ns_hoplim,
 	(struct ns_elem *)&ipv6_ns_saddr, (struct ns_elem *)&ipv6_ns_daddr,
-	(struct ns_elem *)&ipv6_ns_exth, 
+	(struct ns_elem *)&ipv6_ns_xnxthdr, (struct ns_elem *)&ipv6_ns_exth, 
 };
 
 
