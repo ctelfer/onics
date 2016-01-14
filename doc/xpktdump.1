@@ -1,0 +1,46 @@
+.TH "xpktdump" 1 "January 2016" "ONICS 1.0"
+.SH NAME
+xpktdump - Dump out XPKTs in a readable form.
+.P
+.SH SYNOPSYS
+\fBxpktdump\fP [\fB-hx\fP] [\fIinfile\fP]
+.P
+.SH DESCRIPTION
+\fBxpktdump\fP reads in a stream of XPKT-formatted packets and outputs
+them in a canonical hexadecimal dump format annotated with decoded
+packet fields.  By default \fBx2hpkt\fP reads the packets from standard
+input and outputs them to standard output.  If \fIinfile\fP is specified
+then \fBx2hpkt\fP reads from it instead.  \fBxpktdump\fP uses the
+\fBx2hpkt(1)\fP to generate the packet output.  However, it also invokes
+the pager specified by the $PAGER environment variable to paginate the
+output.
+.P
+.SH OPTIONS
+.IP \fB-h\fP
+Print the usage of the command and exit.
+.IP \fB-x\fP
+Dump the XPKT header along with every packet. 
+.P
+.SH EXAMPLES
+.P
+View packets captured in a file:
+.nf
+
+    xpktdump capture.xpkt
+
+.fi
+Capture packets from the wire and view them:
+.nf
+
+    pktin eth0 | xpktdump 
+
+.fi
+.P
+.SH AVAILABILITY
+This utility should be available on all supported ONICS platforms.
+.P
+.SH AUTHOR
+Christopher A. Telfer <ctelfer@gmail.com>
+.P
+.SH "SEE ALSO"
+onics_proto(7), x2hpkt(1)

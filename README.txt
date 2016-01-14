@@ -7,7 +7,7 @@ The intent of these tools is to make it possible to manipulate packets
 on the command line in a UNIX-shell like fashion the same way one can
 manipulate text with programs like sed, awk, cat, tr, etc.  In fact,
 many of said command line tools and be used with the ONICS tool suite if
-done properly.  There are currently 21 binary tools and 27 Bourne shell
+done properly.  There are currently 21 binary tools and 28 Bourne shell
 scripts in the repository.
 
 This tool suite comes with regression tests, examples, complete manpages
@@ -223,6 +223,8 @@ work just about everywhere.
  * vxlan-decap - decapsulate VXLAN+UDP+IP+Etherent packets
 
  * vxlan-encap - encapsulate packets in VXLAN+UDP+IP+Etherent headers
+
+ * xpktdump - dump a stream of packets in readable format with pagination
 
  * xtsscale - scale the timestamps for a stream of packets
 
