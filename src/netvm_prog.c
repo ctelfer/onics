@@ -609,6 +609,8 @@ static int sendpkt(struct netvm *vm, ulong pn, FILE *f, FILE *dout,
 		return -1;
 	}
 
+	pkb_fix_dltype_if_parsed(p);
+
 	if (pkb_pack(p) < 0) {
 		if (debug) {
 			esave = errno;

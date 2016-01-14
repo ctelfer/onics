@@ -781,6 +781,17 @@ void pkb_fix_dltype(struct pktbuf *pkb)
 }
 
 
+void pkb_fix_dltype_if_parsed(struct pktbuf *pkb)
+{
+	struct prparse *prp;
+	abort_unless((pkb->flags & PKB_F_PACKED) == 0);
+	if (!prp_empty(&pkb->prp)) {
+		prp = prp_next(&pkb->prp);
+		pkb->xpkt->hdr.dltype = prp->prid;
+	}
+}
+
+
 int pkb_pushprp(struct pktbuf *pkb, int prid)
 {
 	struct prpspec ps;

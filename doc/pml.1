@@ -1180,7 +1180,6 @@ Generate a TCP packet:
                     parse_push_front(0, @ip);
                     parse_push_front(0, @eth);
                     tcp.payload = payload;
-                    fix_dltype(0);
                     fix_lens(0);
                     fix_csums(0);
 		    send;

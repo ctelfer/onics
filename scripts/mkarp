@@ -35,7 +35,6 @@ START='
 	arp.sndpraddr = 192.168.0.1;
 	arp.sndhwaddr = 02:00:00:00:00:01;
 	arp.trgpraddr = 192.168.0.2;
-	fix_dltype(0);
 '
 
 pml -e "import \"std.pml\";

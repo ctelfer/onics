@@ -83,7 +83,6 @@ $S"
 done
 
 PMLSCRIPT="$PMLSCRIPT
-	fix_dltype(0);
 	fix_lens(0);
 	fix_csums(0);
 }"

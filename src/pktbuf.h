@@ -181,8 +181,13 @@ void pkb_set_layer(struct pktbuf *pkb, struct prparse *prp, int layer);
 /* Clear a layer pointer */
 void pkb_clr_layer(struct pktbuf *pkb, int layer);
 
-/* set the data link type for the packet in the metadata */
+/* Set the data link type for the packet in the metadata to the first */
+/* PRID of the outermost parse type.  Set to PRID_RAWPKT if none. */
 void pkb_fix_dltype(struct pktbuf *pkb);
+
+/* Set the data link type for the packet in the metadata to the first */
+/* PRID of the outermost parse type.  Don't change if no outermost parse. */
+void pkb_fix_dltype_if_parsed(struct pktbuf *pkb);
 
 /* Push a new protocol parse to the innermost region of the packet */
 int pkb_pushprp(struct pktbuf *pkb, int ptype);

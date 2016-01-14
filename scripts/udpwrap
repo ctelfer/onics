@@ -56,7 +56,6 @@ done
 
 PMLSCRIPT="$PMLSCRIPT
 	fix_lens(0);
-	fix_dltype(0);
 }"
 
 exec pml -e "$PMLSCRIPT" $INFILE

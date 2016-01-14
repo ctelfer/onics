@@ -59,7 +59,6 @@ void mk_tcp_pn(int pn)
 	parse_push_back(pn, @ip);
 	$(pn)ip.proto = 6;
 	parse_push_back(pn, @tcp);
-	fix_dltype(pn);
 }
 
 
@@ -77,7 +76,6 @@ void mk_udp_pn(int pn)
 	parse_push_back(pn, @ip);
 	$(pn)ip.proto = 17;
 	parse_push_back(pn, @udp);
-	fix_dltype(pn);
 }
 
 
@@ -93,7 +91,6 @@ void mk_arp_pn(int pn)
 	parse_push_back(pn, @eth);
 	$(pn)eth.ethtype = 0x806;
 	parse_push_back(pn, @arp);
-	fix_dltype(pn);
 }
 
 
@@ -175,7 +172,6 @@ void fix()
 {
 	fix_lens(0);
 	fix_csums(0);
-	fix_dltype(0);
 }
 
 
@@ -183,7 +179,6 @@ void fix_pn(int pn)
 {
 	fix_lens(pn);
 	fix_csums(pn);
-	fix_dltype(pn);
 }
 
 
@@ -213,56 +208,48 @@ const VXLAN_PORT = 4789;
 void eth_wrap()
 {
 	parse_push_front(0, @eth);
-	fix_dltype(0);
 }
 
 
 void ip_wrap()
 {
 	parse_push_front(0, @ip);
-	fix_dltype(0);
 }
 
 
 void ip6_wrap()
 {
 	parse_push_front(0, @ip6);
-	fix_dltype(0);
 }
 
 
 void icmp_wrap()
 {
 	parse_push_front(0, @icmp);
-	fix_dltype(0);
 }
 
 
 void icmp6_wrap()
 {
 	parse_push_front(0, @icmp6);
-	fix_dltype(0);
 }
 
 
 void tcp_wrap()
 {
 	parse_push_front(0, @tcp);
-	fix_dltype(0);
 }
 
 
 void udp_wrap()
 {
 	parse_push_front(0, @udp);
-	fix_dltype(0);
 }
 
 
 void gre_wrap()
 {
 	parse_push_front(0, @gre);
-	fix_dltype(0);
 }
 
 
@@ -271,7 +258,6 @@ void gre_encap()
 	parse_push_front(0, @gre);
 	parse_push_front(0, @ip);
 	parse_push_front(0, @eth);
-	fix_dltype(0);
 }
 
 
@@ -285,7 +271,6 @@ void gre_decap()
 		parse_pop_front(0);
 		parse_pop_front(0);
 		parse_pop_front(0);
-		fix_dltype(0);
 	}
 }
 
@@ -293,7 +278,6 @@ void gre_decap()
 void nvgre_wrap()
 {
 	parse_push_front(0, @nvgre);
-	fix_dltype(0);
 }
 
 
@@ -302,7 +286,6 @@ void nvgre_encap()
 	parse_push_front(0, @nvgre);
 	parse_push_front(0, @ip);
 	parse_push_front(0, @eth);
-	fix_dltype(0);
 }
 
 
@@ -316,7 +299,6 @@ void nvgre_decap()
 		parse_pop_front(0);
 		parse_pop_front(0);
 		parse_pop_front(0);
-		fix_dltype(0);
 	}
 }
 
@@ -324,7 +306,6 @@ void nvgre_decap()
 void vxlan_wrap()
 {
 	parse_push_front(0, @vxlan);
-	fix_dltype(0);
 }
 
 
@@ -335,7 +316,6 @@ void vxlan_encap()
 	udp.dport = VXLAN_PORT;
 	parse_push_front(0, @ip);
 	parse_push_front(0, @eth);
-	fix_dltype(0);
 }
 
 
@@ -351,7 +331,6 @@ void vxlan_decap()
 		parse_pop_front(0);
 		parse_pop_front(0);
 		parse_pop_front(0);
-		fix_dltype(0);
 	}
 }
 
@@ -435,7 +414,6 @@ void mpls_push_pn(int pn, int label, int tc, int ttl)
 	val = ((label & 0xFFFFF) << 12) | ((tc & 0x7) << 9) | (ttl & 0xFF);
 	if (not $(pn)mpls) {
 		parse_push_front(pn, @mpls);
-		fix_dltype(pn);
 		val = val | 0x100;
 	} else {
 		pkt_ins_d(pn, str_addr($(pn)mpls.header), 4);
