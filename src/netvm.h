@@ -1,6 +1,6 @@
 /*
  * ONICS
- * Copyright 2012-2015
+ * Copyright 2012-2016
  * Christopher Adam Telfer
  *
  * netvm.h -- NetVM external API and core data structures.
@@ -495,7 +495,17 @@ enum {
 	NETVM_OC_PKADJ,		/* [pdesc,amt] adjust offset 'field' by */
 	                        /*   amt (signed) bytes in parse */
 
-	NETVM_OC_MAXOP = NETVM_OC_PKADJ
+	NETVM_OC_PKPII,		/* See next, but pdesc is immediate and */
+				/* prid is specified in offset of pdesc */
+	NETVM_OC_PKPI,		/* [pdesc,prid] Insert a new prp after pdesc */
+				/* in the packet.  Inserts hdr/trailer and */
+				/* updates prev prp's next hdr and cksum */
+	NETVM_OC_PKPDI,		/* See next, but pdesc is immediate */
+	NETVM_OC_PKPD,		/* [pdesc] Remove a prp and its header/ */
+				/* trailer data from packet.  Adjust prev hdr */
+				/* 'next' field and checksum if necessary. */
+
+	NETVM_OC_MAXOP = NETVM_OC_PKPD
 /* 
 * Still to consider:
 *
@@ -572,6 +582,8 @@ enum {
 	NETVM_ERR_PKTINS,
 	NETVM_ERR_PKTCUT,
 	NETVM_ERR_PRPADJ,
+	NETVM_ERR_PKPI,
+	NETVM_ERR_PKPD,
 	NETVM_ERR_PARSE,
 	NETVM_ERR_NOMEM,
 	NETVM_ERR_IOVFL,

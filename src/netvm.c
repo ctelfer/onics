@@ -1,6 +1,6 @@
 /*
  * ONICS
- * Copyright 2012-2015
+ * Copyright 2012-2016
  * Christopher Adam Telfer
  *
  * netvm.c -- NetVM core.  Network processing virtual machine.
@@ -1371,6 +1371,47 @@ static void ni_pkadj(struct netvm *vm)
 }
 
 
+static void ni_pkpi(struct netvm *vm)
+{
+	int immed = (vm->inst[vm->pc].op == NETVM_OC_PKPII);
+	struct netvm_prp_desc pd0;
+	struct pktbuf *pkb;
+	struct prparse *prp;
+	ulong prid;
+	int rv;
+
+	if (immed)
+		S_POP(vm, prid);
+	prp = netvm_find_header(vm, &pd0, !immed);
+	VMCKRET(vm);
+	if (!immed)
+		prid = pd0.offset & NETVM_PD_PRID_MASK;
+
+	FATAL(vm, NETVM_ERR_NOPRP, prp == NULL);
+	pkb = vm->packets[pd0.pktnum];
+	rv = pkb_insert_prp(pkb, prp, prid);
+	FATAL(vm, NETVM_ERR_PKPI, rv < 0);
+}
+
+
+static void ni_pkpd(struct netvm *vm)
+{
+	int onstack = (vm->inst[vm->pc].op != NETVM_OC_PKPDI);
+	struct netvm_prp_desc pd0;
+	struct pktbuf *pkb;
+	struct prparse *prp;
+	int rv;
+
+	prp = netvm_find_header(vm, &pd0, onstack);
+	VMCKRET(vm);
+
+	FATAL(vm, NETVM_ERR_NOPRP, prp == NULL);
+	pkb = vm->packets[pd0.pktnum];
+	rv = pkb_delete_prp(pkb, prp);
+	FATAL(vm, NETVM_ERR_PKPD, rv < 0);
+}
+
+
 netvm_op g_netvm_ops[NETVM_OC_MAXOP + 1] = {
 	ni_pop,			/* POP */
 	ni_popto,		/* POPTO */
@@ -1503,6 +1544,11 @@ netvm_op g_netvm_ops[NETVM_OC_MAXOP + 1] = {
 	ni_pkins,		/* PKINS */
 	ni_pkcut,		/* PKCUT */
 	ni_pkadj,		/* PKADJ */
+
+	ni_pkpi,		/* PKPII */
+	ni_pkpi,		/* PKPI */
+	ni_pkpd,		/* PKPDI */
+	ni_pkpd,		/* PKPD */
 };
 
 
@@ -1877,6 +1923,8 @@ static const char *rt_error_strings[NETVM_ERR_MAX] = {
 	"error inserting into packet",
 	"error cutting data from packet",
 	"error adjusting header field",
+	"error inserting new prp",
+	"error removing prp",
 	"error parsing packet",
 	"out of memory",
 	"integer overflow",

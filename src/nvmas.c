@@ -214,6 +214,10 @@ struct nvmop Operations[] = {
 	{ "pkins",  NETVM_OC_PKINS,  1, ARGX },
 	{ "pkcut",  NETVM_OC_PKCUT,  1, ARGX },
 	{ "pkadj",  NETVM_OC_PKADJ,  0, 0 },
+	{ "pkpii",  NETVM_OC_PKPII,  3, ARGY|ARGZ|ARGW|PDONLY },
+	{ "pkpi",   NETVM_OC_PKPI,   0, 0 },
+	{ "pkpdi",  NETVM_OC_PKPDI,  3, ARGY|ARGZ|ARGW|PDONLY },
+	{ "pkpd",   NETVM_OC_PKPD,   0, 0 },
 
 	{ NULL,  0,  0, 0 },
 };
