@@ -168,6 +168,12 @@ static void default_update(struct prparse *prp, byte_t *buf)
 }
 
 
+static int default_fixnxt(struct prparse *prp, byte_t *buf)
+{
+	return 0;
+}
+
+
 static int default_fixlen(struct prparse *prp, byte_t *buf)
 {
 	return 0;
@@ -364,6 +370,16 @@ static void eth_update(struct prparse *prp, byte_t *buf)
 
 	prp_poff(prp) = poff;
 	prp->offs[PRP_ETHFLD_ETYPE] = poff - 2;
+}
+
+
+static int eth_fixnxt(struct prparse *prp, byte_t *buf)
+{
+	struct prparse *next;
+	next = prp_next(prp);
+	if (!prp_list_end(next))
+		hton16i(pridtoetype(next->prid), buf + prp_poff(prp) - 2);
+	return 0;
 }
 
 
@@ -713,6 +729,27 @@ static void ipv4_update(struct prparse *prp, byte_t *buf)
 }
 
 
+static int ipv4_fixnxt(struct prparse *prp, byte_t *buf)
+{
+	struct prparse *next;
+	struct ipv4h *ip;
+	uchar proto;
+	ulong sum;
+
+	next = prp_next(prp);
+	if (!prp_list_end(next)) {
+		proto = pridtoiptype(next->prid);
+		ip = prp_header(prp, buf, struct ipv4h);
+		sum = hton16(((~ip->proto & 0xFF) << 8) + (proto << 8)) + 
+		      ip->cksum;
+		sum = (sum >> 16) + (sum & 0xFFFF);
+		ip->cksum = (sum >> 16) + (sum & 0xFFFF);
+		ip->proto = proto;
+	}
+	return 0;
+}
+
+
 static int ipv4_fixlen(struct prparse *prp, byte_t *buf)
 {
 	struct ipv4h *ip;
@@ -849,6 +886,19 @@ static int udp_nxtcld(struct prparse *reg, byte_t *buf, struct prparse *cld,
 		*off = prp_poff(reg);
 		*maxlen = prp_plen(reg);
 		return 1;
+	/* 
+	 * MPLS must be:
+	 *   - on the right port
+	 *   - have enough room for the header
+	 */
+	} else if (dport == MPLS_PORT && prp_plen(reg) >= MPLS_HLEN) {
+		*prid = PRID_MPLS;
+		*off = prp_poff(reg);
+		*maxlen = prp_plen(reg);
+		return 1;
+	/*
+	 * No further encapsulated protocols yet.
+	 */
 	} else {
 		return 0;
 	}
@@ -919,6 +969,33 @@ static void udp_update(struct prparse *prp, byte_t *buf)
 		    (pseudo_cksum(prp, ipprp, buf, IPPROT_UDP) & 0xFFFF) != 0)
 			prp->error |= PRP_ERR_CKSUM;
 	}
+}
+
+
+static int udp_fixnxt(struct prparse *prp, byte_t *buf)
+{
+	struct prparse *next;
+	struct udph *udp;
+	ulong sum;
+
+	next = prp_next(prp);
+	if (!prp_list_end(next)) {
+		udp = prp_header(prp, buf, struct udph);
+		sum = (~udp->dport) & 0xFFFF;
+		if (next->prid == PRID_VXLAN) {
+			hton16i(VXLAN_PORT, &udp->dport);
+		} else if (next->prid == PRID_MPLS) {
+			hton16i(MPLS_PORT, &udp->dport);
+		} else {
+			return 0;
+		}
+		if (udp->cksum != 0) {
+			sum += udp->cksum + udp->dport;
+			sum = (sum >> 16) + (sum & 0xFFFF);
+			udp->cksum = (sum >> 16) + (sum & 0xFFFF);
+		}
+	}
+	return 0;
 }
 
 
@@ -1644,6 +1721,18 @@ static void ipv6_update(struct prparse *prp, byte_t *buf)
 }
 
 
+static int ipv6_fixnxt(struct prparse *prp, byte_t *buf)
+{
+	struct prparse *next;
+
+	next = prp_next(prp);
+	if (!prp_list_end(next) && prp_off_valid(prp, PRP_IPV6FLD_NXTHDR))
+		*(buf + prp->offs[PRP_IPV6FLD_NXTHDR]) =
+			pridtoiptype(next->prid);
+	return 0;
+}
+
+
 static int ipv6_fixlen(struct prparse *prp, byte_t *buf)
 {
 	struct ipv6h *ip6 = prp_header(prp, buf, struct ipv6h);
@@ -2065,6 +2154,19 @@ static void gre_update(struct prparse *prp, byte_t *buf)
 }
 
 
+static int gre_fixnxt(struct prparse *prp, byte_t *buf)
+{
+	struct prparse *next;
+	struct greh *gre;
+	next = prp_next(prp);
+	if (!prp_list_end(next)) {
+		gre = prp_header(prp, buf, struct greh);
+		hton16i(pridtoetype(next->prid), &gre->proto);
+	}
+	return 0;
+}
+
+
 static int gre_fixcksum(struct prparse *prp, byte_t *buf)
 {
 	struct greh *gre;
@@ -2352,6 +2454,7 @@ struct proto_parser_ops eth_proto_parser_ops = {
 
 struct prparse_ops eth_prparse_ops = {
 	eth_update,
+	eth_fixnxt,
 	default_fixlen,
 	default_fixcksum,
 	default_copy,
@@ -2367,6 +2470,7 @@ struct proto_parser_ops arp_proto_parser_ops = {
 
 struct prparse_ops arp_prparse_ops = {
 	arp_update,
+	default_fixnxt,
 	arp_fixlen,
 	default_fixcksum,
 	arp_copy,
@@ -2382,6 +2486,7 @@ struct proto_parser_ops ipv4_proto_parser_ops = {
 
 struct prparse_ops ipv4_prparse_ops = {
 	ipv4_update,
+	ipv4_fixnxt,
 	ipv4_fixlen,
 	ipv4_fixcksum,
 	ipv4_copy,
@@ -2397,6 +2502,7 @@ struct proto_parser_ops ipv6_proto_parser_ops = {
 
 struct prparse_ops ipv6_prparse_ops = {
 	ipv6_update,
+	ipv6_fixnxt,
 	ipv6_fixlen,
 	default_fixcksum,
 	ipv6_copy,
@@ -2412,6 +2518,7 @@ struct proto_parser_ops icmp_proto_parser_ops = {
 
 struct prparse_ops icmp_prparse_ops = {
 	icmp_update,
+	default_fixnxt,
 	default_fixlen,
 	icmp_fixcksum,
 	default_copy,
@@ -2427,6 +2534,7 @@ struct proto_parser_ops icmpv6_proto_parser_ops = {
 
 struct prparse_ops icmpv6_prparse_ops = {
 	icmp6_update,
+	default_fixnxt,
 	default_fixlen,
 	icmp6_fixcksum,
 	default_copy,
@@ -2442,6 +2550,7 @@ struct proto_parser_ops udp_proto_parser_ops = {
 
 struct prparse_ops udp_prparse_ops = {
 	udp_update,
+	udp_fixnxt,
 	udp_fixlen,
 	udp_fixcksum,
 	default_copy,
@@ -2457,6 +2566,7 @@ struct proto_parser_ops tcp_proto_parser_ops = {
 
 struct prparse_ops tcp_prparse_ops = {
 	tcp_update,
+	default_fixnxt,
 	tcp_fixlen,
 	tcp_fixcksum,
 	tcp_copy,
@@ -2472,6 +2582,7 @@ struct proto_parser_ops gre_proto_parser_ops = {
 
 struct prparse_ops gre_prparse_ops = {
 	gre_update,
+	gre_fixnxt,
 	default_fixlen,
 	gre_fixcksum,
 	default_copy,
@@ -2494,6 +2605,7 @@ struct proto_parser_ops vxlan_proto_parser_ops = {
 
 struct prparse_ops vxlan_prparse_ops = {
 	vxlan_update,
+	default_fixnxt,
 	default_fixlen,
 	default_fixcksum,
 	default_copy,
@@ -2509,6 +2621,7 @@ struct proto_parser_ops mpls_proto_parser_ops = {
 
 struct prparse_ops mpls_prparse_ops = {
 	mpls_update,
+	default_fixnxt,
 	default_fixlen,
 	default_fixcksum,
 	default_copy,

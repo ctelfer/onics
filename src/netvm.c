@@ -1148,9 +1148,9 @@ static void ni_pkppsh(struct netvm *vm)
 	FATAL(vm, NETVM_ERR_NOPKT, !(pkb = vm->packets[pktnum]));
 	/* XXX is this the right error? */
 	if (inst->x) {	/* outer push */
-		FATAL(vm, NETVM_ERR_NOMEM, pkb_wrapprp(pkb, prid) < 0);
-	} else {		/* inner push */
-		FATAL(vm, NETVM_ERR_NOMEM, pkb_pushprp(pkb, prid) < 0);
+		FATAL(vm, NETVM_ERR_NOMEM, pkb_pushprp(pkb, prid, 1) < 0);
+	} else {	/* inner push */
+		FATAL(vm, NETVM_ERR_NOMEM, pkb_pushprp(pkb, prid, 0) < 0);
 	}
 }
 

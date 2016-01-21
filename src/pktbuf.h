@@ -189,17 +189,24 @@ void pkb_fix_dltype(struct pktbuf *pkb);
 /* PRID of the outermost parse type.  Don't change if no outermost parse. */
 void pkb_fix_dltype_if_parsed(struct pktbuf *pkb);
 
-/* Push a new protocol parse to the innermost region of the packet */
-int pkb_pushprp(struct pktbuf *pkb, int ptype);
-
-/* Push a new protocol parse to the outermost region of the packet */
-/* If this new header starts below the current packet starting offset */
-/* then implicitly shift the packet starting offset to the new header's */
-/* starting offset. */
-int pkb_wrapprp(struct pktbuf *pkb, int ptype);
+/* Push a new protocol parse to the front or back of the packet. */
+/* If pushing to the front and this new header and the new packet expands */
+/* the start or end of the packet, then implicitly shift the packet starting */
+/* and ending offsets accordingly. */
+int pkb_pushprp(struct pktbuf *pkb, int ptype, int tofront);
 
 /* Remove a protocol parse from the beginning or end of the packet */
+/* If popping from the front then adjust the starting and ending offsets */
+/* of the packet to reflect outer data that this operation removed. */
 void pkb_popprp(struct pktbuf *pkb, int fromfront);
+
+/* Insert a PRP into a packet after a PDU automatically inserting room */
+/* after pprp.  This will work even if pprp == &pkb->prp.  */
+int pkb_insert_prp(struct pktbuf *pkb, struct prparse *pprp, int prid);
+
+/* Delete a PDU from a packet removing its header and trailer from the */
+/* packet in the process. */
+int pkb_delete_prp(struct pktbuf *pkb, struct prparse *prp);
 
 /* Obtain the xpkt for a packet buffer to manipulate the tags.  */
 /* This will return NULL if the packet buffer is packed.  */

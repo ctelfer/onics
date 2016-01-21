@@ -219,8 +219,21 @@ struct prparse_ops {
 	void			(*update)(struct prparse *prp, byte_t *buf);
 
 	/*
+	 * Fix the field(s) (if any) indicating the next header of this PDU
+	 * according to the values in the protocol parse.  Adjust the
+	 * checksum according to the changes if applicable.
+	 *
+	 * Parameters:
+	 * + prp  -- The parse referring to the PDU whose length to fix.
+	 * + buf  -- The buffer containing the actual PDU data.
+	 *
+	 * Returns 0 on success and -1 on error setting errno appropriately
+	 */
+	int			(*fixnxt)(struct prparse *prp, byte_t *buf);
+
+	/*
 	 * Fix the length field(s) (if any) of this PDU according to the 
-	 * values in the the protocol parse.
+	 * values in the protocol parse.
 	 *
 	 * Parameters:
 	 * + prp  -- The parse referring to the PDU whose length to fix.
@@ -232,7 +245,7 @@ struct prparse_ops {
 
 	/*
 	 * Fix the checksum field(s) (if any) of this PDU according to the
-	 * values in the the protocol parse.
+	 * values in the protocol parse.
 	 *
 	 * Parameters:
 	 * + prp  -- The parse referring to the PDU whose length to fix.
@@ -449,8 +462,12 @@ int prp_parse_packet(struct prparse *base, byte_t *buf, uint firstprid);
  * parse. (based on the 'enclose' parameter.  If the function returns 0,
  * then the spec is poulated with values appropriate to pass to prp_add().
  */
-int prp_get_spec(uint prid, struct prparse *prp, int enclose,
-		 struct prpspec *ps);
+enum {
+	PRP_GSF_APPEND,
+	PRP_GSF_WRAPPRP,
+	PRP_GSF_WRAPPLD,
+};
+int prp_get_spec(uint prid, struct prparse *prp, int flags, struct prpspec *ps);
 
 /*
  * Create a new header in a parsed packet.  The prpspec specifies the
@@ -492,6 +509,9 @@ int prp_copy(struct prparse *nprp, struct prparse *oprp);
  */
 uint prp_update(struct prparse *prp, byte_t *buf);
 
+/* fix the "next header" field in a given PDU to the enclosed PDU */
+int prp_fix_nxthdr(struct prparse *prp, byte_t *buf);
+
 /* fix up checksums in the 'prp' protocol header */
 int prp_fix_cksum(struct prparse *prp, byte_t *buf);
 
@@ -502,7 +522,7 @@ int prp_fix_cksum(struct prparse *prp, byte_t *buf);
 int prp_fix_len(struct prparse *prp, byte_t *buf);
 
 /*
- * insert data into the the packet and adjust parses.  The starting byte
+ * insert data into the packet and adjust parses.  The starting byte
  * S = prp_soff(prp) + off.  That is, the 'off'th byte after the start of
  * the parse.  if moveup is nonzero, then the function shifts bytes [S,end]
  * 'len' bytes forward in the packet and fills them with dummy values.  If

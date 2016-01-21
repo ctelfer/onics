@@ -19,7 +19,8 @@ TARGETS= \
 	$(BINDIR)/testns \
 	$(BINDIR)/testpmllex \
 	$(BINDIR)/testpmlparse \
-	$(BINDIR)/testfld
+	$(BINDIR)/testfld \
+	$(BINDIR)/testpkb
 
 all: $(TARGETS)
 
@@ -73,6 +74,14 @@ $(BINDIR)/testfld: testfld.c \
 	$(CC) -o ../bin/testfld testfld.c $(TOOLSRC)/fld.o $(TOOLSRC)/util.o \
 		$(TOOLSRC)/protoparse.o $(TOOLSRC)/ns.o $(TOOLSRC)/pktbuf.o \
 		$(TOOLSRC)/xpkt.o $(TOOLSRC)/stdproto.o \
+		$(DEFS) $(OPTS) $(INCS) $(LIBS)
+
+$(BINDIR)/testpkb: $(TOOLSRC)/protoparse.o $(TOOLSRC)/stdproto.o \
+		   $(TOOLSRC)/util.o  $(TOOLSRC)/pktbuf.o $(TOOLSRC)/xpkt.o \
+		   testpkb.c
+	$(CC) -o ../bin/testpkb testpkb.c $(TOOLSRC)/pktbuf.o \
+		$(TOOLSRC)/protoparse.o $(TOOLSRC)/stdproto.o \
+		$(TOOLSRC)/util.o $(TOOLSRC)/ns.o $(TOOLSRC)/xpkt.o \
 		$(DEFS) $(OPTS) $(INCS) $(LIBS)
 
 $(LIBOBJS):

@@ -775,5 +775,7 @@ struct mpls_label {
 #define MPLS_TTL(_lbl) \
 	(((_lbl) >> MPLS_TTL_SHF) & MPLS_TTL_MSK)
 
+#define MPLS_PORT		6635
+
 
 #endif /* __tcpip_hdrs_h */

@@ -1,6 +1,6 @@
 /*
  * ONICS
- * Copyright 2012-2015
+ * Copyright 2012-2016
  * Christopher Adam Telfer
  *
  * protoparse.c -- Framework to parse network protocols.
@@ -166,6 +166,7 @@ int pp_unregister(uint prid)
 /* -- ops for "NONE", "NONE base" and "DATA" and "RAWPKT" protocol type -- */
 
 static void default_update(struct prparse *prp, byte_t *buf);
+static int default_fixnxt(struct prparse *prp, byte_t *buf);
 static int default_fixlen(struct prparse *prp, byte_t *buf);
 static int default_fixcksum(struct prparse *prp, byte_t *buf);
 static struct prparse *default_copy(struct prparse *oprp);
@@ -175,6 +176,7 @@ static void base_free(struct prparse *prp);
 
 static struct prparse_ops none_prparse_ops = {
 	default_update,
+	default_fixnxt,
 	default_fixlen,
 	default_fixcksum,
 	default_copy,
@@ -184,6 +186,7 @@ static struct prparse_ops none_prparse_ops = {
 
 static struct prparse_ops data_prparse_ops = {
 	default_update,
+	default_fixnxt,
 	default_fixlen,
 	default_fixcksum,
 	default_copy,
@@ -193,6 +196,7 @@ static struct prparse_ops data_prparse_ops = {
 
 static struct prparse_ops base_prparse_ops = {
 	default_update,
+	default_fixnxt,
 	default_fixlen,
 	default_fixcksum,
 	base_copy,
@@ -273,7 +277,6 @@ static int mkspec(struct prparse *prp, int enclose, uint prid,
 		ps->plen = prp_plen(prp);
 		ps->tlen = 0;
 	}
-
 
 	return 0;
 }
@@ -368,6 +371,12 @@ static int data_add(struct prparse *reg, byte_t *buf, struct prpspec *ps,
 /* -- default prparse handlers -- */
 static void default_update(struct prparse *prp, byte_t *buf)
 {
+}
+
+
+static int default_fixnxt(struct prparse *prp, byte_t *buf)
+{
+	return 0;
 }
 
 
@@ -534,8 +543,7 @@ err:
 }
 
 
-int prp_get_spec(uint prid, struct prparse *prp, int enclose,
-		 struct prpspec *ps)
+int prp_get_spec(uint prid, struct prparse *prp, int flags, struct prpspec *ps)
 {
 	const struct proto_parser *pp;
 	struct prparse dummy;
@@ -554,14 +562,15 @@ int prp_get_spec(uint prid, struct prparse *prp, int enclose,
 
 	/* If we are wrapping an empty data block, treat the payload */
 	/* as an embedded none-type parse to wrap around and pop afterwards. */
-	if (enclose && prp_empty(prp)) {
+	if (((flags == PRP_GSF_WRAPPRP) && prp_empty(prp)) ||
+	    (flags == PRP_GSF_WRAPPLD)) {
 		base_init(&dummy, prp_poff(prp), 0, prp_plen(prp), 0);
 		dummy.region = prp;
 		prp_insert_parse(prp, &dummy);
 		prp = &dummy;
 	}
 
-	rv = (*pp->ops->getspec)(prp, enclose, ps);
+	rv = (*pp->ops->getspec)(prp, flags != PRP_GSF_APPEND, ps);
 
 	if (prp == &dummy)
 		prp_remove_parse(&dummy);
@@ -759,10 +768,10 @@ uint prp_update(struct prparse *prp, byte_t *buf)
 }
 
 
-int prp_fix_cksum(struct prparse *prp, byte_t *buf)
+int prp_fix_nxthdr(struct prparse *prp, byte_t *buf)
 {
 	abort_unless(prp && prp->ops && prp->ops->fixcksum);
-	return (*prp->ops->fixcksum)(prp, buf);
+	return (*prp->ops->fixnxt)(prp, buf);
 }
 
 
@@ -770,6 +779,13 @@ int prp_fix_len(struct prparse *prp, byte_t *buf)
 {
 	abort_unless(prp && prp->ops && prp->ops->fixlen);
 	return (*prp->ops->fixlen)(prp, buf);
+}
+
+
+int prp_fix_cksum(struct prparse *prp, byte_t *buf)
+{
+	abort_unless(prp && prp->ops && prp->ops->fixcksum);
+	return (*prp->ops->fixcksum)(prp, buf);
 }
 
 

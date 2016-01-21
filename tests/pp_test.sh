@@ -19,4 +19,20 @@ else
 fi
 echo "---------------"
 echo
+
+echo "---------------"
+echo "Packet buffer packet generation test"
+$TBIN/testpkb > $TOUT/testpkb.out 2> $TOUT/testpkb.err
+
+if cmp $TOUT/testpkb.out $DATA/testpkb.out &&
+   cmp $TOUT/testpkb.err $DATA/testpkb.err
+then
+	echo PASSED
+else
+	echo FAILED
+	RET=1
+fi
+echo "---------------"
+echo
+
 exit $RET
