@@ -189,6 +189,17 @@ Functions
       Variable: pdesc [param; width=4, addr=0]
    Body -- 
       (null)
+   Function[intrinsic]: prp_insert() -- 2 args, 0-byte stack, return type=void
+   Parameters & Variables -- 
+      Variable: pdesc [param; width=4, addr=0]
+      Variable: prid [param; width=4, addr=4]
+   Body -- 
+      (null)
+   Function[intrinsic]: prp_delete() -- 1 args, 0-byte stack, return type=void
+   Parameters & Variables -- 
+      Variable: pdesc [param; width=4, addr=0]
+   Body -- 
+      (null)
    Function[intrinsic]: fix_dltype() -- 1 args, 0-byte stack, return type=void
    Parameters & Variables -- 
       Variable: pnum [param; width=4, addr=0]

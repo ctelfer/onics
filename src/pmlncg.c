@@ -483,7 +483,7 @@ static int _i_scarg(struct pmlncg *cg, struct pml_call *c, struct cg_intr *intr)
 
 
 int _i_loc_to_pdesc(struct pmlncg *cg, struct pml_locator *loc,
-		    struct cg_intr *intr)
+		    struct cg_intr *intr, int oc, int oci)
 {
 	struct cg_pdesc cgpd;
 	if (loc->off) {
@@ -496,7 +496,7 @@ int _i_loc_to_pdesc(struct pmlncg *cg, struct pml_locator *loc,
 		      intr->name);
 		return -1;
 	}
-	cgpd_init(&cgpd, -1, -1, 0, loc);
+	cgpd_init(&cgpd, oc, oci, 0, loc);
 	return cg_pdop(cg, &cgpd);
 }
 
@@ -515,7 +515,7 @@ static int _i_pdarg(struct pmlncg *cg, struct pml_call *c, struct cg_intr *intr)
 		return -1;
 	}
 
-	if (_i_loc_to_pdesc(cg, loc, intr) < 0)
+	if (_i_loc_to_pdesc(cg, loc, intr, -1, -1) < 0)
 		return -1;
 
 	for (i = 0; i < intr->numop; ++i) {
@@ -527,6 +527,33 @@ static int _i_pdarg(struct pmlncg *cg, struct pml_call *c, struct cg_intr *intr)
 	}
 
 	return 0;
+}
+
+
+static int _i_prpfunc(struct pmlncg *cg, struct pml_call *c,
+		      struct cg_intr *intr)
+{
+	struct pml_list *pl = c->args;
+	struct pml_locator *loc;
+	union pml_node *e;
+
+	loc = (struct pml_locator *)l_to_node(l_head(&pl->list));
+	if (loc->type != PMLTT_LOCATOR) {
+		cgerr(cg, "intrinsic '%s' requires a protocol field",
+		      intr->name);
+		return -1;
+	}
+
+	/* numop overloaded to indicate # of additional args */
+	if (intr->numop > 0) {
+		e = l_to_node(l_next(&loc->ln));
+		if (cg_expr(cg, e, PML_ETYPE_SCALAR) < 0)
+			return -1;
+	}
+
+	/* ops overloaded to store opcode for regular vs indirect ops */
+	return _i_loc_to_pdesc(cg, loc, intr, intr->ops[0].op,
+			       intr->ops[1].op);
 }
 
 
@@ -975,6 +1002,10 @@ struct cg_intr intrinsics[] = {
 		{ NETVM_OP(PKPPOP,1,0,0,0) } },
 	{ "parse_update", NULL, _i_pdarg, NULL, 1, 
 		{ NETVM_OP(PKPUP,0,0,0,0) } },
+	{ "prp_insert", NULL, _i_prpfunc, NULL, 1 /* override */,
+		{ NETVM_OP(PKPI,0,0,0,0), NETVM_OP(PKPII,0,0,0,0) } },
+	{ "prp_delete", NULL, _i_prpfunc, NULL, 0 /* override */,
+		{ NETVM_OP(PKPD,0,0,0,0), NETVM_OP(PKPDI,0,0,0,0) } },
 	{ "fix_dltype", NULL, _i_scarg, NULL, 1, { NETVM_OP(PKFXD,0,0,0,0) } },
 	{ "fix_len", NULL, _i_pdarg, NULL, 1, { NETVM_OP(PKFXL,0,0,0,0) } },
 	{ "fix_lens",  NULL, _i_scarg, NULL, 4, 

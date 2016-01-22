@@ -1373,19 +1373,16 @@ static void ni_pkadj(struct netvm *vm)
 
 static void ni_pkpi(struct netvm *vm)
 {
-	int immed = (vm->inst[vm->pc].op == NETVM_OC_PKPII);
+	int onstack = (vm->inst[vm->pc].op != NETVM_OC_PKPII);
 	struct netvm_prp_desc pd0;
 	struct pktbuf *pkb;
 	struct prparse *prp;
 	ulong prid;
 	int rv;
 
-	if (immed)
-		S_POP(vm, prid);
-	prp = netvm_find_header(vm, &pd0, !immed);
+	prp = netvm_find_header(vm, &pd0, onstack);
 	VMCKRET(vm);
-	if (!immed)
-		prid = pd0.offset & NETVM_PD_PRID_MASK;
+	S_POP(vm, prid);
 
 	FATAL(vm, NETVM_ERR_NOPRP, prp == NULL);
 	pkb = vm->packets[pd0.pktnum];

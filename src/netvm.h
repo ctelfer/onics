@@ -357,7 +357,7 @@ enum {
 	NETVM_OC_NLZ,		/* [v] # leading 0s in v for lower x bytes */
 
 	NETVM_OC_ADD,		/* [v1,v2] add v1 and v2 */
-	NETVM_OC_ADDI,		/* [v] add v1 and w */
+	NETVM_OC_ADDI,		/* [v] add v and w */
 	NETVM_OC_SUB,		/* [v1,v2] subtract v2 from v1 */
 	NETVM_OC_SUBI,		/* [v] subtract w from v */
 	NETVM_OC_MUL,		/* [v1,v2] multiply v1 by v2 */
@@ -495,17 +495,16 @@ enum {
 	NETVM_OC_PKADJ,		/* [pdesc,amt] adjust offset 'field' by */
 	                        /*   amt (signed) bytes in parse */
 
-	NETVM_OC_PKPII,		/* See next, but pdesc is immediate and */
-				/* prid is specified in offset of pdesc */
-	NETVM_OC_PKPI,		/* [pdesc,prid] Insert a new prp after pdesc */
+	NETVM_OC_PKPI,		/* [prid,pdesc] Insert a new prp after pdesc */
 				/* in the packet.  Inserts hdr/trailer and */
 				/* updates prev prp's next hdr and cksum */
-	NETVM_OC_PKPDI,		/* See next, but pdesc is immediate */
+	NETVM_OC_PKPII,		/* [prid] See prev, but pdesc is immediate. */
 	NETVM_OC_PKPD,		/* [pdesc] Remove a prp and its header/ */
 				/* trailer data from packet.  Adjust prev hdr */
 				/* 'next' field and checksum if necessary. */
+	NETVM_OC_PKPDI,		/* See prev, but pdesc is immediate */
 
-	NETVM_OC_MAXOP = NETVM_OC_PKPD
+	NETVM_OC_MAXOP = NETVM_OC_PKPDI
 /* 
 * Still to consider:
 *

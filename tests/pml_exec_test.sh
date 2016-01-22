@@ -130,5 +130,6 @@ pml_test 56 NONE -vvv
 pml_test 57 NONE -vvv
 pml_test 58 NONE
 pml_test 59 $PDIR/onepkt.xpkt
+pml_test 60 $PDIR/tcpandgre.xpkt
 
 exit $ERR
