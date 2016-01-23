@@ -968,6 +968,32 @@ packets still stored in packet lists.
 
   void fix_csum(pdesc)
   	- Fix the checksum fields in the given PDU.
+
+  void prp_insert(pdesc, int prid)
+	- Insert a new header/trailer with of type 'prid' into the
+	  packet after the header and before the trailer for the PDU
+	  that 'pdesc' identifies.  This may be 'pkt' to have the new
+	  PDU encapsulate the entire packet.  This function inserts new
+	  space for the header and trailer.  It also causes the header
+	  in pdesc to change its "next protocol" field (e.g. ip.proto
+	  or eth.etype) to correctly identify the new header and
+	  it adjusts that PDU's checksum accordingly.  This intrinsic
+	  does not adjust length or checksum fields (outside of
+	  the adjustment for the changed "next protocol" field.
+	  This is a simpler way to insert headers compared with
+	  pkt_ins_*() and parse_push_*() functions.  
+
+  void prp_delete(pdesc)
+	- Remove the PDU from the packet clearing cutting out its header
+	  and trailer data from the packet.  This function also adjusts
+	  the "next protocol" field of the immediately enclosing PDU
+	  (if any) to point to the PDU that the 'pdesc' PDU enclosed.
+	  It correspondingly adjusts the enclosing PDU's checksum if
+	  applicable.  This intrinsic does not adjust length or
+	  checksum fields (outside of the adjustment for the changed
+	  "next protocol" field.  This is simpler method of removing
+	  PDU headers compared with pkt_cut_*() and parse_pop_*().
+	
 .fi
 .P
 .SS "Numeric Operations"
