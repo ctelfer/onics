@@ -2,10 +2,9 @@
 #
 
 {
-	pkt_ins_d(0, str_addr(pkt.payload), 54);
-	parse_push_front(0, @tcp);
-	parse_push_front(0, @ip);
-	parse_push_front(0, @eth);
+	pdu_insert(pkt, @tcp);
+	pdu_insert(pkt, @ip);
+	pdu_insert(pkt, @eth);
 
 	ip.saddr = 1.2.3.4;
 	ip.daddr = 5.6.7.8;

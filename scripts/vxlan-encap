@@ -44,10 +44,10 @@ fi
 PMLSCRIPT="
 import \"std.pml\";
 {
-	parse_push_front(0, @vxlan);
-	parse_push_front(0, @udp);
-	parse_push_front(0, @ip);
-	parse_push_front(0, @eth);
+	pdu_insert(pkt, @vxlan);
+	pdu_insert(pkt, @udp);
+	pdu_insert(pkt, @ip);
+	pdu_insert(pkt, @eth);
 "
 
 for S

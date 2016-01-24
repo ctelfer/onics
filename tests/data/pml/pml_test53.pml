@@ -3,9 +3,9 @@
 str pay[] = "hello world";
 BEGIN {
 	pkt_new(0, str_len(pay));
-	parse_push_front(0, @tcp);
-	parse_push_front(0, @ip);
-	parse_push_front(0, @eth);
+	pdu_insert(pkt, @tcp);
+	pdu_insert(pkt, @ip);
+	pdu_insert(pkt, @eth);
 
 	eth.src = 00:11:22:33:44:55;
 	eth.dst = 00:66:77:88:99:aa;

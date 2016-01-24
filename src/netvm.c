@@ -1135,39 +1135,6 @@ static void ni_pkcla(struct netvm *vm)
 }
 
 
-static void ni_pkppsh(struct netvm *vm)
-{
-	struct netvm_inst *inst = &vm->inst[vm->pc];
-	ulong pktnum, prid;
-	struct pktbuf *pkb;
-
-	FATAL(vm, NETVM_ERR_STKUNDF, !S_HAS(vm, 2));
-	S_POP_NOCK(vm, prid);
-	S_POP_NOCK(vm, pktnum);
-	FATAL(vm, NETVM_ERR_PKTNUM, (pktnum >= NETVM_MAXPKTS));
-	FATAL(vm, NETVM_ERR_NOPKT, !(pkb = vm->packets[pktnum]));
-	/* XXX is this the right error? */
-	if (inst->x) {	/* outer push */
-		FATAL(vm, NETVM_ERR_NOMEM, pkb_pushprp(pkb, prid, 1) < 0);
-	} else {	/* inner push */
-		FATAL(vm, NETVM_ERR_NOMEM, pkb_pushprp(pkb, prid, 0) < 0);
-	}
-}
-
-
-static void ni_pkppop(struct netvm *vm)
-{
-	struct netvm_inst *inst = &vm->inst[vm->pc];
-	ulong pktnum;
-	struct pktbuf *pkb;
-	S_POP(vm, pktnum);
-	FATAL(vm, NETVM_ERR_PKTNUM, (pktnum >= NETVM_MAXPKTS));
-	FATAL(vm, NETVM_ERR_NOPKT, !(pkb = vm->packets[pktnum]));
-	/* width tells whether to pop from the front (non-zero) or back */
-	pkb_popprp(pkb, inst->x);
-}
-
-
 static void ni_pkprs(struct netvm *vm)
 {
 	struct netvm_inst *inst = &vm->inst[vm->pc];
@@ -1386,7 +1353,7 @@ static void ni_pkpi(struct netvm *vm)
 
 	FATAL(vm, NETVM_ERR_NOPRP, prp == NULL);
 	pkb = vm->packets[pd0.pktnum];
-	rv = pkb_insert_prp(pkb, prp, prid);
+	rv = pkb_insert_pdu(pkb, prp, prid);
 	FATAL(vm, NETVM_ERR_PKPI, rv < 0);
 }
 
@@ -1404,7 +1371,7 @@ static void ni_pkpd(struct netvm *vm)
 
 	FATAL(vm, NETVM_ERR_NOPRP, prp == NULL);
 	pkb = vm->packets[pd0.pktnum];
-	rv = pkb_delete_prp(pkb, prp);
+	rv = pkb_delete_pdu(pkb, prp);
 	FATAL(vm, NETVM_ERR_PKPD, rv < 0);
 }
 
@@ -1526,8 +1493,6 @@ netvm_op g_netvm_ops[NETVM_OC_MAXOP + 1] = {
 
 	ni_pksla,		/* PKSLA */
 	ni_pkcla,		/* PKCLA */
-	ni_pkppsh,		/* PKPPSH */
-	ni_pkppop,		/* PKPPOP */
 
 	ni_pkprs,		/* PKPRS */
 	ni_pkfxd,		/* PKFXD */

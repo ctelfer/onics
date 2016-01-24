@@ -29,7 +29,7 @@ usage() {
 PMLSCRIPT="
 	import \"std.pml\";
 	{
-	parse_push_front(0, @ip6);
+	ip6_wrap();
 "
 
 INFILE=""

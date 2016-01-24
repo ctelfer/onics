@@ -2,12 +2,10 @@
 #
 {
 	# build a new packet for '1' one
-	pkt_new(1, 68);
-	parse_push_back(1, @eth);
-	parse_push_back(1, @ip);
-	$(1)eth.ethtype = 0x0800;
-	parse_push_back(1, @tcp);
-	$(1)ip.proto = 6;
+	pkt_new(1, 14);
+	pdu_insert($(1)pkt, @eth);
+	pdu_insert($(1)eth, @ip);
+	pdu_insert($(1)ip, @tcp);
 	$(1)tcp.payload = "Goodbye World\n";
 	fix_dltype(1);
 	fix_lens(1);

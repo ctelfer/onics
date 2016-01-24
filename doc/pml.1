@@ -869,29 +869,6 @@ some bit operations quickly.  The intrinsics are given below.
   	- add 'amt' to offset 'oid' of the 'idx'th protocol data unit 
 	  with protocol ID 'prid' in packet 'pnum'.
 
-  void parse_push_back(int pnum, int prid)
-  	- push a new protocol header of protocol ID 'prid' to the back
-	  of the protocol data unit chain of packet 'pnum'.  If this
-	  this will adjust the starting offset of the packet in its
-	  buffer if necessary.  However, it will fail at runtime if
-	  insufficient space exists.
-
-  void parse_pop_back(int pnum)
-  	- remove the innermost protocol data unit from packet 'pnum'.
-	  This does not remove the data itself: only the parse of the
-	  data unit.  To remove the data, follow this up with pkt_cut_*.
-
-  void parse_push_front(int pnum, int prid)
-  	- push a new protocol header of protocol ID 'prid' to the front
-	  of the protocol data unit chain of packet 'pnum'.  There must
-	  be space outside the outermost protocol data unit to hold this
-	  new header.  (Use pkt_ins_* of necessary to create it.)
-
-  void parse_pop_front(int pnum)
-  	- remove the outermost protocol data unit from packet 'pnum'.
-	  This does not remove the data itself: only the parse of the
-	  data unit.  To remove the data, follow this up with pkt_cut_*.
-
 
   void fix_dltype(pnum)
   	- Set the datalink type of the packet to the outermost protocol
@@ -958,18 +935,18 @@ packets still stored in packet lists.
 .fi
 .P
 .nf
-  void parse_update(pdesc)
-  	- Update the protocol parsed fields for the PDU.  One might use
-	  this, for example, after inserting IP option data in an IP
-	  header to make PML able to recognize the IP option fields.
-
   void fix_len(pdesc)
   	- Fix the length fields in the given PDU.
 
   void fix_csum(pdesc)
   	- Fix the checksum fields in the given PDU.
 
-  void prp_insert(pdesc, int prid)
+  void pdu_update(pdesc)
+  	- Update the protocol parsed fields for the PDU.  One might use
+	  this, for example, after inserting IP option data in an IP
+	  header to make PML able to recognize the IP option fields.
+
+  void pdu_insert(pdesc, int prid)
 	- Insert a new header/trailer with of type 'prid' into the
 	  packet after the header and before the trailer for the PDU
 	  that 'pdesc' identifies.  This may be 'pkt' to have the new
@@ -980,10 +957,8 @@ packets still stored in packet lists.
 	  it adjusts that PDU's checksum accordingly.  This intrinsic
 	  does not adjust length or checksum fields (outside of
 	  the adjustment for the changed "next protocol" field.
-	  This is a simpler way to insert headers compared with
-	  pkt_ins_*() and parse_push_*() functions.  
 
-  void prp_delete(pdesc)
+  void pdu_delete(pdesc)
 	- Remove the PDU from the packet clearing cutting out its header
 	  and trailer data from the packet.  This function also adjusts
 	  the "next protocol" field of the immediately enclosing PDU
@@ -991,8 +966,7 @@ packets still stored in packet lists.
 	  It correspondingly adjusts the enclosing PDU's checksum if
 	  applicable.  This intrinsic does not adjust length or
 	  checksum fields (outside of the adjustment for the changed
-	  "next protocol" field.  This is simpler method of removing
-	  PDU headers compared with pkt_cut_*() and parse_pop_*().
+	  "next protocol" field.
 	
 .fi
 .P
@@ -1202,9 +1176,9 @@ Generate a TCP packet:
 	pml -e "str payload = "Hello World";
 		BEGIN {
                     pkt_new(0, str_len(&payload));
-                    parse_push_front(0, @tcp);
-                    parse_push_front(0, @ip);
-                    parse_push_front(0, @eth);
+                    pdu_insert(pkt, @tcp);
+                    pdu_insert(pkt, @ip);
+                    pdu_insert(pkt, @eth);
                     tcp.payload = payload;
                     fix_lens(0);
                     fix_csums(0);

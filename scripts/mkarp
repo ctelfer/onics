@@ -27,8 +27,11 @@ usage() {
 }
 
 START='
-	parse_push_front(0, @arp);
-	parse_push_front(0, @eth);
+import "std.pml";
+BEGIN {
+	pkt_new(0, 0);
+	pdu_insert(pkt, @arp);
+	pdu_insert(pkt, @eth);
 
 	eth.src = 02:00:00:00:00:01;
 	eth.dst = ff:ff:ff:ff:ff:ff;
@@ -37,5 +40,8 @@ START='
 	arp.trgpraddr = 192.168.0.2;
 '
 
-pml -e "import \"std.pml\";
-        BEGIN { pkt_new(0, 0); $START $* send 0; }"
+END='
+	send 0;
+}'
+
+pml -e "$START $* $END"

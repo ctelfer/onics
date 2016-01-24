@@ -40,13 +40,6 @@ then
 	fi
 fi
 
-POP="
-	if (\$(0,1)pdu) {
-		pkt_cut_u(\$(0,1)pdu.header);
-		parse_pop_front(0);
-	}
-"
-
 PMLSCRIPT="
 import \"std.pml\";
 {
@@ -55,7 +48,7 @@ import \"std.pml\";
 while [ $NPOP -gt 0 ]
 do
 	PMLSCRIPT="$PMLSCRIPT
-		   $POP"
+		   hdr_pop();"
 	NPOP=`expr $NPOP - 1`
 done
 

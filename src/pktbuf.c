@@ -792,56 +792,7 @@ void pkb_fix_dltype_if_parsed(struct pktbuf *pkb)
 }
 
 
-static int pkb_append_prp(struct pktbuf *pkb, int prid)
-{
-	struct prpspec ps;
-	struct prparse *olast;
-	olast = prp_prev(&pkb->prp);
-	if (prp_get_spec(prid, olast, PRP_GSF_APPEND, &ps) < 0)
-		return -1;
-	if (prp_add(olast, pkb->buf, &ps, 0) < 0)
-		return -1;
-	if (prp_fix_nxthdr(olast, pkb->buf) < 0)
-		return -1;
-	pkb_set_layer(pkb, prp_prev(&pkb->prp), -1);
-	return 0;
-}
-
-
-static int pkb_wrap_prp(struct pktbuf *pkb, int prid)
-{
-	struct prpspec ps;
-	struct prparse *prp;
-	if (prp_get_spec(prid, prp_next(&pkb->prp), PRP_GSF_WRAPPRP, &ps) < 0)
-		return -1;
-	if (prp_add(&pkb->prp, pkb->buf, &ps, 1) < 0)
-		return -1;
-	prp = prp_next(&pkb->prp);
-	/* 
-	   in the packet buffer environment, when wrapping headers,
-	   if we header we wrap goes below the current start of packet,
-	   implicitly move the start of packet to the start of the new
-	   header.
-	 */
-	if (prp_poff(&pkb->prp) > prp_soff(prp))
-		prp_poff(&pkb->prp) = prp_soff(prp);
-	if (prp_toff(&pkb->prp) < prp_eoff(prp))
-		prp_toff(&pkb->prp) = prp_eoff(prp);
-	pkb_set_layer(pkb, prp, SET_LAYER_FORCE);
-	return 0;
-}
-
-
-int pkb_pushprp(struct pktbuf *pkb, int prid, int tofront)
-{
-	if (tofront)
-		return pkb_wrap_prp(pkb, prid);
-	else
-		return pkb_append_prp(pkb, prid);
-}
-
-
-int pkb_insert_prp(struct pktbuf *pkb, struct prparse *pprp, int prid)
+int pkb_insert_pdu(struct pktbuf *pkb, struct prparse *pprp, int prid)
 {
 	struct prpspec ps;
 	int rv;
@@ -883,9 +834,10 @@ int pkb_insert_prp(struct pktbuf *pkb, struct prparse *pprp, int prid)
 }
 
 
-int pkb_delete_prp(struct pktbuf *pkb, struct prparse *prp)
+int pkb_delete_pdu(struct pktbuf *pkb, struct prparse *prp)
 {
 	struct prparse *pprp;
+	int i;
 
 	if (pkb == NULL || prp == NULL || prp_is_base(prp)) {
 		errno = EINVAL;
@@ -899,61 +851,16 @@ int pkb_delete_prp(struct pktbuf *pkb, struct prparse *prp)
 	if (prp_tlen(prp) > 0)
 		if (prp_cut(prp, pkb->buf, prp_plen(prp), prp_tlen(prp), 0) < 0)
 			return -1;
+	for (i = 0; i < PKB_LAYER_NUM; ++i) {
+		if (pkb->layers[i] == prp) {
+			pkb->layers[i] = NULL;
+			break;
+		}
+	}
 	prp_free_parse(prp);
 	prp_fix_nxthdr(pprp, pkb->buf);
 
 	return 0;
-}
-
-void pkb_popprp(struct pktbuf *pkb, int fromfront)
-{
-	struct prparse *topop;
-	struct prparse *reg;
-	long osoff;
-	long opoff;
-	long otoff;
-	int i;
-	if (fromfront)
-		topop = prp_next(&pkb->prp);
-	else
-		topop = prp_prev(&pkb->prp);
-	if (!prp_list_head(topop)) {
-		reg = topop->region;
-		for (i = 0; i < PKB_LAYER_NUM; ++i) {
-			if (pkb->layers[i] == topop) {
-				pkb->layers[i] = NULL;
-				break;
-			}
-		}
-
-		osoff = prp_soff(topop);
-		opoff = prp_poff(topop);
-		otoff = prp_toff(topop);
-		prp_free_parse(topop);
-
-		if (fromfront) {
-			/* 
-			   in the packet buffer environment, when popping
-			   headers from the front, implicitly move the start
-			   of packet to the start of the next header if there
-			   is one present.  Otherwise set the packet region
-			   to the payload of the last PDU popped.
-			 */
-			if (!prp_empty(&pkb->prp)) {
-				reg = prp_next(&pkb->prp);
-				if (osoff < prp_soff(reg)) {
-					prp_poff(&pkb->prp) = prp_soff(reg);
-					prp_toff(&pkb->prp) = prp_eoff(reg);
-				}
-			} else {
-					prp_poff(&pkb->prp) = opoff;
-					prp_toff(&pkb->prp) = otoff;
-			}
-		} else {
-			if (reg != NULL)
-				prp_fix_nxthdr(reg, pkb->buf);
-		}
-	}
 }
 
 

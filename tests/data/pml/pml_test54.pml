@@ -34,14 +34,10 @@ int pkt_splice(str p, str s)
 
 int mk_udpipeth_pn(int pn) 
 {
-	len = 14 + 20 + 8;
 	pkt_new(pn, 2048-256);
-	parse_push_back(pn, @eth);
-	$(pn)eth.ethtype = 0x800;
-	parse_push_back(pn, @ip);
-	$(pn)ip.proto = 17;
-	parse_push_back(pn, @udp);
-	fix_dltype(pn);
+	pdu_insert($(pn)pkt, @eth);
+	pdu_insert($(pn)eth, @ip);
+	pdu_insert($(pn)ip, @udp);
 	return 0;
 }
 
@@ -77,7 +73,7 @@ void vlan_push(int pnum, int tpid, int tci)
 		return 0;
 	pkt_ins_d(pnum, str_addr($(pnum)eth[0]) + 12, 4);
 	$(pnum)eth[12,4] = (tpid << 16) | (tci & 0xFFFF);
-	parse_update($(pnum)eth);
+	pdu_update($(pnum)eth);
 }
 
 

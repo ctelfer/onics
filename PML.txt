@@ -775,29 +775,6 @@ Packet Buffer / Protocol Unit Manipulation
   	- add 'amt' to offset 'oid' of the 'idx'th protocol data unit 
 	  with protocol ID 'prid' in packet 'pnum'.
 
-  void parse_push_back(int pnum, int prid)
-  	- push a new protocol header of protocol ID 'prid' to the back
-	  of the protocol data unit chain of packet 'pnum'.  If this
-	  this will adjust the starting offset of the packet in its
-	  buffer if necessary.  However, it will fail at runtime if
-	  insufficient space exists.
-
-  void parse_pop_back(int pnum)
-  	- remove the innermost protocol data unit from packet 'pnum'.
-	  This does not remove the data itself: only the parse of the
-	  data unit.  To remove the data, follow this up with pkt_cut_*.
-
-  void parse_push_front(int pnum, int prid)
-  	- push a new protocol header of protocol ID 'prid' to the front
-	  of the protocol data unit chain of packet 'pnum'.  There must
-	  be space outside the outermost protocol data unit to hold this
-	  new header.  (Use pkt_ins_* of necessary to create it.)
-
-  void parse_pop_front(int pnum)
-  	- remove the outermost protocol data unit from packet 'pnum'.
-	  This does not remove the data itself: only the parse of the
-	  data unit.  To remove the data, follow this up with pkt_cut_*.
-
 
   void fix_dltype(pnum)
   	- Set the datalink type of the packet to the outermost protocol
@@ -825,17 +802,39 @@ Special Locator Intrinsics
 	$(1,2)ip	-> the 2nd IP PDU of packet 1
 	$(1)icmp6	-> the first ICMPv6 PDU of packet 0
 
-  void parse_update(pdesc)
-  	- Update the protocol parsed fields for the PDU.  One might use
-	  this, for example, after inserting IP option data in an IP
-	  header to make PML able to recognize the IP option fields.
-
   void fix_len(pdesc)
   	- Fix the length fields in the given PDU.
 
   void fix_csum(pdesc)
   	- Fix the checksum fields in the given PDU.
 
+  void pdu_update(pdesc)
+  	- Update the protocol parsed fields for the PDU.  One might use
+	  this, for example, after inserting IP option data in an IP
+	  header to make PML able to recognize the IP option fields.
+
+  void pdu_insert(pdesc, int prid)
+	- Insert a new header/trailer with of type 'prid' into the
+	  packet after the header and before the trailer for the PDU
+	  that 'pdesc' identifies.  This may be 'pkt' to have the new
+	  PDU encapsulate the entire packet.  This function inserts new
+	  space for the header and trailer.  It also causes the header
+	  in pdesc to change its "next protocol" field (e.g. ip.proto
+	  or eth.etype) to correctly identify the new header and
+	  it adjusts that PDU's checksum accordingly.  This intrinsic
+	  does not adjust length or checksum fields (outside of
+	  the adjustment for the changed "next protocol" field.
+
+  void pdu_delete(pdesc)
+	- Remove the PDU from the packet clearing cutting out its header
+	  and trailer data from the packet.  This function also adjusts
+	  the "next protocol" field of the immediately enclosing PDU
+	  (if any) to point to the PDU that the 'pdesc' PDU enclosed.
+	  It correspondingly adjusts the enclosing PDU's checksum if
+	  applicable.  This intrinsic does not adjust length or
+	  checksum fields (outside of the adjustment for the changed
+	  "next protocol" field.
+	
 
 Numeric Operations
 
@@ -1184,17 +1183,16 @@ Intrinsics:
   -- void pkt_pop(listnum, pnum) - pop the next packet from the front of
 				   packet list 'listnum' to packet 'pnum'
 
-  -- void parse_push_back(pnum, prid)
-  -- void parse_pop_back(pnum)
-  -- void parse_push_front(pnum, prid)
-  -- void parse_pop_front(pnum)
-  -- void parse_update(pdesc)
+  -- void pdu_update(pdesc)
 
   -- void fix_dltype(pnum)
   -- void fix_len(pdesc)
   -- void fix_lens(pnum)
   -- void fix_csum(pdesc)
   -- void fix_csums(pnum)
+  -- void pdu_insert(pdesc, prid) - insert a new PDU after pdesc making
+				    space for header and trailer
+  -- void pdu_delete(pdesc) - remove a PDU along with its header/trailer
 
   Per packet metadata that may or may not be present.
   If the data is not present the m_get_* function returns -1.

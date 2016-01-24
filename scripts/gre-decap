@@ -34,7 +34,6 @@ if (eth and eth.index == 1 and
     ip and ip.index == 2 and 
     gre and gre.index == 3
    ) {
-    len = eth.hlen + ip.hlen + gre.hlen;
 "
 
 if [ $# -gt 0 ]
@@ -48,7 +47,6 @@ if (eth and eth.index == 1 and
     ip and ip.index == 2 and 
     nvgre and nvgre.index == 3
    ) {
-    len = eth.hlen + ip.hlen + nvgre.hlen;
 "
 		shift
 	fi
@@ -66,10 +64,9 @@ PMLSCRIPT="
 	import \"std.pml\";
 	{
 	  $PROLOG
-	    pkt_cut_u(eth[0, len]);
-	    parse_pop_front(0);
-	    parse_pop_front(0);
-	    parse_pop_front(0);
+	  pdu_delete(\$(0,1)pdu);
+	  pdu_delete(\$(0,1)pdu);
+	  pdu_delete(\$(0,1)pdu);
 "
 
 for S

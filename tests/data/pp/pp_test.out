@@ -71,8 +71,8 @@
    5:	Header 2 -- ARP
 		No errors
 		Offset:      208	Length:       28
-		Header length:        8
-		Payload length:      20
+		Header length:       28
+		Payload length:       0
 		Trailer length:       0
 
    6:	Header 1 -- Ethernet2
@@ -84,8 +84,8 @@
    6:	Header 2 -- ARP
 		No errors
 		Offset:      208	Length:       28
-		Header length:        8
-		Payload length:      20
+		Header length:       28
+		Payload length:       0
 		Trailer length:       0
 
    7:	Header 1 -- Ethernet2

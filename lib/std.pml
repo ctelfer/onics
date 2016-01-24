@@ -54,11 +54,12 @@ int pkt_splice(str p, str s)
 void mk_tcp_pn(int pn) 
 {
 	pkt_new(pn, 2048-256);
-	parse_push_back(pn, @eth);
-	$(pn)eth.ethtype = 0x800;
-	parse_push_back(pn, @ip);
-	$(pn)ip.proto = 6;
-	parse_push_back(pn, @tcp);
+	pdu_insert(pkt, @eth);
+	pdu_insert(eth, @ip);
+	pdu_insert(ip, @tcp);
+	fix_len(ip);
+	fix_csum(ip);
+	fix_csum(tcp);
 }
 
 
@@ -71,11 +72,11 @@ void mk_tcp()
 void mk_udp_pn(int pn) 
 {
 	pkt_new(pn, 2048-256);
-	parse_push_back(pn, @eth);
-	$(pn)eth.ethtype = 0x800;
-	parse_push_back(pn, @ip);
-	$(pn)ip.proto = 17;
-	parse_push_back(pn, @udp);
+	pdu_insert(pkt, @eth);
+	pdu_insert(eth, @ip);
+	pdu_insert(ip, @udp);
+	fix_len(ip);
+	fix_csum(ip);
 }
 
 
@@ -87,10 +88,9 @@ void mk_udp()
 
 void mk_arp_pn(int pn)
 {
-	pkt_new(pn, 14 + 28);
-	parse_push_back(pn, @eth);
-	$(pn)eth.ethtype = 0x806;
-	parse_push_back(pn, @arp);
+	pkt_new(pn, 0);
+	pdu_insert(pkt, @eth);
+	pdu_insert(eth, @arp);
 }
 
 
@@ -143,7 +143,7 @@ void vlan_push_pn(int pn, int vid)
 		return 0;
 	pkt_ins_d(pn, str_addr($(pn)eth[0]) + 12, 4);
 	$(pn)eth[12,4] = (ETYPE_C_VLAN << 16) | (vid & 0xFFFF);
-	parse_update($(pn)eth);
+	pdu_update($(pn)eth);
 }
 
 
@@ -158,7 +158,7 @@ void vlan_pop_pn(int pn)
 	if (not vlan_present_pn(pn))
 		return 0;
 	pkt_cut_u($(pn)eth[12,4]);
-	parse_update($(pn)eth);
+	pdu_update($(pn)eth);
 }
 
 
@@ -184,13 +184,15 @@ void fix_pn(int pn)
 
 void hdr_pop()
 {
-	parse_pop_front(0);
+	if ($(0, 1)pdu)
+		pdu_delete($(0, 1)pdu);
 }
 
 
 void hdr_pop_pn(int pn)
 {
-	parse_pop_front(pn);
+	if ($(pn, 1)pdu)
+		pdu_delete($(pn, 1)pdu);
 }
 
 
@@ -207,57 +209,57 @@ const VXLAN_PORT = 4789;
 
 void eth_wrap()
 {
-	parse_push_front(0, @eth);
+	pdu_insert(pkt, @eth);
 }
 
 
 void ip_wrap()
 {
-	parse_push_front(0, @ip);
+	pdu_insert(pkt, @ip);
 }
 
 
 void ip6_wrap()
 {
-	parse_push_front(0, @ip6);
+	pdu_insert(pkt, @ip6);
 }
 
 
 void icmp_wrap()
 {
-	parse_push_front(0, @icmp);
+	pdu_insert(pkt, @icmp);
 }
 
 
 void icmp6_wrap()
 {
-	parse_push_front(0, @icmp6);
+	pdu_insert(pkt, @icmp6);
 }
 
 
 void tcp_wrap()
 {
-	parse_push_front(0, @tcp);
+	pdu_insert(pkt, @tcp);
 }
 
 
 void udp_wrap()
 {
-	parse_push_front(0, @udp);
+	pdu_insert(pkt, @udp);
 }
 
 
 void gre_wrap()
 {
-	parse_push_front(0, @gre);
+	pdu_insert(pkt, @gre);
 }
 
 
 void gre_encap()
 {
-	parse_push_front(0, @gre);
-	parse_push_front(0, @ip);
-	parse_push_front(0, @eth);
+	pdu_insert(pkt, @gre);
+	pdu_insert(pkt, @ip);
+	pdu_insert(pkt, @eth);
 }
 
 
@@ -266,26 +268,24 @@ void gre_decap()
 	if (eth and eth.index == 1 and
 	    ip and ip.index == 2 and
 	    gre and gre.index == 3) {
-		len = eth.hlen + ip.hlen + gre.hlen;
-		pkt_cut_u(eth[0, len]);
-		parse_pop_front(0);
-		parse_pop_front(0);
-		parse_pop_front(0);
+		pdu_delete(eth);
+		pdu_delete(ip);
+		pdu_delete(gre);
 	}
 }
 
 
 void nvgre_wrap()
 {
-	parse_push_front(0, @nvgre);
+	pdu_insert(pkt, @nvgre);
 }
 
 
 void nvgre_encap()
 {
-	parse_push_front(0, @nvgre);
-	parse_push_front(0, @ip);
-	parse_push_front(0, @eth);
+	pdu_insert(pkt, @nvgre);
+	pdu_insert(pkt, @ip);
+	pdu_insert(pkt, @eth);
 }
 
 
@@ -294,28 +294,25 @@ void nvgre_decap()
 	if (eth and eth.index == 1 and
 	    ip and ip.index == 2 and
 	    nvgre and nvgre.index == 3) {
-		len = eth.hlen + ip.hlen + nvgre.hlen;
-		pkt_cut_u(eth[0, len]);
-		parse_pop_front(0);
-		parse_pop_front(0);
-		parse_pop_front(0);
+		pdu_delete(eth);
+		pdu_delete(ip);
+		pdu_delete(nvgre);
 	}
 }
 
 
 void vxlan_wrap()
 {
-	parse_push_front(0, @vxlan);
+	pdu_insert(pkt, @vxlan);
 }
 
 
 void vxlan_encap()
 {
-	parse_push_front(0, @vxlan);
-	parse_push_front(0, @udp);
-	udp.dport = VXLAN_PORT;
-	parse_push_front(0, @ip);
-	parse_push_front(0, @eth);
+	pdu_insert(pkt, @vxlan);
+	pdu_insert(pkt, @udp);
+	pdu_insert(pkt, @ip);
+	pdu_insert(pkt, @eth);
 }
 
 
@@ -325,12 +322,10 @@ void vxlan_decap()
 	    ip and ip.index == 2 and
 	    udp and udp.index == 3 and udp.dport == VXLAN_PORT and
 	    vxlan and vxlan.index == 4) {
-		len = eth.hlen + ip.hlen + udp.hlen + vxlan.hlen;
-		pkt_cut_u(eth[0, len]);
-		parse_pop_front(0);
-		parse_pop_front(0);
-		parse_pop_front(0);
-		parse_pop_front(0);
+		pdu_delete(eth);
+		pdu_delete(ip);
+		pdu_delete(udp);
+		pdu_delete(vxlan);
 	}
 }
 
@@ -413,7 +408,7 @@ void mpls_push_pn(int pn, int label, int tc, int ttl)
 {
 	val = ((label & 0xFFFFF) << 12) | ((tc & 0x7) << 9) | (ttl & 0xFF);
 	if (not $(pn)mpls) {
-		parse_push_front(pn, @mpls);
+		pdu_insert($(pn)pkt, @mpls);
 		val = val | 0x100;
 	} else {
 		pkt_ins_d(pn, str_addr($(pn)mpls.header), 4);
@@ -429,7 +424,7 @@ int mpls_pop_pn(int pn)
 		val = $(pn)mpls[0, 4];
 		pkt_cut_u($(pn)mpls.header[0, 4]);
 		if (str_len($(pn)mpls.header) <= 0)
-			parse_pop_front(pn);
+			pdu_delete($(pn)mpls);
 	}
 	return val;
 }

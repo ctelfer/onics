@@ -4,7 +4,7 @@
 # Copyright 2012-2016
 # Christopher Adam Telfer
 #
-# gre-decap - Decapsulate GRE packets.
+# vxlan-decap - Decapsulate VXLAN packets.
 #
 #
 #  This program is free software: you can redistribute it and/or modify
@@ -33,7 +33,6 @@ if (eth and eth.index == 1 and
     ip and ip.index == 2 and 
     udp and udp.index == 3 and
     vxlan and vxlan.index == 4) {
-    len = eth.hlen + ip.hlen + udp.hlen + vxlan.hlen;
 "
 
 if [ $# -gt 0 ]
@@ -53,11 +52,10 @@ PMLSCRIPT="
 	import \"std.pml\";
 	{
 	  $PROLOG
-	    pkt_cut_u(eth[0, len]);
-	    parse_pop_front(0);
-	    parse_pop_front(0);
-	    parse_pop_front(0);
-	    parse_pop_front(0);
+	    pdu_delete(eth);
+	    pdu_delete(ip);
+	    pdu_delete(udp);
+	    pdu_delete(vxlan);
 "
 
 for S

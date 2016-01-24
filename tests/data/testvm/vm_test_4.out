@@ -446,14 +446,12 @@
 # ARP: HW Address length:      6
 # ARP: Proto Address length:   4
 # ARP: Operation:              1
-    00000e:  00 01 08 00 06 04 00 01                          |........|
 # ARP: Sender HW Address:      00:22:fa:a7:69:90
 # ARP: Sender IP Address:      192.168.0.4
 # ARP: Target HW Address:      00:00:00:00:00:00
 # ARP: Target IP Address:      192.168.0.7
-# ARP: Data -- [22:20]
-    000016:  00 22 fa a7 69 90 c0 a8 00 04 00 00 00 00 00 00  |."..i...........|
-    000026:  c0 a8 00 07                                      |....|
+    00000e:  00 01 08 00 06 04 00 01 00 22 fa a7 69 90 c0 a8  |........."..i...|
+    00001e:  00 04 00 00 00 00 00 00 c0 a8 00 07              |............|
 
 
 #####
@@ -474,14 +472,12 @@
 # ARP: HW Address length:      6
 # ARP: Proto Address length:   4
 # ARP: Operation:              2
-    00000e:  00 01 08 00 06 04 00 02                          |........|
 # ARP: Sender HW Address:      00:30:65:c1:b3:a8
 # ARP: Sender IP Address:      192.168.0.7
 # ARP: Target HW Address:      00:22:fa:a7:69:90
 # ARP: Target IP Address:      192.168.0.4
-# ARP: Data -- [22:20]
-    000016:  00 30 65 c1 b3 a8 c0 a8 00 07 00 22 fa a7 69 90  |.0e........"..i.|
-    000026:  c0 a8 00 04                                      |....|
+    00000e:  00 01 08 00 06 04 00 02 00 30 65 c1 b3 a8 c0 a8  |.........0e.....|
+    00001e:  00 07 00 22 fa a7 69 90 c0 a8 00 04              |..."..i.....|
 # ETH: Data -- [42:18]
     00002a:  55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55  |UUUUUUUUUUUUUUUU|
     00003a:  55 55                                            |UU|

@@ -468,10 +468,6 @@ enum {
 
 	NETVM_OC_PKSLA,		/* [pdesc] set layer 'x' to prp in pdesc */
 	NETVM_OC_PKCLA,		/* [pkn] clear layer 'x' */
-	NETVM_OC_PKPPSH,	/* [pkn,prid] "push" prp of prid in packet */
-				/*   pkn to inner header if !x or outer if x */
-	NETVM_OC_PKPPOP,	/* [pkn] pop the top prp off of packet pkn */
-	                        /*   if x then pop from front else innermost */
 
 	NETVM_OC_PKPRS,		/* [pkn] delete parse and if 'x' == 0 reparse */
 	NETVM_OC_PKFXD,		/* [pkn] set dltype to PRID_ of 2nd prp */

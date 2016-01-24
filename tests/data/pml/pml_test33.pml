@@ -24,13 +24,12 @@ BEGIN {
 
 	len = 14 + 20 + 20;
 	pkt_new_z(0, 2048);
-	pkt_ins_u(0, str_addr(pkt.payload), len);
+	pkt_adj_off(0, @pkt, 0, TRAILER_OFF, len);
+	pkt_adj_off(0, @pkt, 0, PAYLOAD_OFF, len);
 
-	parse_push_back(0, @eth);
-	eth.ethtype = 0x800;
-	parse_push_back(0, @ip);
-	ip.proto = 6;
-	parse_push_back(0, @tcp);
+	pdu_insert(pkt, @eth);
+	pdu_insert(eth, @ip);
+	pdu_insert(ip, @tcp);
 	ip.saddr = 192.168.100.2;
 	ip.daddr = 192.168.100.1;
 	tcp.sport = 54321;

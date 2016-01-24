@@ -4,9 +4,9 @@
 BEGIN {
 	pkt_new(0, 0);
 
-	parse_push_front(0, @icmp6);
-	parse_push_front(0, @ip6);
-	parse_push_front(0, @eth);
+	pdu_insert(pkt, @icmp6);
+	pdu_insert(pkt, @ip6);
+	pdu_insert(pkt, @eth);
 
 	eth.src = 02:00:00:00:00:01;
 	eth.dst = 02:00:00:00:00:02;

@@ -384,7 +384,7 @@ static int eth_fixnxt(struct prparse *prp, byte_t *buf)
 
 
 /* -- ops for ARP type -- */
-static byte_t ethiparpstr[6] = {0, 1, 8, 0, 6, 4 };
+static byte_t ethiparpstr[6] = {0, 1, 8, 0, 6, 4};
 static void arp_update(struct prparse *prp, byte_t *buf);
 
 static struct prparse *arp_parse(struct prparse *reg, byte_t *buf,
@@ -416,16 +416,15 @@ static void arp_update(struct prparse *prp, byte_t *buf)
 		prp->error |= PRP_ERR_TOOSMALL;
 		return;
 	}
-	prp_poff(prp) = prp_soff(prp) + 8;
 	resetxfields(prp);
 	arp = prp_header(prp, buf, struct arph);
-	if (arp->hwlen * 2 + arp->prlen * 2 > prp_plen(prp)) {
+	if (arp->hwlen * 2 + arp->prlen * 2 > prp_totlen(prp) - 8) {
 		prp->error |= PRP_ERR_TOOSMALL;
 		return;
 	} 
-	prp_eoff(prp) = prp_toff(prp) = 
-		prp_poff(prp) + arp->hwlen * 2 + arp->prlen * 2;
-	if (!memcmp(ethiparpstr, arp, sizeof(ethiparpstr)))
+	prp_eoff(prp) = prp_toff(prp) = prp_poff(prp) =
+		prp_soff(prp) + arp->hwlen * 2 + arp->prlen * 2 + 8;
+	if (memcmp(ethiparpstr, arp, sizeof(ethiparpstr)) == 0)
 		prp->offs[PRP_ARPFLD_ETHARP] = prp_soff(prp);
 }
 
@@ -433,6 +432,8 @@ static void arp_update(struct prparse *prp, byte_t *buf)
 static int arp_getspec(struct prparse *prp, int enclose, struct prpspec *ps)
 {
 	ps->prid = PRID_ARP;
+	ps->hlen = 28;
+	ps->plen = 0;
 	ps->tlen = 0;
 	if (enclose) {
 		/* ARP can not enclose any real data */
@@ -441,16 +442,12 @@ static int arp_getspec(struct prparse *prp, int enclose, struct prpspec *ps)
 			return -1;
 		}
 		ps->off = prp_soff(prp) - 28;
-		ps->hlen = 8;
-		ps->plen = 20;
 	} else {
 		if (prp_plen(prp) < 28) {
 			errno = ENOSPC;
 			return -1;
 		}
 		ps->off = prp_poff(prp);
-		ps->hlen = 8;
-		ps->plen = prp_plen(prp) - 8;
 	}
 	return 0;
 }
@@ -463,11 +460,11 @@ static int arp_add(struct prparse *reg, byte_t *buf, struct prpspec *ps,
 	struct prparse *prp;
 	struct arph *arp;
 	
-	if (ps->hlen != 8) {
+	if (ps->hlen < 8) {
 		errno = EINVAL;
 		return -1;
 	}
-	prp = crtprp(sizeof(struct arp_parse), PRID_ARP, ps->off, 8,
+	prp = crtprp(sizeof(struct arp_parse), PRID_ARP, ps->off, ps->hlen,
 		     ps->plen, ps->tlen, &arp_prparse_ops, PRP_ARP_NXFIELDS);
 	if (!prp)
 		return -1;
@@ -475,8 +472,7 @@ static int arp_add(struct prparse *reg, byte_t *buf, struct prpspec *ps,
 	prp_add_insert(reg, prp, enclose);
 	if (buf) {
 		memset(buf + ps->off, 0, prp_totlen(prp));
-		if (prp_plen(prp) >= 20) {
-			prp_toff(prp) = prp_eoff(prp) = prp_poff(prp) + 20;
+		if (prp_hlen(prp) >= 28) {
 			prp->offs[PRP_ARPFLD_ETHARP] = prp_soff(prp);
 			arp = prp_header(prp, buf, struct arph);
 			pack(arp, 8, "hhbbh", ARPT_ETHERNET, ETHTYPE_IP, 6, 4,
@@ -494,7 +490,7 @@ static int arp_fixlen(struct prparse *prp, byte_t *buf)
 	if (prp_hlen(prp) < 8)
 		return -1;
 	arp = prp_header(prp, buf, struct arph);
-	if (arp->hwlen * 2 + arp->prlen * 2 > prp_plen(prp))
+	if (arp->hwlen * 2 + arp->prlen * 2 + 8 > prp_hlen(prp))
 		return -1;
 	prp->error &= ~(PRP_ERR_TRUNC | PRP_ERR_HLEN | PRP_ERR_TOOSMALL);
 	return 0;

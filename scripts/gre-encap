@@ -42,10 +42,8 @@ then
 	if [ "$1" = "-s" ]
 	then
 		PMLSCRIPT="
-if (eth and eth.index == 1) {
-	pkt_cut_u(eth.header);
-	parse_pop_front(0);
-}
+if (eth and eth.index == 1)
+	pdu_delete(eth);
 "
 		shift
 	elif [ "$1" = "-n" ]
@@ -71,9 +69,9 @@ PMLSCRIPT="
 import \"std.pml\";
 {
 	$PMLSCRIPT
-	parse_push_front(0, $GPROTO);
-	parse_push_front(0, @ip);
-	parse_push_front(0, @eth);
+	pdu_insert(pkt, $GPROTO);
+	pdu_insert(pkt, @ip);
+	pdu_insert(pkt, @eth);
 "
 
 for S

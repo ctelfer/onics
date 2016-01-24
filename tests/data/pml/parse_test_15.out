@@ -165,40 +165,18 @@ Functions
       Variable: pnum [param; width=4, addr=4]
    Body -- 
       (null)
-   Function[intrinsic]: parse_push_back() -- 2 args, 0-byte stack, return type=void
-   Parameters & Variables -- 
-      Variable: pnum [param; width=4, addr=0]
-      Variable: prid [param; width=4, addr=4]
-   Body -- 
-      (null)
-   Function[intrinsic]: parse_pop_back() -- 1 args, 0-byte stack, return type=void
-   Parameters & Variables -- 
-      Variable: pnum [param; width=4, addr=0]
-   Body -- 
-      (null)
-   Function[intrinsic]: parse_push_front() -- 2 args, 0-byte stack, return type=void
-   Parameters & Variables -- 
-      Variable: pnum [param; width=4, addr=0]
-      Variable: prid [param; width=4, addr=4]
-   Body -- 
-      (null)
-   Function[intrinsic]: parse_pop_front() -- 1 args, 0-byte stack, return type=void
-   Parameters & Variables -- 
-      Variable: pnum [param; width=4, addr=0]
-   Body -- 
-      (null)
-   Function[intrinsic]: parse_update() -- 1 args, 0-byte stack, return type=void
+   Function[intrinsic]: pdu_update() -- 1 args, 0-byte stack, return type=void
    Parameters & Variables -- 
       Variable: pdesc [param; width=4, addr=0]
    Body -- 
       (null)
-   Function[intrinsic]: prp_insert() -- 2 args, 0-byte stack, return type=void
+   Function[intrinsic]: pdu_insert() -- 2 args, 0-byte stack, return type=void
    Parameters & Variables -- 
       Variable: pdesc [param; width=4, addr=0]
       Variable: prid [param; width=4, addr=4]
    Body -- 
       (null)
-   Function[intrinsic]: prp_delete() -- 1 args, 0-byte stack, return type=void
+   Function[intrinsic]: pdu_delete() -- 1 args, 0-byte stack, return type=void
    Parameters & Variables -- 
       Variable: pdesc [param; width=4, addr=0]
    Body -- 

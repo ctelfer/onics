@@ -74,7 +74,8 @@ and then sending the packet:
                 ipwrap   "ip.daddr = 192.168.0.1; 
                           ip.saddr = 10.0.0.1;"                 | 
                 ethwrap  "eth.src = 00:11:22:33:44:55; 
-                          eth.dst = aa:bb:cc:dd:ee:ff;"         | 
+                          eth.dst = aa:bb:cc:dd:ee:ff;
+                          fix_csums(0);"                        |
                 pktout eth0
 
 

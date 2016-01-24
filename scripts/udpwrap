@@ -30,7 +30,7 @@ usage() {
 PMLSCRIPT="
 	import \"std.pml\";
 	{
-	parse_push_front(0, @udp);
+	udp_wrap();
 	udp.cksum = 1;
 "
 

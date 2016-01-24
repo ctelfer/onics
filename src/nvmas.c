@@ -202,8 +202,6 @@ struct nvmop Operations[] = {
 	{ "pkdel",  NETVM_OC_PKDEL,  0, 0 },
 	{ "pksla",  NETVM_OC_PKSLA,  1, ARGX },
 	{ "pkcla",  NETVM_OC_PKCLA,  1, ARGX },
-	{ "pkppsh", NETVM_OC_PKPPSH, 1, ARGX },
-	{ "pkppop", NETVM_OC_PKPPOP, 1, ARGX },
 	{ "pkprs",  NETVM_OC_PKPRS,  1, ARGX },
 	{ "pkfxd",  NETVM_OC_PKFXD,  0, 0 },
 	{ "pkpup",  NETVM_OC_PKPUP,  0, 0 },

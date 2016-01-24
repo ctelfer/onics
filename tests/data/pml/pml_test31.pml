@@ -34,14 +34,10 @@ int pkt_splice(str p, str s)
 
 int mk_tcpipeth(int pn) 
 {
-	len = 14 + 20 + 20;
 	pkt_new(pn, 2048-256);
-	parse_push_back(pn, @eth);
-	$(pn)eth.ethtype = 0x800;
-	parse_push_back(pn, @ip);
-	$(pn)ip.proto = 6;
-	parse_push_back(pn, @tcp);
-	fix_dltype(pn);
+	pdu_insert(pkt, @eth);
+	pdu_insert(eth, @ip);
+	pdu_insert(ip, @tcp);
 	return 0;
 }
 

@@ -43,9 +43,9 @@ int main(int argc, char *argv[])
 	memset(pkb_data(pkb), 0xdd, DLEN);
 
 	/* add eth+ip+tcp headers */
-	EXPECT(pkb_insert_prp(pkb, &pkb->prp, PRID_TCP), 0);
-	EXPECT(pkb_insert_prp(pkb, &pkb->prp, PRID_IPV4), 0);
-	EXPECT(pkb_insert_prp(pkb, &pkb->prp, PRID_ETHERNET2), 0);
+	EXPECT(pkb_insert_pdu(pkb, &pkb->prp, PRID_TCP), 0);
+	EXPECT(pkb_insert_pdu(pkb, &pkb->prp, PRID_IPV4), 0);
+	EXPECT(pkb_insert_pdu(pkb, &pkb->prp, PRID_ETHERNET2), 0);
 	pkb_fix_dltype(pkb);
 	fix_all(pkb);
 
@@ -58,7 +58,7 @@ int main(int argc, char *argv[])
 	pkb_unpack(pkb);
 	eprp = prp_next(&pkb->prp);
 	EXPECT(eprp->prid, PRID_ETHERNET2);
-	EXPECT(pkb_insert_prp(pkb, eprp, PRID_MPLS), 0);
+	EXPECT(pkb_insert_pdu(pkb, eprp, PRID_MPLS), 0);
 
 	mprp = prp_next(eprp);
 	EXPECT(mprp->prid, PRID_MPLS);
@@ -77,7 +77,7 @@ int main(int argc, char *argv[])
 
 	/* Delete the MPLS label */
 	pkb_unpack(pkb);
-	EXPECT(pkb_delete_prp(pkb, mprp), 0);
+	EXPECT(pkb_delete_pdu(pkb, mprp), 0);
 	fix_all(pkb);
 
 	/* Send out eth+ip+tcp packet again */
