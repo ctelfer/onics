@@ -4,7 +4,7 @@
 # Copyright 2016
 # Christopher Adam Telfer
 #
-# ppophdr - remove the outermost headers from a packet
+# ppop - remove the outermost headers from a packet
 #
 #
 #  This program is free software: you can redistribute it and/or modify
@@ -48,7 +48,7 @@ import \"std.pml\";
 while [ $NPOP -gt 0 ]
 do
 	PMLSCRIPT="$PMLSCRIPT
-		   hdr_pop();"
+		   pdu_pop();"
 	NPOP=`expr $NPOP - 1`
 done
 

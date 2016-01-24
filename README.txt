@@ -208,7 +208,7 @@ work just about everywhere.
 
  * phead - extract the first N packets from a packet stream
 
- * ppophdr - pop the outermost headers from each packet in a packet stream
+ * ppop - pop the outermost protocol(s) from each packet in a packet stream
 
  * ptail - extract the last N packets from a packet stream
 

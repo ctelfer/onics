@@ -20,6 +20,51 @@
 #  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 
+#
+# Simple aliases for simple packet operations
+#
+
+inline pkt_headroom() { pkt.hlen }
+inline pkt_tailroom() { pkt.tlen }
+inline pkt_headroom_pn(int pn) { $(pn)pkt.hlen }
+inline pkt_tailroom_pn(int pn) { $(pn)pkt.tlen }
+
+
+void fix()
+{
+	fix_lens(0);
+	fix_csums(0);
+}
+
+
+void fix_pn(int pn)
+{
+	fix_lens(pn);
+	fix_csums(pn);
+}
+
+
+# Pop outermost header if present
+void pdu_pop()
+{
+	if ($(0, 1)pdu)
+		pdu_delete($(0, 1)pdu);
+}
+
+
+void pdu_pop_pn(int pn)
+{
+	if ($(pn, 1)pdu)
+		pdu_delete($(pn, 1)pdu);
+}
+
+
+#
+# Packet data splicing
+#  - replace one string with another inserting or removing
+#    space in the packet as required
+#
+
 int pkt_splice(str p, str s)
 {
 	str post;
@@ -50,6 +95,10 @@ int pkt_splice(str p, str s)
 	return 0;
 }
 
+
+#
+# Simple packet creation functions
+#
 
 void mk_tcp_pn(int pn) 
 {
@@ -103,6 +152,7 @@ void mk_arp()
 
 #
 # host() primitive
+#  - return true if either src or dest address matches the packet
 #
 
 inline host_pn(int pn, str addr) {
@@ -115,6 +165,7 @@ inline host_pn(int pn, str addr) {
 }
 
 inline host(str addr) { host_pn(0, addr) }
+
 
 #
 # Ethernet constants and utilities
@@ -165,34 +216,6 @@ void vlan_pop_pn(int pn)
 void vlan_pop()
 {
 	vlan_pop_pn(0);
-}
-
-
-void fix()
-{
-	fix_lens(0);
-	fix_csums(0);
-}
-
-
-void fix_pn(int pn)
-{
-	fix_lens(pn);
-	fix_csums(pn);
-}
-
-
-void hdr_pop()
-{
-	if ($(0, 1)pdu)
-		pdu_delete($(0, 1)pdu);
-}
-
-
-void hdr_pop_pn(int pn)
-{
-	if ($(pn, 1)pdu)
-		pdu_delete($(pn, 1)pdu);
 }
 
 

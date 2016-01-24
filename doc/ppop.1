@@ -1,0 +1,40 @@
+.TH "ppop" 1 "January 2016" "ONICS 1.0"
+.SH NAME
+ppop - Remove the outermost protocol from a packet.
+.P
+.SH SYNOPSYS
+\fBppop\fB [\fB-n\fP \fInumhdrs\fP] [\fIinfile\fP [\fIoutfile\fP]]
+.P
+.SH DESCRIPTION
+The \fBppop\fP utility removes the outermost protocol or protocols from
+each packet in a stream of XPKT packets.  By default, \fBppop\fP removes
+only the outermost header from each packet.  However, if the user
+specifies \fPnumhdrs\fP then \fBppop\fP removes that many headers
+instead.  The utility reads from standard input and writes to standard
+output unless overridden by the \fBinfile\fP and/or \fBoutfile\fP
+arguments.
+.P
+.SH EXAMPLES
+.P
+Create a TCP+IP+Ethernet packet but then strip out the Ethernet header:
+.nf
+
+        mktcp | ppop | x2hpkt
+
+.fi
+Strip all the datalink headers from all the packets in input.txt and
+write the results to output.txt:
+.nf
+
+        ppop infile.txt outfile.txt
+
+.fi
+.P
+.SH AVAILABILITY
+This utility should be available on all supported ONICS platforms.
+.P
+.SH AUTHOR
+Christopher A. Telfer <ctelfer@gmail.com>
+.P
+.SH "SEE ALSO"
+pml(1)
