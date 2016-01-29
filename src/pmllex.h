@@ -73,6 +73,13 @@ int pmll_add_instr(struct pmllex *lex, const char *s, int front,
 int pmll_add_infile(struct pmllex *lex, FILE *f, int front,
 		    const char *name);
 
+/*
+ * Open the file named 'fn' and add it to the lex input as above with
+ * pmll_add_infile().  This routine searches the library search path
+ * for the file if it can't open the base file name.
+ */
+int pmll_open_add_infile(struct pmllex *lex, const char *fn, int front);
+
 /* Get the error string for the scanner */
 const char *pmll_get_err(struct pmllex *lex);
 

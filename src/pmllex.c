@@ -37,7 +37,10 @@
 
 #include "pml.h"
 #include "pmllex.h"
+#include "onics_config.h"
 
+
+#define PML_LIB_PATH	"lib/pml"
 
 #define SIDCHARS "_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 #define IDCHARS	"_abcdefghijklmnopqrstuvwxyz"\
@@ -279,6 +282,41 @@ int pmll_add_infile(struct pmllex *lex, FILE *f, int front, const char *fn)
 		l_push(INLIST(lex), &pi->ln);
 	else
 		l_enq(INLIST(lex), &pi->ln);
+
+	return 0;
+}
+
+
+int pmll_open_add_infile(struct pmllex *lex, const char *fn, int front)
+{
+	FILE *fp;
+	char path[512];
+	int esave;
+
+	if (str_copy(path, fn, sizeof(path)) >= sizeof(path)) {
+		errno = EINVAL;
+		return -1;
+	}
+	fp = fopen(path, "r");
+	if (fp == NULL) {
+		str_copy(path, ONICS_INSTALL_PREFIX, sizeof(path));
+		str_cat(path, "/", sizeof(path));
+		str_cat(path, PML_LIB_PATH, sizeof(path));
+		str_cat(path, "/", sizeof(path));
+		if (str_cat(path, fn, sizeof(path)) >= sizeof(path)) {
+			errno = EINVAL;
+			return -1;
+		}
+		fp = fopen(path, "r");
+		if (fp == NULL)
+			return -1;
+	}
+	if (pmll_add_infile(lex, fp, 1, path) < 0) {
+		esave = errno;
+		fclose(fp);
+		errno = esave;
+		return -1;
+	}
 
 	return 0;
 }
