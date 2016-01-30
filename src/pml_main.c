@@ -40,12 +40,15 @@
 #include "pmlncg.h"
 
 
+#define STDLIB_FILENAME "std.pml"
+
 struct clopt options[] = {
 	CLOPT_I_NOARG('h', NULL, "print help and exit"),
 	CLOPT_I_NOARG('E', NULL, "ignore netvm errors"),
 	CLOPT_I_NOARG('v', NULL, "increase verbosity"),
 	CLOPT_I_NOARG('q', NULL, "decrease verbosity"),
 	CLOPT_I_NOARG('s', NULL, "single step the program"),
+	CLOPT_I_NOARG('i', NULL, "import standard library by default"),
 	CLOPT_I_STRING('f', NULL, "INFILE", "input PML program"),
 	CLOPT_I_STRING('e', NULL, "EXPR", "input expression"),
 	CLOPT_I_STRING('c', NULL, "BINFILE",
@@ -69,6 +72,7 @@ struct pmlinput {
 int verbosity = 0;
 int ignore_errors = 0;
 int single_step = 0;
+int import_std_lib = 0;
 char *progname;
 const char *ofname = NULL;
 
@@ -153,6 +157,8 @@ void parse_options(int argc, char *argv[], FILE **fin, FILE **fout)
 			ofname = opt->val.str_val;
 		} else if (opt->ch == 's') {
 			single_step = 1;
+		} else if (opt->ch == 'i') {
+			import_std_lib = 1;
 		}
 	}
 
@@ -189,6 +195,8 @@ void parse_pml_program(struct netvm_program *prog)
 	
 	if ((scanner = pmll_alloc()) == NULL)
 		errsys("pmllex_init: ");
+	if (import_std_lib)
+		pmll_open_add_infile(scanner, STDLIB_FILENAME, 1);
 	pmll_set_eoicb(scanner, &pmleoi);
 
 	if (!(parser = pml_alloc()))

@@ -3,8 +3,8 @@
 pml - Packet Manipulation Language utility to match and modify packets.
 .P
 .SH SYNOPSYS
-\fBpml\fP [\fB-Ehqsv\fP] [\fB-e\fP \fIexpr\fP] [\fB-f\fP \fIprogfile\fP]
-[\fIinfile\fP [\fIoutfile\fP]]
+\fBpml\fP [\fB-Ehiqsv\fP] [\fB-e\fP \fIexpr\fP]
+[\fB-f\fP \fIprogfile\fP] [\fIinfile\fP [\fIoutfile\fP]]
 .P
 \fBpml\fP [\fB-e\fP \fIexpr\fP ...] [\fB-f\fP \fIprogfile\fP ...]
 \fB-c\fP \fInprgfile\fP
@@ -78,6 +78,11 @@ Add \fIprogfile\fP to the list of PML program files to compile.
 line.
 .IP \fB-h\fP
 Print the usage of the command and exit.
+.IP \fB-i\fP
+Automatically import standard PML libraries for the program.  This is
+semantically equivalent to placing \fB-e 'import "std.pml";'\fP in
+the command line arguments before any other \fB-e\fP or \fB-f\fP
+arguments.
 .IP \fB-q\fP
 Decrease the verbosity.  Can be specified multiple times.
 .IP \fB-s\fP
@@ -1184,6 +1189,14 @@ Generate a TCP packet:
                     fix_csums(0);
 		    send;
 		}" > tcppacket.xpkt
+
+.fi
+Generate a TCP packet using standard library functions:
+.nf
+
+        pml -ie "BEGIN { mk_tcp();
+                         pkt_splice(tcp.payload, "Hello World");
+                         fix(); send; }" > tcppacket.xpkt
 
 .fi
 See also the various scripts that come with the ONICS distribution 
