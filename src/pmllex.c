@@ -54,6 +54,8 @@
 #define NEXTCEOF	-2
 #define NEXTCERR	-3
 
+#define DEFAULT_PATH "."
+
 enum {
 	NTYPE, FTYPE, STYPE
 };
@@ -90,6 +92,7 @@ struct pmllex {
 	struct hnode *		kwbk[32];
 	struct kwnode		kwnodes[32];
 
+	char 			ipath[512];
 	struct dynbuf		text;
 	struct dynbuf		strbuf;
 
@@ -201,6 +204,7 @@ struct pmllex *pmll_alloc(void)
 	cset_init_accept(lex->s_id, IDCHARS);
 	cset_init_accept(lex->s_ws, WSCHARS);
 	cset_init_accept(lex->s_op, OPCHARS);
+	pmll_ipath_reset(lex);
 
 	ht_init(&lex->kwtab, lex->kwbk, array_length(lex->kwbk), cmp_str,
 		ht_shash, NULL);
@@ -287,30 +291,50 @@ int pmll_add_infile(struct pmllex *lex, FILE *f, int front, const char *fn)
 }
 
 
+void pmll_ipath_reset(struct pmllex *lex)
+{
+	memset(lex->ipath, 0, sizeof(lex->ipath));	/* paranoia */
+	str_copy(lex->ipath, DEFAULT_PATH, sizeof(lex->ipath));
+}
+
+
+int pmll_ipath_append(struct pmllex *lex, const char *dir)
+{
+	size_t n;
+	n = str_cat(lex->ipath, ":", sizeof(lex->ipath));
+	if (n >= sizeof(lex->ipath)) {
+		pmll_ipath_reset(lex);
+		return -1;
+	}
+	n = str_cat(lex->ipath, dir, sizeof(lex->ipath));
+	if (n >= sizeof(lex->ipath)) {
+		pmll_ipath_reset(lex);
+		return -1;
+	}
+	return 0;
+}
+
+
 int pmll_open_add_infile(struct pmllex *lex, const char *fn, int front)
 {
 	FILE *fp;
-	char path[512];
+	char pbuf[512];
+	char *path;
 	int esave;
+	struct path_walker pw;
 
-	if (str_copy(path, fn, sizeof(path)) >= sizeof(path)) {
-		errno = EINVAL;
+	pwalk_init(&pw, lex->ipath, ":", '/');
+	while ((path = pwalk_next(&pw, fn, pbuf, sizeof(pbuf))) != NULL) {
+		fp = fopen(path, "r");
+		if (fp != NULL)
+			break;
+	}
+
+	if (fp == NULL) {
+		errno = ENOENT;
 		return -1;
 	}
-	fp = fopen(path, "r");
-	if (fp == NULL) {
-		str_copy(path, ONICS_INSTALL_PREFIX, sizeof(path));
-		str_cat(path, "/", sizeof(path));
-		str_cat(path, PML_LIB_PATH, sizeof(path));
-		str_cat(path, "/", sizeof(path));
-		if (str_cat(path, fn, sizeof(path)) >= sizeof(path)) {
-			errno = EINVAL;
-			return -1;
-		}
-		fp = fopen(path, "r");
-		if (fp == NULL)
-			return -1;
-	}
+
 	if (pmll_add_infile(lex, fp, 1, path) < 0) {
 		esave = errno;
 		fclose(fp);

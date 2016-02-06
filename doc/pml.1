@@ -3,11 +3,12 @@
 pml - Packet Manipulation Language utility to match and modify packets.
 .P
 .SH SYNOPSYS
-\fBpml\fP [\fB-Ehiqsv\fP] [\fB-e\fP \fIexpr\fP]
-[\fB-f\fP \fIprogfile\fP] [\fIinfile\fP [\fIoutfile\fP]]
+\fBpml\fP [\fB-EhiPqsv\fP] [\fB-e\fP \fIexpr\fP]
+[\fB-f\fP \fIprogfile\fP] [\fB-I\fP \fIpath\fP] 
+[\fIinfile\fP [\fIoutfile\fP]]
 .P
-\fBpml\fP [\fB-e\fP \fIexpr\fP ...] [\fB-f\fP \fIprogfile\fP ...]
-\fB-c\fP \fInprgfile\fP
+\fBpml\fP [\fB-EhiPqv\fP] [\fB-e\fP \fIexpr\fP]
+[\fB-f\fP \fIprogfile\fP] \fB-c\fP \fInprgfile\fP
 .P
 .SH DESCRIPTION
 The \fBpml\fP utility invokes the compiler and/or interpreter for the
@@ -83,6 +84,18 @@ Automatically import standard PML libraries for the program.  This is
 semantically equivalent to placing \fB-e 'import "std.pml";'\fP in
 the command line arguments before any other \fB-e\fP or \fB-f\fP
 arguments.
+.IP "\fB-I\fP \fIpath\fP"
+Add \fIpath\fP to the search path for import statements.  This option
+can appear multiple times.  The PML compiler will always search for an
+imported file first in the current directory, next in any directories
+specified by the \fB-I\fP option in the order they appear on the command
+line and finally in the system library directory.  One can omit the
+system library from the search path using the \fB-P\fP option (below).
+The system library path is system dependent but usually defaults to 
+something like /usr/local/lib/pml.
+.IP \fB-P\fP
+Omit the standard system PML library from the path for import
+statements.
 .IP \fB-q\fP
 Decrease the verbosity.  Can be specified multiple times.
 .IP \fB-s\fP

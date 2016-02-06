@@ -58,6 +58,16 @@ struct pmllex *pmll_alloc(void);
 /* Free a lexical scanner and all associated data */
 void pmll_free(struct pmllex *lex);
 
+/*
+ * Reset the import path for the lexer.
+ */
+void pmll_ipath_reset(struct pmllex *lex);
+
+/*
+ * Append a directory to the import path.
+ */
+int pmll_ipath_append(struct pmllex *lex, const char *dir);
+
 /* 
  * Add an input string to the queue.  If 'front' is non-zero then add to the 
  * front of the queue, otherwise add to the back.
