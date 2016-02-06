@@ -21,7 +21,7 @@ packets out to it.
 it detects a new flow it emits a "flow start" event.  Periodically
 (by default every 10 seconds) \fBnft\fP emtis a "flow update" for all
 the flows that are still live.  Finally, when a flow ends (currently
-detected by a liveness timeout) \fPnft\fP emits an "flow ene" event.
+detected by a liveness timeout) \fPnft\fP emits an "flow end" event.
 .P
 \fBnft\fP currently tracks TCP and UDP flows at the granularity of a 
 traditional 5-tuple:  source IP address, destination IP address, source

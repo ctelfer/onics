@@ -7,6 +7,9 @@ Key:
 
 PML
  + More test cases (control flow especially)
+ + unit tests for the standard library
+ * for loops
+ * 4-byte length when unspecified
  ? proper 'global' variable resolutions in functions and rules
  * command line arguments to programs (requires number parsing to be useful)
  > Either hash table or multi-dimensional array support
@@ -17,13 +20,10 @@ Protocol parsing & Namespace
  + Add IPv6 extension headers in the namespace.
  * Check restrictions on parsing to ensure termination.
  > Add short-form parsing for protocols using the above.
- > MPLS
  > PPP
- > GRE
  > GTP
- > VXLAN
  > PPOE
- > other tunnel formats
+ > GENEVE
 
 
 x2hpkt:
@@ -48,6 +48,7 @@ pktmux/pktdemux:
 
 pdiff:
  + unit tests
+ + windowed region support for large file comparisons
  * Two-column output format
  * pml edit script output format
 
@@ -65,6 +66,17 @@ ipfrag:
 ipreasm:
  + unit tests
 
+scripts:
+ + unit tests
+
 pmerge:
+ + implement
+
+nft:
+ + unit tests
+ + other protocols? (SCTP? DCCP? etc..?)
+ * adaptive timeouts based on state tracking
+
+viper: -- VIsual Packet EditoR
  + implement
 
