@@ -1,7 +1,7 @@
 #!/bin/sh
 #
 # ONICS
-# Copyright 2013-2015
+# Copyright 2016
 # Christopher Adam Telfer
 #
 # icmpwrap - Wrap a packet in an ICMP header.
@@ -26,8 +26,9 @@ usage() {
 	exit 1
 }
 
+IPATH=${IPATH:-}
+
 PMLSCRIPT="
-	import \"std.pml\";
 	{
 	icmp_wrap();
 "
@@ -57,4 +58,4 @@ PMLSCRIPT="$PMLSCRIPT
 	fix_csums(0);
 }"
 
-exec pml -e "$PMLSCRIPT" $INFILE
+exec pml $IPATH -ie "$PMLSCRIPT" $INFILE

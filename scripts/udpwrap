@@ -1,7 +1,7 @@
 #!/bin/sh
 #
 # ONICS
-# Copyright 2013-2015
+# Copyright 2016
 # Christopher Adam Telfer
 #
 # udpwrap - Wrap a packet in a UDP header.
@@ -26,9 +26,10 @@ usage() {
 	exit 1
 }
 
+IPATH=${IPATH:-}
+
 # Be sure to force a checksum update by default
 PMLSCRIPT="
-	import \"std.pml\";
 	{
 	udp_wrap();
 	udp.cksum = 1;
@@ -58,4 +59,4 @@ PMLSCRIPT="$PMLSCRIPT
 	fix_lens(0);
 }"
 
-exec pml -e "$PMLSCRIPT" $INFILE
+exec pml $IPATH -ie "$PMLSCRIPT" $INFILE

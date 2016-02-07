@@ -26,6 +26,7 @@ usage() {
 	exit 1
 }
 
+IPATH=${IPATH:-}
 INFILE=""
 
 if [ $# -gt 0 ]
@@ -42,7 +43,6 @@ then
 fi
 
 PMLSCRIPT="
-import \"std.pml\";
 {
 	pdu_insert(pkt, @vxlan);
 	pdu_insert(pkt, @udp);
@@ -61,4 +61,4 @@ PMLSCRIPT="$PMLSCRIPT
 	fix_csums(0);
 }"
 
-exec pml -e "$PMLSCRIPT" $INFILE
+exec pml $IPATH -ie "$PMLSCRIPT" $INFILE

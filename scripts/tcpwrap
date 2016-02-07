@@ -1,7 +1,7 @@
 #!/bin/sh
 #
 # ONICS
-# Copyright 2012-2015
+# Copyright 2016
 # Christopher Adam Telfer
 #
 # tcpwrap - Wrap a packet in a TCP header.
@@ -26,8 +26,9 @@ usage() {
 	exit 1
 }
 
+IPATH=${IPATH:-}
+
 PMLSCRIPT="
-	import \"std.pml\";
 	{
 	tcp_wrap();
 "
@@ -55,4 +56,4 @@ done
 PMLSCRIPT="$PMLSCRIPT
 }"
 
-exec pml -e "$PMLSCRIPT" $INFILE
+exec pml $IPATH -ie "$PMLSCRIPT" $INFILE

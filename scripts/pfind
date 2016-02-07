@@ -21,6 +21,8 @@
 #  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 
+IPATH=${IPATH:-}
+
 getrange() {
 	if echo $1 | grep '^[0-9][0-9]*$' > /dev/null 2>&1 
 	then
@@ -51,8 +53,7 @@ then
 	MATCH=`getrange $1`
 	shift
 	if [ "$2" = "-only" ] ; then shift ; fi
-	exec pml -e "
-		import \"std.pml\";
+	exec pml $IPATH -ie "
 		int N=0; 
 		{ N=N+1; } 
 		?- not ($MATCH) -? { drop; }
@@ -63,8 +64,7 @@ else
 	shift
 	shift
 	shift
-	exec pml -e "
-		import \"std.pml\";
+	exec pml $IPATH -ie "
 		int N = 0;
 		int allow = 0;
 

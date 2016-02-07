@@ -221,7 +221,8 @@ void parse_pml_program(struct netvm_program *prog)
 		if (pmll_ipath_append(scanner, PML_SYS_PATH) < 0)
 			err("Import path too long");
 	if (import_std_lib)
-		pmll_open_add_infile(scanner, STDLIB_FILENAME, 1);
+		if (pmll_open_add_infile(scanner, STDLIB_FILENAME, 1) < 0)
+			errsys("Unable to open %s: ", STDLIB_FILENAME);
 	pmll_set_eoicb(scanner, &pmleoi);
 
 	if (!(parser = pml_alloc()))

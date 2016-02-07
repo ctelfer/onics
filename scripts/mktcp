@@ -1,7 +1,7 @@
 #!/bin/sh
 #
 # ONICS
-# Copyright 2015
+# Copyright 2016
 # Christopher Adam Telfer
 #
 # mktcp - Generate a TCP/IP/Ethernet packet.
@@ -29,6 +29,8 @@ usage() {
 	echo "	STMT1 are PML statements to modify the packet"
 	exit 1
 }
+
+IPATH=${IPATH:-}
 
 START='
 	pdu_insert(pkt, @tcp);
@@ -59,14 +61,13 @@ then
 	then
 		F=$1
 		shift
-		rawpkt $F | pml -e "import \"std.pml\"; { $START $* $END }"
+		rawpkt $F | pml $IPATH -ie "{ $START $* $END }"
 	else
 		shift
-		rawpkt | pml -e "import \"std.pml\"; { $START $* $END }"
+		rawpkt | pml $IPATH -ie "{ $START $* $END }"
 	fi
 else
 	if [ $# -gt 0 ] ; then shift ; fi
-	pml -e "import \"std.pml\";
-                BEGIN { pkt_new(0, 0); $START $* $END send 0; }"
+	pml $IPATH -ie "BEGIN { pkt_new(0, 0); $START $* $END send 0; }"
 fi
 

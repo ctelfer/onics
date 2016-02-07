@@ -27,6 +27,7 @@ usage() {
 	exit 1
 }
 
+IPATH=${IPATH:-}
 INFILE=""
 PMLSCRIPT=""
 PROLOG="
@@ -61,7 +62,6 @@ if (eth and eth.index == 1 and
 fi
 
 PMLSCRIPT="
-	import \"std.pml\";
 	{
 	  $PROLOG
 	  pdu_delete(\$(0,1)pdu);
@@ -81,4 +81,4 @@ PMLSCRIPT="$PMLSCRIPT
 	  }
         }"
 
-exec pml -e "$PMLSCRIPT" $INFILE
+exec pml $IPATH -ie "$PMLSCRIPT" $INFILE

@@ -26,6 +26,7 @@ usage() {
 	exit 1
 }
 
+IPATH=${IPATH:-}
 NPOP=1
 
 if [ $# -gt 0 ]
@@ -41,7 +42,6 @@ then
 fi
 
 PMLSCRIPT="
-import \"std.pml\";
 {
 "
 
@@ -55,4 +55,4 @@ done
 PMLSCRIPT="$PMLSCRIPT
 }"
 
-exec pml -e "$PMLSCRIPT" $*
+exec pml $IPATH -ie "$PMLSCRIPT" $*
