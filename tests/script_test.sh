@@ -2,6 +2,8 @@
 
 IPATH=-PI../lib
 export IPATH
+PATH=../bin:$PATH
+export PATH
 TOUT=tmp
 SCR=../scripts
 DATA=data/scripts
