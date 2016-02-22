@@ -191,8 +191,19 @@ struct pdiff {
 };
 
 
+/* File info */
+struct file_info {
+	const char *name;
+	FILE *fp;
+	ulong start;
+	ulong total;
+	int eof;
+};
+
+
 /* Globals */
 
+int window_size = -1;
 int verbosity = 0;
 const char *progname;
 
@@ -200,6 +211,7 @@ struct clopt g_options[] = {
 	CLOPT_I_NOARG('h', NULL, "print help"),
 	CLOPT_I_NOARG('M', NULL, "disallow packet modifications"),
 	CLOPT_I_NOARG('v', NULL, "increase verbosity"),
+	CLOPT_I_UINT('w', NULL, "WINSIZE", "size of the diff window"),
 };
 struct clopt_parser g_oparse = CLOPTPARSER_INIT_ARR(g_options);
 
@@ -261,6 +273,9 @@ void parse_args(int argc, char *argv[])
 			break;
 		case 'v':
 			++verbosity;
+			break;
+		case 'w':
+			window_size = opt->val.uint_val;
 			break;
 		}
 	}
@@ -332,22 +347,34 @@ void pktent_init(struct pktent *pke, ulong pn, const char *sname)
 }
 
 
-static void pa_readfile(struct pktarr *pa, FILE *fp, const char *fn)
+static void read_file(struct pktarr *pa, struct file_info *fi, int max)
 {
 	int rv;
+	int i;
 	struct pktent *pke;
 
-	pa->pasz = 16;
+	pa->pasz = (max <= 0) ? 16 : max;
 	pa->pkts = emalloc(sizeof(struct pktent) * pa->pasz);
 	pa->npkts = 0;
 
-	pke = &pa->pkts[pa->npkts];
-	rv = pkb_file_read_a(&pke->pkt, fp, NULL, NULL);
-	while (rv > 0) {
+	if (fi->eof)
+		return;
+
+	fi->start = fi->total;
+	for (i = 0; max <= 0 || i < max; ++i) {
+		pke = &pa->pkts[pa->npkts];
+		rv = pkb_file_read_a(&pke->pkt, fi->fp, NULL, NULL);
+		if (rv < 0)
+			errsys("Error reading packet for file %s", fi->name);
+		if (rv == 0) {
+			fi->eof = 1;
+			break;
+		}
 		if (pkb_parse(pke->pkt) < 0)
 			err("unable to parse packet %lu\n", pa->npkts+1);
-		pktent_init(pke, pa->npkts+1, fn);
+		pktent_init(pke, pa->npkts+1, fi->name);
 		++pa->npkts;
+		++fi->total;
 		if (pa->npkts == pa->pasz) {
 			if (pa->pasz * 2 < pa->pasz)
 				err("Size overflow\n");
@@ -355,12 +382,7 @@ static void pa_readfile(struct pktarr *pa, FILE *fp, const char *fn)
 			pa->pkts = erealloc(pa->pkts, 
 					    pa->pasz * sizeof(struct pktent));
 		}
-		pke = &pa->pkts[pa->npkts];
-		rv = pkb_file_read_a(&pke->pkt, fp, NULL, NULL);
 	}
-
-	if (rv < 0)
-		errsys("Error reading packet for file %s", fn);
 }
 
 
@@ -484,15 +506,15 @@ static void getmincost(struct chgpath *p, double icost, double dcost,
 }
 
 
-void pdiff_load(struct pdiff *pd, FILE *before, const char *bname, 
-		FILE *after, const char *aname)
+void pdiff_load(struct pdiff *pd, struct file_info *before,
+		struct file_info *after)
 {
 	double *dp;
 	double cost;
 	ulong i, j;
 
-	pa_readfile(&pd->before, before, bname);
-	pa_readfile(&pd->after, after, aname);
+	read_file(&pd->before, before, window_size);
+	read_file(&pd->after, after, window_size);
 	pd->nb = pd->before.npkts;
 	pd->na = pd->after.npkts;
 	cpm_ealloc(&pd->cpm, pd->nb+1, pd->na+1);
@@ -1334,14 +1356,14 @@ static void pke_print(struct emitter *e, struct pktent *pke, char *pfx)
 
 
 static void report_pass(struct emitter *e, struct pdiff *pd, 
-			struct chgpath *elem)
+			struct chgpath *elem, ulong poff)
 {
 	struct pktent *pke;
 	if (verbosity < 1)
 		return;
 
 	emit_string(e, "#####\n");
-	emit_format(e, "# Pass packet %lu\n", elem->r+1);
+	emit_format(e, "# Pass packet %lu\n", elem->r + 1 + poff);
 	emit_string(e, "#####\n");
 	if (verbosity > 1) {
 		pke = &pd->before.pkts[elem->r];
@@ -1352,12 +1374,12 @@ static void report_pass(struct emitter *e, struct pdiff *pd,
 
 
 static void report_drop(struct emitter *e, struct pdiff *pd, 
-			struct chgpath *elem)
+			struct chgpath *elem, ulong poff)
 {
 	struct pktent *pke = &pd->before.pkts[elem->r];
 	if (elem->shift == 0) {
 		emit_string(e, "#####\n");
-		emit_format(e, "# DROP packet %lu\n", elem->r + 1);
+		emit_format(e, "# DROP packet %lu\n", elem->r + 1 + poff);
 		emit_string(e, "#####\n");
 		pke_print(e, pke, "-- ");
 		emit_string(e, "\n");
@@ -1366,7 +1388,7 @@ static void report_drop(struct emitter *e, struct pdiff *pd,
 			return;
 		emit_string(e, "#####\n");
 		emit_format(e, "# Packet %lu moved forward %ld packet%s\n",
-			    elem->r + 1, elem->shift, 
+			    elem->r + 1 + poff, elem->shift, 
 			    (elem->shift > 1) ? "s" : "");
 		emit_string(e, "#####\n\n");
 	} else {
@@ -1375,7 +1397,7 @@ static void report_drop(struct emitter *e, struct pdiff *pd,
 			return;
 		emit_string(e, "#####\n");
 		emit_format(e, "# Packet %lu moved backwards %ld packet%s\n",
-			    elem->r + 1, -elem->shift, 
+			    elem->r + 1 + poff, -elem->shift, 
 			    elem->shift < -1 ? "s" : "");
 		emit_string(e, "#####\n\n");
 	}
@@ -1383,7 +1405,7 @@ static void report_drop(struct emitter *e, struct pdiff *pd,
 
 
 static void report_insert(struct emitter *e, struct pdiff *pd, 
-			  struct chgpath *elem)
+			  struct chgpath *elem, ulong poff)
 {
 	struct pktent *pke = &pd->after.pkts[elem->c];
 	if (elem->shift == 0) {
@@ -1396,7 +1418,7 @@ static void report_insert(struct emitter *e, struct pdiff *pd,
 		/* inserted earlier and dropped later */
 		emit_string(e, "#####\n");
 		emit_format(e, "# Packet %lu moved backwards %lu packet%s\n",
-			    elem->opkt, elem->shift, 
+			    elem->opkt + poff, elem->shift, 
 			    (elem->shift > 1) ? "s" : "");
 		emit_string(e, "#####\n");
 		pke_print(e, pke, "<< ");
@@ -1406,7 +1428,7 @@ static void report_insert(struct emitter *e, struct pdiff *pd,
 		/* dropped earlier and inserted later */
 		emit_string(e, "#####\n");
 		emit_format(e, "# Packet %lu moved forward %ld packet%s\n",
-			    elem->opkt, -elem->shift,
+			    elem->opkt + poff, -elem->shift,
 			    elem->shift < -1 ? "s" : "");
 		emit_string(e, "#####\n");
 		pke_print(e, pke, ">> ");
@@ -1416,19 +1438,19 @@ static void report_insert(struct emitter *e, struct pdiff *pd,
 
 
 static void report_modify(struct emitter *e, struct pdiff *pd, 
-			  struct chgpath *elem)
+			  struct chgpath *elem, ulong poff)
 {
 	struct pktent *before = &pd->before.pkts[elem->r];
 	struct pktent *after = &pd->after.pkts[elem->c];
 	emit_string(e, "#####\n");
-	emit_format(e, "# MODIFY packet %lu\n", elem->r + 1);
+	emit_format(e, "# MODIFY packet %lu\n", elem->r + 1 + poff);
 	emit_string(e, "#####\n");
 	mod_pkt_report(before, elem->r + 1, after, elem->c + 1, e);
 	emit_string(e, "\n");
 }
 
 
-void pdiff_report(struct pdiff *pd, struct emitter *e)
+void pdiff_report(struct pdiff *pd, struct emitter *e, ulong f1off)
 {
 	struct cpmatrix *cpm = &pd->cpm;
 	struct chgpath *elem;
@@ -1437,16 +1459,16 @@ void pdiff_report(struct pdiff *pd, struct emitter *e)
 	while (elem->actf != DONE) {
 		switch (elem->actf) {
 		case PASS: 
-			report_pass(e, pd, elem);
+			report_pass(e, pd, elem, f1off);
 			break;
 		case DROP:
-			report_drop(e, pd, elem);
+			report_drop(e, pd, elem, f1off);
 			break;
 		case INSERT:
-			report_insert(e, pd, elem);
+			report_insert(e, pd, elem, f1off);
 			break;
 		case MODIFY:
-			report_modify(e, pd, elem);
+			report_modify(e, pd, elem, f1off);
 			break;
 		}
 		elem = elem->next;
@@ -1455,29 +1477,38 @@ void pdiff_report(struct pdiff *pd, struct emitter *e)
 }
 
 
-static void openfile(const char *fn, FILE **fpp, const char **fnp)
+static void open_file(const char *fn, struct file_info *fi)
 {
-	abort_unless(fn && fpp && fnp);
-	*fnp = fn;
+	abort_unless(fn && fi);
+
+	fi->eof = 0;
+	fi->start = 0;
+	fi->total = 0;
 	if (strcmp(fn, "-") == 0) {
-		*fpp = stdin;
-		*fnp = "<standard input>";
+		fi->fp = stdin;
+		fi->name = "<standard input>";
 	} else {
-		*fpp = fopen(fn, "r");
-		if (*fpp == NULL)
+		fi->name = fn;
+		fi->fp = fopen(fn, "r");
+		if (fi->fp == NULL)
 			errsys("unable to open file '%s'", fn);
 	}
+}
+
+
+static void close_file(struct file_info *fi)
+{
+	fclose(fi->fp);
+	fi->fp = NULL;
+	fi->name = NULL;
 }
 
 
 int main(int argc, char *argv[])
 {
 	struct pdiff pd;
-	FILE *f1;
-	FILE *f2;
-	const char *f1n;
-	const char *f2n;
 	struct file_emitter fe;
+	struct file_info fi1, fi2;
 
 	parse_args(argc, argv);
 
@@ -1487,14 +1518,18 @@ int main(int argc, char *argv[])
 	register_std_proto();
 	pkb_init_pools(128);
 
-	openfile(filename1, &f1, &f1n);
-	openfile(filename2, &f2, &f2n);
+	open_file(filename1, &fi1);
+	open_file(filename2, &fi2);
 
-	pdiff_load(&pd, f1, f1n, f2, f2n);
-	pdiff_compare(&pd);
-	pdiff_report(&pd, (struct emitter *)&fe);
-	pdiff_clear(&pd);
+	while (!fi1.eof || !fi2.eof) {
+		pdiff_load(&pd, &fi1, &fi2);
+		pdiff_compare(&pd);
+		pdiff_report(&pd, (struct emitter *)&fe, fi1.start);
+		pdiff_clear(&pd);
+	}
 
+	close_file(&fi1);
+	close_file(&fi2);
 	fdiff_free(&Fdiff);
 
 	return 0;
