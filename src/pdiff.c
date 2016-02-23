@@ -116,6 +116,7 @@ struct pktent {
 	struct prpent * 	prparr;
 	int			nprp;
 	ulong			pasiz;
+	long			eoff;
 	byte_t			hash[32];
 };
 
@@ -186,6 +187,9 @@ struct pdiff {
 	struct pktarr 		after;
 	ulong			nb;
 	ulong			na;
+	ulong			lastb;
+	ulong			lasta;
+	int			end_early;
 	struct cpmatrix		cpm;
 	double **		mcosts;
 };
@@ -196,8 +200,8 @@ struct file_info {
 	const char *name;
 	FILE *fp;
 	ulong start;
-	ulong total;
 	int eof;
+	int can_rewind;
 };
 
 
@@ -353,14 +357,13 @@ static void read_file(struct pktarr *pa, struct file_info *fi, int max)
 	int i;
 	struct pktent *pke;
 
-	pa->pasz = (max <= 0) ? 16 : max;
+	pa->pasz = (max <= 0) ? 16 : max + 1;
 	pa->pkts = emalloc(sizeof(struct pktent) * pa->pasz);
 	pa->npkts = 0;
 
 	if (fi->eof)
 		return;
 
-	fi->start = fi->total;
 	for (i = 0; max <= 0 || i < max; ++i) {
 		pke = &pa->pkts[pa->npkts];
 		rv = pkb_file_read_a(&pke->pkt, fi->fp, NULL, NULL);
@@ -372,9 +375,9 @@ static void read_file(struct pktarr *pa, struct file_info *fi, int max)
 		}
 		if (pkb_parse(pke->pkt) < 0)
 			err("unable to parse packet %lu\n", pa->npkts+1);
+		pke->eoff = ftell(fi->fp);
 		pktent_init(pke, pa->npkts+1, fi->name);
 		++pa->npkts;
-		++fi->total;
 		if (pa->npkts == pa->pasz) {
 			if (pa->pasz * 2 < pa->pasz)
 				err("Size overflow\n");
@@ -452,14 +455,15 @@ void cpm_clear(struct cpmatrix *cpm)
 }
 
 
-void cpm_backtrace(struct cpmatrix *cpm)
+void cpm_backtrace(struct cpmatrix *cpm, ulong *lr, ulong *lc)
 {
-	ulong r = cpm->nrows-1;
-	ulong c = cpm->ncols-1;
+	ulong r = cpm->nrows - 1;
+	ulong c = cpm->ncols - 1;
+	ulong lpr = -1ul;
+	ulong lpc = -1ul;
+	ulong lmr = -1ul;
+	ulong lmc = -1ul;
 	struct chgpath *elem, *prev;
-
-	abort_unless(r == cpm->nrows - 1);
-	abort_unless(c == cpm->ncols - 1);
 
 	elem = cpm_elem(cpm, r, c);
 	elem->actf = DONE;
@@ -467,10 +471,22 @@ void cpm_backtrace(struct cpmatrix *cpm)
 		abort_unless(r < cpm->nrows && c < cpm->ncols);
 
 		switch(elem->actb) {
-		case PASS: 	r -= 1; c -= 1; break;
+		case PASS:
+			r -= 1; c -= 1;
+			if (lpr == -1ul) {
+				lpr = r;
+				lpc = c;
+			}
+			break;
 		case DROP: 	r -= 1; break;
 		case INSERT: 	c -= 1; break;
-		case MODIFY:	r -= 1; c -= 1; break;
+		case MODIFY:
+			r -= 1; c -= 1;
+			if (lmr == -1ul) {
+				lmr = r;
+				lmc = c;
+			}
+			break;
 		default:	abort_unless(0);
 		}
 
@@ -478,6 +494,44 @@ void cpm_backtrace(struct cpmatrix *cpm)
 		prev->next = elem;
 		prev->actf = elem->actb;
 		elem = prev;
+	}
+
+	if (lr != NULL && lc != NULL) {
+		/*
+		 * This looks for an early truncation point for reporting.
+		 * It is beneficial to do this when examining a window of
+		 * packets at a time.  A packet insertion or drop will cause
+		 * the windows to misalign resulting in an insert+drop every
+		 * 'window_size' packets: technically correct but not optimal.
+		 * 
+		 * To attempt to avoid this, search for the last 'PASS'
+		 * packet or, failing that * the last 'MODIFY' packet.  If
+		 * that packet is at least 3/4 of the way through both
+		 * current windows then restart the diff right after that
+		 * packet in both streams.
+		 */
+		abort_unless(cpm->nrows * 3 >= cpm->nrows);
+		if (lpr != -1ul && lpr >= cpm->nrows * 3 / 4 &&
+		    lpc >= cpm->nrows * 3 / 4) {
+			*lr = lpr;
+			*lc = lpc;
+			/* truncate reporting */
+			elem = cpm_elem(cpm, lpr, lpc);
+			abort_unless(elem->actf == PASS && elem->next != NULL);
+			elem->next->actf = DONE;
+		} else if (lmr != -1ul && lmr >= cpm->nrows * 3 / 4 &&
+			   lmc >= cpm->nrows * 3 / 4) {
+			*lr = lmr;
+			*lc = lmc;
+			/* truncate reporting */
+			elem = cpm_elem(cpm, lmr, lmc);
+			abort_unless(elem->actf == MODIFY &&
+				     elem->next != NULL);
+			elem->next->actf = DONE;
+		} else {
+			*lr = cpm->nrows - 1;
+			*lc = cpm->ncols - 1;
+		}
 	}
 }
 
@@ -515,6 +569,8 @@ void pdiff_load(struct pdiff *pd, struct file_info *before,
 
 	read_file(&pd->before, before, window_size);
 	read_file(&pd->after, after, window_size);
+	pd->end_early = before->can_rewind && after->can_rewind && 
+			window_size > 0 && (!before->eof || !after->eof);
 	pd->nb = pd->before.npkts;
 	pd->na = pd->after.npkts;
 	cpm_ealloc(&pd->cpm, pd->nb+1, pd->na+1);
@@ -532,6 +588,31 @@ void pdiff_load(struct pdiff *pd, struct file_info *before,
 				cost = Infinity;
 			pd->mcosts[i][j] = cost;
 		}
+	}
+}
+
+
+void file_set(struct pdiff *pd, struct file_info *before,
+	      struct file_info *after)
+{
+	long off;
+
+	before->start += pd->lastb + 1;
+	after->start += pd->lasta + 1;
+
+	if (before->eof && after->eof)
+		return;
+
+	if (pd->lastb < pd->nb - 1) {
+		off = pd->before.pkts[pd->lastb].eoff;
+		before->eof = 0;
+		fseek(before->fp, off, SEEK_SET);
+	}
+
+	if (pd->lasta < pd->na - 1) {
+		off = pd->after.pkts[pd->lasta].eoff;
+		after->eof = 0;
+		fseek(after->fp, off, SEEK_SET);
 	}
 }
 
@@ -837,7 +918,7 @@ static void mod_hdr_report(struct emitter *e, struct prpent *ppe1, ulong p1n,
 	fdiff_load(&Fdiff, bnpfl, anpfl);
 	fdiff_compare(&Fdiff, drop_bit_cost, ins_bit_cost);
 	cpm = &Fdiff.cpm;
-	cpm_backtrace(cpm);
+	cpm_backtrace(cpm, NULL, NULL);
 
 	elem = cpm_elem(cpm, 0, 0);
 	rnpf = npfl_first(bnpfl);
@@ -1167,7 +1248,13 @@ void pdiff_compare(struct pdiff *pd)
 		}
 	}
 
-	cpm_backtrace(&pd->cpm);
+	if (pd->end_early) {
+		cpm_backtrace(&pd->cpm, &pd->lastb, &pd->lasta);
+	} else {
+		cpm_backtrace(&pd->cpm, NULL, NULL);
+		pd->lastb = pd->nb - 1;
+		pd->lasta = pd->na - 1;
+	}
 
 	mark_reorders(pd);
 }
@@ -1236,7 +1323,7 @@ static void mod_pkt_report(struct pktent *pke1, ulong p1n, struct pktent *pke2,
 	hdiff_load(&Hdiff, pke1, pke2);
 	hdiff_compare(&Hdiff);
 	cpm = &Hdiff.cpm;
-	cpm_backtrace(cpm);
+	cpm_backtrace(cpm, NULL, NULL);
 
 	drop_bit_cost = Pkt_mod_cost /
 			(double)(pkb_get_len(pke1->pkt) * 8);
@@ -1483,15 +1570,16 @@ static void open_file(const char *fn, struct file_info *fi)
 
 	fi->eof = 0;
 	fi->start = 0;
-	fi->total = 0;
 	if (strcmp(fn, "-") == 0) {
 		fi->fp = stdin;
 		fi->name = "<standard input>";
+		fi->can_rewind = 0;
 	} else {
 		fi->name = fn;
 		fi->fp = fopen(fn, "r");
 		if (fi->fp == NULL)
 			errsys("unable to open file '%s'", fn);
+		fi->can_rewind = 1;
 	}
 }
 
@@ -1525,6 +1613,7 @@ int main(int argc, char *argv[])
 		pdiff_load(&pd, &fi1, &fi2);
 		pdiff_compare(&pd);
 		pdiff_report(&pd, (struct emitter *)&fe, fi1.start);
+		file_set(&pd, &fi1, &fi2);
 		pdiff_clear(&pd);
 	}
 
