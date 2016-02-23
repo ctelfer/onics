@@ -1,6 +1,6 @@
 /*
  * ONICS
- * Copyright 2013-2015
+ * Copyright 2013-2016
  * Christopher Adam Telfer
  *
  * pdiff.c -- Compute the difference between two packet streams.
@@ -207,7 +207,7 @@ struct file_info {
 
 /* Globals */
 
-int window_size = -1;
+int window_size = 100;
 int verbosity = 0;
 const char *progname;
 
@@ -215,7 +215,8 @@ struct clopt g_options[] = {
 	CLOPT_I_NOARG('h', NULL, "print help"),
 	CLOPT_I_NOARG('M', NULL, "disallow packet modifications"),
 	CLOPT_I_NOARG('v', NULL, "increase verbosity"),
-	CLOPT_I_UINT('w', NULL, "WINSIZE", "size of the diff window"),
+	CLOPT_I_UINT('w', NULL, "WINSIZE",
+		"size of the diff window; 0 == infinite (default 100)"),
 };
 struct clopt_parser g_oparse = CLOPTPARSER_INIT_ARR(g_options);
 

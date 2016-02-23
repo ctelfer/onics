@@ -3,7 +3,7 @@
 pdiff - Parse and print the differences between two packet traces.
 .P
 .SH SYNOPSYS
-\fBpdiff\fP [\fB-hMv\fI] \fIfile1\fP \fIfile2\fP
+\fBpdiff\fP [\fB-hMv\fP] [\fB-w \fIwsize\fP] \fIfile1\fP \fIfile2\fP
 .P
 .SH DESCRIPTION
 \fBpdiff\fP compares two stream of packets in XPKT format and reports
@@ -36,12 +36,48 @@ libraries.  Thus it has no protocol-specific data encoded within it.
 Extending the ONICS protocol parsing automatically extends
 \fBpdiff\fP's packet decoding capabilities.
 .P
+The standard algorithm for computing edit distance (especially when
+including transposition or substitution) is an O(n^2) algoirthm (see
+Damerau–Levenshtein distance).  For large packet traces, this can
+quickly lead to an intractable problem.  To avoid an explosion in memory
+and CPU time, \fBpdiff\fP computes differences in packet traces over
+windows of packets.  The standard size of this window is 100 packets.
+The upshot of this is that if a packet is delayed from one window of
+packets to another, \fBpdiff\fP will indicate this as a drop within one
+window and an insertion within another.  So, for the most accurate (or
+useful) results, the window size should be about twice as large as the
+largest expected amount of packet reordering.  However, one must keep in
+mind that the larger the window, the longer the run-time for larger
+traces and the more memory that \fBpdiff\fP must use for its
+computations.
+.P
+Another windowing issue is that a single packet insertion or removal
+would result in misaligned diff-windows between the two traces.  This
+would lead to a diff with an insertion/drop pair in every window of
+packets.  To compensate for this, \fBpdiff\fP will allow for up to
+one-quarter of a window overlap when computing edit distances.  So, if
+the window size is 100 packets, then \fBpdiff\fP may truncate one
+window's reporting at 75 packets and start the next packets with the
+last 25 packets from the previous window and filling out 100 packets
+from there.  It can only do this if neither input file is standard
+input.  The \fBpdiff\fP program attempts to be intelligent about where
+to cut off window edit reporting.  It looks for the latest packet that
+appears in both traces in the window.  Failing that, it looks for the
+latest packet in the window in both traces that was modified.  If either
+are available and are within the last quarter of the diff-window, then
+\fBpdiff\fP truncates diff reporting at that packet and starts with the
+next packet in both traces for the next diff-window.
+.P
 .SH OPTIONS
 .IP \fB-h\fP
 Print the usage of the command and exit.
 .IP \fB-M\fP
 Prohibit modifications when computing the difference.  This can be useful
 when you are just interested in seeing how packets got reordered.
+.IP "\fB-w \fIwsize\fP"
+Set the size of the diff window to \fBwsize\fP (default 100).  A size of
+0 or less means to not set any size limit on the window.  This can lead
+to a significant memory problem and a lengthy runtime.
 .IP \fB-v\fP
 Increase the verbosity of the output.  Specifying this option multiple
 times further increases output verbosity.
