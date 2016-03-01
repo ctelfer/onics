@@ -922,12 +922,12 @@ void npfl_cache(struct npf_list *npfl)
 	if (!npf_is_initialized)
 		_npf_init();
 
-	l_move(&npfl->list.le, &npf_cache);
+	l_append(&npf_cache, &npfl->list.le);
 	npfl_reset(npfl);
 }
 
 
-void npfl_clear_cache(struct npf_list *npfl)
+void npfl_clear_cache(void)
 {
 	struct list *le, *extra;
 

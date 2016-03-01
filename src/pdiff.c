@@ -577,18 +577,23 @@ void pdiff_load(struct pdiff *pd, struct file_info *before,
 	cpm_ealloc(&pd->cpm, pd->nb+1, pd->na+1);
 
 	/* precompute pair-wise modification costs between each packet */
-	pd->mcosts = calloc(sizeof(double *), pd->nb);
-	dp = calloc(sizeof(double), pd->nb * pd->na);
-	for (i = 0; i < pd->nb; ++i) {
-		pd->mcosts[i] = dp;
-		dp += pd->na;
-		for (j = 0; j < pd->na; ++j) {
-			cost = pkt_cmp(&pd->before.pkts[i], i+1,
-				       &pd->after.pkts[j], j+1);
-			if (cost != 0.0 && disallow_mods)
-				cost = Infinity;
-			pd->mcosts[i][j] = cost;
+	if (pd->nb > 0 && pd->na > 0) {
+		abort_unless(ULONG_MAX / sizeof(double) / pd->nb > pd->na);
+		pd->mcosts = calloc(sizeof(double *), pd->nb);
+		dp = calloc(sizeof(double), pd->nb * pd->na);
+		for (i = 0; i < pd->nb; ++i) {
+			pd->mcosts[i] = dp;
+			dp += pd->na;
+			for (j = 0; j < pd->na; ++j) {
+				cost = pkt_cmp(&pd->before.pkts[i], i+1,
+					       &pd->after.pkts[j], j+1);
+				if (cost != 0.0 && disallow_mods)
+					cost = Infinity;
+				pd->mcosts[i][j] = cost;
+			}
 		}
+	} else {
+		pd->mcosts = NULL;
 	}
 }
 
@@ -627,9 +632,11 @@ void pdiff_clear(struct pdiff *pd)
 	cpm_clear(&pd->cpm);
 	pd->na = 0;
 	pd->nb = 0;
-	free(pd->mcosts[0]);
-	free(pd->mcosts);
-	pd->mcosts = NULL;
+	if (pd->mcosts != NULL) {
+		free(pd->mcosts[0]);
+		free(pd->mcosts);
+		pd->mcosts = NULL;
+	}
 }
 
 
@@ -1621,6 +1628,7 @@ int main(int argc, char *argv[])
 	close_file(&fi1);
 	close_file(&fi2);
 	fdiff_free(&Fdiff);
+	npfl_clear_cache();
 
 	return 0;
 }

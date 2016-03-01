@@ -268,7 +268,7 @@ void npfl_clear(struct npf_list *npfl);
 void npfl_cache(struct npf_list *npfl);
 
 /* release the elements in the field list cache */
-void npfl_clear_cache(struct npf_list *npfl);
+void npfl_clear_cache(void);
 
 /* return 1 if the two fields are essentially equal and 0 otherwise */
 int npf_eq(struct npfield *npf1, struct npfield *npf2);
