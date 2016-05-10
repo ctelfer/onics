@@ -153,8 +153,8 @@ ${BINDIR}/x2hpkt: x2hpkt.o stdproto.o fld.o stdproto.h tcpip_hdrs.h \
 	${CC} -o ${BINDIR}/x2hpkt x2hpkt.o ${PKTOBJ} stdproto.o fld.o \
 		${DEFS} ${OPTS} ${INCS} ${LIBS}
 
-${BINDIR}/h2xpkt: h2xpkt.o ${PKTOBJ} ${PKTHDR}
-	${CC} -o ${BINDIR}/h2xpkt h2xpkt.o ${PKTOBJ} \
+${BINDIR}/h2xpkt: h2xpkt.o stdproto.o stdproto.h ${PKTOBJ} ${PKTHDR}
+	${CC} -o ${BINDIR}/h2xpkt h2xpkt.o stdproto.o ${PKTOBJ} \
 		${DEFS} ${OPTS} ${INCS} ${LIBS}
 
 ${BINDIR}/nvmas: nvmas.o netvm.o netvm_prog.o netvm.h netvm_prog.h \

@@ -11,6 +11,7 @@ tests:
 	./pml_exec_test.sh
 	./seq_test.sh
 	./script_test.sh
+	./util_test.sh
 	@echo All tests passed
 	@echo
 

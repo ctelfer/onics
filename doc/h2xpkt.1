@@ -1,18 +1,20 @@
-.TH "x2hpkt" 1 "August 2013" "ONICS 1.0"
+.TH "h2xpkt" 1 "May 2016" "ONICS 1.0"
 .SH NAME
 h2xpkt - Convert a stream of packets from HEXPKT format XPKT.
 .P
 .SH SYNOPSYS
-\fBx2hpkt\fP [\fB-fh\fP] [\fB-l\fP \fIdltype\fP]
+\fBh2xpkt\fP [\fB-fhs\fP] [\fB-l\fP \fIdltype\fP]
 [\fIinfile\fP [\fIoutfile\fP]]
 .P
 .SH DESCRIPTION
 \fBh2xpkt\fP reads in a stream of packets in \fBhexpkt\fP format and
-them in XPKT format.  By default \fBh2xpkt\fP reads the packets from standard
-input and outputs them to standard output.  If \fIinfile\fP is specified
-then \fBh2xpkt\fP reads from it instead.  If \fIoutfile\fP is specified,
-then \fBh2xpkt\fP opens, creates and truncates that file before writing
-its output to that file.
+them in XPKT format.  By default \fBh2xpkt\fP reads the packets from
+standard input and outputs them to standard output.  If \fIinfile\fP is
+present then \fBh2xpkt\fP reads from it instead.  If \fIinfile\fP is
+"-", then h2xpkt still reads from standard input (this just allows
+reading from standard input but specifying the output file). If
+\fIoutfile\fP is present, then \fBh2xpkt\fP opens, creates and
+truncates that file before writing its output to that file.
 .P
 .SH OPTIONS
 .IP \fB-f\fP
@@ -21,13 +23,18 @@ useful if packets are coming in live and subsequent programs should
 receive input packets in a timely manner.
 .IP \fB-h\fP
 Print the usage of the command and exit.
+.IP \fB-s\fP
+Use strict address checking.  In this mode, all non-comment, non-blank
+lines must start with an address and the address must be the next
+address expected for a given packet.
 .IP "\fB-l\fP \fIdltype\fP"
 The input stream of packets does not contain XPKT headers.  Instead each
 packet starts with the first header in the packet.  For each packet, the
-protocol of the first PDU in the packet is \fIdltype\fP specified as an
-ONICS prototocol ID (PRID).  This mode of operation allows reading
-packets from hex dumps produced by other programs so long as each
-packet's hex dump is separated by a blank line from the next packet.
+protocol of the first PDU in the packet is \fIdltype\fP specified by
+protocol name or as an ONICS prototocol ID (PRID).  This mode of
+operation allows reading packets from hex dumps produced by other
+programs so long as each packet's hex dump is separated by a blank line
+from the next packet.
 .P
 .SH "HEXPKT FORMAT"
 .P
@@ -37,26 +44,27 @@ that starts with a '#' is ignored entirely.  Every other line should
 have the form:
 .nf
 
-	\fIaddress\fP: \fIhexval\fP [\fIhexval\fP ...] |\fItext\fP ...|
+	[\fIaddress\fP:] \fIhex\fP [\fIhex\fP ...] [\fInonhex\fP] [\fIany\fP...]
 
 .fi
-The \fIaddress\fP is specified in hexidecimal.  It specifies the offset
-in the file where the data on the rest of the line should reside.
-\fBx2hpkt\fP outputs individual bytes separately in the hex dump with
-each byte represented as a 2-digit hexadecimal number.  (There is no
-prefix to specify that the value is in hexadecimal such as "0x" for
-example.)  Other programs (e.g. tcpdump) will output 2- or 4-byte values
-grouped together.  The portion of the hexdump between the '|' characters
-displays the ASCII text values for most printable non-special
-characters.  \fBx2hpkt\fP prints characters like tabs, newlines, etc... 
-as well as bytes that do not correspond to a printable ASCII characters
-with the '.' character.
+The \fIaddress\fP (if present) is specified in hexadecimal.  It
+specifies the offset in the file where the data on the rest of the line
+should reside.  Following the address and colon character, are a series
+of pairs of hexadecimal digits.  These hexadecimal digit pairs can have
+spaces between them or not.  The h2xpkt program will skip any "0x"
+prefixes to either the address or the hex digits..  It will also assume
+that every value starting with hexadecimal digits (including decimal and
+octal numbers) are actually hexadecimal numbers.  Any non-space,
+non-hexadecimal character on the line ends parsing until the end of the
+line: h2xpkt ignores said character and all characters remaining in the
+line.
 .P
 The \fBhexpkt\fP format imposes two additional rules for the hex dump
 that is not present in other dumps.  First, packets are delimited by
 blank lines and so must not contain any blank lines within them.
 Second, addresses are relative to the start of a packet.  Thus,
-addresses in a \fBhexpkt\fP stream 'reset' at the start of every packet.
+addresses in a \fBhexpkt\fP stream 'reset' after every blank line
+(i.e. the start of each new packet).
 .P
 .SH EXAMPLES
 .P
@@ -66,18 +74,18 @@ Convert a hexpkt dump to XPKT:
     h2xpkt infile.hpkt outfile.xpkt
 
 .fi
-An alternate version of pcapin(1) using tcpdump.  Note that 
-in this form, we assume that the datalink type is ethernet 
-(0x0201).  Also note that the '\fB\\t\fP' in the the \fBsed\fP
-and \fBegrep\fP commands should be replaced by a literal 
-tab character.  (often CTRL-v followed by TAB)
+An alternate version of pcapin(1) using tcpdump.  Note that in this
+form, we assume that the datalink type is ethernet.  Also note that the
+'\fB\\t\fP' in the \fBegrep\fP command should be replaced by a literal
+tab character (often CTRL-v followed by TAB).  Note that the "cut"
+command here prunes the "readable" portion of the tcpdump in case that
+section starts with hexadecimal characters.
 .nf
 
     tcpdump -nvvvvXXXXes 0 -r infile.pcap | 
-        sed -e 's/^[^ \t].*$//' |
-        egrep '(^[ \t]*0x|^$)' | 
+        egrep '(^[ \\t]*0x|^$)' | 
         cut -c 1-50 |
-        sed -e 's/0x//' | h2xpkt -l 0x0201 > outfile.xpkt
+        h2xpkt -l eth > outfile.xpkt
 
 .fi
 .P

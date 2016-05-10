@@ -29,6 +29,8 @@
 #include <cat/optparse.h>
 #include "pktbuf.h"
 #include "xpkt.h"
+#include "ns.h"
+#include "stdproto.h"
 
 #define MAXLINE 256
 
@@ -37,13 +39,15 @@ ulong g_lineno = 0;
 ulong g_pktno = 1;
 int g_toolong = 0;
 int g_do_flush = 0;
+int g_strict_addr = 0;
 FILE *infile;
 FILE *outfile;
 
 struct clopt g_optarr[] = {
-	CLOPT_I_UINT('l', NULL, "LINKTYPE",
-		     "no xpkt header: each packet starts with type <x>"),
+	CLOPT_I_STRING('l', NULL, "LINKTYPE",
+		       "no xpkt header: each packet starts with type <x>"),
 	CLOPT_I_NOARG('f', NULL, "Flush output per packet"),
+	CLOPT_I_NOARG('s', NULL, "Strict address format"),
 	CLOPT_I_NOARG('h', NULL, "print help")
 };
 
@@ -69,15 +73,28 @@ void parse_options()
 {
 	int rv;
 	struct clopt *opt;
+	const char *s;
+	struct ns_elem *e;
 	infile = stdin;
 	outfile = stdout;
 	while (!(rv = optparse_next(&g_oparser, &opt))) {
 		switch (opt->ch) {
 		case 'l':
-			g_dlt = opt->val.uint_val;
+			s = opt->val.str_val;
+			if (strncmp(s, "0x", 2) == 0) {
+				g_dlt = strtoul(s + 2, NULL, 16);
+			} else {
+				e = ns_lookup(NULL, s);
+				if (e == NULL || e->type != NST_NAMESPACE)
+					err("Unknown protocol '%s'", s);
+				g_dlt = ((struct ns_namespace *)e)->prid;
+			}
 			break;
 		case 'f':
 			g_do_flush = 1;
+			break;
+		case 's':
+			g_strict_addr = 1;
 			break;
 		case 'h':
 			usage(NULL);
@@ -89,7 +106,9 @@ void parse_options()
 		usage(NULL);
 
 	if (rv < g_oparser.argc) {
-		if ((infile = fopen(g_oparser.argv[rv], "r")) == NULL)
+		if (strcmp(g_oparser.argv[rv], "-") == 0)
+			infile = stdin;
+		else if ((infile = fopen(g_oparser.argv[rv], "r")) == NULL)
 			errsys("fopen: ");
 	} 
 	if (rv < g_oparser.argc-1) {
@@ -145,7 +164,10 @@ void clearline()
 
 char *skipspace(char *str)
 {
-	return str + strspn(str, " \t");
+	str += strspn(str, " \t");
+	if (strncmp(str, "0x", 2) == 0)
+		str += 2;
+	return str;
 }
 
 
@@ -232,6 +254,7 @@ int main(int argc, char *argv[])
 	struct pktbuf *pkb = NULL;
 	ulong off;
 
+	register_std_proto();
 	optparse_reset(&g_oparser, argc, argv);
 	parse_options();
 	pkb_init_pools(1);
@@ -261,13 +284,15 @@ int main(int argc, char *argv[])
 		}
 
 		off = strtoul(cp, &end, 16);
-		if ((end == cp) || (*end != ':'))
+		if (*end == ':') {
+			if (g_strict_addr && off != pkb_get_off(pkb))
+				err("Invalid address at line %lu:"
+				    " expected %lu but got %lu\n", g_lineno, 
+				    pkb_get_off(pkb), off);
+			cp = end + 1;
+		} else if (g_strict_addr) {
 			err("Invalid address format on line %lu\n", g_lineno);
-		if (off != pkb_get_off(pkb))
-			err("Invalid address at line %lu:"
-			    " expected %lu but got %lu\n", g_lineno, 
-			    pkb_get_off(pkb), off);
-		cp = end + 1;
+		}
 
 		scan_bytes(cp, pkb);
 	}
