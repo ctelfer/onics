@@ -30,6 +30,7 @@
 #include "pktbuf.h"
 #include "ns.h"
 #include "stdproto.h"
+#include "prload.h"
 #include "fld.h"
 
 
@@ -303,6 +304,7 @@ int add_xpkt_key(struct kfxpkt *kxf, struct pktbuf *p, int koff, ulong pn)
 		nb = xai->nwords * 4;
 		break;
 	default:
+		nb = 0;
 		abort_unless(0);
 	}
 
@@ -455,6 +457,7 @@ int main(int argc, char *argv[])
 
 	pkb_init_pools(128);
 	register_std_proto();
+	register_extern_proto();
 	parse_args(argc, argv);
 	read_packets(&pl);
 	load_keys(&pl);

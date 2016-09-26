@@ -18,6 +18,65 @@
 # to configure for the proper platform.
 
 INSTALL_PREFIX=${INSTALL_PREFIX:-/usr/local}
+USE_LIBDL=0
+LIBDLFLG=
+LIBDL_SET=n
+DEBUG=n
+CATLIB_SET=n
+
+usage() {
+	echo "usage $0 [--help|-h] [--dlsym|--no-dlsym] [--debug]" >&2 
+	echo "         [--catlib=PATH]" >&2
+	exit 1
+}
+
+
+while [ $# -gt 0 ] ; do 
+	case $1 in
+		--dlsym)
+			LIBDL_SET=y
+			USE_LIBDL=1
+			LIBDLFLG=-ldl
+		;;
+		--no-dlsym)
+			LIBDL_SET=n
+			USE_LIBDL=0
+			LIBDLFLG=
+		;;
+		--debug)
+			DEBUG=y
+		;;
+		--catlib*)
+			CATLIB_ROOT=`echo $1 | sed -e 's/--catlib=//'`
+			CATLIB_SET=y
+		;;
+		*) usage
+		;;
+	esac
+	shift
+done
+
+
+if [ "$CATLIB_SET" = "n" ] ; then
+	if [ -d ../catlib ] ; then
+		CATLIB_ROOT=../catlib
+	elif [ -d ../../catlib ] ; then
+		CATLIB_ROOT=../../catlib
+	else
+		echo Can not find catlib!
+		usage
+	fi
+fi
+
+
+if [ "$LIBDL_SET" = "n" ] ; then
+	if [ -f /usr/include/dlfcn.h ] ; then
+		echo "configure: dlsym support detected"
+		LIBDLFLG=-ldl
+		USE_LIBDL=1
+	fi
+fi
+
 
 rm -f .has_pcap
 
@@ -25,7 +84,7 @@ rm -f .has_pcap
 if uname -a 2>/dev/null | grep -i linux > /dev/null 2>&1
 then
 	echo configure: Linux detected
-	echo linking linux-specific source files
+	echo configure: linking linux-specific source files
 	[ -h pktin.c ] || ln -s pktin-linux.c pktin.c
 	[ -h pktout.c ] || ln -s pktout-linux.c pktout.c
 
@@ -33,7 +92,7 @@ elif uname -a 2>/dev/null | grep BSD > /dev/null 2>&1
 then
 
 	echo configure: BSD detected
-	echo linking BSD-specific source files
+	echo configure: linking BSD-specific source files
 	[ -h pktin.c ] || ln -s pktin-bsd.c pktin.c
 	[ -h pktout.c ] || ln -s pktout-bsd.c pktout.c
 
@@ -41,12 +100,12 @@ elif uname -a 2>/dev/null | grep Darwin > /dev/null 2>&1
 then
 
 	echo configure: OSX detected
-	echo linking BSD-specific source files
+	echo configure: linking BSD-specific source files
 	[ -h pktin.c ] || ln -s pktin-bsd.c pktin.c
 	[ -h pktout.c ] || ln -s pktout-bsd.c pktout.c
 
 else
-	echo Unknown OS detected.  pktin/pktout will not function. 
+	echo configure: Unknown OS detected.  pktin/pktout will not function.
 	[ -h pktin.c ] || ln -s pktin-none.c pktin.c
 	[ -h pktout.c ] || ln -s pktout-none.c pktout.c
 fi
@@ -56,7 +115,7 @@ if [ -f /usr/include/pcap.h -o -f /usr/include/pcap/pcap.h -o \
      -f /usr/local/include/pcap.h -o -f /usr/local/include/pcap/pcap.h ] 
 then
 	echo "configure: libpcap detected"
-	echo "linking libpcap-specific files in"
+	echo "configure: linking libpcap-specific files in"
 	echo > .has_pcap
 	[ -h pcapin-tgt.c ] || ln -s pcapin.c pcapin-tgt.c
 	[ -h pcapout-tgt.c ] || ln -s pcapout.c pcapout-tgt.c
@@ -67,12 +126,12 @@ else
 fi
 
 
-echo Building onics_config.h
+echo configure: Building onics_config.h
 rm -f config.h
 cat <<EOF > onics_config.h
 /*
  * ONICS
- * Copyright 2013
+ * Copyright 2016
  * Christopher Adam Telfer
  *
  * onics_config.h-- general configuration file for ONICS.
@@ -97,6 +156,21 @@ cat <<EOF > onics_config.h
 #define __onics_config_h
 
 #define ONICS_INSTALL_PREFIX "$INSTALL_PREFIX"
+#define ONICS_DLSYM_SUPPORT $USE_LIBDL
 
 #endif /* __onics_config_h */
 EOF
+
+echo configure: Building makefile 
+if [ $DEBUG = "y" ]; then
+	MKOPTS="-g -Wall -Wno-pointer-sign"
+	MKLIBS="-L\${CATLIB_ROOT}/lib -lcat_dbg $LIBDLFLG"
+else
+	MKOPTS="-O3 -Wall -Wno-pointer-sign"
+	MKLIBS="-L\${CATLIB_ROOT}/lib -lcat $LIBDLFLG"
+fi
+
+sed -e "s|^CATLIB_ROOT=.*\$|CATLIB_ROOT=$CATLIB_ROOT|" \
+    -e "s|^OPTS=.*\$|OPTS=$MKOPTS|" \
+    -e "s|^LIBS=.*\$|LIBS=$MKLIBS|" \
+    makefile.tmpl > makefile

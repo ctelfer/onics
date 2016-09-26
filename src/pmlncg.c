@@ -700,6 +700,7 @@ static int _i_cg_listop(struct pmlncg *cg, struct pml_call *c,
 		} else if (strcmp(intr->name, "pkt_push") == 0) {
 			cpop = NETVM_CPOC_PUSH;
 		} else {
+			cpop = 0;
 			abort_unless(0);
 		}
 	}

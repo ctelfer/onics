@@ -137,7 +137,7 @@ int main(int argc, char *argv[])
 {
 	int rv;
 	struct pktbuf *p;
-	cat_time_t pts, now, next, nnext, start_time, start_ts;
+	cat_time_t pts, now, next, nnext, start_time, start_ts = { 0 };
 	struct xpkt_tag_ts *ts;
 	int infd = 0;
 	int outfd = 1;
@@ -169,10 +169,18 @@ int main(int argc, char *argv[])
 			nnext = tm_add(next, tm_dset(bits / g_bps));
 			sleep_until(&next, &now);
 			next = nnext;
-		} else if (ts) {
-			ts = (struct xpkt_tag_ts *)pkb_find_tag(p, XPKT_TAG_TIMESTAMP, 0);
-			pts = tm_lset(ts->sec, ts->nsec);
+		} else {
+			ts = (struct xpkt_tag_ts *)
+				pkb_find_tag(p, XPKT_TAG_TIMESTAMP, 0);
 
+			if ( ts == NULL ) {
+				fprintf(stderr,
+					"no timestamp on packet %lu: sending\n",
+					g_npkts);
+				goto send;
+			}
+
+			pts = tm_lset(ts->sec, ts->nsec);
 			if (tm_ltz(pts)) {
 				fprintf(stderr,
 					"Invalid timestamp on packet %lu "
@@ -187,11 +195,9 @@ int main(int argc, char *argv[])
 
 			next = tm_add(tm_sub(pts, start_ts), start_time);
 			sleep_until(&next, &now);
-		} else {
-			fprintf(stderr, "no timestamp on packet %lu: sending\n",
-				g_npkts);
 		}
 
+send:
 		rv = pkb_pack(p);
 		abort_unless(rv == 0);
 		if (pkb_fd_write(p, outfd) < 0)

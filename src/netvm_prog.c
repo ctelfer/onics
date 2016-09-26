@@ -881,7 +881,7 @@ int nvmp_run_all(struct netvm *vm, struct netvm_program *prog, FILE *pin,
 	int debug = flags & NVMP_RUN_DEBUG;
 	int rv;
 	int esave;
-	int pinfd;
+	int pinfd = 0;
 	struct pktbuf *p;
 	cat_time_t ntick;
 	fd_set rset, rset_save;

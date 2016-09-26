@@ -37,6 +37,7 @@
 #include "util.h"
 #include "tcpip_hdrs.h"
 #include "stdproto.h"
+#include "prload.h"
 
 
 union addr {
@@ -662,6 +663,7 @@ int main(int argc, char *argv[])
 	parse_args(argc, argv, &ifd, &ofd);
 	pkb_init_pools(1);
 	register_std_proto();
+	register_extern_proto();
 	ft_init(&ft);
 
 	if (realtime) {

@@ -29,6 +29,7 @@
 #include "pktbuf.h"
 #include "ns.h"
 #include "stdproto.h"
+#include "prload.h"
 #include "protoparse.h"
 #include "tcpip_hdrs.h"
 
@@ -465,6 +466,7 @@ int main(int argc, char *argv[])
 
 	pkb_init_pools(32);
 	register_std_proto();
+	register_extern_proto();
 	parse_args(argc, argv);
 
 	while ((rv = pkb_file_read_a(&p, infile, NULL, NULL)) > 0) {

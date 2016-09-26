@@ -31,6 +31,8 @@
 #define PRID_PF_NET		1
 #define PRID_PF_DLT		2
 #define PRID_PF_PVER		3
+#define PRID_PF_EPR_FIRST	128
+#define PRID_PF_EPR_LAST	254
 #define PRID_PF_RES		255
 #define PRID_PER_PF		256
 

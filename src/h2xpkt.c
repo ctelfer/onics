@@ -31,6 +31,7 @@
 #include "xpkt.h"
 #include "ns.h"
 #include "stdproto.h"
+#include "prload.h"
 
 #define MAXLINE 256
 
@@ -255,6 +256,7 @@ int main(int argc, char *argv[])
 	ulong off;
 
 	register_std_proto();
+	register_extern_proto();
 	optparse_reset(&g_oparser, argc, argv);
 	parse_options();
 	pkb_init_pools(1);

@@ -174,7 +174,7 @@ void pkb_reset(struct pktbuf *pkb)
 	pkb->xhlen = 0;
 	pkb->flags &= PKB_F_RESET_MASK;
 
-	prp_init_parse(&pkb->prp, pkb->bufsize);
+	prp_init_parse_base(&pkb->prp, pkb->bufsize);
 	for (i = 0; i < PKB_LAYER_NUM; ++i)
 		pkb->layers[i] = NULL;
 

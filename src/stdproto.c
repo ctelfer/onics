@@ -93,37 +93,23 @@ struct gre_parse {
 };
 
 
-static void resetxfields(struct prparse *prp)
-{
-	uint i;
-	for (i = PRP_OI_EXTRA; i < prp->noff; ++i)
-		prp->offs[i] = PRP_OFF_INVALID;
-}
+struct mpls_parse {
+	struct prparse prp;
+	ulong xfields[PRP_MPLS_NXFIELDS];
+};
 
 
 /* NB:  right now we are using emalloc() fpr header allocation, but we */
 /* may not do that in the future.  When that happens, we need to change */
-/* newprp, crtprp, and freeprp */
-static struct prparse *crtprp(size_t sz, uint prid, ulong off, ulong hlen,
+/* newprp, and freeprp */
+static struct prparse *newprp(size_t sz, uint prid, ulong off, ulong hlen,
 			      ulong plen, ulong tlen, struct prparse_ops *ops,
-			      uint nxfields)
+			      struct prparse *reg, uint nxfields)
 {
 	struct prparse *prp;
 	abort_unless(sz >= sizeof(struct prparse));
 	prp = emalloc(sz);
-	prp->prid = prid;
-	prp->error = 0;
-	prp_soff(prp) = off;
-	prp_poff(prp) = off + hlen;
-	prp_toff(prp) = off + hlen + plen;
-	prp_eoff(prp) = off + hlen + plen + tlen;
-	prp->noff = PRP_OI_MIN_NUM + nxfields;
-	abort_unless(prp_soff(prp) >= 0 && prp_poff(prp) >= prp_soff(prp) &&
-		     prp_toff(prp) >= prp_poff(prp) &&
-		     prp_eoff(prp) >= prp_toff(prp));
-	prp->ops = ops;
-	l_init(&prp->node);
-	resetxfields(prp);
+	prp_init_parse(prp, prid, off, hlen, plen, tlen, ops, reg, nxfields);
 	return prp;
 }
 
@@ -134,92 +120,48 @@ static ONICS_INLINE void freeprp(struct prparse *prp)
 }
 
 
-static struct prparse *default_parse(struct prparse *pprp, byte_t *buf,
+static struct prparse *stdpr_parse(struct prparse *pprp, byte_t *buf,
 				     ulong off, ulong maxlen)
 {
 	return NULL;
 }
 
 
-static int default_nxtcld(struct prparse *reg, byte_t *buf, struct prparse *cld,
+static int stdpr_nxtcld(struct prparse *reg, byte_t *buf, struct prparse *cld,
 			  uint *prid, ulong *off, ulong *maxlen)
 {
 	return 0;
 }
 
 
-static int default_getspec(struct prparse *prp, int enclose, struct prpspec *ps)
+static int stdpr_getspec(struct prparse *prp, int enclose, struct prpspec *ps)
 {
 	errno = ENOTSUP;
 	return -1;
 }
 
 
-static struct prparse *default_add(struct prparse *reg, byte_t *buf,
+static struct prparse *stdpr_add(struct prparse *reg, byte_t *buf,
 				   struct prpspec *ps, int enclose)
 {
 	return NULL;
 }
 
 
-static void default_update(struct prparse *prp, byte_t *buf)
+static void stdpr_update(struct prparse *prp, byte_t *buf)
 {
-	resetxfields(prp);
+	prp_reset_xfields(prp);
 }
 
 
-static int default_fixnxt(struct prparse *prp, byte_t *buf)
-{
-	return 0;
-}
-
-
-static int default_fixlen(struct prparse *prp, byte_t *buf)
-{
-	return 0;
-}
-
-
-static int default_fixcksum(struct prparse *prp, byte_t *buf)
-{
-	return 0;
-}
-
-
-static void default_free(struct prparse *prp)
+static void stdpr_free(struct prparse *prp)
 {
 	/* presently unused */
-	(void)default_getspec;
-	(void)default_add;
-	(void)default_parse;
-	(void)default_update;
+	(void)stdpr_getspec;
+	(void)stdpr_add;
+	(void)stdpr_parse;
+	(void)stdpr_update;
 	freeprp(prp);
-}
-
-
-static int hdr_getspec(struct prparse *prp, int enclose, struct prpspec *ps,
-		       uint prid, uint hlen)
-{
-	ps->prid = prid;
-	ps->tlen = 0;
-	if (enclose) {
-		if (prp_soff(prp) < hlen) {
-			errno = ENOSPC;
-			return -1;
-		}
-		ps->off = prp_soff(prp) - hlen;
-		ps->hlen = hlen;
-		ps->plen = prp_totlen(prp);
-	} else {
-		if (prp_plen(prp) < hlen) {
-			errno = ENOSPC;
-			return -1;
-		}
-		ps->off = prp_poff(prp);
-		ps->hlen = hlen;
-		ps->plen = prp_plen(prp) - hlen;
-	}
-	return 0;
 }
 
 
@@ -236,7 +178,7 @@ static struct prparse *simple_copy(struct prparse *oprp, size_t psize)
 }
 
 
-static struct prparse *default_copy(struct prparse *oprp)
+static struct prparse *stdpr_copy(struct prparse *oprp)
 {
 	return simple_copy(oprp, sizeof(struct prparse));
 }
@@ -249,15 +191,11 @@ static struct prparse *eth_parse(struct prparse *reg, byte_t *buf,
 				 ulong off, ulong maxlen)
 {
 	struct prparse *prp;
-
-	prp = crtprp(sizeof(struct eth_parse), PRID_ETHERNET2, off, 0,
-		     maxlen, 0, &eth_prparse_ops, PRP_ETH_NXFIELDS);
+	prp = newprp(sizeof(struct eth_parse), PRID_ETHERNET2, off, 0,
+		     maxlen, 0, &eth_prparse_ops, reg, PRP_ETH_NXFIELDS);
 	if (!prp)
 		return NULL;
-
-	prp->region = reg;
 	eth_update(prp, buf);
-
 	return prp;
 }
 
@@ -287,7 +225,7 @@ int eth_nxtcld(struct prparse *reg, byte_t *buf, struct prparse *cld,
 
 static int eth_getspec(struct prparse *prp, int enclose, struct prpspec *ps)
 {
-	return hdr_getspec(prp, enclose, ps, PRID_ETHERNET2, ETHHLEN);
+	return prpspec_init(ps, prp, PRID_ETHERNET2, ETHHLEN, 0, enclose);
 }
 
 
@@ -304,9 +242,9 @@ static int eth_add(struct prparse *reg, byte_t *buf, struct prpspec *ps,
 		return -1;
 	}
 
-	prp = crtprp(sizeof(struct eth_parse), PRID_ETHERNET2, 
+	prp = newprp(sizeof(struct eth_parse), PRID_ETHERNET2, 
 		     ps->off, ps->hlen, ps->plen, ps->tlen,
-		     &eth_prparse_ops, PRP_ETH_NXFIELDS);
+		     &eth_prparse_ops, reg, PRP_ETH_NXFIELDS);
 	if (!prp)
 		return -1;
 
@@ -343,7 +281,7 @@ static void eth_update(struct prparse *prp, byte_t *buf)
 	uint vidx;
 
 	prp->error = 0;
-	resetxfields(prp);
+	prp_reset_xfields(prp);
 
 	if (prp_totlen(prp) < ETHHLEN) {
 		prp->error |= PRP_ERR_TOOSMALL;
@@ -391,17 +329,12 @@ static struct prparse *arp_parse(struct prparse *reg, byte_t *buf,
 				 ulong off, ulong maxlen)
 {
 	struct prparse *prp;
-
 	abort_unless(reg && buf);
-
-	prp = crtprp(sizeof(struct arp_parse), PRID_ARP, off, 0, maxlen, 0,
-		     &arp_prparse_ops, PRP_ARP_NXFIELDS);
+	prp = newprp(sizeof(struct arp_parse), PRID_ARP, off, 0, maxlen, 0,
+		     &arp_prparse_ops, reg, PRP_ARP_NXFIELDS);
 	if (!prp)
 		return NULL;
-
-	prp->region = reg;
 	arp_update(prp, buf);
-
 	return prp;
 }
 
@@ -410,13 +343,13 @@ static void arp_update(struct prparse *prp, byte_t *buf)
 {
 	struct arph *arp;
 	prp->error = 0;
-	resetxfields(prp);
+	prp_reset_xfields(prp);
 
 	if (prp_totlen(prp) < 8) {
 		prp->error |= PRP_ERR_TOOSMALL;
 		return;
 	}
-	resetxfields(prp);
+	prp_reset_xfields(prp);
 	arp = prp_header(prp, buf, struct arph);
 	if (arp->hwlen * 2 + arp->prlen * 2 > prp_totlen(prp) - 8) {
 		prp->error |= PRP_ERR_TOOSMALL;
@@ -464,8 +397,9 @@ static int arp_add(struct prparse *reg, byte_t *buf, struct prpspec *ps,
 		errno = EINVAL;
 		return -1;
 	}
-	prp = crtprp(sizeof(struct arp_parse), PRID_ARP, ps->off, ps->hlen,
-		     ps->plen, ps->tlen, &arp_prparse_ops, PRP_ARP_NXFIELDS);
+	prp = newprp(sizeof(struct arp_parse), PRID_ARP, ps->off, ps->hlen,
+		     ps->plen, ps->tlen, &arp_prparse_ops, reg, 
+		     PRP_ARP_NXFIELDS);
 	if (!prp)
 		return -1;
 
@@ -591,15 +525,11 @@ static struct prparse *ipv4_parse(struct prparse *reg, byte_t *buf,
 				  ulong off, ulong maxlen)
 {
 	struct prparse *prp;
-
-	prp = crtprp(sizeof(struct ip_parse), PRID_IPV4, off, 0, maxlen, 0,
-		     &ipv4_prparse_ops, PRP_IP_NXFIELDS);
+	prp = newprp(sizeof(struct ip_parse), PRID_IPV4, off, 0, maxlen, 0,
+		     &ipv4_prparse_ops, reg, PRP_IP_NXFIELDS);
 	if (!prp)
 		return NULL;
-
-	prp->region = reg;
 	ipv4_update(prp, buf);
-
 	return prp;
 }
 
@@ -629,7 +559,7 @@ int ipv4_nxtcld(struct prparse *reg, byte_t *buf, struct prparse *cld,
 
 static int ipv4_getspec(struct prparse *prp, int enclose, struct prpspec *ps)
 {
-	return hdr_getspec(prp, enclose, ps, PRID_IPV4, IPH_MINLEN);
+	return prpspec_init(ps, prp, PRID_IPV4, IPH_MINLEN, 0, enclose);
 }
 
 
@@ -644,8 +574,9 @@ static int ipv4_add(struct prparse *reg, byte_t *buf, struct prpspec *ps,
 		errno = EINVAL;
 		return -1;
 	}
-	prp = crtprp(sizeof(struct ip_parse), PRID_IPV4, ps->off, ps->hlen, 
-		     ps->plen, ps->tlen, &ipv4_prparse_ops, PRP_IP_NXFIELDS);
+	prp = newprp(sizeof(struct ip_parse), PRID_IPV4, ps->off, ps->hlen, 
+		     ps->plen, ps->tlen, &ipv4_prparse_ops, reg,
+		     PRP_IP_NXFIELDS);
 	if (!prp)
 		return -1;
 
@@ -682,7 +613,7 @@ static void ipv4_update(struct prparse *prp, byte_t *buf)
 	ulong len, fragoff;
 
 	prp->error = 0;
-	resetxfields(prp);
+	prp_reset_xfields(prp);
 
 	len = prp_totlen(prp);
 	if (len < IPH_MINLEN) {
@@ -844,15 +775,11 @@ static struct prparse *udp_parse(struct prparse *reg, byte_t *buf,
 				 ulong off, ulong maxlen)
 {
 	struct prparse *prp;
-
-	prp = crtprp(sizeof(*prp), PRID_UDP, off, 0, maxlen, 0,  
-		     &udp_prparse_ops, 0);
+	prp = newprp(sizeof(*prp), PRID_UDP, off, 0, maxlen, 0,  
+		     &udp_prparse_ops, reg, 0);
 	if (!prp)
 		return NULL;
-
-	prp->region = reg;
 	udp_update(prp, buf);
-
 	return prp;
 }
 
@@ -903,7 +830,7 @@ static int udp_nxtcld(struct prparse *reg, byte_t *buf, struct prparse *cld,
 
 static int udp_getspec(struct prparse *prp, int enclose, struct prpspec *ps)
 {
-	return hdr_getspec(prp, enclose, ps, PRID_UDP, UDPH_LEN);
+	return prpspec_init(ps, prp, PRID_UDP, UDPH_LEN, 0, enclose);
 }
 
 
@@ -919,8 +846,8 @@ static int udp_add(struct prparse *reg, byte_t *buf, struct prpspec *ps,
 		return -1;
 	}
 
-	prp = crtprp(sizeof(*prp), PRID_UDP, ps->off, ps->hlen, ps->plen, 
-		     ps->tlen, &udp_prparse_ops, 0);
+	prp = newprp(sizeof(*prp), PRID_UDP, ps->off, ps->hlen, ps->plen, 
+		     ps->tlen, &udp_prparse_ops, reg, 0);
 	if (!prp)
 		return -1;
 
@@ -1107,22 +1034,19 @@ static struct prparse *tcp_parse(struct prparse *reg, byte_t *buf,
 				 ulong off, ulong maxlen)
 {
 	struct prparse *prp;
-
-	prp = crtprp(sizeof(struct tcp_parse), PRID_TCP, off, 0, maxlen, 0,
-		     &tcp_prparse_ops, PRP_TCP_NXFIELDS);
+	prp = newprp(sizeof(struct tcp_parse), PRID_TCP, off, 0, maxlen, 0,
+		     &tcp_prparse_ops, reg, PRP_TCP_NXFIELDS);
 	if (!prp)
 		return NULL;
-
 	prp->region = reg;
 	tcp_update(prp, buf);
-
 	return prp;
 }
 
 
 static int tcp_getspec(struct prparse *prp, int enclose, struct prpspec *ps)
 {
-	return hdr_getspec(prp, enclose, ps, PRID_TCP, TCPH_MINLEN);
+	return prpspec_init(ps, prp, PRID_TCP, TCPH_MINLEN, 0, enclose);
 }
 
 
@@ -1138,9 +1062,9 @@ static int tcp_add(struct prparse *reg, byte_t *buf, struct prpspec *ps,
 		return -1;
 	}
 
-	prp = crtprp(sizeof(struct tcp_parse), PRID_TCP, 
+	prp = newprp(sizeof(struct tcp_parse), PRID_TCP, 
 		     ps->off, ps->hlen, ps->plen, ps->tlen,
-		     &tcp_prparse_ops, PRP_TCP_NXFIELDS);
+		     &tcp_prparse_ops, reg, PRP_TCP_NXFIELDS);
 	if (!prp)
 		return -1;
 
@@ -1176,7 +1100,7 @@ static void tcp_update(struct prparse *prp, byte_t *buf)
 	ulong len;
 
 	prp->error = 0;
-	resetxfields(prp);
+	prp_reset_xfields(prp);
 
 	len = prp_totlen(prp);
 	if (len < TCPH_MINLEN) {
@@ -1257,15 +1181,11 @@ static struct prparse *icmp_parse(struct prparse *reg, byte_t *buf,
 				  ulong off, ulong maxlen)
 {
 	struct prparse *prp;
-
-	prp = crtprp(sizeof(struct icmp_parse), PRID_ICMP, off, 0, maxlen, 0,
-		     &icmp_prparse_ops, PRP_ICMP_NXFIELDS);
+	prp = newprp(sizeof(struct icmp_parse), PRID_ICMP, off, 0, maxlen, 0,
+		     &icmp_prparse_ops, reg, PRP_ICMP_NXFIELDS);
 	if (!prp)
 		return NULL;
-
-	prp->region = reg;
 	icmp_update(prp, buf);
-
 	return prp;
 }
 
@@ -1293,7 +1213,7 @@ static int icmp_nxtcld(struct prparse *reg, byte_t *buf, struct prparse *cld,
 
 static int icmp_getspec(struct prparse *prp, int enclose, struct prpspec *ps)
 {
-	return hdr_getspec(prp, enclose, ps, PRID_ICMP, ICMPH_LEN);
+	return prpspec_init(ps, prp, PRID_ICMP, ICMPH_LEN, 0, enclose);
 }
 
 
@@ -1308,8 +1228,9 @@ static int icmp_add(struct prparse *reg, byte_t *buf, struct prpspec *ps,
 		return -1;
 	}
 
-	prp = crtprp(sizeof(struct icmp_parse), PRID_ICMP, ps->off, ps->hlen,
-		     ps->plen, ps->tlen, &icmp_prparse_ops, PRP_ICMP_NXFIELDS);
+	prp = newprp(sizeof(struct icmp_parse), PRID_ICMP, ps->off, ps->hlen,
+		     ps->plen, ps->tlen, &icmp_prparse_ops, reg,
+		     PRP_ICMP_NXFIELDS);
 	if (!prp)
 		return -1;
 
@@ -1330,7 +1251,7 @@ static void icmp_update(struct prparse *prp, byte_t *buf)
 	struct icmph *icmp;
 
 	prp->error = 0;
-	resetxfields(prp);
+	prp_reset_xfields(prp);
 
 	if (prp_totlen(prp) < ICMPH_LEN) {
 		prp->error = PRP_ERR_TOOSMALL;
@@ -1550,15 +1471,11 @@ static struct prparse *ipv6_parse(struct prparse *reg, byte_t *buf,
 				  ulong off, ulong maxlen)
 {
 	struct prparse *prp;
-
-	prp = crtprp(sizeof(struct ipv6_parse), PRID_IPV6, off, 0, maxlen, 0,
-		     &ipv6_prparse_ops, PRP_IPV6_NXFIELDS);
+	prp = newprp(sizeof(struct ipv6_parse), PRID_IPV6, off, 0, maxlen, 0,
+		     &ipv6_prparse_ops, reg, PRP_IPV6_NXFIELDS);
 	if (!prp)
 		return NULL;
-
-	prp->region = reg;
 	ipv6_update(prp, buf);
-
 	return prp;
 }
 
@@ -1610,7 +1527,7 @@ int ipv6_nxtcld(struct prparse *reg, byte_t *buf, struct prparse *cld,
 
 static int ipv6_getspec(struct prparse *prp, int enclose, struct prpspec *ps)
 {
-	return hdr_getspec(prp, enclose, ps, PRID_IPV6, IPV6H_LEN);
+	return prpspec_init(ps, prp, PRID_IPV6, IPV6H_LEN, 0, enclose);
 }
 
 
@@ -1625,8 +1542,9 @@ static int ipv6_add(struct prparse *reg, byte_t *buf, struct prpspec *ps,
 		return -1;
 	}
 
-	prp = crtprp(sizeof(struct ipv6_parse), PRID_IPV6, ps->off, ps->hlen,
-		     ps->plen, ps->tlen, &ipv6_prparse_ops, PRP_IPV6_NXFIELDS);
+	prp = newprp(sizeof(struct ipv6_parse), PRID_IPV6, ps->off, ps->hlen,
+		     ps->plen, ps->tlen, &ipv6_prparse_ops, reg,
+		     PRP_IPV6_NXFIELDS);
 	if (!prp)
 		return -1;
 
@@ -1658,7 +1576,7 @@ static void ipv6_update(struct prparse *prp, byte_t *buf)
 	int rv;
 
 	prp->error = 0;
-	resetxfields(prp);
+	prp_reset_xfields(prp);
 	ip6 = prp_header(prp, buf, struct ipv6h);
 	prp->offs[PRP_IPV6FLD_NXTHDR] = prp_soff(prp) + 6;
 
@@ -1773,14 +1691,11 @@ static struct prparse *icmp6_parse(struct prparse *reg, byte_t *buf,
 				   ulong off, ulong maxlen)
 {
 	struct prparse *prp;
-
-	prp = crtprp(sizeof(struct icmp6_parse), PRID_ICMP6, off, 0, maxlen, 0,
-		     &icmpv6_prparse_ops, PRP_ICMP6_NXFIELDS);
+	prp = newprp(sizeof(struct icmp6_parse), PRID_ICMP6, off, 0, maxlen, 0,
+		     &icmpv6_prparse_ops, reg, PRP_ICMP6_NXFIELDS);
 	if (!prp)
 		return NULL;
-	prp->region = reg;
 	icmp6_update(prp, buf);
-
 	return prp;
 }
 
@@ -1812,7 +1727,7 @@ static int icmp6_nxtcld(struct prparse *reg, byte_t *buf, struct prparse *cld,
 
 static int icmp6_getspec(struct prparse *prp, int enclose, struct prpspec *ps)
 {
-	return hdr_getspec(prp, enclose, ps, PRID_ICMP6, ICMP6H_LEN);
+	return prpspec_init(ps, prp, PRID_ICMP6, ICMP6H_LEN, 0, enclose);
 }
 
 
@@ -1822,8 +1737,9 @@ static int icmp6_add(struct prparse *reg, byte_t *buf, struct prpspec *ps,
 	struct prparse *prp, *ipprp;
 	struct icmp6h *icmp6;
 
-	prp = crtprp(sizeof(struct icmp6_parse), PRID_ICMP6, ps->off, ps->hlen,
-		     ps->plen, ps->tlen, &icmpv6_prparse_ops, PRP_ICMP6_NXFIELDS);
+	prp = newprp(sizeof(struct icmp6_parse), PRID_ICMP6, ps->off, ps->hlen,
+		     ps->plen, ps->tlen, &icmpv6_prparse_ops, reg,
+		     PRP_ICMP6_NXFIELDS);
 	if (!prp)
 		return -1;
 
@@ -1919,7 +1835,7 @@ static void icmp6_update(struct prparse *prp, byte_t *buf)
 	int hlen;
 
 	prp->error = 0;
-	resetxfields(prp);
+	prp_reset_xfields(prp);
 
 	if (prp_totlen(prp) < ICMP6H_LEN) {
 		prp->error = PRP_ERR_TOOSMALL;
@@ -2022,12 +1938,11 @@ static struct prparse *gre_parse(struct prparse *reg, byte_t *buf,
 			prid = PRID_NVGRE;
 	}
 
-	prp = crtprp(sizeof(struct gre_parse), prid, off, 0, maxlen, 0,
-		     &gre_prparse_ops, PRP_GRE_NXFIELDS);
+	prp = newprp(sizeof(struct gre_parse), prid, off, 0, maxlen, 0,
+		     &gre_prparse_ops, reg, PRP_GRE_NXFIELDS);
 	if (!prp)
 		return NULL;
 
-	prp->region = reg;
 	gre_update(prp, buf);
 
 	return prp;
@@ -2056,7 +1971,7 @@ int gre_nxtcld(struct prparse *reg, byte_t *buf, struct prparse *cld,
 
 static int gre_getspec(struct prparse *prp, int enclose, struct prpspec *ps)
 {
-	return hdr_getspec(prp, enclose, ps, PRID_GRE, GRE_BASE_HLEN);
+	return prpspec_init(ps, prp, PRID_GRE, GRE_BASE_HLEN, 0, enclose);
 }
 
 
@@ -2073,8 +1988,9 @@ static int gre_add(struct prparse *reg, byte_t *buf, struct prpspec *ps,
 		return -1;
 	}
 
-	prp = crtprp(sizeof(struct gre_parse), PRID_GRE, ps->off, ps->hlen,
-		     ps->plen, ps->tlen, &gre_prparse_ops, PRP_GRE_NXFIELDS);
+	prp = newprp(sizeof(struct gre_parse), PRID_GRE, ps->off, ps->hlen,
+		     ps->plen, ps->tlen, &gre_prparse_ops, reg,
+		     PRP_GRE_NXFIELDS);
 	if (!prp)
 		return -1;
 
@@ -2105,7 +2021,7 @@ static void gre_update(struct prparse *prp, byte_t *buf)
 	ushort proto;
 
 	prp->error = 0;
-	resetxfields(prp);
+	prp_reset_xfields(prp);
 
 	prp->prid = PRID_GRE;
 	len = prp_totlen(prp);
@@ -2185,7 +2101,7 @@ static int gre_fixcksum(struct prparse *prp, byte_t *buf)
 
 static int nvgre_getspec(struct prparse *prp, int enclose, struct prpspec *ps)
 {
-	return hdr_getspec(prp, enclose, ps, PRID_NVGRE, NVGRE_HLEN);
+	return prpspec_init(ps, prp, PRID_NVGRE, NVGRE_HLEN, 0, enclose);
 }
 
 
@@ -2202,8 +2118,9 @@ static int nvgre_add(struct prparse *reg, byte_t *buf, struct prpspec *ps,
 		return -1;
 	}
 
-	prp = crtprp(sizeof(struct gre_parse), PRID_NVGRE, ps->off, ps->hlen,
-		     ps->plen, ps->tlen, &gre_prparse_ops, PRP_GRE_NXFIELDS);
+	prp = newprp(sizeof(struct gre_parse), PRID_NVGRE, ps->off, ps->hlen,
+		     ps->plen, ps->tlen, &gre_prparse_ops, reg,
+		     PRP_GRE_NXFIELDS);
 	if (!prp)
 		return -1;
 
@@ -2232,14 +2149,11 @@ static struct prparse *vxlan_parse(struct prparse *reg, byte_t *buf,
 				   ulong off, ulong maxlen)
 {
 	struct prparse *prp;
-
-	prp = crtprp(sizeof(struct prparse), PRID_VXLAN, off, 0, maxlen, 0,
-		     &vxlan_prparse_ops, 0);
+	prp = newprp(sizeof(struct prparse), PRID_VXLAN, off, 0, maxlen, 0,
+		     &vxlan_prparse_ops, reg, 0);
 	if (!prp)
 		return NULL;
-	prp->region = reg;
 	vxlan_update(prp, buf);
-
 	return prp;
 }
 
@@ -2258,7 +2172,7 @@ int vxlan_nxtcld(struct prparse *reg, byte_t *buf, struct prparse *cld,
 
 static int vxlan_getspec(struct prparse *prp, int enclose, struct prpspec *ps)
 {
-	return hdr_getspec(prp, enclose, ps, PRID_VXLAN, VXLAN_HLEN);
+	return prpspec_init(ps, prp, PRID_VXLAN, VXLAN_HLEN, 0, enclose);
 }
 
 
@@ -2274,8 +2188,8 @@ static int vxlan_add(struct prparse *reg, byte_t *buf, struct prpspec *ps,
 		return -1;
 	}
 
-	prp = crtprp(sizeof(struct prparse), PRID_VXLAN, ps->off, ps->hlen,
-		     ps->plen, ps->tlen, &vxlan_prparse_ops, 0);
+	prp = newprp(sizeof(struct prparse), PRID_VXLAN, ps->off, ps->hlen,
+		     ps->plen, ps->tlen, &vxlan_prparse_ops, reg, 0);
 	if (!prp)
 		return -1;
 
@@ -2297,7 +2211,7 @@ static void vxlan_update(struct prparse *prp, byte_t *buf)
 	ulong flags;
 
 	prp->error = 0;
-	resetxfields(prp);
+	prp_reset_xfields(prp);
 
 	len = prp_totlen(prp);
 	if (len < VXLAN_HLEN) {
@@ -2320,15 +2234,11 @@ static struct prparse *mpls_parse(struct prparse *reg, byte_t *buf,
 				  ulong off, ulong maxlen)
 {
 	struct prparse *prp;
-
-	prp = crtprp(sizeof(struct eth_parse), PRID_MPLS, off, 0,
-		     maxlen, 0, &mpls_prparse_ops, PRP_MPLS_NXFIELDS);
+	prp = newprp(sizeof(struct mpls_parse), PRID_MPLS, off, 0,
+		     maxlen, 0, &mpls_prparse_ops, reg, PRP_MPLS_NXFIELDS);
 	if (!prp)
 		return NULL;
-
-	prp->region = reg;
 	mpls_update(prp, buf);
-
 	return prp;
 }
 
@@ -2371,7 +2281,7 @@ int mpls_nxtcld(struct prparse *reg, byte_t *buf, struct prparse *cld,
 
 static int mpls_getspec(struct prparse *prp, int enclose, struct prpspec *ps)
 {
-	return hdr_getspec(prp, enclose, ps, PRID_MPLS, MPLS_HLEN);
+	return prpspec_init(ps, prp, PRID_MPLS, MPLS_HLEN, 0, enclose);
 }
 
 
@@ -2389,9 +2299,9 @@ static int mpls_add(struct prparse *reg, byte_t *buf, struct prpspec *ps,
 		return -1;
 	}
 
-	prp = crtprp(sizeof(struct eth_parse), PRID_MPLS, 
+	prp = newprp(sizeof(struct mpls_parse), PRID_MPLS, 
 		     ps->off, ps->hlen, ps->plen, ps->tlen,
-		     &eth_prparse_ops, PRP_MPLS_NXFIELDS);
+		     &eth_prparse_ops, reg, PRP_MPLS_NXFIELDS);
 	if (!prp)
 		return -1;
 
@@ -2416,7 +2326,7 @@ static void mpls_update(struct prparse *prp, byte_t *buf)
 	struct mpls_label *mpls;
 
 	prp->error = 0;
-	resetxfields(prp);
+	prp_reset_xfields(prp);
 
 	if (prp_totlen(prp) < MPLS_HLEN) {
 		prp->error |= PRP_ERR_TOOSMALL;
@@ -2451,26 +2361,26 @@ struct proto_parser_ops eth_proto_parser_ops = {
 struct prparse_ops eth_prparse_ops = {
 	eth_update,
 	eth_fixnxt,
-	default_fixlen,
-	default_fixcksum,
-	default_copy,
-	default_free
+	prp_nop_fixlen,
+	prp_nop_fixcksum,
+	stdpr_copy,
+	stdpr_free
 };
 
 struct proto_parser_ops arp_proto_parser_ops = {
 	arp_parse,
-	default_nxtcld,
+	stdpr_nxtcld,
 	arp_getspec,
 	arp_add
 };
 
 struct prparse_ops arp_prparse_ops = {
 	arp_update,
-	default_fixnxt,
+	prp_nop_fixnxt,
 	arp_fixlen,
-	default_fixcksum,
+	prp_nop_fixcksum,
 	arp_copy,
-	default_free
+	stdpr_free
 };
 
 struct proto_parser_ops ipv4_proto_parser_ops = {
@@ -2500,7 +2410,7 @@ struct prparse_ops ipv6_prparse_ops = {
 	ipv6_update,
 	ipv6_fixnxt,
 	ipv6_fixlen,
-	default_fixcksum,
+	prp_nop_fixcksum,
 	ipv6_copy,
 	ipv6_free
 };
@@ -2514,11 +2424,11 @@ struct proto_parser_ops icmp_proto_parser_ops = {
 
 struct prparse_ops icmp_prparse_ops = {
 	icmp_update,
-	default_fixnxt,
-	default_fixlen,
+	prp_nop_fixnxt,
+	prp_nop_fixlen,
 	icmp_fixcksum,
-	default_copy,
-	default_free
+	stdpr_copy,
+	stdpr_free
 };
 
 struct proto_parser_ops icmpv6_proto_parser_ops = {
@@ -2530,11 +2440,11 @@ struct proto_parser_ops icmpv6_proto_parser_ops = {
 
 struct prparse_ops icmpv6_prparse_ops = {
 	icmp6_update,
-	default_fixnxt,
-	default_fixlen,
+	prp_nop_fixnxt,
+	prp_nop_fixlen,
 	icmp6_fixcksum,
-	default_copy,
-	default_free
+	stdpr_copy,
+	stdpr_free
 };
 
 struct proto_parser_ops udp_proto_parser_ops = {
@@ -2549,20 +2459,20 @@ struct prparse_ops udp_prparse_ops = {
 	udp_fixnxt,
 	udp_fixlen,
 	udp_fixcksum,
-	default_copy,
-	default_free
+	stdpr_copy,
+	stdpr_free
 };
 
 struct proto_parser_ops tcp_proto_parser_ops = {
 	tcp_parse,
-	default_nxtcld,
+	stdpr_nxtcld,
 	tcp_getspec,
 	tcp_add
 };
 
 struct prparse_ops tcp_prparse_ops = {
 	tcp_update,
-	default_fixnxt,
+	prp_nop_fixnxt,
 	tcp_fixlen,
 	tcp_fixcksum,
 	tcp_copy,
@@ -2579,10 +2489,10 @@ struct proto_parser_ops gre_proto_parser_ops = {
 struct prparse_ops gre_prparse_ops = {
 	gre_update,
 	gre_fixnxt,
-	default_fixlen,
+	prp_nop_fixlen,
 	gre_fixcksum,
-	default_copy,
-	default_free
+	stdpr_copy,
+	stdpr_free
 };
 
 struct proto_parser_ops nvgre_proto_parser_ops = {
@@ -2601,11 +2511,11 @@ struct proto_parser_ops vxlan_proto_parser_ops = {
 
 struct prparse_ops vxlan_prparse_ops = {
 	vxlan_update,
-	default_fixnxt,
-	default_fixlen,
-	default_fixcksum,
-	default_copy,
-	default_free
+	prp_nop_fixnxt,
+	prp_nop_fixlen,
+	prp_nop_fixcksum,
+	stdpr_copy,
+	stdpr_free
 };
 
 struct proto_parser_ops mpls_proto_parser_ops = {
@@ -2617,11 +2527,11 @@ struct proto_parser_ops mpls_proto_parser_ops = {
 
 struct prparse_ops mpls_prparse_ops = {
 	mpls_update,
-	default_fixnxt,
-	default_fixlen,
-	default_fixcksum,
-	default_copy,
-	default_free
+	prp_nop_fixnxt,
+	prp_nop_fixlen,
+	prp_nop_fixcksum,
+	stdpr_copy,
+	stdpr_free
 };
 
 

@@ -22,6 +22,7 @@
 
 #include <ctype.h>
 #include <cat/str.h>
+#include <cat/stduse.h>
 #include "util.h"
 #include "prid.h"
 #include "tcpip_hdrs.h"
@@ -409,6 +410,61 @@ int ethtostr(char *s, void *ea, size_t slen)
 }
 
 
+static struct crbtree *e2pmap = NULL;
+static struct crbtree *p2emap = NULL;
+
+int e2p_map_add(ushort etype, uint prid)
+{
+	if ( e2pmap == NULL ) {
+		e2pmap = crb_new(&crb_std_attr_pkey, 1);
+		p2emap = crb_new(&crb_std_attr_pkey, 1);
+	}
+
+	if ( int2ptr(etype) == NULL || int2ptr(prid) == NULL )
+		return -1;
+
+	if ( etypetoprid(etype) != PRID_NONE || pridtoetype(prid) != PRID_NONE )
+		return -1;
+
+	crb_put(e2pmap, int2ptr(etype), int2ptr(prid));
+	crb_put(p2emap, int2ptr(prid), int2ptr(etype));
+
+	return 0;
+}
+
+
+void e2p_map_del(ushort etype)
+{
+	void *r = crb_get(e2pmap, int2ptr(etype));
+	if ( r != NULL ) {
+		crb_del(e2pmap, int2ptr(etype));
+		crb_del(p2emap, r);
+	}
+}
+
+
+static uint e2p_lkup(ushort etype)
+{
+	void *r;
+	if ( e2pmap != NULL && (r = crb_get(e2pmap, int2ptr(etype))) != NULL ) {
+		return (uint)ptr2int(r);
+	} else {
+		return PRID_NONE;
+	}
+}
+
+
+static ushort p2e_lkup(uint prid)
+{
+	void *r;
+	if ( p2emap != NULL && (r = crb_get(p2emap, int2ptr(prid))) != NULL ) {
+		return (ushort)ptr2int(r);
+	} else {
+		return 0;
+	}
+}
+
+
 uint etypetoprid(ushort etype)
 {
 	switch (etype) {
@@ -418,7 +474,7 @@ uint etypetoprid(ushort etype)
 	case ETHTYPE_TEB:    return PRID_ETHERNET2;
 	case ETHTYPE_MPLS:   return PRID_MPLS;
 	case ETHTYPE_MPLSMC: return PRID_MPLS;
-	default:	     return PRID_NONE;
+	default:	     return e2p_lkup(etype);
 	}
 }
 
@@ -431,7 +487,7 @@ ushort pridtoetype(uint prid)
 	case PRID_ARP:       return ETHTYPE_ARP;
 	case PRID_ETHERNET2: return ETHTYPE_TEB;
 	case PRID_MPLS:      return ETHTYPE_MPLS;
-	default:	     return 0;
+	default:	     return p2e_lkup(prid);
 	}
 }
 

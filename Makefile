@@ -1,10 +1,20 @@
 
-all:
+all: normal
+
+normal:
 	(INSTALL_PREFIX=$${INSTALL_PREFIX:-/usr/local} ; \
-	cd src && ./configure && make && \
+	cd src && ([ -f makefile ] || ./configure $(CFGOPTS)) && make && \
 	cd ../lib && make && \
-	cd ../doc && make && \
-	cd ../tests && make )
+	cd ../doc && make )
+
+debug:
+	(INSTALL_PREFIX=$${INSTALL_PREFIX:-/usr/local} ; \
+	cd src && ./configure --debug && make && \
+	cd ../lib && make && \
+	cd ../doc && make )
+
+test: 
+	cd tests && make
 
 install:
 	(INSTALL_PREFIX=$${INSTALL_PREFIX:-/usr/local} ; \

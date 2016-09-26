@@ -31,6 +31,7 @@
 #include "pktbuf.h"
 #include "protoparse.h"
 #include "stdproto.h"
+#include "prload.h"
 #include "tcpip_hdrs.h"
 #include "netvm.h"
 #include "netvm_std_coproc.h"
@@ -317,6 +318,7 @@ int main(int argc, char *argv[])
 		err("No program sources provided: use -f or -e\n");
 
 	register_std_proto();
+	register_extern_proto();
 	pkb_init_pools(1);
 
 	parse_pml_program(&prog);

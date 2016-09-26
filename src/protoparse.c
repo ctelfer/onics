@@ -165,40 +165,36 @@ int pp_unregister(uint prid)
 
 /* -- ops for "NONE", "NONE base" and "DATA" and "RAWPKT" protocol type -- */
 
-static void default_update(struct prparse *prp, byte_t *buf);
-static int default_fixnxt(struct prparse *prp, byte_t *buf);
-static int default_fixlen(struct prparse *prp, byte_t *buf);
-static int default_fixcksum(struct prparse *prp, byte_t *buf);
 static struct prparse *default_copy(struct prparse *oprp);
 static void default_free(struct prparse *prp);
 static struct prparse *base_copy(struct prparse *oprp);
 static void base_free(struct prparse *prp);
 
 static struct prparse_ops none_prparse_ops = {
-	default_update,
-	default_fixnxt,
-	default_fixlen,
-	default_fixcksum,
+	prp_nop_update,
+	prp_nop_fixnxt,
+	prp_nop_fixlen,
+	prp_nop_fixcksum,
 	default_copy,
 	default_free
 };
 
 
 static struct prparse_ops data_prparse_ops = {
-	default_update,
-	default_fixnxt,
-	default_fixlen,
-	default_fixcksum,
+	prp_nop_update,
+	prp_nop_fixnxt,
+	prp_nop_fixlen,
+	prp_nop_fixcksum,
 	default_copy,
 	default_free
 };
 
 
 static struct prparse_ops base_prparse_ops = {
-	default_update,
-	default_fixnxt,
-	default_fixlen,
-	default_fixcksum,
+	prp_nop_update,
+	prp_nop_fixnxt,
+	prp_nop_fixlen,
+	prp_nop_fixcksum,
 	base_copy,
 	base_free
 };
@@ -369,29 +365,6 @@ static int data_add(struct prparse *reg, byte_t *buf, struct prpspec *ps,
 
 
 /* -- default prparse handlers -- */
-static void default_update(struct prparse *prp, byte_t *buf)
-{
-}
-
-
-static int default_fixnxt(struct prparse *prp, byte_t *buf)
-{
-	return 0;
-}
-
-
-static int default_fixlen(struct prparse *prp, byte_t *buf)
-{
-	return 0;
-}
-
-
-static int default_fixcksum(struct prparse *prp, byte_t *buf)
-{
-	return 0;
-}
-
-
 static struct prparse *default_copy(struct prparse *oprp)
 {
 	struct prpspec ps;
@@ -453,7 +426,7 @@ int prp_region_empty(struct prparse *reg)
 }
 
 
-void prp_init_parse(struct prparse *base, ulong len)
+void prp_init_parse_base(struct prparse *base, ulong len)
 {
 	abort_unless(base && (len >= 0));
 	base_init(base, 0, 0, len, 0);
@@ -1120,4 +1093,95 @@ void prp_add_insert(struct prparse *reg, struct prparse *prp, int enclose)
 				trav->region = prp;
 		}
 	}
+}
+
+
+
+void prp_init_parse(struct prparse *prp, uint prid, ulong off, ulong hlen,
+		    ulong plen, ulong tlen, struct prparse_ops *ops,
+		    struct prparse *reg, uint nxfields)
+{
+	prp->prid = prid;
+	prp->error = 0;
+	prp_soff(prp) = off;
+	prp_poff(prp) = off + hlen;
+	prp_toff(prp) = off + hlen + plen;
+	prp_eoff(prp) = off + hlen + plen + tlen;
+	abort_unless(prp_soff(prp) >= 0 && prp_poff(prp) >= prp_soff(prp) &&
+		     prp_toff(prp) >= prp_poff(prp) &&
+		     prp_eoff(prp) >= prp_toff(prp));
+	prp->ops = ops;
+	l_init(&prp->node);
+	prp->region = reg;
+	prp->noff = PRP_OI_MIN_NUM + nxfields;
+	prp_reset_xfields(prp);
+}
+
+
+void prp_reset_xfields(struct prparse *prp)
+{
+	uint i;
+	for (i = PRP_OI_EXTRA; i < prp->noff; ++i)
+		prp->offs[i] = PRP_OFF_INVALID;
+}
+
+
+int prpspec_init(struct prpspec *ps, struct prparse *prp, uint prid, uint hlen,
+		 uint tlen, int enclose)
+{
+	ps->prid = prid;
+	ps->hlen = hlen;
+	ps->tlen = tlen;
+	if (enclose) {
+		if (prp_soff(prp) < hlen) {
+			errno = ENOSPC;
+			return -1;
+		}
+		ps->off = prp_soff(prp) - hlen;
+		ps->plen = prp_totlen(prp);
+	} else {
+		if (prp_plen(prp) < hlen + tlen) {
+			errno = ENOSPC;
+			return -1;
+		}
+		ps->off = prp_poff(prp);
+		ps->plen = prp_plen(prp) - hlen - tlen;
+	}
+	return 0;
+}
+
+
+void prp_nop_update(struct prparse *prp, byte_t *buf)
+{
+	/* do nothing */
+}
+
+
+int prp_nop_fixnxt(struct prparse *prp, byte_t *buf)
+{
+	return 0; /* return success */
+}
+
+
+int prp_nop_fixlen(struct prparse *prp, byte_t *buf)
+{
+	return 0; /* return success */
+}
+
+
+int prp_nop_fixcksum(struct prparse *prp, byte_t *buf)
+{
+	return 0; /* return success */
+}
+
+
+struct prparse *prp_nop_copy(struct prparse *oprp)
+{
+	return NULL;  /* this we can't do without help */
+}
+
+
+void prp_nop_free(struct prparse *prp)
+{
+	/* do nothing */
 }

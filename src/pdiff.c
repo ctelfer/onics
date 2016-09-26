@@ -36,6 +36,7 @@
 #include "ns.h"
 #include "pktbuf.h"
 #include "stdproto.h"
+#include "prload.h"
 #include "fld.h"
 #include "util.h"
 
@@ -1289,8 +1290,8 @@ static void print_hdr_desc(struct emitter *e, struct prpent *ppe,
 
 static void print_hdr_op(struct emitter *e, struct prpent *ppe, int action)
 {
-	char *op;
-	char *pfx;
+	char *op = "";
+	char *pfx = "";
 	struct npfield *npf;
 
 	switch (action) {
@@ -1612,6 +1613,7 @@ int main(int argc, char *argv[])
 	hdiff_init(&Hdiff);
 	file_emitter_init(&fe, stdout);
 	register_std_proto();
+	register_extern_proto();
 	pkb_init_pools(128);
 
 	open_file(filename1, &fi1);

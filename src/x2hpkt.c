@@ -27,6 +27,7 @@
 #include <cat/err.h>
 #include <string.h>
 #include "prid.h"
+#include "prload.h"
 #include "util.h"
 #include "pktbuf.h"
 #include "ns.h"
@@ -590,6 +591,7 @@ int main(int argc, char *argv[])
 	parse_options();
 
 	register_std_proto();
+	register_extern_proto();
 
 	init_fields();
 

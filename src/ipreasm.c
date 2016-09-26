@@ -31,6 +31,7 @@
 #include "pktbuf.h"
 #include "ns.h"
 #include "stdproto.h"
+#include "prload.h"
 #include "protoparse.h"
 #include "tcpip_hdrs.h"
 #include "util.h"
@@ -554,6 +555,7 @@ int main(int argc, char *argv[])
 
 	pkb_init_pools(128);
 	register_std_proto();
+	register_extern_proto();
 	parse_args(argc, argv);
 	init_tables();
 

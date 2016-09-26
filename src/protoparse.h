@@ -439,7 +439,7 @@ int prp_region_empty(struct prparse *reg);
  * Initializes a fresh parse of PRID_NONE.  This can be used to create the
  * base for a full parse. 
  */
-void prp_init_parse(struct prparse *base, ulong len);
+void prp_init_parse_base(struct prparse *head, ulong len);
 
 /* Insert a parse into the parse list */
 void prp_insert_parse(struct prparse *from, struct prparse *toins);
@@ -577,5 +577,31 @@ int prp_adj_unused(struct prparse *prp);
  * calls.)
  */
 void prp_add_insert(struct prparse *reg, struct prparse *toadd, int enclose);
+
+
+/*
+ * Initialize a parse.  (Used by protocol libraries)
+ */
+void prp_init_parse(struct prparse *prp, uint prid, ulong off, ulong hlen,
+		    ulong plen, ulong tlen, struct prparse_ops *ops,
+		    struct prparse *reg, uint nxfields);
+
+/* Reset all the extra fields in a parse */
+void prp_reset_xfields(struct prparse *prp);
+
+
+/* Initialize a prpspec based on a region we are either trying to */
+/* enclose or fit the header within. */
+int prpspec_init(struct prpspec *ps, struct prparse *prp, uint prid, uint hlen,
+		 uint tlen, int enclose);
+		          
+
+/* No-op versions of the prparse operations */
+void prp_nop_update(struct prparse *prp, byte_t *buf);
+int prp_nop_fixnxt(struct prparse *prp, byte_t *buf);
+int prp_nop_fixlen(struct prparse *prp, byte_t *buf);
+int prp_nop_fixcksum(struct prparse *prp, byte_t *buf);
+struct prparse *prp_nop_copy(struct prparse *oprp);
+void prp_nop_free(struct prparse *prp);
 
 #endif /* __protoparse_h */

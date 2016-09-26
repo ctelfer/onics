@@ -41,12 +41,14 @@ QUICK START
  3) Change to the onics directory and type:
 
     make
+    make test
 
- 4) (optional) To install run:
+ 4) (optional) To install type:
 
     sudo make install
 
 This will:
+ * build catlib
  * build the tools
  * build test programs (under tests/bin)
  * run regression tests

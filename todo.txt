@@ -48,7 +48,6 @@ pktmux/pktdemux:
 
 pdiff:
  + unit tests
- + windowed region support for large file comparisons
  * Two-column output format
  * pml edit script output format
 
