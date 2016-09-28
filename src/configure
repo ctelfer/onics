@@ -36,10 +36,10 @@ while [ $# -gt 0 ] ; do
 		--dlsym)
 			LIBDL_SET=y
 			USE_LIBDL=1
-			LIBDLFLG=-ldl
+			LIBDLFLG="-ldl -rdynamic"
 		;;
 		--no-dlsym)
-			LIBDL_SET=n
+			LIBDL_SET=y
 			USE_LIBDL=0
 			LIBDLFLG=
 		;;
@@ -69,13 +69,13 @@ if [ "$CATLIB_SET" = "n" ] ; then
 fi
 
 
-if [ "$LIBDL_SET" = "n" ] ; then
-	if [ -f /usr/include/dlfcn.h ] ; then
-		echo "configure: dlsym support detected"
-		LIBDLFLG=-ldl
-		USE_LIBDL=1
-	fi
-fi
+#if [ "$LIBDL_SET" = "n" ] ; then
+#	if [ -f /usr/include/dlfcn.h ] ; then
+#		echo "configure: dlsym support detected"
+#		LIBDLFLG="-ldl -rdynamic"
+#		USE_LIBDL=1
+#	fi
+#fi
 
 
 rm -f .has_pcap

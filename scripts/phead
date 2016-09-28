@@ -35,7 +35,7 @@ then
 		usage
 	fi
 
-	MAXPKTs=`echo $1 | sed -e 's/^-//'`
+	MAXPKTS=`echo $1 | sed -e 's/^-//'`
 	shift
 fi
 

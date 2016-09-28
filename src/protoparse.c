@@ -69,11 +69,11 @@ static struct proto_parser_ops data_proto_parser_ops = {
 
 
 /* -- global protocol parser tables -- */
+struct proto_parser inet_proto_parsers[PRID_PER_PF];
+struct proto_parser net_proto_parsers[PRID_PER_PF];
 struct proto_parser dlt_proto_parsers[PRID_PER_PF] = {
 	{PRID_RAWPKT, 1, &data_proto_parser_ops},
 };
-struct proto_parser net_proto_parsers[PRID_PER_PF];
-struct proto_parser inet_proto_parsers[PRID_PER_PF];
 struct proto_parser pver_proto_parsers[PRID_PER_PF];
 struct proto_parser pp_proto_parsers[PRID_PER_PF] = {
 	{PRID_NONE, 1, &none_proto_parser_ops},
@@ -81,22 +81,71 @@ struct proto_parser pp_proto_parsers[PRID_PER_PF] = {
 };
 
 
+static struct proto_parser *proto_families[PRID_NUM_PF] = { 
+	&inet_proto_parsers[0], &net_proto_parsers[0], &dlt_proto_parsers[0],
+	&pver_proto_parsers[0], NULL, NULL, NULL, NULL,  /* 0 - 7 */
+	NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, /* 8-15 */
+	NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, /* 16-23 */
+	NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, /* 24-31 */
+
+	NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, /* 32-39 */
+	NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, /* 40-47 */
+	NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, /* 48-55 */
+	NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, /* 56-63 */
+
+	NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, /* 64-71 */
+	NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, /* 72-79 */
+	NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, /* 80-87 */
+	NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, /* 88-95 */
+
+	NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, /* 96-103 */
+	NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, /* 104-111 */
+	NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, /* 112-119 */
+	NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, /* 120-127 */
+
+	NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, /* 128-135 */
+	NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, /* 136-143 */
+	NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, /* 144-151 */
+	NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, /* 152-159 */
+
+	NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, /* 160-167 */
+	NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, /* 168-175 */
+	NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, /* 176-183 */
+	NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, /* 184-191 */
+
+	NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, /* 192-199 */
+	NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, /* 200-207 */
+	NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, /* 208-215 */
+	NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, /* 216-223 */
+
+	NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, /* 224-231 */
+	NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, /* 232-239 */
+	NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, /* 240-247 */
+	NULL, NULL, NULL, NULL, NULL, NULL, NULL, 
+	&pp_proto_parsers[0], /* 248-255 */
+};
+
 
 /* -- Protocol parser API -- */
 int pp_register(unsigned prid, struct proto_parser_ops *ppo)
 {
 	struct proto_parser *pp;
+	uint family = PRID_FAMILY(prid);
+	uint proto = PRID_PROTO(prid);
 
-	if ((ppo == NULL) || (ppo->parse == NULL) || (ppo->add == NULL)) {
+	if ((ppo == NULL) || (ppo->parse == NULL) || (ppo->add == NULL) ||
+	    (family == PRID_PF_RES)) {
 		errno = EINVAL;
 		return -1;
 	}
 
-	pp = _pp_lookup(prid);
-	if (!pp) {
-		errno = EINVAL;
-		return -1;
+	if (proto_families[family] == NULL) {
+		proto_families[family] =
+			calloc(sizeof(struct proto_parser), PRID_PER_PF);
+		if (proto_families[family] == NULL)
+			return -1;
 	}
+	pp = &proto_families[family][proto];
 
 	if (pp->valid) {
 		errno = EACCES;
@@ -113,23 +162,10 @@ int pp_register(unsigned prid, struct proto_parser_ops *ppo)
 
 static struct proto_parser *_pp_lookup(uint prid)
 {
-	switch (PRID_FAMILY(prid)) {
-	case PRID_PF_INET:
-		return &inet_proto_parsers[PRID_PROTO(prid)];
-	case PRID_PF_NET:
-		return &net_proto_parsers[PRID_PROTO(prid)];
-	case PRID_PF_DLT:
-		return &dlt_proto_parsers[PRID_PROTO(prid)];
-	case PRID_PF_PVER:
-		return &pver_proto_parsers[PRID_PROTO(prid)];
-	case PRID_PF_RES:
-		if (PRID_PROTO(prid) >= PRID_META_MIN_PROTO)
-			return NULL;
-		else
-			return &pp_proto_parsers[PRID_PROTO(prid)];
-	default:
+	if (proto_families[PRID_FAMILY(prid)] != NULL)
+		return &proto_families[PRID_FAMILY(prid)][PRID_PROTO(prid)];
+	else
 		return NULL;
-	}
 }
 
 

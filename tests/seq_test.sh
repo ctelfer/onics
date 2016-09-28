@@ -7,7 +7,7 @@ BDIR=../bin
 DATA=data/seq
 RET=0
 
-export PATH=$PATH:$BDIR
+export PATH=$BDIR:$PATH
 
 VERIFY="
 	int nseq = 1;

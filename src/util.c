@@ -415,15 +415,15 @@ static struct crbtree *p2emap = NULL;
 
 int e2p_map_add(ushort etype, uint prid)
 {
-	if ( e2pmap == NULL ) {
+	if (e2pmap == NULL) {
 		e2pmap = crb_new(&crb_std_attr_pkey, 1);
 		p2emap = crb_new(&crb_std_attr_pkey, 1);
 	}
 
-	if ( int2ptr(etype) == NULL || int2ptr(prid) == NULL )
+	if (int2ptr(etype) == NULL || int2ptr(prid) == NULL)
 		return -1;
 
-	if ( etypetoprid(etype) != PRID_NONE || pridtoetype(prid) != PRID_NONE )
+	if (etypetoprid(etype) != PRID_NONE || pridtoetype(prid) != 0)
 		return -1;
 
 	crb_put(e2pmap, int2ptr(etype), int2ptr(prid));
@@ -436,7 +436,7 @@ int e2p_map_add(ushort etype, uint prid)
 void e2p_map_del(ushort etype)
 {
 	void *r = crb_get(e2pmap, int2ptr(etype));
-	if ( r != NULL ) {
+	if (r != NULL) {
 		crb_del(e2pmap, int2ptr(etype));
 		crb_del(p2emap, r);
 	}
@@ -446,7 +446,8 @@ void e2p_map_del(ushort etype)
 static uint e2p_lkup(ushort etype)
 {
 	void *r;
-	if ( e2pmap != NULL && (r = crb_get(e2pmap, int2ptr(etype))) != NULL ) {
+	if (e2pmap != NULL && etype && 
+	    (r = crb_get(e2pmap, int2ptr(etype))) != NULL) {
 		return (uint)ptr2int(r);
 	} else {
 		return PRID_NONE;
@@ -457,7 +458,7 @@ static uint e2p_lkup(ushort etype)
 static ushort p2e_lkup(uint prid)
 {
 	void *r;
-	if ( p2emap != NULL && (r = crb_get(p2emap, int2ptr(prid))) != NULL ) {
+	if (p2emap != NULL && (r = crb_get(p2emap, int2ptr(prid))) != NULL) {
 		return (ushort)ptr2int(r);
 	} else {
 		return 0;
