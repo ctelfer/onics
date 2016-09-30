@@ -22,8 +22,36 @@
 #ifndef __prload_h
 #define __prload_h
 
-void register_extern_proto(void);
+#include "prid.h"
+#include "protoparse.h"
+#include "ns.h"
 
-void unregister_extern_proto(void);
+/* Called by application */
+
+void load_external_protocols(void);
+
+void unload_external_protocols(void);
+
+
+/*
+ * Called by protocol libraries to register/unregister protocols
+ *
+ * Library must have the following externally visible functions:
+ *
+ *   int load(void);
+ *   void unload(void);
+ * 
+ */
+
+struct oproto {
+	uint prid;
+	struct proto_parser_ops *ops;
+	struct ns_namespace *ns;
+	ushort etype;
+};
+
+int register_protocol(struct oproto *opr);
+
+void unregister_protocol(struct oproto *opr);
 
 #endif /* __prload_h */

@@ -3,7 +3,7 @@
 #include <string.h>
 #include <arpa/inet.h> /* ntohs */
 #include <errno.h>
-#include <prlib.h>
+#include <prload.h>
 #include <prid.h>
 #include <protoparse.h>
 #include <ns.h>
@@ -191,7 +191,6 @@ struct proto_parser_ops yproto_ops = {
 };
 
 
-
 #define ALEN(arr) (sizeof(arr) / sizeof(arr[0]))
 extern struct ns_elem *yproto_ns_elems[4];
 struct ns_namespace yproto_ns =
@@ -216,6 +215,20 @@ struct ns_elem *yproto_ns_elems[] = {
 };
 
 
-BEGIN_EXTERN_PRLIBS_DECL
-ETHPROTO("yproto", YPPRID, YPETYPE, yproto_ops, yproto_ns)
-END_EXTERN_PRLIBS_DECL
+static struct oproto _yproto = {
+	YPPRID, &yproto_ops, &yproto_ns, YPETYPE
+};
+
+
+/* Required functions */
+
+int load(void)
+{
+	return register_protocol(&_yproto);
+}
+
+
+void unload(void)
+{
+	unregister_protocol(&_yproto);
+}

@@ -256,7 +256,7 @@ int main(int argc, char *argv[])
 	ulong off;
 
 	register_std_proto();
-	register_extern_proto();
+	load_external_protocols();
 	optparse_reset(&g_oparser, argc, argv);
 	parse_options();
 	pkb_init_pools(1);

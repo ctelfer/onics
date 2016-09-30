@@ -555,7 +555,7 @@ int main(int argc, char *argv[])
 
 	pkb_init_pools(128);
 	register_std_proto();
-	register_extern_proto();
+	load_external_protocols();
 	parse_args(argc, argv);
 	init_tables();
 

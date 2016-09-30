@@ -96,9 +96,12 @@ ulong be32val(void *p, size_t len);
 /* modulo 2^(min(4, len) * 8) */
 void wrbe32(void *p, size_t len, ulong val);
 
-/* Add bi-direcional mapping between an ethtype and prid */
+/* Add bi-direcional mapping between an ethertype and prid */
 /* Returns -1 if the mapping already exists or if either parameter is 0 */
 int e2p_map_add(ushort etype, uint prid);
+
+/* Remove a bi-directional mapping between an ethertype and prid */
+void e2p_map_del(ushort etype);
 
 /* Returns the associated PRID for a given ethertype. */
 /* Returns PRID_NONE if there is no corresponding PRID. */

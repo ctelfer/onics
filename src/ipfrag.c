@@ -466,7 +466,7 @@ int main(int argc, char *argv[])
 
 	pkb_init_pools(32);
 	register_std_proto();
-	register_extern_proto();
+	load_external_protocols();
 	parse_args(argc, argv);
 
 	while ((rv = pkb_file_read_a(&p, infile, NULL, NULL)) > 0) {

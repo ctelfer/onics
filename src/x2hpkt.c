@@ -591,7 +591,7 @@ int main(int argc, char *argv[])
 	parse_options();
 
 	register_std_proto();
-	register_extern_proto();
+	load_external_protocols();
 
 	init_fields();
 

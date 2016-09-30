@@ -145,7 +145,7 @@ int main(int argc, char *argv[])
 	parse_options(argc, argv);
 
 	register_std_proto();
-	register_extern_proto();
+	load_external_protocols();
 	pkb_init_pools(1);
 
 	if ((pf = fopen(progname, "r")) == NULL)

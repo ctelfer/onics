@@ -1613,7 +1613,7 @@ int main(int argc, char *argv[])
 	hdiff_init(&Hdiff);
 	file_emitter_init(&fe, stdout);
 	register_std_proto();
-	register_extern_proto();
+	load_external_protocols();
 	pkb_init_pools(128);
 
 	open_file(filename1, &fi1);

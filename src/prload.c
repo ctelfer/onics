@@ -22,8 +22,6 @@
 
 #include "onics_config.h"
 
-#if ONICS_DLSYM_SUPPORT
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <dlfcn.h>
@@ -37,72 +35,88 @@
 #include "prid.h"
 #include "protoparse.h"
 #include "ns.h"
-#include "prlib.h"
+#include "prload.h"
 #include "util.h"
+
+int register_protocol(struct oproto *opr)
+{
+	if (opr->ops == NULL || opr->ns == NULL)
+		return -1;
+	if (pp_register(opr->prid, opr->ops) < 0)
+		return -1;
+	if (ns_add_elem(NULL, (struct ns_elem *)opr->ns) < 0) {
+		pp_unregister(opr->prid);
+		return -1;
+	}
+	if (opr->etype != 0) {
+		if (e2p_map_add(opr->etype, opr->prid) < 0) {
+			ns_rem_elem((struct ns_elem *)opr->ns);
+			pp_unregister(opr->prid);
+			return -1;
+		}
+	}
+	return 0;
+}
+
+
+void unregister_protocol(struct oproto *opr)
+{
+	if (opr->etype != 0)
+		e2p_map_del(opr->etype);
+	ns_rem_elem((struct ns_elem *)opr->ns);
+	pp_unregister(opr->prid);
+}
+
+
+#if ONICS_DLSYM_SUPPORT
 
 #define ONICS_PROTO_DIR ONICS_INSTALL_PREFIX "/lib/onics/protocols"
 
-static struct clist *prliblist = NULL;
-static struct clist *dynliblist = NULL;
+
+struct oproto_library {
+	const char *path;
+	void *handle;
+	int (*load)(void);
+	void (*unload)(void);
+};
 
 
-static const char *libname(struct prlib *lib)
-{
-	return (lib->name == NULL) ? "Unknown" : lib->name;
-}
-
-
-static void register_proto(struct prlib *lib, const char *path)
-{
-	int rv;
-	if (lib->name == NULL || lib->pp_ops == NULL || lib->ns == NULL)
-		err("Error parsing %s protocol in library %s\n",
-		    libname(lib), path);
-	rv = pp_register(lib->prid, lib->pp_ops);
-	if (rv < 0)
-		errsys("Could not register %s in %s to prid %u: ",
-		       libname(lib), path, lib->prid);
-	rv = ns_add_elem(NULL, (struct ns_elem *)lib->ns);
-	if (rv < 0)
-		err("%s in %s has a name conflict\n", libname(lib), path);
-	if (lib->etype != 0) {
-		rv = e2p_map_add(lib->etype, lib->prid);
-		if (rv < 0)
-			err("%s in %s can't map PRID %u to ethertype 0x%04x\n",
-			    libname(lib), path, lib->prid, lib->etype);
-	}
-	cl_push(prliblist, lib);
-}
+static struct clist *oprliblist = NULL;
 
 
 static void load_prlib(const char *path)
 {
-	void *dlh;
-	struct prlib *lib;
+	struct oproto_library *lib;
 
-	if (prliblist == NULL)
-		prliblist = cl_new(NULL, 1);
-	if (dynliblist == NULL)
-		dynliblist = cl_new(NULL, 1);
+	abort_unless(path != NULL);
 
-	dlh = dlopen(path, RTLD_LAZY);
-	if (dlh == NULL)
+	if (oprliblist == NULL)
+		oprliblist = cl_new(NULL, 1);
+
+	lib = ecalloc(sizeof(*lib), 1);
+
+	lib->path = path;
+
+	lib->handle = dlopen(path, RTLD_LAZY);
+	if (lib->handle == NULL)
 		err("%s\n", dlerror());
 
-	lib = dlsym(dlh, "_prlibs");
-	if (lib == NULL)
+	lib->load = dlsym(lib->handle, "load");
+	if (lib->load == NULL)
 		err("%s\n", dlerror());
 
-	while (lib->prid != PRID_NONE) {
-		register_proto(lib, path);
-		++lib;
-	}
+	lib->unload = dlsym(lib->handle, "unload");
+	if (lib->unload == NULL)
+		err("%s\n", dlerror());
 
-	cl_push(dynliblist, dlh);
+	if ((*lib->load)() < 0)
+		errsys("Error loading %s: ");
+
+	cl_push(oprliblist, lib);
 }
 
 
-void register_extern_proto()
+void load_external_protocols()
 {
 	DIR *dir;
 	struct dirent *ent;
@@ -116,34 +130,31 @@ void register_extern_proto()
 			continue;
 		path = str_cat_a(ONICS_PROTO_DIR"/", ent->d_name);
 		load_prlib(path);
-		free(path);
 	}
 	closedir(dir);
 }
 
 
-void unregister_extern_proto()
+void unload_external_protocols()
 {
-	struct prlib *lib;
-	void *dlh;
-	if (prliblist == NULL)
+	struct oproto_library *lib;
+	if (oprliblist == NULL)
 		return;
-	while ((lib = cl_pop(prliblist)) != NULL) {
-		pp_unregister(lib->prid);
-		ns_rem_elem((struct ns_elem *)lib->ns);
+	while ((lib = cl_pop(oprliblist)) != NULL) {
+		(*lib->unload)();
+		dlclose(lib->handle);
+		free(lib);
 	}
-	while ((dlh = cl_pop(dynliblist)) != NULL)
-		dlclose(dlh);
 }
 
 
 #else /* ONICS_DLSYM_SUPPORT */
 
-void register_extern_proto()
+void load_external_protocols()
 {
 }
 
-void unregister_extern_proto()
+void unload_external_protocols()
 {
 }
 
