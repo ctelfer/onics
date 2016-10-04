@@ -40,6 +40,7 @@ QUICK START
 
  3) Change to the onics directory and type:
 
+    ./configure
     make
     make test
 
@@ -265,6 +266,31 @@ DIRECTORIES
  * src/ - source code for all binaries
  * tests/ - contains various unit tests for the tools
 
+
+ADVANCED BUILDING
+=================
+
+The configure script has a few options that you can pass it.  These
+include:
+
+  --debug       Build using debug flags.  Useful if you want to run
+                under GDB for example.
+
+  --dlsym       Build so that the ONICS tools will search
+                $INSTALL_PREFIX/lib/onics/protocols for protocol
+                libraries to load dynamically at runtime.
+
+  --no-dlsym    Ensure that the tools will NOT be compiled with
+                dynamic protocol loading as per (--dlsym).  This
+                is the default.
+
+  --catlib=/path/to/catlib
+                Provide the path to the catlib root directory
+                explicitly.
+
+When running 'make', the Makefiles will use the environment or make
+variable 'INSTALL_PREFIX' for the root of the tree where ONICS files
+will go when installed in the system.  This defaults to /usr/local.
 
 
 COMPONENTS

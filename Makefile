@@ -2,36 +2,39 @@
 all: normal
 
 normal:
-	(INSTALL_PREFIX=$${INSTALL_PREFIX:-/usr/local} ; \
-	cd src && ([ -f makefile ] || ./configure $(CFGOPTS)) && make && \
-	cd ../lib && make && \
-	cd ../doc && make )
-
-debug:
-	(INSTALL_PREFIX=$${INSTALL_PREFIX:-/usr/local} ; \
-	cd src && ./configure --debug && make && \
-	cd ../lib && make && \
-	cd ../doc && make )
+	@(INSTALL_PREFIX=$${INSTALL_PREFIX:-/usr/local} ; \
+	( [ -f src/makefile ] || \
+	  (echo "Run ./configure first" >&2 && exit 1) ) &&\
+	echo "Building binaries..." && make -C src && \
+	echo "Building libraries ..." && make -C lib && \
+	echo "Building documentation..." && make -C doc && \
+	echo "Done" )
 
 test: 
-	cd tests && make
+	make -C tests 
 
 install:
 	(INSTALL_PREFIX=$${INSTALL_PREFIX:-/usr/local} ; \
-	cd src && make install && \
-	cd ../lib && make install && \
-	cd ../scripts && make install && \
-	cd ../doc && make install )
+	make -C src install &&\
+	make -C lib install &&\
+	make -C scripts install &&\
+	make -C doc install)
 
 uninstall:
 	(INSTALL_PREFIX=$${INSTALL_PREFIX:-/usr/local} ; \
-	cd src && make uninstall && \
-	cd ../lib && make uninstall && \
-	cd ../scripts && make uninstall && \
-	cd ../doc && make uninstall )
+	make -C src uninstall &&\
+	make -C lib uninstall &&\
+	make -C scripts uninstall &&\
+	make -C doc uninstall)
 
 clean:
-	cd src && make veryclean
-	cd lib && make clean
-	cd doc && make clean
-	cd tests && make clean
+	make -C src clean
+	make -C lib clean
+	make -C doc clean
+	make -C tests clean
+
+veryclean:
+	make -C src veryclean
+	make -C lib clean
+	make -C doc clean
+	make -C tests clean

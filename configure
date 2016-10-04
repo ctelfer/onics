@@ -59,9 +59,9 @@ done
 
 if [ "$CATLIB_SET" = "n" ] ; then
 	if [ -d ../catlib ] ; then
-		CATLIB_ROOT=../catlib
-	elif [ -d ../../catlib ] ; then
 		CATLIB_ROOT=../../catlib
+	elif [ -d ./catlib ] ; then
+		CATLIB_ROOT=../catlib
 	else
 		echo Can not find catlib!
 		usage
@@ -77,9 +77,11 @@ fi
 #	fi
 #fi
 
+# All remaining configurations are under src/
+set -e
+cd src
 
 rm -f .has_pcap
-
 
 if uname -a 2>/dev/null | grep -i linux > /dev/null 2>&1
 then
