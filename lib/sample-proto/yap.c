@@ -1,29 +1,58 @@
+/*
+ * This is a sample protocol parsing dynamic library that parses the
+ * mythical protocol YAP (Yet Another Protocol).  It is an L2 encapsulating
+ * protocol with a "checksum" and "length" field.  It generally comes between
+ * an Ethernet header and an IP/IPv6 header.  (although it can go between
+ * any two headers with valid ethertypes).
+ *
+ * The header is 8 bytes long and like this:
+ *
+ *  31         16 15          0
+ * +-------------+-------------+
+ * |    Tag      |   Length    |
+ * +-------------+-------------+
+ * |   Etype     |  Checksum   |
+ * +-------------+-------------+
+ *
+ * The tag is an arbitrary 16 bit value.
+ * The length is the length of the payload that follows.
+ * The etype is the Ethernet protocol type of the header that follows.
+ * The checksum is an XOR of all the other three fields.
+ * The protocol has the mythical Ethertype of 0x9999
+ *
+ * The purpose of this is just to serve as a demonstration of the basics of
+ * how to create an ONICS protocol parser and compile it for dynamic inclusion
+ * in the ONICS tool suite.
+ */
 #include <stdlib.h> /* malloc/free */
-#include <stdint.h>
-#include <string.h>
+#include <stdint.h> /* uint*_t */
+#include <string.h> /* memset/memcpy */
 #include <arpa/inet.h> /* ntohs */
-#include <errno.h>
+#include <errno.h>  /* errno, E* */
+
+/* ONICS headers you need.  Do NOT compile in the sources. */
+/* Just use the headers for types and prototypes. */
 #include <prload.h>
 #include <prid.h>
 #include <protoparse.h>
 #include <ns.h>
 #include <util.h>
 
-/* Our new protocol header in this sample */
-struct yphdr {
+/* Our new protocol header */
+struct yaph {
 	uint16_t tag;	/* arbitrary */
 	uint16_t len;   /* length of payload */
 	uint16_t etype; /* ethertype of next header */
 	uint16_t csum;	/* xor of header bytes */
 };
-
-#define YPHLEN 8
+#define YAPHLEN 8
 
 /* This protocol is an L2 tunnel header, so it has an ethertype */
-#define YPETYPE 0x9999
+#define YAPETYPE 0x9999
 
 /* We select a PRID for our usage from the user-defined list. */
-#define YPPRID  PRID_BUILD(PRID_PF_USER_FIRST, 0)
+#define YAPPRID  PRID_BUILD(PRID_PF_USER_FIRST, 0)
+
 
 /* forward declarations */
 struct proto_parser_ops yap_ops;
@@ -35,32 +64,32 @@ struct prparse_ops yap_parse_ops;
  */
 static void yap_update(struct prparse *prp, byte_t *buf)
 {
-	struct yphdr *yph;
+	struct yaph *yh;
 	uint16_t len;
 
 	prp->error = 0;				/* reset error */
-	if (prp_totlen(prp) < YPHLEN) {		/* check for truncation */
+	if (prp_totlen(prp) < YAPHLEN) {	/* check for truncation */
 		prp->error |= PRP_ERR_TOOSMALL;
 		/* if there's no full header, consider all fields invalid */
 		return;
 	}
 
 	/* Set the payload offset based on the parsed header length */
-	prp_poff(prp) = prp_soff(prp) + YPHLEN;
+	prp_poff(prp) = prp_soff(prp) + YAPHLEN;
 
 	/* There is no trailer: set the trailer offset to the end of the PDU */
 	prp_toff(prp) = prp_eoff(prp);
 
 	/* Get a pointer to the YP header */
-	yph = prp_header(prp, buf, struct yphdr);
+	yh = prp_header(prp, buf, struct yaph);
 
 	/* perform the "checksum" check */
 	/* our checksum is just a simple xor here */
-	if (yph->tag ^ yph->len ^ yph->etype ^ yph->csum)
+	if (yh->tag ^ yh->len ^ yh->etype ^ yh->csum)
 		prp->error |= PRP_ERR_CKSUM;
 
 	/* Check the length field of the header */
-	len = ntohs(yph->len);
+	len = ntohs(yh->len);
 	if (len != prp_plen(prp)) {
 		if (prp_plen(prp) < len)
 			prp->error |= PRP_ERR_TRUNC;
@@ -76,7 +105,7 @@ static void yap_update(struct prparse *prp, byte_t *buf)
  */
 static int yap_fixnxt(struct prparse *prp, byte_t *buf)
 {
-	struct yphdr *yph = prp_header(prp, buf, struct yphdr);
+	struct yaph *yh = prp_header(prp, buf, struct yaph);
 	struct prparse *next;
 
 	/* Find the next PDU after ours */
@@ -84,10 +113,10 @@ static int yap_fixnxt(struct prparse *prp, byte_t *buf)
 	if (next != NULL) {
 		/* if it exists, then set this header's ethertype */
 		/* based on the PRID mapping of the PDU. */
-		yph->etype = htons(pridtoetype(next->prid));
+		yh->etype = htons(pridtoetype(next->prid));
 
 		/* if the etype == 0, then we couldn't find the mapping */
-		if (yph->etype == 0)
+		if (yh->etype == 0)
 			return -1;
 	}
 	return 0;
@@ -117,8 +146,8 @@ static struct prparse *yap_copy(struct prparse *oprp)
  */
 int yap_fixlen(struct prparse *prp, byte_t *buf)
 {
-	struct yphdr *yph = prp_header(prp, buf, struct yphdr);
-	yph->len = htons(prp_plen(prp));
+	struct yaph *yh = prp_header(prp, buf, struct yaph);
+	yh->len = htons(prp_plen(prp));
 	return 0;
 }
 
@@ -128,8 +157,8 @@ int yap_fixlen(struct prparse *prp, byte_t *buf)
  */
 int yap_fixcksum(struct prparse *prp, byte_t *buf)
 {
-	struct yphdr *yph = prp_header(prp, buf, struct yphdr);
-	yph->csum = yph->tag ^ yph->len ^ yph->etype;
+	struct yaph *yh = prp_header(prp, buf, struct yaph);
+	yh->csum = yh->tag ^ yh->len ^ yh->etype;
 	return 0;
 }
 
@@ -166,7 +195,7 @@ static struct prparse *newypprp(struct prparse *reg, ulong off, ulong maxlen)
 	prp = calloc(sizeof(struct prparse), 1);
 	if (prp == NULL)
 		return NULL;
-	prp_init_parse(prp, YPPRID, off, 0, maxlen, 0, &yap_parse_ops,
+	prp_init_parse(prp, YAPPRID, off, 0, maxlen, 0, &yap_parse_ops,
 		       reg, 0);
 	return prp;
 }
@@ -211,7 +240,7 @@ static int yap_nxtcld(struct prparse *parent, byte_t *buf,
 			 struct prparse *cld, uint *prid, ulong *off,
 			 ulong *maxlen)
 {
-	struct yphdr *yph = (struct yphdr *)(buf + prp_soff(parent));
+	struct yaph *yh = (struct yaph *)(buf + prp_soff(parent));
 
 	/* only one embedded packet per yap PDU */
 	/* if called a second time, return NULL */
@@ -220,7 +249,7 @@ static int yap_nxtcld(struct prparse *parent, byte_t *buf,
 
 	/* Determine the PRID of the embedded packet by ethertype. */
 	/* If we can't, report no child protocol */
-	*prid = etypetoprid(ntohs(yph->etype));
+	*prid = etypetoprid(ntohs(yh->etype));
 	if (*prid == 0)
 		return 0;
 	/* Payload offset will be start of inner PDU */
@@ -246,7 +275,7 @@ static int yap_nxtcld(struct prparse *parent, byte_t *buf,
  */
 static int yap_getspec(struct prparse *prp, int enclose, struct prpspec *ps)
 {
-	return prpspec_init(ps, prp, YPPRID, YPHLEN, 0, enclose);
+	return prpspec_init(ps, prp, YAPPRID, YAPHLEN, 0, enclose);
 }
 
 
@@ -264,10 +293,10 @@ static int yap_add(struct prparse *reg, byte_t *buf, struct prpspec *ps,
 {
 	struct prparse *prp;
 	struct prparse *cld;
-	struct yphdr *yph;
+	struct yaph *yh;
 
 	/* If the spec doesn't give enough headroom, it's an error */
-	if (ps->hlen != YPHLEN) {
+	if (ps->hlen != YAPHLEN) {
 		errno = EINVAL;
 		return -1;
 	}
@@ -285,21 +314,21 @@ static int yap_add(struct prparse *reg, byte_t *buf, struct prpspec *ps,
 
 	if (buf) {
 		/* fill in the default yp header fields */
-		yph = prp_header(prp, buf, struct yphdr);
-		memset(yph, 0, sizeof(yph));
-		yph->tag = htons(0xdead);
-		yph->len = htons(prp_plen(prp));
+		yh = prp_header(prp, buf, struct yaph);
+		memset(yh, 0, YAPHLEN);
+		yh->tag = htons(0xdead);
+		yh->len = htons(prp_plen(prp));
 
 		/* If this PDU encloses another, then try to set the */
 		/* ethertype field in the packet */
 		cld = prp_next_in_region(prp, prp);
 		if (cld != NULL)
-			yph->etype = htons(pridtoetype(cld->prid));
+			yh->etype = htons(pridtoetype(cld->prid));
 		else
-			yph->etype = 0;
+			yh->etype = 0;
 
 		/* set the checksum */
-		yph->csum = yph->tag ^ yph->len ^ yph->etype;
+		yh->csum = yh->tag ^ yh->len ^ yh->etype;
 	}
 
 	return 0;
@@ -349,8 +378,8 @@ extern struct ns_elem *yap_ns_elems[4];
  *   - number of sub-elements
  */
 struct ns_namespace yap_ns =
-	NS_NAMESPACE_I("yap", NULL, YPPRID, PRID_PCLASS_TUNNEL,
-		       "YetAnotherProto", NULL, yap_ns_elems,
+	NS_NAMESPACE_I("yap", NULL, YAPPRID, PRID_PCLASS_TUNNEL,
+		       "Yet Another Protocol", NULL, yap_ns_elems,
 		       ALEN(yap_ns_elems));
 
 /*
@@ -365,14 +394,14 @@ struct ns_namespace yap_ns =
  *    ns_fmt_hex and ns_fmt_dec provide hex and decimal printing
  */
 struct ns_pktfld yap_ns_tag =
-	NS_BYTEFIELD_I("tag", &yap_ns, YPPRID, 0, 2, "Tag", &ns_fmt_hex);
+	NS_BYTEFIELD_I("tag", &yap_ns, YAPPRID, 0, 2, "Tag", &ns_fmt_hex);
 struct ns_pktfld yap_ns_len =
-	NS_BYTEFIELD_I("len", &yap_ns, YPPRID, 2, 2, "Length", &ns_fmt_dec);
+	NS_BYTEFIELD_I("len", &yap_ns, YAPPRID, 2, 2, "Length", &ns_fmt_dec);
 struct ns_pktfld yap_ns_etype =
-	NS_BYTEFIELD_I("etype", &yap_ns, YPPRID, 4, 2, "Ethertype",
+	NS_BYTEFIELD_I("etype", &yap_ns, YAPPRID, 4, 2, "Ethertype",
 		       &ns_fmt_hex);
 struct ns_pktfld yap_ns_csum =
-	NS_BYTEFIELD_I("csum", &yap_ns, YPPRID, 6, 2, "Checksum",
+	NS_BYTEFIELD_I("csum", &yap_ns, YAPPRID, 6, 2, "Checksum",
 		       &ns_fmt_hex);
 
 /* Now the actual definition of the sub-element array */
@@ -386,7 +415,7 @@ struct ns_elem *yap_ns_elems[] = {
 
 /* This function is used as the parameter to the register_protocol() function.*/
 static struct oproto _yap = {
-	YPPRID, &yap_ops, &yap_ns, YPETYPE
+	YAPPRID, &yap_ops, &yap_ns, YAPETYPE
 };
 
 
