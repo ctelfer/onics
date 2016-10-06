@@ -1,4 +1,4 @@
-# Makefile for yproto protocol library
+# Makefile for yap protocol library
 CC=gcc
 ONICS_PATH=../..
 CATLIB_PATH=../../../catlib
@@ -9,19 +9,19 @@ LIBS=
 DEFS=
 
 # common objects for packets
-OBJS=yproto.o
-SRCS=yproto.c
-ALL_BINARIES=yproto.so
+OBJS=yap.o
+SRCS=yap.c
+ALL_BINARIES=yap.so
 
-TARGETS=yproto.so
+TARGETS=yap.so
 
 all: ${TARGETS} ${OBJS}
 
-yproto.o: yproto.c
-	$(CC) -fPIC ${OPTS} ${INCS} ${DEFS} -c yproto.c
+yap.o: yap.c
+	$(CC) -fPIC ${OPTS} ${INCS} ${DEFS} -c yap.c
 
-yproto.so: yproto.o
-	$(CC) -shared -fPIC -o yproto.so yproto.o 
+yap.so: yap.o
+	$(CC) -shared -fPIC -o yap.so yap.o 
 
 clean:
 	rm -f ${TARGETS} ${OBJS}
