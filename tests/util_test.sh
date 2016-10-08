@@ -95,6 +95,17 @@ t_ipfrag_combined() {
 		$BIN/ipfrag -46 -m 1280 -i 10
 }
 
+t_ipreasm_ipv4() {
+	$BIN/ipreasm -4 $DATA/tcp-reasm.xpkt 
+}
+
+t_ipreasm_ipv6() {
+	$BIN/ipreasm -6 $DATA/tcp6-reasm.xpkt 
+}
+
+t_ipreasm_combined() {
+	cat $DATA/tcp-reasm.xpkt $DATA/tcp6-reasm.xpkt | $BIN/ipreasm -46
+}
 
 
 run_test t_h2xpkt_immed "h2xpkt -- basic from immediate data"
@@ -111,5 +122,8 @@ run_test t_psort_udp_2keys "psort -- sort by src port then dst port"
 run_test t_ipfrag_ipv4 "ipfrag -- IPv4, 576-byte MTU, set IP ID 10, set DF"
 run_test t_ipfrag_ipv6 "ipfrag -- IPv6, 1280-byte MTU, set ID 10"
 run_test t_ipfrag_combined "ipfrag -- IPv4+IPv6, 1280-byte MTU, set ID 10"
+run_test t_ipreasm_ipv4 "ipreasm -- IPv4 basic reassembly"
+run_test t_ipreasm_ipv6 "ipreasm -- IPv6 basic reassembly"
+run_test t_ipreasm_combined "ipreasm -- combined IPv4+IPv6 reassembly"
 
 exit $RET

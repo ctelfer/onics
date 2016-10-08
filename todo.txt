@@ -59,9 +59,6 @@ psort:
 psplit:
  + unit tests
 
-ipreasm:
- + unit tests
-
 scripts:
  + unit tests
 
