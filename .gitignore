@@ -9,6 +9,7 @@ src/pml.h
 src/pml.c
 src/pml.out
 src/pml_tok_strs.c
+src/makefile
 
 doc/enum_proto
 doc/onics_proto.7

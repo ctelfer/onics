@@ -52,14 +52,11 @@ pdiff:
  * pml edit script output format
 
 psort:
- + unit tests
  ? subfields of fields
  ? header fields
+ ? separate directions for each field
 
 psplit:
- + unit tests
-
-ipfrag:
  + unit tests
 
 ipreasm:
@@ -77,5 +74,5 @@ nft:
  * adaptive timeouts based on state tracking
 
 viper: -- VIsual Packet EditoR
- + implement
+ > implement
 

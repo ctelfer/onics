@@ -171,7 +171,9 @@ static int frag_action(struct pktbuf *p)
 	prp = p->layers[PKB_LAYER_NET];
 	if (prp == NULL) {
 		return PASS;
-	} else if (prp->prid == PRID_IPV4 && frag4) {
+	} else if (prp->prid == PRID_IPV4) {
+		if (!frag4)
+			return PASS;
 		if (prp->error != 0 || prp_totlen(prp) <= mtu)
 			return PASS;
 		ip = prp_header(prp, p->buf, struct ipv4h);
@@ -179,7 +181,9 @@ static int frag_action(struct pktbuf *p)
 			return dfact;
 		else
 			return FRAG;
-	} else if (prp->prid == PRID_IPV6 && frag6) {
+	} else if (prp->prid == PRID_IPV6) {
+		if (!frag6)
+			return PASS;
 		/* IPv6 always has a "Don't fragment" bit implied. */
 		/* so if frag6 is non-zero we assume we should fragment. */
 		if (prp->error != 0 || prp_totlen(prp) <= mtu)
@@ -190,7 +194,7 @@ static int frag_action(struct pktbuf *p)
 		else
 			return FRAG;
 	} else {
-		return 0;
+		return PASS;
 	}
 }
 

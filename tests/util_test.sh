@@ -70,14 +70,46 @@ t_h2xpkt_tcpdump() {
 		$BIN/h2xpkt -l eth -
 }
 
-run_test t_h2xpkt_immed "Basic h2xpkt test"
-run_test t_h2xpkt_immed_nox "Basic h2xpkt test w/o xpkt header"
+t_psort_basic() {
+	$BIN/psort $DATA/psort_tcp.xpkt 
+}
 
+t_psort_tcpseq_rev() {
+	$BIN/psort -r -k tcp.seqn $DATA/psort_tcp.xpkt 
+}
+
+t_psort_udp_2keys() {
+	$BIN/psort -k udp.sport -k udp.dport $DATA/psort_udp.xpkt 
+}
+
+t_ipfrag_ipv4() {
+	$BIN/ipfrag -m 576 -i 10 -d $DATA/tcp-fragtest.xpkt 
+}
+
+t_ipfrag_ipv6() {
+	$BIN/ipfrag -6 -m 1280 -i 10 $DATA/tcp6-fragtest.xpkt 
+}
+
+t_ipfrag_combined() {
+	cat $DATA/tcp-fragtest.xpkt $DATA/tcp6-fragtest.xpkt | \
+		$BIN/ipfrag -46 -m 1280 -i 10
+}
+
+
+
+run_test t_h2xpkt_immed "h2xpkt -- basic from immediate data"
+run_test t_h2xpkt_immed_nox "h2xpkt -- w/o xpkt header"
 if which tcpdump > /dev/null 2>&1 
 then
-	run_test t_h2xpkt_tcpdump "tcpdump to xpkt via h2xpkt"
+	run_test t_h2xpkt_tcpdump "h2xpkt -- tcpdump to xpkt via h2xpkt"
 else
 	echo Skipping tcpdump tests since I can\'t find tcpdump
 fi
+run_test t_psort_basic "psort -- sort by timestamp"
+run_test t_psort_tcpseq_rev "psort -- reverse sort by TCP seqn"
+run_test t_psort_udp_2keys "psort -- sort by src port then dst port"
+run_test t_ipfrag_ipv4 "ipfrag -- IPv4, 576-byte MTU, set IP ID 10, set DF"
+run_test t_ipfrag_ipv6 "ipfrag -- IPv6, 1280-byte MTU, set ID 10"
+run_test t_ipfrag_combined "ipfrag -- IPv4+IPv6, 1280-byte MTU, set ID 10"
 
 exit $RET
