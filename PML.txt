@@ -363,8 +363,8 @@ value of type 'str' or 'sref'.)
 		   substring restricts possible types for this locator.)
 
 PROTOCOL ID:
-  @@name
-  @@name.name2	-- could refer to: protocol name
+  @name
+  @name.name2	-- could refer to: protocol name
 
 
 
@@ -380,8 +380,7 @@ declaration is the very first direct access form:  a name with no
 
 The type of a locator expression is the type of the value it refers to
 with one exception.  A locator that refers to a 'sref' variable has type
-'str' (unless modified with the unary & operator in which case the
-expression has type 'sref').
+'str'.
 
 A direct access locator that begins with $(pnum) or $(pnum, idx) refers
 can refer to packets other than packet 0 in the working set (see below).
@@ -1005,7 +1004,9 @@ RANDOM NOTES
     - string reference		- sref (declared as 'str' with no [])
    
   Expressions that can return sref:
-    - a location address 
+    - a string variable (possibly sliced)
+    - a string refernce variable (also possibly sliced)
+    - a non-scalar packet field
     - a function returning a sref
    
 
@@ -1029,8 +1030,6 @@ RANDOM NOTES
      * can assign scalars to byte strings (overwrite up to 8 bytes)
      * can assign scalars to srefs (overrite up to 8 bytes)
      * can assign byte strings to string refs (string copy)
-     * NOTE:
-       + sref-to-sref implies rhs uses the '&' operator to get a location address
    
 
   Value types:
@@ -1043,9 +1042,9 @@ RANDOM NOTES
     			   presence of the header
 			   byte string when offset length (protocol header)
     - packet field	-> if bitfields then scalar otherwise byte string
-    - operator result   -> sref for '&', scalar for all others
+    - operator result   -> scalar
     - inline macro return -> scalar
-    - function return   -> scalar, sref | void
+    - function return   -> scalar, sref, void
 
 
   

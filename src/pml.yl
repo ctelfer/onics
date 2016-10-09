@@ -107,10 +107,6 @@ int Count;
    $(p)a.b.c.d[o,l]	-- Bytes from packet p, field a.b.c.d, offset o length l
    $(p,i)a.b.c.d[o,l]	-- Bytes from packet p, i'th 'a' header, field a.b.c.d, 
 			   offset o length l
-   &a			-- String reference for a field a
-   &$(p,i)a.b.c.d[o,l]	-- String reference for bytes at offset o with length l of
-			   the i'th 'a' header in packet p field a.b.c.d
-
 
   Intrinsic Functions:
    - Drop

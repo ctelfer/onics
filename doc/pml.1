@@ -616,8 +616,8 @@ error and abort the program.
 .P
 .SS "Protocol ID"
 .nf
-  @@name
-  @@name.name2	-- could refer to: protocol name
+  @name
+  @name.name2	-- could refer to: protocol name
 .fi
 .P
 .P
@@ -1145,7 +1145,7 @@ Then, the following are constant expression:
 	somefunc(double(3), somefunc(8 * 4 / 2, A))
 .fi
 .P
-The following are not constant expressoins:
+The following are not constant expressions:
 .P
 .nf
 	X
@@ -1191,9 +1191,9 @@ Compile a PML program and run it using nvmpf:
 Generate a TCP packet:
 .nf
 
-	pml -e "str payload = "Hello World";
+	pml -e 'str payload[] = "Hello World";
 		BEGIN {
-                    pkt_new(0, str_len(&payload));
+                    pkt_new(0, str_len(payload));
                     pdu_insert(pkt, @tcp);
                     pdu_insert(pkt, @ip);
                     pdu_insert(pkt, @eth);
@@ -1201,7 +1201,7 @@ Generate a TCP packet:
                     fix_lens(0);
                     fix_csums(0);
 		    send;
-		}" > tcppacket.xpkt
+		}' > tcppacket.xpkt
 
 .fi
 Generate a TCP packet using standard library functions:
