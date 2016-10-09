@@ -1,10 +1,10 @@
 #!/bin/sh
 #
 # ONICS
-# Copyright 2014-2015
+# Copyright 2016
 # Christopher Adam Telfer
 #
-# pfind - Select packets from a packet file/stream.
+# pflt - find pakcets that only match the filter criteria
 #
 #
 #  This program is free software: you can redistribute it and/or modify
@@ -23,55 +23,16 @@
 
 IPATH=${IPATH:-}
 
-getrange() {
-	if echo $1 | grep '^[0-9][0-9]*$' > /dev/null 2>&1 
-	then
-		echo "N == $1"
-	else
-		echo "$*"
-	fi
-}
-
-
 usage() {
 	echo "usage: $0 PATTERN [INFILE [OUTFILE]]" >&2
-	echo "       $0 <lo> -to <hi> [INFILE [OUTFILE]]" >&2
 	exit 1
 
 }
 
-if [ $# -lt 1 -o $# -gt 5 -o "$1" = "-h" ]; then
+if [ $# -lt 1 -o "$1" = "-h" ]; then
 	usage
 fi
 
-
-if [ $# -lt 3 -o "$2" != "-to" ]
-then
-	if [ $# -eq 2 -a "$2" = "-to" ]; then
-		usage
-	fi
-	MATCH=`getrange $1`
-	shift
-	if [ "$2" = "-only" ] ; then shift ; fi
-	exec pml $IPATH -ie "
-		int N=0; 
-		{ N=N+1; } 
-		?- not ($MATCH) -? { drop; }
-	" $*
-else
-	LO=`getrange $1`
-	HI=`getrange $3`
-	shift
-	shift
-	shift
-	exec pml $IPATH -ie "
-		int N = 0;
-		int allow = 0;
-
-		{ N = N + 1; }
-		?- $LO -? { allow = 1; }
-		?- allow -? { send_no_free 0; }
-		?- $HI -? { allow = 0; drop; }
-		{ drop; }
-	" $*
-fi
+MATCH=$1
+shift
+exec pml $IPATH -ie "?- not ($MATCH) -? { drop; }" $*

@@ -1,0 +1,45 @@
+.TH "pflt" 1 "October 2016" "ONICS 1.0"
+.SH NAME
+pflt - Filter out packets from an XPKT stream.
+.P
+.SH SYNOPSYS
+\fBpflt\fB \fIpattern\fP [\fIinfile\fP [\fIoutfile\fP]]
+.P
+.SH DESCRIPTION
+\fBpflt\fP is a thin wrapper script around pml(1) to make it simple
+to select a subset from a stream of XPKT formatted packets.  By default,
+\fBpflt\fP reads from standard input and writes to standard output.
+However, the user can override this by specifying \fIinfile\fP to read
+from and \fIoutfile\fP to write to.  The caller must specify a PML
+pattern to match packets on.  The \fBpflt\fP program allows only
+packets that match \fIpattern\fP to pass through to the output.
+.P
+.SH EXAMPLES
+.P
+Extract the IPv6 packets from a packet capture:
+.nf
+
+        pflt ip6 infile.xpkt outfile.xpkt
+
+.fi
+Extract the TCP SYN packets from a file:
+.nf
+
+        pflt "tcp and tcp.syn" infile.xpkt outfile.xpkt
+
+.fi
+Dump the ICMP TTL Exceeded packets seen on eth0 to x2hpkt:
+.nf
+
+        pktin eth0 | pflt "icmp and icmp.type == 11" | x2hpkt
+
+.fi
+.P
+.SH AVAILABILITY
+This utility should be available on all supported ONICS platforms.
+.P
+.SH AUTHOR
+Christopher A. Telfer <ctelfer@gmail.com>
+.P
+.SH "SEE ALSO"
+pml(1), pcount(1), pxtr(1)

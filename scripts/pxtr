@@ -1,0 +1,93 @@
+#!/bin/sh
+#
+# ONICS
+# Copyright 2014-2015
+# Christopher Adam Telfer
+#
+# pxtr - Extract a range of packets from a file/stream.
+#
+#
+#  This program is free software: you can redistribute it and/or modify
+#  it under the terms of the GNU General Public License as published by
+#  the Free Software Foundation, either version 3 of the License, or
+#  (at your option) any later version.
+#
+#  This program is distributed in the hope that it will be useful,
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#  GNU General Public License for more details.
+#
+#  You should have received a copy of the GNU General Public License
+#  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#
+
+IPATH=${IPATH:-}
+
+getrange() {
+	if echo $1 | grep -q '^[0-9][0-9]*$'
+	then
+		echo "N == $1"
+	elif echo "$1" | grep -q '^[ 	]*ANY[ 	]*$'  ; then
+		echo "1"
+	elif echo "$1" | grep -q '^[ 	]*NONE[	]*$'  ; then
+		echo "0"
+	elif echo "$1" | grep -q '^[ 	]*{[^}]*}[ 	]*$' ; then
+		echo "$1" | sed -e 's/[{}]//g'
+	else
+		echo "Invalid expression '$1'" >&2
+		exit 1
+	fi
+}
+
+
+usage() {
+	echo "usage: $0 [-m] RANGE [INFILE [OUTFILE]]" >&2
+	echo "" >&2
+	echo "RANGE is either PATTERN or PATTERN,PATTERN" >&2
+	echo "PATTERN is one of" >&2
+	echo "    * a number (match that packet number)" >&2
+	echo "    * ANY (match any packet)" >&2
+	echo "    * NONE (match no packet)" >&2
+	echo "    * '{' PML_EXPR '}'" >&2
+	echo "PML_EXPR is a valid PML expression" >&2
+	exit 1
+
+}
+
+EACT='if (matched) { exit(0); }'
+if [ $# -gt 1 -a "$1" = "-m" ] ; then
+	EACT=""
+	shift
+fi
+
+if [ $# -lt 1 -o $# -gt 3 -o "$1" = "-h" ]; then
+	usage
+fi
+
+if echo $1 | grep -q '^[ 	]*{[^}]*}[ 	]*,' ; then
+	SPAT=`echo $1 | sed -e 's/}[ 	]*,.*$/}/'`
+	EPAT=`echo $1 | sed -e 's/^[ 	]*{[^}]*}[ 	]*,//'`
+	LO=`getrange "$SPAT"`
+	HI=`getrange "$EPAT"`
+elif echo $1 | grep -q '[a-zA-Z0-9 	]*,' ; then
+	SPAT=`echo $1 | sed -e 's/,.*$//'`
+	EPAT=`echo $1 | sed -e 's/^[^,]*,//'`
+	LO=`getrange "$SPAT"`
+	HI=`getrange "$EPAT"`
+else
+	LO=`getrange "$1"`
+	HI="$LO"
+fi
+
+shift
+exec pml $IPATH -ie "
+	int N = 0;
+	int allow = 0;
+	int matched = 0;
+
+	{ N = N + 1; }
+	?- $LO -? { allow = 1; matched = 1; }
+	?- allow -? { send_no_free 0; }
+	?- $HI -? { allow = 0; $EACT }
+	{ drop; }
+" $*

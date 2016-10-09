@@ -70,7 +70,7 @@ EXAMPLES
     pc2xpkt in.pcap out.xpkt
 
     # Extract the packets 3 through 10 from a packet stream
-    pfind 3 -to 10 file.xpkt 
+    pxtr 3,10 file.xpkt 
   
     # Read from an interface using libpcap and dump to an xpkt file
     pktin eth0 out.xpkt
@@ -207,15 +207,19 @@ work just about everywhere.
 
  * peseq - embed a sequence number into various fields in a packet stream
 
- * pfind - a program to select a subset of packets from a stream
+ * pflt - select packets from a stream that match a pattern
 
  * phead - extract the first N packets from a packet stream
 
  * ppop - pop the outermost protocol(s) from each packet in a packet stream
 
+ * preverse - reverse the packets in a stream
+
  * ptail - extract the last N packets from a packet stream
 
  * pxseq - extract a sequence number from embedded fields in a packet stream
+
+ * pxtr - extract a range of packets from a stream
 
  * tcpsess - generate a partial or complete TCP stream from data files
 

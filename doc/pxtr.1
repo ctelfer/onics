@@ -1,0 +1,75 @@
+.TH "pxtr" 1 "October 2016" "ONICS 1.0"
+.SH NAME
+pxtr - Extract packets in a range from a packet stream
+.P
+.SH SYNOPSYS
+\fBpxtr\fB [\fB-m\fP] \fIpattern\fP[,\fIpattern2\fP] 
+[\fIinfile\fP [\fIoutfile\fP]]
+.P
+.SH DESCRIPTION
+\fBpxtr\fP is a thin wrapper script around pml(1) to make it simple to
+extract a range of packets.  By default, \fBpxtr\fP reads from standard
+input and writes to standard output.  However, the user can override
+this by specifying \fIinfile\fP to read from and \fIoutfile\fP to write
+to.
+.P
+The caller must specify one or two packet patterns.  If the caller gives
+a single pattern, then \fBpxtr\fP will use the pattern for the upper and
+lower bound of the extraction range.  Otherwise, the first pattern
+specifies the start of the range of packets to extract and the second
+pattern specifies the end of the range.  (\fBpxtr\fP will include the
+packet matching the end of the range in the extraction.)  In order to
+specify two patterns, the caller must give one pattern followed by a
+commma (',') followed by the second pattern.  Two patterns must occur
+as a single argument to \fBpxtr\fP.  The best way to ensure this is to
+surround the two patterns with quotes.
+.P
+Each pattern must have one of the following forms:
+.IP "\fInum\fP"
+This matches the \fInum\fPth packet in the stream.
+.IP "\fBANY\fP"
+This matches any packet in the stream.
+.IP "\fBNONE\fP"
+This matches no packet in the stream.
+.IP "'{' \fIPML_expression\fP '}'"
+This matches whatever the PML expression specifies.
+.P
+\fBpxtr\fP can match multiple ranges in a single stream if the user
+specifies the \fB-m\fP option.  For example, if \fB-m\fP is given
+and the pattern argument is "{udp and udp.sport == 53},{ip6}",
+\fBpxtr\fP may select multiple ranges of packets each starting with a
+UDP packet destined to port 53 and ending with an IPv6 packet.  If no
+packet ever matches the second pattern in a two-pattern range,
+\fBpxtr\fP will continue extracing packets through to the end of the
+packet stream.
+.P
+.SH EXAMPLES
+.P
+Extract the 7th packet from a a file
+.nf
+
+        pxtr 7 infile.xpkt outfile.xpkt
+
+.fi
+Extract packets 3 to 25 from a packet capture:
+.nf
+
+        pxtr 3,25 infile.xpkt outfile.xpkt
+
+.fi
+Extract the packets between a TCP SYN packet and a TCP FIN packet:
+.nf
+
+        pxtr "{tcp and tcp.syn},{tcp and tcp.fin}" \\
+                infile.xpkt outfile.xpkt
+
+.fi
+.P
+.SH AVAILABILITY
+This utility should be available on all supported ONICS platforms.
+.P
+.SH AUTHOR
+Christopher A. Telfer <ctelfer@gmail.com>
+.P
+.SH "SEE ALSO"
+pml(1), pcount(1), pflt(1)
