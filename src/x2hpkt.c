@@ -603,6 +603,8 @@ int main(int argc, char *argv[])
 		dump_to_hex_packet(pkb);
 		pkb_free(pkb);
 	}
+	if (rv < 0)
+		errsys("Error reading packet %lu: ", g_pktnum + 1);
 
 	return 0;
 }
