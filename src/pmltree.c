@@ -1184,6 +1184,7 @@ void pmln_free(void *nodep)
 
 	case PMLTT_RULE: {
 		struct pml_rule *p = &node->rule;
+		symtab_destroy(&p->vars);
 		pmln_free(p->pattern);
 		pmln_free(p->stmts);
 	} break;

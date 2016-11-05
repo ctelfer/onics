@@ -68,6 +68,9 @@ struct pktbuf {
 /* initialize the packet buffer subsystem */
 void pkb_init_pools(uint num_expected);
 
+/* Release memory in packet buffer pools */
+void pkb_free_pools(void);
+
 /* Initializes a packet */
 void pkb_init(struct pktbuf *pkb, void *buf, ulong bsize,
 	      void *xbuf, ulong xbsize);

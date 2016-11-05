@@ -80,6 +80,16 @@ void pkb_init_pools(uint num_buf_expected)
 }
 
 
+void pkb_free_pools(void)
+{
+	int i;
+	pc_freeall(&pkb_buf_pool);
+	pc_freeall(&pkb_xpkt_pool);
+	for (i = 0; i < pkb_num_data_pools; ++i)
+		pc_freeall(&pkb_data_pools[i]);
+}
+
+
 void pkb_init(struct pktbuf *pkb, void *buf, ulong bsize, void *xbuf,
 	      ulong xbsize)
 {

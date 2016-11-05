@@ -1,6 +1,6 @@
 /*
  * ONICS
- * Copyright 2012-2015
+ * Copyright 2012-2016
  * Christopher Adam Telfer
  *
  * pml_main.c -- Main file for the PML programming language/utility.
@@ -295,8 +295,19 @@ void initvm(struct netvm *vm, ulong *stk, uint stksz,
 
 	if ((rv = nvmp_validate(vm, prog)) < 0)
 		err("Error validating program: %s\n", netvm_estr(rv));
+}
 
 
+void finivm(struct netvm *vm, struct netvm_std_coproc *cproc,
+	    struct netvm_program *prog)
+{
+	int i;
+	nvmp_clear(prog);
+	for (i = 0; i < NETVM_MAXMSEGS; ++i) {
+		free(vm->msegs[i].base);
+		vm->msegs[i].base = NULL;
+	}
+	fini_netvm_std_coproc(cproc);
 }
 
 
@@ -329,7 +340,6 @@ int main(int argc, char *argv[])
 			errsys("error opening output file '%s': ", ofname);
 		if (nvmp_write(&prog, outfile) < 0)
 			errsys("error writing out program: ");
-		fclose(outfile);
 		nvmp_clear(&prog);
 
 	} else {
@@ -350,9 +360,12 @@ int main(int argc, char *argv[])
 			err("error running netvm program: %s\n",
 			    netvm_estr(vm.status));
 
-		nvmp_clear(&prog);
-
+		finivm(&vm, &cproc, &prog);
 	}
+
+	pkb_free_pools();
+	fclose(outfile);
+	fclose(infile);
 	
 	return 0;
 }
