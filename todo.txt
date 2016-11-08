@@ -18,8 +18,10 @@ PML
 Protocol parsing & Namespace
  + Add test test cases to validate basic packet parsing.
  + Add IPv6 extension headers in the namespace.
+ + Revise namespace formatting to separate field printing
+   from value printing.
+ + Create short-field formatting.
  * Check restrictions on parsing to ensure termination.
- > Add short-form parsing for protocols using the above.
  > PPP
  > GTP
  > PPOE
@@ -36,7 +38,6 @@ netvm_prog API:
 
 
 NetVM Coprocessors
- * DNS Resolver coprocessor
  > Hash table coprocessor
  > Backing store coprocessor for packets
 
@@ -63,7 +64,7 @@ scripts:
  + unit tests
 
 pmerge:
- + implement
+ + unit tests
 
 nft:
  + unit tests

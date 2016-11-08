@@ -18,9 +18,9 @@ LIBOBJS= ${PKTOBJ} stdproto.o netvm.o netvm_prog.o pmltree.o \
 	 opcap.o 
 
 ALL_BINARIES= \
-	      rawpkt pktdemux pktmux pktrel x2hpkt h2xpkt \
-	      nvmas nvmpf pml pc2xpkt xpkt2pc pdiff nft \
-	      pktin pktout pcapin pcapout psort psplit ipfrag ipreasm
+	rawpkt pktdemux pktmux pktrel x2hpkt h2xpkt nvmas nvmpf pml pc2xpkt \
+	xpkt2pc pdiff nft pktin pktout pcapin pcapout pmerge psort psplit \
+	ipfrag ipreasm
 
 COMMON_TARGETS= \
 	${BINDIR}/rawpkt \
@@ -36,6 +36,7 @@ COMMON_TARGETS= \
 	${BINDIR}/xpkt2pc\
 	${BINDIR}/pdiff \
 	${BINDIR}/nft \
+	${BINDIR}/pmerge \
 	${BINDIR}/psort \
 	${BINDIR}/psplit \
 	${BINDIR}/ipfrag \
@@ -144,6 +145,10 @@ ${BINDIR}/pktdemux: pktdemux.o ${PKTOBJ} ${PKTHDR}
 
 ${BINDIR}/pktrel: pktrel.o ${PKTOBJ} ${PKTHDR}
 	${CC} -o ${BINDIR}/pktrel pktrel.o ${PKTOBJ} \
+		${DEFS} ${OPTS} ${INCS} ${LIBS}
+
+${BINDIR}/pmerge: pmerge.o ${PKTOBJ} ${PKTHDR}
+	${CC} -o ${BINDIR}/pmerge pmerge.o ${PKTOBJ} \
 		${DEFS} ${OPTS} ${INCS} ${LIBS}
 
 ${BINDIR}/x2hpkt: x2hpkt.o stdproto.o fld.o stdproto.h tcpip_hdrs.h \

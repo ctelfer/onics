@@ -1,4 +1,4 @@
-.TH "onics" 7 "January 2016" "ONICS 1.0"
+.TH "onics" 7 "November 2016" "ONICS 1.0"
 .SH NAME
 ONICS - Open Network Inspection Command Suite
 .P
@@ -8,7 +8,7 @@ ONICS - Open Network Inspection Command Suite
 .SH DESCRIPTION
 \fBONICS\fP is a command line tool suite along with the code building
 blocks for those tools to capture, dissect, manipulate and send network
-data.  The tool suite currently consists of 21 binaries and 28 scripts
+data.  The tool suite currently consists of 22 binaries and 30 scripts
 built on those programs.  The idea is for these utilities to be the
 equivalent of programs like grep, sed, awk, etc. for packets instead of
 lines of text.  The programs, as a rule use the XPKT format for packet
@@ -80,6 +80,8 @@ Multiplex a set of streams of packets into a single stream.
 Write packets out to an interface.
 .IP \fBpktrel\fP
 Release packets at time intervals based on their timestamps.
+.IP \fBpmerge\fP
+Interleave the packets from a set of streams into a single stream.
 .IP \fBpml\fP
 Packet Manipulation Language interpeter: like sed(1) or awk(1) for
 packets.
@@ -94,7 +96,7 @@ Reverse a set of packets.
 .IP \fBpsort\fP
 Sort a set of packets according to user-specified keys.
 .IP \fBpsplit\fP
-Split a set of packets into separate trace files.
+Split a set of packets into separate trace files by flow.
 .IP \fBptail\fP
 Pass through the last N packets in a stream.
 .IP \fBpxseq\fP

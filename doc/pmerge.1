@@ -1,0 +1,117 @@
+.TH "pmerge" 1 "November 2016" "ONICS 1.0"
+.SH NAME
+pmerge - Interleave multiple packet streams into one stream
+.P
+.SH SYNOPSYS
+\fBpsplit\fP [\fB-BchPrR\fP] [\fB-n\fP \fInumpkts\fP] 
+[\fB-s\fP \fIseed\fP] \fIfile\fP [\fIfile\fP ...]
+.P
+.SH DESCRIPTION
+The \fBpmerge\fP utility reads in packets in xpkt format from a set of
+files and interleaves their packets before writing them out to standard
+output.  This is primarily used to merge multiple packet streams into
+one coherent stream of traffic.  However, \fBpmerge\fP can also generate
+a larger stream of packets from one or more smaller xpkt files.  If the
+\fB-c\fP option is present, \fBpmerge\fP will keep rewinding the input
+files after reahing each file end sending packets indefinitely.  The
+\fB-n\fP option can bound the total number of packets that \fBpmerge\fP
+writes.
+.P
+The \fBpmerge\fP program can merge the input files deterministically or
+randomly.  Deterministic merging is the default.  The \fB-r\fP option
+instructs \fBpmerge\fP to schedule the next stream randomly.  The
+\fB-B\fP, \fB-P\fP, and \fB-R\fP determine the scheduling criteria for
+the packets in each file.
+.P
+By default (or when the \fB-R\fP option is given), \fBpmerge\fP
+schedules the streams round-robin alternating packets from each stream
+in turn.  When randomized, \fBpmerge\fP selects the next stream randomly
+with each stream having equal weight.  
+.P
+The \fB-P\fP option instructs pmerge to schedule streams proprotional to
+the number of packets in each input stream file.  This will generally
+result in packets from a given input stream being spaced evenly in the
+output stream.  If \fB-r\fP is present then \fBpmerge\fP selects the
+next stream to pull a packet from randomly, but weights each stream by
+the number of packets in the stream's input file.
+.P
+The \fB-B\fP option instructs pmerge to schedule streams proprotional to
+the number of bytes in each input stream file.  This generally results
+in an output stream where windows of packets in the output stream
+contain packet data in roughly the same size proportions as the size
+proportions of the input files.  When \fB-r\fP is present, \fBpmerge\fP
+selects the next stream to pull a packet from randomly, but weights each
+stream by the size of the packets in the stream's input file.
+.P
+In all cases, unless the \fB-c\fP option is present, when \fBpmerge\fP
+arrives at the end of an input file, the stream scheduling for the
+remaining traffic is rebalanced according to the remaining active
+streams.  So, for example, if round-robin scheduling is in use, and
+stream A has 2 packets, stream B has 4 packets and stream C has 6, the
+output stream will look roughly like this:
+.nf
+	A1 B1 C1 A2 B2 C2 B3 C3 B4 C4 C5 C6
+.fi
+.P
+.SH OPTIONS
+.IP \fB-B\fP
+Schedule each stream proportional to the number of packet bytes in the
+input file.  (This excludes the size of XPKT headers.)
+.IP \fB-c\fP
+Continuously send packets rewinding each input stream after reaching the
+end-of-file.
+.IP \fB-h\fP
+Print help for the command and exit.
+.IP "\fB-n\fP \fInumpkts\fP"
+Send at most \fInumpkts\fP packets.
+.IP \fB-P\fP
+Schedule each stream proportional to the number of packets in the input
+file.
+.IP \fB-r\fP
+Randomize stream selection.
+.IP \fB-R\fP
+Schedule streams round-robin.  In other words, each stream has equal
+weight when scheduling.
+.IP "\fB-s\fP \fIseed\fP"
+Seed the random number generation for the \fB-r\fP option by the integer
+\fIseed\fP.
+.P
+.SH EXAMPLES
+Interleave the packets of two input files round-robin and write to an
+outfile.
+.nf
+
+	pmerge in1.xpkt in2.xpkt > out.xpkt
+
+.fi
+Generate a trace file of 100 packets from 3 packet streams with each
+stream scheduled proportional to the number of packets.
+.nf
+
+	pmerge -cP -n 100 in1.xpkt in2.xpkt in3.xpkt > out.xpkt
+
+.fi
+Expand a single trace file into a new one with 1000 packets.
+.nf
+
+	pmerge -c -n 1000 in.xpkt > out.xpkt
+
+.fi
+Continously generate a traffic from a set of 4 files with the traffic
+scheduled randomly, but with each stream taking up space in the traffic
+roughly proportional to the number of bytes in each input file.  Send 
+each packet 100 microseconds after the previous one.
+.nf
+
+	pmerge -cPr in1.xpkt in2.xpkt in3.xpkt in4.xpkt |
+	    pktrel -i 0.0001 | pktout eth0
+
+.fi
+.SH AVAILABILITY
+This utility should be available on all supported ONICS platforms.
+.P
+.SH AUTHOR
+Christopher A. Telfer <ctelfer@gmail.com>
+.P
+.SH "SEE ALSO"
+pktrel(1), pktout(1), psplit(1), pml(1)

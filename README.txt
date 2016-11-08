@@ -7,7 +7,7 @@ The intent of these tools is to make it possible to manipulate packets
 on the command line in a UNIX-shell like fashion the same way one can
 manipulate text with programs like sed, awk, cat, tr, etc.  In fact,
 many of said command line tools and be used with the ONICS tool suite if
-done properly.  There are currently 21 binary tools and 28 Bourne shell
+done properly.  There are currently 22 binary tools and 30 Bourne shell
 scripts in the repository.
 
 This tool suite comes with regression tests, examples, complete manpages
@@ -159,6 +159,8 @@ Below is a list of the current binary tools in the suite.
  * nvmpf - a pure NetVM packet filter program
 
  * pc2xpkt - convert PCAP files to XPKT without libpcap
+
+ * pmerge - interleave packets from a set of streams into one stream
 
  * pktmux - a program to multiplex packets from multiple input streams
 

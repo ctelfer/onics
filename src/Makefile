@@ -12,6 +12,7 @@ COMMON_TARGETS= \
 	${BINDIR}/xpkt2pc\
 	${BINDIR}/pdiff \
 	${BINDIR}/nft \
+	${BINDIR}/pmerge \
 	${BINDIR}/psort \
 	${BINDIR}/psplit \
 	${BINDIR}/ipfrag \
