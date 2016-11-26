@@ -18,3 +18,6 @@ tests:
 clean:
 	cd src ; make clean
 	rm -f tmp/*
+
+veryclean: clean
+	rm -f src/Makefile

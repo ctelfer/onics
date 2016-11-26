@@ -59,14 +59,15 @@ done
 
 if [ "$CATLIB_SET" = "n" ] ; then
 	if [ -d ../catlib ] ; then
-		CATLIB_ROOT=../../catlib
-	elif [ -d ./catlib ] ; then
 		CATLIB_ROOT=../catlib
+	elif [ -d ./catlib ] ; then
+		CATLIB_ROOT=./catlib
 	else
 		echo Can not find catlib!
 		usage
 	fi
 fi
+
 
 
 #if [ "$LIBDL_SET" = "n" ] ; then
@@ -77,10 +78,14 @@ fi
 #	fi
 #fi
 
-# All remaining configurations are under src/
-set -e
-cd src
 
+set -e
+
+BASE=`pwd`
+# canonicalize CATLIB_ROOT
+CATLIB_ROOT=`(cd $CATLIB_ROOT && pwd)`
+
+cd src
 rm -f .has_pcap
 
 if uname -a 2>/dev/null | grep -i linux > /dev/null 2>&1
@@ -163,7 +168,9 @@ cat <<EOF > onics_config.h
 #endif /* __onics_config_h */
 EOF
 
-echo configure: Building makefile 
+
+echo configure: Building makefiles 
+cd $BASE
 if [ $DEBUG = "y" ]; then
 	MKOPTS="-g -Wall -Wno-pointer-sign"
 	MKLIBS="-L\${CATLIB_ROOT}/lib -lcat_dbg $LIBDLFLG"
@@ -175,4 +182,11 @@ fi
 sed -e "s|^CATLIB_ROOT=.*\$|CATLIB_ROOT=$CATLIB_ROOT|" \
     -e "s|^OPTS=.*\$|OPTS=$MKOPTS|" \
     -e "s|^LIBS=.*\$|LIBS=$MKLIBS|" \
-    makefile.tmpl > makefile
+    src/makefile.tmpl > src/makefile
+
+
+sed -e "s|^CATLIB_ROOT=.*\$|CATLIB_ROOT=$CATLIB_ROOT|" \
+    doc/Makefile.tmpl > doc/Makefile
+
+sed -e "s|^CATLIB_ROOT=.*\$|CATLIB_ROOT=$CATLIB_ROOT|" \
+    tests/src/Makefile.tmpl > tests/src/Makefile

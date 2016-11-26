@@ -1,5 +1,7 @@
 # Makefile for ONICS scripts
 
+CATLIB_ROOT=../../catlib
+
 MAN1_DOCS= \
 	gre-decap.1 gre-encap.1 h2xpkt.1 ipfrag.1 ipreasm.1 nft.1 nvmas.1 \
 	nvmpf.1 oprotowrap.1 mkpkt.1 pc2xpkt.1 pcapin.1 pcapout.1 pcount.1 \
@@ -32,11 +34,14 @@ enum_proto: enum_proto.c ../src/ns.c ../src/stdproto.c ../src/util.c \
 	../src/protoparse.c
 	gcc -o enum_proto enum_proto.c ../src/ns.c ../src/stdproto.c \
 		../src/util.c ../src/protoparse.c \
-		-I../src -I../../catlib/include \
-		-L../../catlib/lib -lcat
+		-I../src -I${CATLIB_ROOT}/include \
+		-L${CATLIB_ROOT}/lib -lcat
 
 clean:
 	rm -f onics_stdproto_list.txt onics_proto.7 enum_proto
+
+veryclean: clean
+	rm -f Makefile
 
 
 install: $(ALL_DOCS)

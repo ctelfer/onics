@@ -3,7 +3,7 @@ all: normal
 
 normal:
 	@(INSTALL_PREFIX=$${INSTALL_PREFIX:-/usr/local} ; \
-	( [ -f src/makefile ] || \
+	( [ -f src/makefile -a -f doc/Makefile -a -f tests/src/Makefile ] || \
 	  (echo "Run ./configure first" >&2 && exit 1) ) &&\
 	echo "Building binaries..." && make -C src && \
 	echo "Building libraries ..." && make -C lib && \
@@ -36,5 +36,5 @@ clean:
 veryclean:
 	make -C src veryclean
 	make -C lib clean
-	make -C doc clean
-	make -C tests clean
+	make -C doc veryclean
+	make -C tests veryclean
