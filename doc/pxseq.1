@@ -1,0 +1,115 @@
+.TH "pxseq" 1 "December 2016" "ONICS 1.0"
+.SH NAME
+pxseq - Extract a packet sequence number from fields in a packet
+.P
+.SH SYNOPSYS
+\fBpxseq\fB [\fB-hc\fP] [\fB-s\fP \fIiseq\fP] [\fIloc\fP ...]
+[\fIinfile\fP [\fIoutfile\fP]]
+.P
+.SH DESCRIPTION
+The \fBpxseq\fP program assigns sequence numbers to each packet in a 
+packet stream usually by extracing the sequence number from some field
+in the packet.  The program stores the sequence number in th XPKT
+sequence number metadata associated with the packet.  \fBPxseq\fP
+receives a set of locations (denoted \fIloc\fP above) to search for in
+each packet.  It extracts the sequence number from the first location
+that it finds available in the packet searching in the order given on
+the command line.  If there are no \fIloc\fP arguments given, then pxseq
+assigns monotonically incrementing sequence numbers to the packets
+starting at 1 by default.  The \fB-s\fP option can override the starting
+sequence number when in this mode.
+.P
+If \fBpxseq\fP encounters a packet with no available locations to
+extract from, then it will allow the packet to pass through unmodified.
+However, if the \fB-c\fP option is specified, \fBpxseq\fP will discard
+packets for which it can not assign a sequence number.  Upon completion,
+\fBpxseq\fP prints out the number of unsequenced packets it processed.
+.P
+.SH OPTIONS
+.P
+.IP \fB-c\fP
+Enable strict mode:  if \fBpxseq\fP encounters a packet that it can not
+extract a sequence number from, it will drop the packet rather than
+allowing the packet to pass through unmodified.
+.IP \fB-h\fP
+Print out help information and exit.
+.IP "\fB-s\fP \fIiseq\fP"
+If there are no sequence locations specified, then \fBpxseq\fP assigns
+sequence numbers to packets linearly.  The \fB-s\fP option overrides the
+starting sequence number to \fIiseq\fP instead of 1.
+.P
+.SH LOCATIONS
+.P
+.IP \fB-esrc\fP
+Extract the sequence number from the last 32 bits of the Ethernet
+source MAC address.
+.IP \fB-edst\fP
+Extract the sequence number from the last 32 bits of the Ethernet
+destination MAC address.
+.IP \fB-ipid\fP
+Extract the sequence number from the IP identifier field of 
+non-fragmented IP packets.  This will be a 16-bit sequence number.
+.IP \fB-ipsrc\fP
+Extract the 32-bit sequence number in the source address of IPv4 packets
+or the 64-bit sequence number in the source address of IPv6 packets.
+.IP \fB-ipdst\fP
+Extract the 32-bit sequence number from the destination address of IPv4
+packets or the 64-bit sequence number from the destination address of
+IPv6 packets.
+.IP \fB-v6fid\fP
+Extract the 20-bit sequence number from the Flow ID field of IPv6
+packets.
+.IP "\fB-tpld\fP [\fIoff\fB,\fIlen\fB]"
+Extract a \fIlen\fP-byte sequence number \fIoff\fP bytes from the start
+of the TCP payload.  If the payload is not long enough to hold the
+entire sequence number, \fBpxseq\fP considers this location unusable
+even if the packet contains a TCP header and some of the sequence number
+could be stored at the required location in the payload.  By default
+\fBoff\fP is 0 and \fBlen\fP is 4.
+.IP "\fB-upld\fP [\fIoff\fB,\fIlen\fB]"
+Extract a \fIlen\fP-byte sequence number \fIoff\fP bytes from the start
+of the UDP payload.  If the payload is not long enough to hold the
+entire sequence number, \fBpxseq\fP considers this location unusable
+even if the packet contains a UDP header and some of the sequence number
+could be stored at the required location in the payload.  By default
+\fBoff\fP is 0 and \fBlen\fP is 4.
+.IP "\fB-ipld\fP [\fIoff\fB,\fIlen\fB]"
+Extract a \fIlen\fP-byte sequence number \fIoff\fP bytes from the start
+of the ICMP payload.  If the payload is not long enough to hold the
+entire sequence number, \fBpxseq\fP considers this location unusable
+even if the packet contains a ICMP header and some of the sequence
+number could be stored at the required location in the payload.  By
+default \fBoff\fP is 0 and \fBlen\fP is 4.
+.IP "\fB-i6pld\fP [\fIoff\fB,\fIlen\fB]"
+Extract a \fIlen\fP-byte sequence number \fIoff\fP bytes from the start
+of the ICMPv6 payload.  If the payload is not long enough to hold the
+entire sequence number, \fBpeseq\fP considers this location unusable
+even if the packet contains a ICMPv6 header and some of the sequence
+number could be stored at the required location in the payload.  By
+default \fBoff\fP is 0 and \fBlen\fP is 4.
+.P
+.SH EXAMPLES
+.P
+Extract sequence numbers from bytes 4-7 of the payload of TCP and UDP
+packets.
+.nf
+
+        pxseq -c -tpld 4,4 -upld 4,4 infile.xpkt outfile.xpkt
+
+.fi
+Assign a fresh sequence number to each packets coming from the wire
+before processing with a PML program.
+.nf
+
+	pktin eth0 | pxseq | pml -f someprog ...
+
+.fi
+.P
+.SH AVAILABILITY
+This utility should be available on all supported ONICS platforms.
+.P
+.SH AUTHOR
+Christopher A. Telfer <ctelfer@gmail.com>
+.P
+.SH "SEE ALSO"
+pml(1), pcount(1), peseq(1)

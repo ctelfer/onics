@@ -1,7 +1,7 @@
 #!/bin/sh
 #
 # ONICS
-# Copyright 2013-2015
+# Copyright 2013-2016
 # Christopher Adam Telfer
 #
 # peseq - Embed a sequence number in a (hopefully) unused packet field.
@@ -22,14 +22,14 @@
 #
 
 usage() {
-	echo usage $0 "[options] [modes] [starting sequence #] [infile]" >&2
+	echo usage $0 "[options] [location] [infile [outfile]]" >&2
 	echo "    Options:"
 	echo "        (if specified must be in this order)"
 	echo "        -h|--help		-- display this message and exit"
 	echo "        -s|--start <num>	-- set starting sequence # [default 1]"
 	echo "        -c|--strict     	-- drop all unsequenced packets"
 	echo
-	echo "    Modes:"
+	echo "    Location:"
 	echo "        (can specify more than one: order matters)"
 	echo "        -esrc		-- set in ethernet source address"
 	echo "        -edst		-- set in ethernet destination address"
@@ -154,11 +154,11 @@ do
 	shift
 done
 
-[ $# -gt 1 ] && usage
+[ $# -gt 2 ] && usage
 
 PROG="$PROG
       { U = U + 1; $DROP }
       END { print U, \" unsequenced frames\"; }"
 
 
-exec pml -e "$PROG" $1
+exec pml -e "$PROG" $*

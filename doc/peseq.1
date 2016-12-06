@@ -1,0 +1,121 @@
+.TH "peseq" 1 "December 2016" "ONICS 1.0"
+.SH NAME
+peseq - Embed a sequence number into various fields in a packet stream
+.P
+.SH SYNOPSYS
+\fBpeseq\fB [\fB-hc\fP] [\fB-s\fP \fIiseq\fP] [\fIloc\fP ...]
+[\fIinfile\fP [\fIoutfile\fP]]
+.P
+.SH DESCRIPTION
+The \fBpeseq\fP program takes a stream of packets and attempts to embed a
+sequence number in each one.  It embeds the sequence number in one of
+the packet fields of the of the packet or possibly in a portion of the
+payload of the packet.  The \fIloc\fP arguments specify which locations
+to attempt to embed the sequence number in and in which order to search
+for the availability of those locations.  The \fBpeseq\fP program
+searches the packet for the availability of the locations in the packet
+in the order that they appeared on the command line.  It will embed the
+sequence number in the first location that is available.
+.P
+If \fBpeseq\fP encounters a packet with no available locations (among
+those given on the command line) then it will not increment the sequence
+counter for that packet.  By default it will allow the packet to pass
+through unmodified, but if the \fB-c\fP option is present, then it will
+drop the packet instead.  Upon completion, \fBpeseq\fP prints out the
+number of packets that it was unable to embed a sequence number into.
+.P
+By default, \fBpeseq\fP assigns sequence numbers starting from 1,
+however the user can override this with the \fB-s\fP option.  The
+sequence counter itself is 64 bits, but the size of the sequence number
+embedded in the packet depends on the field that it is being embedded
+into.  See the LOCATIONS section below for more details.
+.P
+.SH OPTIONS
+.P
+.IP \fB-c\fP
+Enable strict mode:  if \fBpeseq\fP encounters a packet that it can not
+embed a sequence number into, it will drop the packet rather than
+allowing the packet to pass through unmodified.
+.IP \fB-h\fP
+Print out help information and exit.
+.IP "\fB-s\fP \fIiseq\fP"
+Assign \fIiseq\fP as the first sequence number (and continue to
+increment from there).  By default, the first sequence number will be 1.
+.P
+.SH LOCATIONS
+.P
+.IP \fB-esrc\fP
+Embed a sequence number in the last 32 bits of the Ethernet source MAC
+address.
+.IP \fB-edst\fP
+Embed a sequence number in the last 32 bits of the Ethernet destination
+MAC address.
+.IP \fB-ipid\fP
+Embed a sequence number in the IP identifier field of non-fragmented IP
+packets.  This will be a 16-bit sequence number.
+.IP \fB-ipsrc\fP
+Embed a 32-bit sequence number in the source address of IPv4 packets
+or a 64-bit sequence number in the source address of IPv6 packets.
+.IP \fB-ipdst\fP
+Embed a 32-bit sequence number in the destination address of IPv4
+packets or a 64-bit sequence number in the destination address of IPv6
+packets.
+.IP \fB-v6fid\fP
+Embed a 20-bit sequence number in the Flow ID field of IPv6 packets.
+.IP "\fB-tpld\fP [\fIoff\fB,\fIlen\fB]"
+Embed a \fIlen\fP-byte sequence number \fIoff\fP bytes from the start of
+the TCP payload.  If the payload is not long enough to hold the entire
+sequence number, \fBpeseq\fP considers this location unusable even if
+the packet contains a TCP header and some of the sequence number could
+be stored at the required location in the payload.  By default \fBoff\fP
+is 0 and \fBlen\fP is 4.
+.IP "\fB-upld\fP [\fIoff\fB,\fIlen\fB]"
+Embed a \fIlen\fP-byte sequence number \fIoff\fP bytes from the start of
+the UDP payload.  If the payload is not long enough to hold the entire
+sequence number, \fBpeseq\fP considers this location unusable even if
+the packet contains a UDP header and some of the sequence number could
+be stored at the required location in the payload.  By default \fBoff\fP
+is 0 and \fBlen\fP is 4.
+.IP "\fB-ipld\fP [\fIoff\fB,\fIlen\fB]"
+Embed a \fIlen\fP-byte sequence number \fIoff\fP bytes from the start of
+the ICMP payload.  If the payload is not long enough to hold the entire
+sequence number, \fBpeseq\fP considers this location unusable even if
+the packet contains a ICMP header and some of the sequence number could
+be stored at the required location in the payload.  By default \fBoff\fP
+is 0 and \fBlen\fP is 4.
+.IP "\fB-i6pld\fP [\fIoff\fB,\fIlen\fB]"
+Embed a \fIlen\fP-byte sequence number \fIoff\fP bytes from the start of
+the ICMPv6 payload.  If the payload is not long enough to hold the
+entire sequence number, \fBpeseq\fP considers this location unusable
+even if the packet contains a ICMPv6 header and some of the sequence
+number could be stored at the required location in the payload.  By
+default \fBoff\fP is 0 and \fBlen\fP is 4.
+.P
+.SH EXAMPLES
+.P
+Embed a 32-bit sequence number in each TCP or UDP packet with at least 8
+bytes of payload starting 4 bytes from the start of the payload.  Drop
+any packets that do not meet these reqirements.
+.nf
+
+        peseq -c -tpld 4,4 -upld 4,4 infile.xpkt outfile.xpkt
+
+.fi
+Attempt to embed a sequence number in: the TCP payload, the IP ID, the
+IP source address or the Ethernet source address in that order.  Allow
+through "unsequenced" any packets that do not have a TCP payload, IPv4
+header or Ethernet header.  Start the sequence numbers at 5.
+.nf
+
+        peseq -s 5 -tpld -ipid -isrc infile.xpkt outfile.xpkt
+
+.fi
+.P
+.SH AVAILABILITY
+This utility should be available on all supported ONICS platforms.
+.P
+.SH AUTHOR
+Christopher A. Telfer <ctelfer@gmail.com>
+.P
+.SH "SEE ALSO"
+pml(1), pcount(1), pxseq(1)
