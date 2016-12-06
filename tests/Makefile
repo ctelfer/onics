@@ -16,8 +16,8 @@ tests:
 	@echo
 
 clean:
-	cd src ; make clean
+	make -C src clean
 	rm -f tmp/*
 
 veryclean: clean
-	rm -f src/Makefile
+	make -C src veryclean

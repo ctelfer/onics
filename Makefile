@@ -3,8 +3,6 @@ all: normal
 
 normal:
 	@(INSTALL_PREFIX=$${INSTALL_PREFIX:-/usr/local} ; \
-	( [ -f src/makefile -a -f doc/Makefile -a -f tests/src/Makefile ] || \
-	  (echo "Run ./configure first" >&2 && exit 1) ) &&\
 	echo "Building binaries..." && make -C src && \
 	echo "Building libraries ..." && make -C lib && \
 	echo "Building documentation..." && make -C doc && \

@@ -28,10 +28,10 @@ PLATFORM_TARGETS= \
 	${BINDIR}/pktout
 
 TARGETS=${COMMON_TARGETS} ${PCAP_TARGETS} ${PLATFORM_TARGETS}
-all: makefile
 
-makefile: makefile.tmpl
-	@echo "makefile not found:  run ./configure" >&2
+all:
+	@echo "Run ./configure in the top level directory first" >&2
+	@exit 1
 
 clean:
 	rm -f ${TARGETS}

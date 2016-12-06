@@ -186,7 +186,7 @@ sed -e "s|^CATLIB_ROOT=.*\$|CATLIB_ROOT=$CATLIB_ROOT|" \
 
 
 sed -e "s|^CATLIB_ROOT=.*\$|CATLIB_ROOT=$CATLIB_ROOT|" \
-    doc/Makefile.tmpl > doc/Makefile
+    doc/makefile.tmpl > doc/makefile
 
 sed -e "s|^CATLIB_ROOT=.*\$|CATLIB_ROOT=$CATLIB_ROOT|" \
-    tests/src/Makefile.tmpl > tests/src/Makefile
+    tests/src/makefile.tmpl > tests/src/makefile
