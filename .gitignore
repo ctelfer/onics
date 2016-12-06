@@ -14,11 +14,13 @@ src/makefile
 doc/enum_proto
 doc/onics_proto.7
 doc/onics_stdproto_list.txt
+doc/makefile
 
 lemon/lemon
 
 tests/bin/*
 tests/tmp/*
+tests/src/makefile
 
 bin/*
 
