@@ -463,7 +463,7 @@ enum {
 				/* + 256 bytes of pad.  if 'x' then len = 0 */
 				/* else, len = 'len' */
 	NETVM_OC_PKSWAP,	/* [pkn1,pkn2] swap packets pkn1 and pkn2  */
-	NETVM_OC_PKCOPY,	/* [pkn2,pkn1] copy packet from pkn1 to pkn2 */
+	NETVM_OC_PKCOPY,	/* [pkn1,pkn2] copy packet from pkn2 to pkn1 */
 	NETVM_OC_PKDEL,		/* [pkn] delete packet */
 
 	NETVM_OC_PKSLA,		/* [pdesc] set layer 'x' to prp in pdesc */

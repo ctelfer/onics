@@ -517,8 +517,8 @@ static void ni_cmp(struct netvm *vm)
 	byte_t *p1, *p2;
 
 	S_POP(vm, len);
-	S_POP(vm, a1);
 	S_POP(vm, a2);
+	S_POP(vm, a1);
 
 	FATAL(vm, NETVM_ERR_IOVFL, (a1 + len < len) || (a2 + len < len));
 	netvm_get_uaddr_ptr(vm, a1, 0, len, &p1);
@@ -539,8 +539,8 @@ static void ni_pcmp(struct netvm *vm)
 	byte_t *p1, *p2;
 
 	S_POP(vm, len);
-	S_POP(vm, a1);
 	S_POP(vm, a2);
+	S_POP(vm, a1);
 
 	FATAL(vm, NETVM_ERR_IOVFL, len + 7 < len);
 	nbytes = (len + 7) >> 3;
@@ -1024,8 +1024,8 @@ static void ni_stpd(struct netvm *vm)
 	byte_t *p;
 
 	width = inst->x;
-	S_POP(vm, val);
 	netvm_get_prp_ptr(vm, (inst->op == NETVM_OC_STPD), width & 0x7F, &p);
+	S_POP(vm, val);
 	VMCKRET(vm);
 	netvm_stk2p(vm, p, val, width);
 }
@@ -1046,20 +1046,6 @@ static void ni_move(struct netvm *vm)
 	netvm_get_uaddr_ptr(vm, daddr, 1, len, &d);
 	VMCKRET(vm);
 	memmove(d, s, len);
-}
-
-
-static void ni_pkswap(struct netvm *vm)
-{
-	int p1, p2;
-	struct pktbuf *tmp;
-	S_POP(vm, p2);
-	S_POP(vm, p1);
-	FATAL(vm, NETVM_ERR_PKTNUM, (p1 >= NETVM_MAXPKTS)
-	      || (p2 >= NETVM_MAXPKTS));
-	tmp = vm->packets[p1];
-	vm->packets[p1] = vm->packets[p2];
-	vm->packets[p2] = tmp;
 }
 
 
@@ -1087,6 +1073,20 @@ static void ni_pknew(struct netvm *vm)
 
 	pkb_free(vm->packets[pktnum]);
 	vm->packets[pktnum] = pnew;
+}
+
+
+static void ni_pkswap(struct netvm *vm)
+{
+	int p1, p2;
+	struct pktbuf *tmp;
+	S_POP(vm, p2);
+	S_POP(vm, p1);
+	FATAL(vm, NETVM_ERR_PKTNUM, (p1 >= NETVM_MAXPKTS)
+	      || (p2 >= NETVM_MAXPKTS));
+	tmp = vm->packets[p1];
+	vm->packets[p1] = vm->packets[p2];
+	vm->packets[p2] = tmp;
 }
 
 
