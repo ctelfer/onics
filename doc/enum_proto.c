@@ -85,7 +85,7 @@ struct pmlfld {
 	{ "header", "PDU header portion" }, 
 	{ "payload", "PDU payload portion" },
 	{ "trailer", "PDU trailer portion" },
-	{ "parse", "entire PDU (as byte string" },
+	{ "parse", "entire PDU (as byte string)" },
 };
 
 

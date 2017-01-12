@@ -1658,13 +1658,14 @@ static int ipv6_fixlen(struct prparse *prp, byte_t *buf)
 	if (!prp_off_valid(prp, PRP_IPV6FLD_JLEN)) {
 		if (prp_plen(prp) > 65535)
 			return -1;
-		plen = prp_plen(prp);
+		plen = prp_plen(prp) + prp_hlen(prp) - 40;
 		hton16i(plen, &ip6->len);
 	} else {
 		if (prp->offs[PRP_IPV6FLD_JLEN] > prp_totlen(prp) - 2)
 			return -1;
 		hton16i(0, &ip6->len);
-		hton32i(prp_plen(prp), buf + prp->offs[PRP_IPV6FLD_JLEN]);
+		hton32i(prp_plen(prp) + prp_hlen(prp) - 40, 
+			buf + prp->offs[PRP_IPV6FLD_JLEN]);
 	}
 	prp->error &= ~(PRP_ERR_TRUNC | PRP_ERR_HLEN | PRP_ERR_TOOSMALL);
 

@@ -132,5 +132,6 @@ pml_test 58 NONE
 pml_test 59 $PDIR/onepkt.xpkt
 pml_test 60 $PDIR/tcpandgre.xpkt
 pml_test 61 $PDIR/smalltcp.xpkt
+pml_test 62 $PDIR/onev6pkt.xpkt
 
 exit $ERR
