@@ -237,7 +237,7 @@ void insert_field(struct field *f)
 
 void release_fields()
 {
-	l_move(&packet_fields, &free_fields);
+	l_move(&free_fields, &packet_fields);
 }
 
 
