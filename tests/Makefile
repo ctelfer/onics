@@ -17,7 +17,7 @@ tests:
 
 clean:
 	make -C src clean
-	rm -f tmp/*
+	rm -fr tmp/*
 
 veryclean: clean
 	make -C src veryclean

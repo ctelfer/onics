@@ -107,6 +107,22 @@ t_ipreasm_combined() {
 	cat $DATA/tcp-reasm.xpkt $DATA/tcp6-reasm.xpkt | $BIN/ipreasm -46
 }
 
+t_nft_psplit_basic() {
+	mkdir -p $TOUT/flows
+	rm -f $TOUT/flows/*
+	$BIN/nft -q $DATA/flows.xpkt | $BIN/psplit -r -p $TOUT/flows/flow
+	echo Flow files
+	ls $TOUT/flows
+	for f in `(cd $TOUT/flows; ls)`; do 
+		if [ -f $DATA/t_nft_psplit_basic/$f ] ; then 
+			echo comparing $f
+			cmp $TOUT/flows/$f $DATA/t_nft_psplit_basic/$f
+		else
+			echo Unable to find $DATA/t_nft_psplit_basic/$f
+		fi
+	done
+}
+
 
 run_test t_h2xpkt_immed "h2xpkt -- basic from immediate data"
 run_test t_h2xpkt_immed_nox "h2xpkt -- w/o xpkt header"
@@ -125,5 +141,6 @@ run_test t_ipfrag_combined "ipfrag -- IPv4+IPv6, 1280-byte MTU, set ID 10"
 run_test t_ipreasm_ipv4 "ipreasm -- IPv4 basic reassembly"
 run_test t_ipreasm_ipv6 "ipreasm -- IPv6 basic reassembly"
 run_test t_ipreasm_combined "ipreasm -- combined IPv4+IPv6 reassembly"
+run_test t_nft_psplit_basic "nft/psplit -- Basic flow track + split"
 
 exit $RET
