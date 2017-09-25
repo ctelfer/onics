@@ -111,7 +111,7 @@ void pkb_set_len(struct pktbuf *pkb, ulong len);
 /* Cannot be called for a packed packet. */
 void pkb_set_dltype(struct pktbuf *pkb, uint16_t dltype);
 
-/* Get the data pointer for the packet buffer */
+/* Get a pointer to the start of packet data (including starting offset) */
 void *pkb_data(struct pktbuf *pkb);
 
 /* 

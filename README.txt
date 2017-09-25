@@ -132,7 +132,7 @@ Below is a list of the current binary tools in the suite.
 
  * pdiff - compares packet streams and print the differences
 
- * nft - tracks individual flows in a stream of packets
+ * nftrk - tracks individual flows in a stream of packets
 
  * pspilt - split a packet stream to multiple streams
 

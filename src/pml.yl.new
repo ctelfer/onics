@@ -1,0 +1,1341 @@
+/*
+ * ONICS
+ * Copyright 2012-2013
+ * Christopher Adam Telfer
+ *
+ * pml.yl -- Parser for the PML programming language.
+ *
+ *
+ *  This program is free software: you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation, either version 3 of the License, or
+ *  (at your option) any later version.
+ *
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License
+ *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
+/*
+Language summary:
+
+# Comment 
+
+?- tcp.sport == tcp.ports.http -?
+
+# Match operator is =~, inverse is !~
+# Takes field on one side, pattern other
+# Patterns include:
+#   IP[v6] w/ mask, bytestring w/ mask, eth addr w/ mask,
+#   regex, numeric range
+#
+?- ip.saddr =~ 127.0.0.0/24 -?          # IP w/mask
+?- eth.saddr !~ c0:2a:f9:00:00:00/ff:ff:ff:f0:00:00 -?  # eth addr
+?- not (pkt.data =~ "hello world!") -?  # ascii string match
+?- not (pkt.data !~ \xa5a6a7a8a9aaabac) -?  # byte string match 
+?- pkt.data =~ `hello +world!` -?       # regex
+?- ipv6.daddr =~ ff80:abcd::/8 -?	# ipv6 w/mask
+?- tcp.dport !~ tcp.ports.reserved -?   # numeric range
+?- udp.sport !~ [0..1023] -?		# numeric range
+?- tcp[2,10] =~ \xABCDEF0123DEADBEEF01/FEEDA110FFFFFFFFAB -? # bytes w/ mask
+
+# Short circuiting boolean ops are supported of course
+?- eth && ip6 && pkt.len > ip6.len + 40 + 14 -?
+
+?- pop(tcp.flags == 2) -?
+
+?- nlz(ip6.flowid) == 4 -?
+
+?- tcp[2,2] == 1628 -?
+
+# byte 3 in the second IP header in the first packet
+?- $(0,1)ip[3,1] == 65 -?
+
+# compares as 64-bit integer
+?- eth.saddr == 5 -? 
+
+# compares first 8 bytes as 64-bit integer
+# probably not intended 
+?- ipv6.saddr == 5 -? 
+
+# A inline function that calls only other inline functions and is not
+# directly or indirectly recursive.  It's body is a single expression.
+inline ishttp() ( tcp && (tcp.sport == 80 || tcp.dport == 80) )
+
+# A function can be recursive, have local variables and it has
+# a series of statements enclosed in braces.
+int incr(v) {
+	x = v + 1;
+	return x;
+}
+
+int Count;
+
+# Patterns can call inline functions.
+?- ishttp() -? { Count = incr(Count); }
+
+*/
+
+
+/* 
+
+  Variables -- all local variables are 64 bit signed numbers (for now)
+  Local variables are referred to by name
+  
+
+  Abstractions:
+   - PRID == protocol ID, identifies a parsable protocol
+   - PKID == packet ID, identifies one of the 16 packets in the working set
+   - FLD == field, a unit of data that has meaning within a protocol
+            There are 2 data types of fields:
+	      - bit fields - width <= 32 bits and do not start at byte offsets
+	      - byte string - Starts at a byte offset, and can have any width.
+	            data within the field can be interpreted in any desired
+		    way.
+		    * byte strings of 8 or less bytes can be operated on as
+		      numeric values.
+
+  Notation:
+   a			-- Variable name (global or local) or proto name
+   @<protoname>		-- Protocol ID (scalar)
+   a.b.c.d		-- Field for packet 0 or protocol constant
+   a.b.c.d[o,l]		-- Bytes from packet 0, field a.b.c.d, offset o length l
+   $(p)a.b.c.d[o,l]	-- Bytes from packet p, field a.b.c.d, offset o length l
+   $(p,i)a.b.c.d[o,l]	-- Bytes from packet p, i'th 'a' header, field a.b.c.d, 
+			   offset o length l
+   &a			-- String reference for a field a
+   &$(p,i)a.b.c.d[o,l]	-- String reference for bytes at offset o with length l of
+			   the i'th 'a' header in packet p field a.b.c.d
+
+
+  Intrinsic Functions:
+   - Drop
+   - Fix datalink type
+   - Insert space
+   - Cut space
+   - Duplicate
+   - Push header inner or outer
+   - Pop header inner or outer
+   - Update header
+   - Fix lengths
+   - Fix checksum
+   - Send packet
+   - (Un)Set layer
+   - pop(ulation count)
+   - nlz (number of leading zeroes)
+   - signext (sign extend a value)
+
+  Statements: 
+   - Any expression (including function calls)
+   - if then else
+   - while
+   - assignment (=)
+   - print
+   - return
+
+  Variable declarations:
+    <type> <name> ;
+    <type> <name> = <init> ;
+    str <name>[<len>] ; 
+    str <name>[<len>] = <init> ;   # Global only
+
+    <type> can be:  int, str
+    - int is a 64-bit signed integer
+    - str is a reference to a byte string
+    - Declaration with length is only permitted in global declarations
+      and declares a globally accessible byte string.
+
+  Function declarations:
+    <type> <name> ( <args> ) { <body> }
+
+    int fib(int x) { 
+	if (x < 2)
+		return 1;
+	else
+		return fib(x-1) + fib(x-2);
+    }
+
+  Rule declarations:
+   - ?- <pat> -? { <action> }
+   - { <action> }
+   - BEGIN { <action> }
+   - TICK { <action> }
+   - END { <action> }
+*/
+
+
+/* ----- Basic Lemon Declarations ----- */
+
+%name PML
+%token_prefix PMLTOK_
+%include { 
+#include <string.h>
+#include <stdlib.h>
+#include <assert.h>  /* XXX needed by lemon */
+#include <cat/cat.h>
+#include <cat/list.h>
+#include "pmllex.h"
+#include "pmltree.h" 
+#include "ns.h"
+
+struct ident {
+	int type;
+	char *name;
+	ulong width;
+};
+
+int pml_y_bpt() { return 1; }
+
+}
+%extra_argument { struct pml_ast *ast }
+
+%syntax_error {
+	pml_ast_err(ast, "syntax error");
+	ast->error = 1;
+}
+
+%parse_failure {
+	pml_ast_err(ast, "parse error");
+	ast->error = 1;
+}
+
+%parse_accept {
+	ast->done = 1;
+}
+
+/* ----- Mappings between non-terminals and C types ----- */
+
+%type decl { union pml_node * }
+%destructor decl { pmln_free($$); }
+
+%type funchdr{ struct pml_function * }
+%destructor funchdr { pmln_free($$); }
+
+%type funcproto { struct pml_function * }
+%destructor funcproto { pmln_free($$); }
+
+%type funcdecl { struct pml_function * }
+%destructor funcdecl { pmln_free($$); }
+
+%type blkbody { struct pml_list * }
+%destructor blkbody { pmln_free($$); }
+
+%type inlinedecl { struct pml_function * }
+%destructor inlinedecl { pmln_free($$); }
+
+%type gvar { struct pml_variable * }
+%destructor gvar { pmln_free($$); }
+
+%type rule { struct pml_rule * }
+%destructor rule { pmln_free($$); }
+
+%type rstart { struct pml_rule * }
+%destructor rstart { pmln_free($$); }
+
+%type pktpat { union pml_expr_u * }
+%destructor pktpat { pmln_free($$); }
+
+%type expr { union pml_expr_u * }
+%destructor expr { pmln_free($$); }
+
+%type stmt { union pml_node * }
+%destructor stmt { pmln_free($$); }
+
+%type prstmt { struct pml_print * }
+%destructor prstmt { pml_prlist_free($$); }
+
+%type stmtlist { struct pml_list * }
+%destructor stmtlist { pmln_free($$); }
+
+%type stmts { struct pml_list * }
+%destructor stmts { pmln_free($$); }
+
+%type stmtorlist { struct pml_list * }
+%destructor stmtorlist { pmln_free($$); }
+
+%type prlist { struct pml_print * }
+%destructor prlist { pml_prlist_free($$); }
+
+%type prfmt { struct pml_print_fmt }
+%destructor prfmt {  }
+
+%type locator { struct pml_locator * }
+%destructor locator { pmln_free($$); }
+
+%type exprlist { struct pml_list * }
+%destructor exprlist { pmln_free($$); }
+
+%type locname { struct pml_locator * }
+%destructor locname { pmln_free($$); }
+
+%type pktname { struct pml_locator * }
+%destructor pktname { pmln_free($$); }
+
+%type idlist { struct pml_list * }
+%destructor idlist { pmln_free($$); }
+
+%type someids { struct pml_list * }
+%destructor someids { pmln_free($$); }
+
+%type type { int }
+
+%type cfmekw { int }
+%type cfmkw { int }
+
+%type iddecl { struct ident }
+%destructor iddecl { free($$.name); }
+
+%type fiddecl { struct ident }
+%destructor fiddecl { free($$.name); }
+
+%type matchop { int }
+%type binop  { int }
+
+%type vexpr { union pml_expr_u * } 
+%destructor vexpr { pmln_free($$); }
+
+%type strval { union pml_expr_u * } 
+%destructor strval { pmln_free($$); }
+
+%type value { union pml_expr_u * } 
+%destructor value { pmln_free($$); }
+
+%type call { struct pml_call * } 
+%destructor call { pmln_free($$); }
+
+%type numval { struct pml_literal * }
+%destructor numval { pmln_free($$); }
+
+%token_type { struct pmll_val }
+%token_destructor { 
+	pmllv_clear(&$$);
+}
+
+/* Give precedence to ELSE to prevent shift-reduce conflict */
+%left IF.
+%left ELSE.
+
+%nonassoc BYTESTR STRING ID IPV4ADDR IPV6ADDR ETHADDR NUM.
+%left OR.
+%left AND.
+%left MATCH NOMATCH EQ NEQ LT GT LEQ GEQ.
+%left BOR.
+%left BXOR.
+%left BAND.
+%left PLUS MINUS.
+%left TIMES DIV MOD.
+%left SHL SHR.
+
+/* Precedence in expressions */
+
+/* ----- Grammar ----- */
+
+prog ::= decllist. {
+	pml_ast_finalize(ast);
+}
+
+/* Declarations */
+decllist ::= decllist decl. /* nothing to do: resolved below. */
+
+decllist ::= . /* nothing to do */
+
+decl ::= funcproto(F). {
+	if (F != NULL && pml_ast_add_func_proto(ast, F) < 0)
+		pmln_free(F);
+}
+decl ::= funcdecl(F). {
+	if (F != NULL && pml_ast_add_func(ast, F) < 0)
+		pmln_free(F);
+}
+decl ::= inlinedecl(F). {
+	if (F != NULL && pml_ast_add_func(ast, F) < 0)
+		pmln_free(F);
+}
+decl ::= gvar(V). {
+	if (V != NULL && pml_ast_add_var(ast, V) < 0)
+		pmln_free(V);
+}
+decl ::= rule(R). {
+	if (R != NULL && pml_ast_add_rule(ast, R) < 0)
+		pmln_free(R);
+}
+
+type(T) ::= INT. { T = PML_ETYPE_SCALAR; }
+type(T) ::= STR. { T = PML_ETYPE_STRREF; }
+
+iddecl(I) ::= type(T) ID(N). {
+	I.name = (char *)N.u.raw.data;
+	I.type = T;
+	I.width = 0;
+}
+
+fiddecl(I) ::= type(T) ID(N). {
+	I.name = (char *)N.u.raw.data;
+	I.type = T;
+	I.width = 0;
+}
+
+fiddecl(I) ::= VOID ID(N). {
+	I.name = (char *)N.u.raw.data;
+	I.type = PML_ETYPE_VOID;
+	I.width = 0;
+}
+
+funchdr(F) ::= fiddecl(I) LPAREN idlist(P) RPAREN. {
+	struct list *t, *x; 
+	struct pml_variable *p;
+
+	F = pmln_alloc(ast, PMLTT_FUNCTION);
+	if (F == NULL) {
+		free(I.name);
+		goto out_func_hdr;
+	}
+
+	F->name = I.name;
+	F->rtype = I.type;
+	l_for_each_safe(t, x, &P->list) {
+		F->arity += 1;
+		p = container(t, struct pml_variable, ln);
+		l_rem(&p->ln);
+		if (pml_func_add_param(F, p) < 0) {
+			free(I.name);
+			pmln_free(p);
+			pmln_free(F);
+			F = NULL;
+			goto out_func_hdr;
+		}
+	}
+	ast->livefunc = F;
+	ast->ltab = &F->vars;
+
+out_func_hdr:
+	pmln_free(P);
+}
+
+
+
+funcproto(FO) ::= funchdr(FI) SEMICOLON. {
+	FO = pml_ast_lookup_func(ast, FI->name);
+	if (FO != NULL) {
+		FO = NULL;
+		pml_check_func_proto(ast, FO, FI);
+		pmln_free(FI);
+	} else {
+		FO = FI;
+	}
+	ast->livefunc = NULL;
+	ast->ltab = NULL;
+}
+
+
+ldecl ::= iddecl(I) SEMICOLON. {
+	struct pml_variable *v;
+	v = pml_var_alloc(ast, I.name, PML_VTYPE_LOCAL, I.type, I.width, NULL);
+	if (v != NULL) {
+		if (pml_func_add_var(ast->ltab, ast->livefunc, v) < 0) {
+			pml_ast_err(ast, "error adding local var '%s'", I.name);
+			pmln_free(v);
+		}
+	}
+}
+
+ldecls ::= .
+ldecls ::= ldecls ldecl.
+ldecls ::= ldecls GLOBAL iddecl SEMICOLON.
+
+blkbody(B) ::= ldecls stmts(S). { B = S; }
+
+
+funcdecl(FO) ::= funchdr(FI) LBRACE blkbody(S) RBRACE. {
+	FO = pml_ast_lookup_func(ast, FI->name);
+	if (FO != NULL) {
+		if (FO->body != NULL || PML_FUNC_IS_INTRINSIC(FO)) {
+			pml_ast_err(ast, "duplicate function declaration '%s'",
+				    FO->name);
+			pmln_free(FI);
+			goto out_func_decl;
+		}
+		if (pml_check_func_proto(ast, FO, FI) < 0) {
+			pmln_free(FI);
+			goto out_func_decl;
+		}
+		pmln_free(FI);
+	} else {
+		FO = FI;
+	}
+	FO->body = (union pml_node *)S;
+
+out_func_decl:
+	ast->livefunc = NULL;
+	ast->ltab = NULL;
+}
+
+
+inlinedecl(I) ::= INLINE ID(N) LPAREN idlist(P) RPAREN LBRACE expr(E) RBRACE. {
+	struct list *t, *x;
+	struct pml_variable *p;
+
+	I = pmln_alloc(ast, PMLTT_FUNCTION);
+	if (I == NULL) {
+		free(N.u.raw.data);
+		goto out_inline_decl;
+	}
+	
+	I->name = (char *)N.u.raw.data;
+	I->rtype = PML_ETYPE_SCALAR;
+
+	l_for_each_safe(t, x, &P->list) {
+		I->arity += 1;
+		p = container(t, struct pml_variable, ln);
+		l_rem(&p->ln);
+		if (pml_func_add_param(I, p) < 0) {
+			free(N.u.raw.data);
+			pmln_free(p);
+			pmln_free(I);
+			goto out_inline_decl;
+		}
+	}
+
+	I->body = (union pml_node *)E;
+	I->flags |= PML_FF_INLINE;
+
+out_inline_decl:
+	pmln_free(P);
+}
+
+idlist(IL) ::= . { IL = pmln_alloc(ast, PMLTT_LIST); }
+idlist(IL) ::= someids(IL2). { IL = IL2; }
+someids(IL) ::= iddecl(I). {
+	struct pml_variable *v = pml_var_alloc(ast, I.name, PML_VTYPE_PARAM, 
+					       I.type, 0, NULL);
+	IL = NULL;
+	if (v == NULL) {
+		free(I.name);
+		goto out_someids;
+	}
+
+	IL = pmln_alloc(ast, PMLTT_LIST);
+	if (IL == NULL) {
+		pmln_free(v);
+		goto out_someids;
+	}
+
+	l_ins(&IL->list, &v->ln);
+
+out_someids:
+	v = NULL;
+}
+someids(IL) ::= someids(IL2) COMMA iddecl(I). {
+	struct pml_variable *v = pml_var_alloc(ast, I.name, PML_VTYPE_PARAM,
+					       I.type, 0, NULL);
+	if (v != NULL)
+		l_enq(&IL2->list, &v->ln);
+	IL = IL2;
+}
+
+
+gvar(G) ::= CONST ID(I) ASSIGN expr(E) SEMICOLON. {
+	G = pml_var_alloc(ast, (char *)I.u.raw.data, PML_VTYPE_CONST, 
+			  PML_ETYPE_SCALAR, 0, E);
+}
+gvar(G) ::= iddecl(I) SEMICOLON. {
+	G = pml_var_alloc(ast, I.name, PML_VTYPE_GLOBAL,
+			  I.type, 0, NULL); 
+}
+gvar(G) ::= iddecl(I) LBRACKET NUM(N) RBRACKET SEMICOLON. {
+	G = NULL;
+	if (I.type != PML_ETYPE_STRREF) {
+		pml_ast_err(ast, "non-string declaration with length");
+		free(I.name);
+	} else {
+		G = pml_var_alloc(ast, I.name, PML_VTYPE_GLOBAL,
+				  PML_ETYPE_BYTESTR, N.u.num, NULL); 
+	}
+}
+gvar(G) ::= iddecl(I) ASSIGN expr(E) SEMICOLON. {
+	G = NULL;
+	if (I.type == PML_ETYPE_STRREF) {
+		free(I.name);
+		pml_ast_err(ast,
+			    "String reference with initializer not supported.");
+	} else {
+		G = pml_var_alloc(ast, I.name, PML_VTYPE_GLOBAL, I.type, 0, E); 
+	}
+}
+gvar(G) ::= iddecl(I) LBRACKET NUM(N) RBRACKET ASSIGN value(VAL) SEMICOLON. {
+	G = NULL;
+	if (I.type != PML_ETYPE_STRREF) {
+		pml_ast_err(ast, "non-str declaration with length");
+		free(I.name);
+	} else {
+		G = pml_var_alloc(ast, I.name, PML_VTYPE_GLOBAL, 
+				  PML_ETYPE_BYTESTR, N.u.num, VAL);
+	}
+}
+gvar(G) ::= iddecl(I) LBRACKET RBRACKET ASSIGN value(VAL) SEMICOLON. {
+	G = NULL;
+	if (I.type != PML_ETYPE_STRREF) {
+		pml_ast_err(ast, "non-str with \"[]\"");
+		free(I.name);
+	} else {
+		G = pml_var_alloc(ast, I.name, PML_VTYPE_GLOBAL, 
+				  PML_ETYPE_BYTESTR, -1, VAL);
+		if (G == NULL)
+			pml_ast_err(ast, "Error allocating global str var");
+	}
+}
+
+
+/* Rules */
+rstart(R) ::= pktpat(P). {
+	R = pmln_alloc(ast, PMLTT_RULE);
+	if (R != NULL) {
+		R->pattern = P;
+		R->trigger = PML_RULE_PACKET;
+		ast->ltab = &R->vars;
+	}
+}
+rstart(R) ::= BEGIN. {
+	R = pmln_alloc(ast, PMLTT_RULE);
+	if (R != NULL) {
+		R->trigger = PML_RULE_BEGIN;
+		ast->ltab = &R->vars;
+	}
+}
+rstart(R) ::= TICK. {
+	R = pmln_alloc(ast, PMLTT_RULE);
+	if (R != NULL) {
+		R->trigger = PML_RULE_TICK;
+		ast->ltab = &R->vars;
+	}
+}
+rstart(R) ::= END. {
+	R = pmln_alloc(ast, PMLTT_RULE);
+	if (R != NULL) {
+		R->trigger = PML_RULE_END;
+		ast->ltab = &R->vars;
+	}
+}
+rstart(R) ::= . {
+	R = pmln_alloc(ast, PMLTT_RULE);
+	if (R != NULL) {
+		R->trigger = PML_RULE_PACKET;
+		ast->ltab = &R->vars;
+	}
+}
+
+
+
+rule(RO) ::= rstart(RI) LBRACE blkbody(S) RBRACE. {
+	RI->stmts = S;
+	RO = RI;
+	ast->ltab = NULL;
+}
+
+
+/* Statements */
+stmtlist(SL) ::= LBRACE stmts(SS) RBRACE. { SL = SS; }
+
+stmts(SS) ::= . {
+	SS = pmln_alloc(ast, PMLTT_LIST);
+}
+stmts(SSO) ::= stmts(SSI) stmt(S). {
+	l_enq(&SSI->list, &S->base.ln);
+	SSO = SSI;
+}
+stmts(SSO) ::= stmts(SSI) prstmt(P). {
+	/* a print 'statement' is actually a list of print statement nodes */
+	struct list sl;
+	l_enq(&P->ln, &sl); /* XXX equivalent to making l new list head */
+	l_append(&SSI->list, &sl);
+	SSO = SSI;
+}
+
+stmtorlist(SOL) ::= stmt(S). { 
+	SOL = pmln_alloc(ast, PMLTT_LIST);
+	if (SOL != NULL) {
+		l_enq(&SOL->list, &S->base.ln);
+	} else {
+		pmln_free(S);
+	}
+}
+stmtorlist(SOL) ::= prstmt(P). { 
+	/* a print 'statement' is actually a list of print statement nodes */
+	struct list sl;
+	SOL = pmln_alloc(ast, PMLTT_LIST);
+	if (SOL != NULL) {
+		l_enq(&P->ln, &sl); /* XXX equivalent to making l new list head */
+		l_append(&SOL->list, &sl);
+	} else {
+		pmln_free(P);
+	}
+}
+stmtorlist(SOL) ::= stmtlist(SL). { SOL = SL; }
+
+
+/* Specific types of statements */
+stmt(S) ::= locator(L) ASSIGN expr(E) SEMICOLON. {
+	struct pml_assign *a = pmln_alloc(ast, PMLTT_ASSIGN);
+	if (a != NULL) {
+		a->loc = L;
+		a->expr = E;
+	} else {
+		pmln_free(L);
+		pmln_free(E);
+	}
+	S = (union pml_node *)a;
+}
+
+stmt(S) ::= AMP locator(L) ASSIGN expr(E) SEMICOLON. {
+	struct pml_assign *a = pmln_alloc(ast, PMLTT_ASSIGN);
+	if (a != NULL) {
+		L->type = PMLTT_LOCADDR;
+		a->loc = L;
+		a->expr = E;
+	} else {
+		pmln_free(L);
+		pmln_free(E);
+	}
+	S = (union pml_node *)a;
+}
+
+stmt(S) ::= WHILE LPAREN expr(E) RPAREN stmtorlist(SOL). {
+	struct pml_while *w = pmln_alloc(ast, PMLTT_WHILE);
+	if (w != NULL) {
+		w->test = E;
+		w->body = SOL;
+	} else {
+		pmln_free(E);
+		pmln_free(SOL);
+	}
+	S = (union pml_node *)w;
+}
+
+stmt(S) ::= IF LPAREN expr(E) RPAREN stmtorlist(SOL). {
+	struct pml_if *ifs = pmln_alloc(ast, PMLTT_IF);
+	if (ifs != NULL) {
+		ifs->test = E;
+		ifs->tbody = SOL;
+	} else {
+		pmln_free(E);
+		pmln_free(SOL);
+	}
+	S = (union pml_node *)ifs;
+}
+
+stmt(S) ::= IF LPAREN expr(E) RPAREN stmtorlist(SLT) ELSE stmtorlist(SLF). {
+	struct pml_if *ifs = pmln_alloc(ast, PMLTT_IF);
+	if (ifs != NULL) {
+		ifs->test = E;
+		ifs->tbody = SLT;
+		ifs->fbody = SLF;
+	} else {
+		pmln_free(E);
+		pmln_free(SLT);
+		pmln_free(SLF);
+	}
+	S = (union pml_node *)ifs;
+}
+
+stmt(S) ::= cfmekw(M) expr(E) SEMICOLON.  {
+	struct pml_cfmod *m = pmln_alloc(ast, PMLTT_CFMOD);
+	if (m != NULL) {
+		m->cftype = M;
+		m->expr = E;
+	} else {
+		pmln_free(E);
+	}
+	S = (union pml_node *)m;
+}
+
+/* CFM keywords that can be used with an expression */
+cfmekw(M) ::= RETURN. { M = PML_CFM_RETURN; } 
+cfmekw(M) ::= SEND. { M = PML_CFM_SENDONE; } 
+cfmekw(M) ::= SENDNOFREE. { M = PML_CFM_SENDNOFREE; } 
+cfmekw(M) ::= DROP. { M = PML_CFM_DROPONE; } 
+
+stmt(S) ::= cfmkw(C) SEMICOLON. {
+	struct pml_cfmod *m = pmln_alloc(ast, PMLTT_CFMOD);
+	if (m != NULL)
+		m->cftype = C;
+	S = (union pml_node *)m;
+}
+
+cfmkw(C) ::= BREAK. { C = PML_CFM_BREAK; }
+cfmkw(C) ::= CONTINUE. { C = PML_CFM_CONTINUE; }
+cfmkw(C) ::= NEXTRULE. { C = PML_CFM_NEXTRULE; }
+cfmkw(C) ::= SEND. { C = PML_CFM_SENDALL; }
+cfmkw(C) ::= DROP. { C = PML_CFM_DROPALL; }
+
+/* this is separate because a print 'statement' with multiple */
+/* arguments gets parsed as a set of individual print statements */
+/* in the AST: one for each expression to print */
+prstmt(P) ::= PRINT prlist(PL) SEMICOLON. { 
+	struct pml_print *p;
+	p = container(l_prev(&PL->ln), struct pml_print, ln);
+	p->flags |= PML_PFLAG_NEWLINE;
+	P = PL;
+}
+
+prstmt(P) ::= PRINT prlist(PL) COMMA SEMICOLON. { P = PL; }
+
+prlist(N) ::= prlist(O) COMMA expr(E). {
+	struct pml_print *p = pml_print_alloc(ast, E, NULL);
+	if (p != NULL)
+		l_enq(&O->ln, &p->ln);
+	N = O;
+}
+
+prlist(P) ::= expr(E). {
+	P = pml_print_alloc(ast, E, NULL);
+}
+
+prlist(N) ::= prlist(O) COMMA prfmt(F) expr(E). {
+	struct pml_print *p = pml_print_alloc(ast, E, &F);
+	if (p != NULL)
+		l_enq(&O->ln, &p->ln);
+	N = O;
+}
+
+prlist(P) ::= prfmt(F) expr(E). {
+	P = pml_print_alloc(ast, E, &F);
+}
+
+prfmt(F) ::= MOD ID(T) MOD. {
+	F.width = 0;
+	F.flags = 0;
+	F.fmt = pml_print_strtofmt(T.u.raw.data);
+	if (F.fmt == PML_FMT_UNKNOWN)
+		pml_ast_err(ast, "Unknown print format type '%s'\n",
+			    T.u.raw.data);
+	free(T.u.raw.data);
+}
+prfmt(F) ::= MOD NUM(W) ID(T) MOD. {
+	F.width = W.u.num;
+	F.flags = 0;
+	F.fmt = pml_print_strtofmt(T.u.raw.data);
+	if (F.fmt == PML_FMT_UNKNOWN)
+		pml_ast_err(ast, "Unknown print format type '%s'\n",
+			    T.u.raw.data);
+	free(T.u.raw.data);
+}
+prfmt(F) ::= MOD MINUS NUM(W) ID(T) MOD. {
+	F.width = W.u.num;
+	F.flags = PML_PFLAG_LJUST;
+	F.fmt = pml_print_strtofmt(T.u.raw.data);
+	if (F.fmt == PML_FMT_UNKNOWN)
+		pml_ast_err(ast, "Unknown print format type '%s'\n",
+			    T.u.raw.data);
+	free(T.u.raw.data);
+}
+
+stmt(S) ::= expr(E) SEMICOLON. { S = (union pml_node *)E; }
+
+pktpat(PP) ::= PPBEGIN expr(E) PPEND. { PP = E; }
+
+expr(E) ::= expr(LHS) OR expr(RHS). {
+	E = pml_binop_alloc(ast, PMLOP_OR, LHS, RHS);
+}
+expr(E) ::= expr(LHS) AND expr(RHS). {
+	E = pml_binop_alloc(ast, PMLOP_AND, LHS, RHS);
+}
+expr(E) ::= expr(LHS) EQ expr(RHS). {
+	E = pml_binop_alloc(ast, PMLOP_EQ, LHS, RHS);
+}
+expr(E) ::= expr(LHS) NEQ expr(RHS). {
+	E = pml_binop_alloc(ast, PMLOP_NEQ, LHS, RHS);
+}
+expr(E) ::= expr(LHS) LT expr(RHS). {
+	E = pml_binop_alloc(ast, PMLOP_LT, LHS, RHS);
+}
+expr(E) ::= expr(LHS) GT expr(RHS). {
+	E = pml_binop_alloc(ast, PMLOP_GT, LHS, RHS);
+}
+expr(E) ::= expr(LHS) LEQ expr(RHS). {
+	E = pml_binop_alloc(ast, PMLOP_LEQ, LHS, RHS);
+}
+expr(E) ::= expr(LHS) GEQ expr(RHS). {
+	E = pml_binop_alloc(ast, PMLOP_GEQ, LHS, RHS);
+}
+expr(E) ::= expr(LHS) BOR expr(RHS). {
+	E = pml_binop_alloc(ast, PMLOP_BOR, LHS, RHS);
+}
+expr(E) ::= expr(LHS) BXOR expr(RHS). {
+	E = pml_binop_alloc(ast, PMLOP_BXOR, LHS, RHS);
+}
+expr(E) ::= expr(LHS) PLUS expr(RHS). {
+	E = pml_binop_alloc(ast, PMLOP_PLUS, LHS, RHS);
+}
+expr(E) ::= expr(LHS) MINUS expr(RHS). {
+	E = pml_binop_alloc(ast, PMLOP_MINUS, LHS, RHS);
+}
+expr(E) ::= expr(LHS) TIMES expr(RHS). {
+	E = pml_binop_alloc(ast, PMLOP_TIMES, LHS, RHS);
+}
+expr(E) ::= expr(LHS) DIV expr(RHS). {
+	E = pml_binop_alloc(ast, PMLOP_DIV, LHS, RHS);
+}
+expr(E) ::= expr(LHS) MOD expr(RHS). {
+	E = pml_binop_alloc(ast, PMLOP_MOD, LHS, RHS);
+}
+expr(E) ::= expr(LHS) SHL expr(RHS). {
+	E = pml_binop_alloc(ast, PMLOP_SHL, LHS, RHS);
+}
+expr(E) ::= expr(LHS) SHR expr(RHS). {
+	E = pml_binop_alloc(ast, PMLOP_SHR, LHS, RHS);
+}
+
+expr(E) ::= expr(LHS) matchop(OP) BYTESTR(T1) DIV BYTESTR(T2). {
+	struct pml_literal *v = pmln_alloc(ast, PMLTT_MASKVAL);
+	int r;
+
+	E = NULL;
+	if (v == NULL)
+		goto out_mask_match;
+
+	r = pml_bytestr_copy(ast, &v->u.maskval.val, PML_SEG_ROMEM,
+			     T1.u.raw.data, T1.u.raw.len);
+	if (r < 0) {
+		pmln_free(v);
+		goto out_mask_match;
+	}
+
+	r = pml_bytestr_copy(ast, &v->u.maskval.mask, PML_SEG_ROMEM,
+			     T2.u.raw.data, T2.u.raw.len);
+	if (r < 0) {
+		pmln_free(v);
+		goto out_mask_match;
+	}
+
+	E = pml_binop_alloc(ast, OP, LHS, (union pml_expr_u *)v); 
+
+out_mask_match:
+	free(T1.u.raw.data);
+	free(T2.u.raw.data);
+}
+
+expr(E) ::= expr(LHS) matchop(OP) strval(S). {
+	E = NULL;
+	if (S != NULL)
+		E = pml_binop_alloc(ast, OP, LHS, S);
+}
+
+expr(E) ::= expr(LHS) matchop(OP) IPV4ADDR(A) DIV NUM(L). {
+	struct pml_literal *v = pmln_alloc(ast, PMLTT_MASKVAL);
+	uchar mask[4] = { 0 };
+	int i, rem, r;
+
+	E = NULL;
+	if (v == NULL)
+		goto out_v4_pfx;
+
+	r = pml_bytestr_copy(ast, &v->u.maskval.val, PML_SEG_ROMEM,
+			     A.u.v4addr, 4);
+	if (r < 0) {
+		pmln_free(v);
+		goto out_v4_pfx;
+	}
+
+	if (L.u.num > 32) {
+		pmln_free(v);
+		pml_ast_err(ast, "IPv4 address mask > 32 bits\n");
+		goto out_v4_pfx;
+	}
+
+	i = 0;
+	rem = L.u.num;
+	while (rem > 8) {
+		mask[i++] = 0xff;
+		rem -= 8;
+	}
+	mask[i] = 0xFF - ((1 << (8 - rem)) - 1);
+
+	r = pml_bytestr_copy(ast, &v->u.maskval.mask, PML_SEG_ROMEM, mask, 4);
+	if (r < 0) {
+		pmln_free(v);
+		goto out_v4_pfx;
+	}
+
+	E = pml_binop_alloc(ast, OP, LHS, (union pml_expr_u *)v); 
+
+out_v4_pfx:
+}
+
+expr(E) ::= expr(LHS) matchop(OP) IPV4ADDR(A1) DIV IPV4ADDR(A2). {
+	struct pml_literal *v = pmln_alloc(ast, PMLTT_MASKVAL);
+	int r;
+
+	E = NULL;
+	if (v == NULL)
+		goto out_v4_mask;
+
+	r = pml_bytestr_copy(ast, &v->u.maskval.val, PML_SEG_ROMEM,
+			     A1.u.v4addr, 4);
+	if (r < 0) {
+		pmln_free(v);
+		goto out_v4_mask;
+	}
+
+	r = pml_bytestr_copy(ast, &v->u.maskval.mask, PML_SEG_ROMEM,
+			     A2.u.v4addr, 4);
+	if (r < 0) {
+		pmln_free(v);
+		goto out_v4_mask;
+	}
+	
+	E = pml_binop_alloc(ast, OP, LHS, (union pml_expr_u *)v); 
+
+out_v4_mask:
+}
+
+expr(E) ::= expr(LHS) matchop(OP) IPV6ADDR(A) DIV NUM(L). {
+	struct pml_literal *v = pmln_alloc(ast, PMLTT_MASKVAL);
+	uchar mask[16] = { 0 };
+	int i, rem, r;
+
+	E = NULL;
+	if (v == NULL)
+		goto out_v6_pfx;
+
+	r = pml_bytestr_copy(ast, &v->u.maskval.val, PML_SEG_ROMEM,
+			     A.u.v6addr, 16);
+	if (r < 0) {
+		pmln_free(v);
+		goto out_v6_pfx;
+	}
+
+	if (L.u.num > 128) {
+		pmln_free(v);
+		pml_ast_err(ast, "IPv6 address mask > 128 bits.\n");
+		goto out_v6_pfx;
+	}
+
+	i = 0;
+	rem = L.u.num;
+	while (rem > 8) {
+		mask[i++] = 0xff;
+		rem -= 8;
+	}
+	mask[i] = 0xFF - ((1 << (8 - rem)) - 1);
+
+	r = pml_bytestr_copy(ast, &v->u.maskval.mask, PML_SEG_ROMEM, mask,
+			     16);
+	if (r < 0) {
+		pmln_free(v);
+		goto out_v6_pfx;
+	}
+
+	E = pml_binop_alloc(ast, OP, LHS, (union pml_expr_u *)v); 
+
+out_v6_pfx:
+}
+
+expr(E) ::= expr(LHS) matchop(OP) IPV6ADDR(A1) DIV IPV6ADDR(A2). {
+	struct pml_literal *v = pmln_alloc(ast, PMLTT_MASKVAL);
+	int r;
+
+	E = NULL;
+	if (v == NULL)
+		goto out_v6_mask;
+
+	r = pml_bytestr_copy(ast, &v->u.maskval.val, PML_SEG_ROMEM,
+			     A1.u.v6addr, 16);
+	if (r < 0) {
+		pmln_free(v);
+		goto out_v6_mask;
+	}
+
+	r = pml_bytestr_copy(ast, &v->u.maskval.mask, PML_SEG_ROMEM,
+			     A2.u.v6addr, 16);
+	if (r < 0) {
+		pmln_free(v);
+		goto out_v6_mask;
+	}
+
+	E = pml_binop_alloc(ast, OP, LHS, (union pml_expr_u *)v); 
+
+out_v6_mask:
+}
+
+expr(E) ::= expr(LHS) matchop(OP) ETHADDR(E1) DIV ETHADDR(E2). {
+	struct pml_literal *v = pmln_alloc(ast, PMLTT_MASKVAL);
+	int r;
+
+	E = NULL;
+	if (v == NULL)
+		goto out_eth_mask;
+
+
+	r = pml_bytestr_copy(ast, &v->u.maskval.val, PML_SEG_ROMEM,
+			     E1.u.ethaddr, 6);
+	if (r < 0) {
+		pmln_free(v);
+		goto out_eth_mask;
+	}
+
+	r = pml_bytestr_copy(ast, &v->u.maskval.mask, PML_SEG_ROMEM,
+			     E2.u.ethaddr, 6);
+	if (r < 0) {
+		pmln_free(v);
+		goto out_eth_mask;
+	}
+
+	E = pml_binop_alloc(ast, OP, LHS, (union pml_expr_u *)v); 
+
+out_eth_mask:
+}
+
+expr(E) ::= expr(LHS) matchop(OP) locname(L). {
+	struct pml_literal *v;
+	int op = (OP == PMLOP_MATCH) ? PMLOP_MATCH : PMLOP_NOTMATCH;
+	E = NULL;
+	v = pml_lookup_ns_literal(ast, L);
+	if (v == NULL) {
+		pml_ast_err(ast, "unable to find protocol value '%s'",
+			    L->name);
+	} else if (v->type == PMLTT_SCALAR) {
+		pmln_free(v);
+		pml_ast_err(ast, "Protocol field '%s' on right side of match "
+				 "operator is neither a byte nor mask string",
+			    L->name);
+	} else {
+		E = pml_binop_alloc(ast, op, LHS, (union pml_expr_u *)v);
+	}
+	pmln_free(L);
+}
+
+expr(E) ::= expr(LHS) matchop(OP) REGEX(R). {
+	struct pml_literal *lit = pmln_alloc(ast, PMLTT_BYTESTR);
+	int op = (OP == PMLOP_MATCH) ? PMLOP_REXMATCH : PMLOP_NOTREXMATCH;
+	int r;
+
+	E = NULL;
+	if (lit == NULL)
+		goto out_regex_match;
+
+	r = pml_bytestr_copy(ast, &lit->u.bytestr, PML_SEG_ROMEM, R.u.raw.data,
+			     R.u.raw.len);
+	if (r < 0)
+		goto out_regex_match;
+
+	lit->u.bytestr.len -= 1;
+	pml_ast_add_regex(ast, lit);
+	E = pml_binop_alloc(ast, op, LHS, (union pml_expr_u *)lit); 
+
+out_regex_match:
+	free(R.u.raw.data);
+}
+
+matchop(OP) ::= MATCH. { OP = PMLOP_MATCH; }
+matchop(OP) ::= NOMATCH. { OP = PMLOP_NOTMATCH; }
+
+expr(E) ::= NOT vexpr(PE). { E = pml_unop_alloc(ast, PMLOP_NOT, PE); }
+expr(E) ::= BINV vexpr(PE). { E = pml_unop_alloc(ast, PMLOP_BINV, PE); }
+expr(E) ::= MINUS vexpr(PE). [NOT] { E = pml_unop_alloc(ast, PMLOP_NEG, PE); }
+expr(PE) ::= LPAREN expr(E) RPAREN. { PE = E; }
+
+vexpr(PE) ::= call(C). { PE = (union pml_expr_u *)C; }
+vexpr(PE) ::= value(V). { PE = (union pml_expr_u *)V; }
+
+call(C) ::= ID(N) LPAREN exprlist(A) RPAREN. { 
+	struct pml_function *f;
+	char *name = (char *)N.u.raw.data;
+	f = pml_ast_lookup_func(ast, name); 
+	if (f != NULL) {
+		C = pml_call_alloc(ast, f, A);
+	} else {
+		pmln_free(A);
+		pml_ast_err(ast, "Undefined function: %s\n", name);
+	}
+	free(name);
+}
+
+call(C) ::= ID(N) LPAREN RPAREN. { 
+	struct pml_function *f;
+	struct pml_list *args;
+	char *name = (char *)N.u.raw.data;
+	C = NULL;
+	f = pml_ast_lookup_func(ast, name);
+	if (f != NULL) {
+		args = pmln_alloc(ast, PMLTT_LIST);
+		if (args != NULL)
+			C = pml_call_alloc(ast, f, args);
+	} else {
+		pml_ast_err(ast, "Undefined function: %s\n", name);
+	}
+	free(name);
+}
+
+exprlist(EL1) ::= exprlist(EL0) COMMA expr(E). { 
+	l_enq(&EL0->list, &E->base.ln);
+	EL1 = EL0;
+}
+exprlist(EL) ::= expr(E). { 
+	struct pml_list *l = pmln_alloc(ast, PMLTT_LIST);
+	if (l != NULL) {
+		l_enq(&l->list, &E->base.ln);
+	} else {
+		pmln_free(E);
+	}
+	EL = l;
+}
+
+value(V) ::= locator(L). { 
+	V = (union pml_expr_u *)L;
+}
+value(V) ::= AMP locator(L). { 
+	L->type = PMLTT_LOCADDR;
+	V = (union pml_expr_u *)L;
+}
+value(V) ::= AMP strval(S). { 
+	struct pml_locator *loc = pmln_alloc(ast, PMLTT_LOCADDR);
+
+	if (loc != NULL) {
+		loc->eflags = PML_EFLAG_CONST|PML_EFLAG_PCONST;
+		loc->etype = PML_ETYPE_STRREF;
+		loc->width = 16;
+		loc->reftype = PML_REF_LITERAL;
+		loc->u.litref = (struct pml_literal *)S;
+	} else {
+		pmln_free(S);
+	}
+
+	V = (union pml_expr_u *)loc;
+}
+strval(V) ::= BYTESTR(I). {
+	struct pml_literal *v = pmln_alloc(ast, PMLTT_BYTESTR);
+	if (v != NULL)
+		pml_bytestr_copy(ast, &v->u.bytestr, PML_SEG_ROMEM,
+				 I.u.raw.data, I.u.raw.len);
+	free(I.u.raw.data);
+	V = (union pml_expr_u *)v;
+}
+strval(V) ::= STRING(I). {
+	struct pml_literal *v = pmln_alloc(ast, PMLTT_BYTESTR);
+	if (v != NULL) {
+		pml_bytestr_copy(ast, &v->u.bytestr, PML_SEG_ROMEM,
+				 I.u.raw.data, I.u.raw.len);
+		/* copied the null terminator for sanity */
+		/* but don't count in length */
+		v->u.bytestr.len -= 1;
+	}
+	free(I.u.raw.data);
+	V = (union pml_expr_u *)v;
+}
+value(VO) ::= strval(VI). { VO = VI; }
+value(V) ::= IPV4ADDR(I). {
+	struct pml_literal *v = pmln_alloc(ast, PMLTT_BYTESTR);
+	if (v != NULL)
+		pml_bytestr_copy(ast, &v->u.bytestr, PML_SEG_ROMEM,
+				 I.u.v4addr, 4);
+	V = (union pml_expr_u *)v;
+}
+value(V) ::= IPV6ADDR(I). {
+	struct pml_literal *v = pmln_alloc(ast, PMLTT_BYTESTR);
+	if (v != NULL)
+		pml_bytestr_copy(ast, &v->u.bytestr, PML_SEG_ROMEM,
+				 I.u.v6addr, 16);
+	V = (union pml_expr_u *)v;
+}
+value(V) ::= ETHADDR(I). {
+	struct pml_literal *v = pmln_alloc(ast, PMLTT_BYTESTR);
+	if (v != NULL)
+		pml_bytestr_copy(ast, &v->u.bytestr, PML_SEG_ROMEM,
+				 I.u.ethaddr, 6);
+	V = (union pml_expr_u *)v;
+}
+value(V) ::= numval(N). { V = (union pml_expr_u *)N; }
+value(V) ::= AT locname(L). {
+	struct ns_elem *ne = ns_lookup(NULL, L->name);
+	struct pml_literal *v = NULL;
+	if (ne == NULL) {
+		pml_ast_err(ast, "invalid @location: '%s'\n", L->name);
+	} else if (ne->type == NST_NAMESPACE) {
+		struct ns_namespace *ns = (struct ns_namespace *)ne;
+		v = pmln_alloc(ast, PMLTT_SCALAR);
+		if (v != NULL) {
+			v->width = 4;
+			v->u.scalar = ns->prid;
+		}
+	} else if (ne->type != NST_PKTFLD) {
+		struct ns_pktfld *pf = (struct ns_pktfld *)ne;
+		v = pmln_alloc(ast, PMLTT_SCALAR);
+		if (v != NULL)  {
+			v->width = 4;
+			v->u.scalar = pf->prid;
+		}
+	} else {
+		pml_ast_err(ast, "@location '%s' is neither a namespace "
+				 "or a packet field\n", L->name);
+	}
+	pmln_free(L);
+	V = (union pml_expr_u *)v;
+}
+
+
+locator(V) ::= locname(N). { V = N; }
+
+
+locator(V) ::= locname(N) LBRACKET expr(E) RBRACKET. {
+	N->off = E;
+	V = N;
+}
+
+locator(V) ::= locname(N) LBRACKET expr(E1) COMMA expr(E2) RBRACKET. {
+	N->off = E1;
+	N->len = E2;
+	V = N;
+}
+
+locname(L1) ::= locname(L0) DOT ID(TOK). {
+	if (pml_locator_extend_name(L0, (char *)TOK.u.raw.data, 
+				    TOK.u.raw.len) < 0)
+		pml_ast_err(ast, "Out of memory for string.\n");
+	free(TOK.u.raw.data);
+	L1 = L0;
+	L1->reftype = PML_REF_UNKNOWN_NS_ELEM;
+}
+
+locname(L) ::= ID(TOK). { 
+	L = pmln_alloc(ast, PMLTT_LOCATOR);
+	if (L != NULL) {
+		L->name = (char *)TOK.u.raw.data;
+	} else {
+		free(TOK.u.raw.data);
+	}
+}
+
+locname(L) ::= DOLLAR LPAREN expr(P) RPAREN ID(TOK). {
+	L = pmln_alloc(ast, PMLTT_LOCATOR);
+	if (L != NULL) {
+		L->name = (char *)TOK.u.raw.data;
+		L->reftype = PML_REF_UNKNOWN_NS_ELEM;
+		L->pkt = P;
+	} else {
+		free(TOK.u.raw.data);
+	}
+}
+
+locname(L) ::= DOLLAR LPAREN expr(P) COMMA expr(I) RPAREN ID(TOK). {
+	L = pmln_alloc(ast, PMLTT_LOCATOR);
+	if (L != NULL) {
+		L->name = (char *)TOK.u.raw.data;
+		L->reftype = PML_REF_UNKNOWN_NS_ELEM;
+		L->pkt = P;
+		L->idx = I;
+	} else {
+		free(TOK.u.raw.data);
+	}
+}
+
+numval(N) ::= NUM(TOK). {
+	N = pmln_alloc(ast, PMLTT_SCALAR);
+	if (N != NULL) {
+		N->width = 4;
+		N->u.scalar = TOK.u.num;
+	}
+}

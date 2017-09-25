@@ -3,7 +3,7 @@
  * Copyright 2013-2015
  * Christopher Adam Telfer
  *
- * nft.c -- Network Flow Tracker
+ * nftrk.c -- Network Flow Tracker
  *
  *
  *  This program is free software: you can redistribute it and/or modify

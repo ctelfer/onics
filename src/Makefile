@@ -11,7 +11,7 @@ COMMON_TARGETS= \
 	${BINDIR}/pc2xpkt\
 	${BINDIR}/xpkt2pc\
 	${BINDIR}/pdiff \
-	${BINDIR}/nft \
+	${BINDIR}/nftrk \
 	${BINDIR}/pmerge \
 	${BINDIR}/psort \
 	${BINDIR}/psplit \

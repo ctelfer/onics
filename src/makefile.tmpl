@@ -19,7 +19,7 @@ LIBOBJS= ${PKTOBJ} stdproto.o netvm.o netvm_prog.o pmltree.o \
 
 ALL_BINARIES= \
 	rawpkt pktdemux pktmux pktrel x2hpkt h2xpkt nvmas nvmpf pml pc2xpkt \
-	xpkt2pc pdiff nft pktin pktout pcapin pcapout pmerge psort psplit \
+	xpkt2pc pdiff nftrk pktin pktout pcapin pcapout pmerge psort psplit \
 	ipfrag ipreasm
 
 COMMON_TARGETS= \
@@ -35,7 +35,7 @@ COMMON_TARGETS= \
 	${BINDIR}/pc2xpkt\
 	${BINDIR}/xpkt2pc\
 	${BINDIR}/pdiff \
-	${BINDIR}/nft \
+	${BINDIR}/nftrk \
 	${BINDIR}/pmerge \
 	${BINDIR}/psort \
 	${BINDIR}/psplit \
@@ -192,8 +192,8 @@ ${BINDIR}/pdiff: pdiff.o stdproto.o fld.o ${PKTOBJ} ${PKTHDR}
 	${CC} -o ${BINDIR}/pdiff pdiff.o stdproto.o fld.o ${PKTOBJ} \
 		${DEFS} ${OPTS} ${INCS} ${LIBS}
 
-${BINDIR}/nft: nft.o stdproto.o ${PKTOBJ} ${PKTHDR}
-	${CC} -o ${BINDIR}/nft nft.o stdproto.o ${PKTOBJ} \
+${BINDIR}/nftrk: nftrk.o stdproto.o ${PKTOBJ} ${PKTHDR}
+	${CC} -o ${BINDIR}/nftrk nftrk.o stdproto.o ${PKTOBJ} \
 		${DEFS} ${OPTS} ${INCS} ${LIBS}
 
 ${BINDIR}/psort: psort.o stdproto.o fld.o ${PKTOBJ} ${PKTHDR}

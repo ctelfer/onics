@@ -690,7 +690,7 @@ int pkb_parse(struct pktbuf *pkb)
 		return -1;
 
 	for (prp=prp_next(&pkb->prp); !prp_list_end(prp); prp=prp_next(prp))
-		pkb_set_layer(pkb, prp, -1);
+		pkb_set_layer(pkb, prp, SET_LAYER_AUTO);
 
 	pkb->flags |= PKB_F_PARSED;
 
@@ -838,7 +838,7 @@ int pkb_insert_pdu(struct pktbuf *pkb, struct prparse *pprp, int prid)
 		return -1;
 	if (prp_fix_nxthdr(pprp, pkb->buf) < 0)
 		return -1;
-	pkb_set_layer(pkb, prp_next(pprp), -1);
+	pkb_set_layer(pkb, prp_next(pprp), SET_LAYER_AUTO);
 
 	return 0;
 }

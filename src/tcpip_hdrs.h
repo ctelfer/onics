@@ -24,12 +24,15 @@
 #include <cat/cat.h>
 
 /* -- Address Type Structures -- */
+#define ETH_ADDR_LEN	6
 struct ethaddr {
-	uint8_t			bytes[6];
+	uint8_t			bytes[ETH_ADDR_LEN];
 };
 
+
+#define IPV6_ADDR_LEN	16
 struct ipv6addr {
-	uint8_t			bytes[16];
+	uint8_t			bytes[IPV6_ADDR_LEN];
 };
 
 
