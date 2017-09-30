@@ -26,6 +26,8 @@
 #include <cat/aux.h>
 #include <cat/str.h>
 #include <cat/bitops.h>
+#include <cat/emalloc.h>
+#include <cat/err.h>
 #include "pmltree.h"
 #include "ns.h"
 #include "util.h"
@@ -70,9 +72,8 @@
 
 static ulong val32(struct pml_ast *ast, struct pml_retval *v);
 static const char *nts(int type);
-static struct pml_variable *pml_var_alloc_nc(struct pml_ast *ast, char *name, 
-				             int vtype, int etype, int size,
-				             union pml_expr_u *init);
+static struct pml_variable *pml_var_alloc_nc(char *name, int vtype, int etype,
+					     int size, union pml_expr_u *init);
 
 
 /* return -1 if conversion from stype to dtype is invalid and 0 otherwise */
@@ -142,19 +143,16 @@ static void *pml_bytestr_ptr(struct pml_ast *ast, struct pml_bytestr *bs)
 }
 
 
-static int symtab_init(struct pml_symtab *t)
+static void symtab_init(struct pml_symtab *t)
 {
 	struct hnode **bins;
 
 	abort_unless(t);
-	if ((bins = malloc(SYMTABSIZE * sizeof(struct hnode *))) == NULL) {
-		return -1;
-	}
+	bins = ecalloc(sizeof(struct hnode *), SYMTABSIZE);
 	ht_init(&t->tab, bins, SYMTABSIZE, cmp_str, ht_shash, NULL);
 	l_init(&t->list);
 	t->addr_rw1 = 0;
 	t->addr_rw2 = 0;
-	return 0;
 }
 
 
@@ -236,21 +234,12 @@ static void symtab_adj_var_addrs(struct pml_symtab *t)
 static int add_resv_var(struct pml_ast *ast, const char *name,
 			int type, ulong size)
 {
-	char *vname = strdup(name);
+	char *vname = estrdup(name);
 	struct pml_variable *v;
 	int rv;
 	struct pml_symtab *t = &ast->vars;
 
-	if (vname == NULL) {
-		pml_ast_err(ast, "out of memory allocating var name '%s'\n",
-			    name);
-		return -1;
-	}
-	v = pmln_alloc(ast, PMLTT_VAR);
-	if (v == NULL) {
-		free(vname);
-		return -1;
-	}
+	v = pmln_alloc(PMLTT_VAR);
 	v->vtype = PML_VTYPE_GLOBAL;
 	v->etype = type;
 	v->width = size;
@@ -268,12 +257,8 @@ int pml_ast_init(struct pml_ast *ast)
 	int i;
 	ast->error = 0;
 	ast->done = 0;
-	if (symtab_init(&ast->vars) < 0)
-		return -1;
-	if (symtab_init(&ast->funcs) < 0) {
-		symtab_destroy(&ast->vars);
-		return -1;
-	}
+	symtab_init(&ast->vars);
+	symtab_init(&ast->funcs);
 	if (add_resv_var(ast, "mem", PML_ETYPE_BYTESTR, 0) < 0)
 		return -1;
 	ast->b_rule = NULL;
@@ -661,21 +646,16 @@ int pml_ast_add_intrinsic(struct pml_ast *ast, struct pml_intrinsic *intr)
 		return -1;
 	}
 
-	f = pmln_alloc(ast, PMLTT_FUNCTION);
-	if (f == NULL)
-		return -1;
-
-	if ((f->name = strdup(intr->name)) == NULL)
-		goto enomem;
+	f = pmln_alloc(PMLTT_FUNCTION);
+	f->name = estrdup(intr->name);
 
 	for (i = 0; i < intr->arity; ++i) {
 		abort_unless(intr->params[i].name);
-		v = pml_var_alloc_nc(ast, intr->params[i].name, PML_VTYPE_PARAM,
+		v = pml_var_alloc_nc(intr->params[i].name, PML_VTYPE_PARAM,
 				     intr->params[i].etype, 0, NULL);
-		if (v == NULL)
-			goto enomem;
 		if (pml_func_add_param(f, v) < 0) {
 			pmln_free(f);
+			pmln_free(v);
 			return -1;
 		}
 	}
@@ -687,10 +667,6 @@ int pml_ast_add_intrinsic(struct pml_ast *ast, struct pml_intrinsic *intr)
 	abort_unless(symtab_add(&ast->funcs, (struct pml_sym *)f) >= 0);
 
 	return 0;
-
-enomem:
-	pmln_free(f);
-	return -1;
 }
 
 
@@ -899,14 +875,12 @@ void pml_ast_finalize(struct pml_ast *ast)
 }
 
 
-static union pml_node *_pmln_alloc(int type)
+void *pmln_alloc(int type)
 {
 	union pml_node *np;
 	struct pml_node_base *node;
 
-	np = calloc(1, sizeof(*np));
-	if (np == NULL)
-		return NULL;
+	np = ecalloc(1, sizeof(*np));
 
 	/* initialize the common elements of each node */
 	node = &np->base;
@@ -1040,11 +1014,7 @@ static union pml_node *_pmln_alloc(int type)
 	case PMLTT_FUNCTION: {
 		struct pml_function *p = &np->function;
 		ht_ninit(&p->hn, "");
-		if (symtab_init(&p->vars) < 0) {
-			symtab_destroy(&p->vars);
-			free(np);
-			return NULL;
-		}
+		symtab_init(&p->vars);
 		p->flags = 0;
 		p->name = NULL;
 		p->arity = 0;
@@ -1071,20 +1041,6 @@ static union pml_node *_pmln_alloc(int type)
 
 	}
 	return np;
-}
-
-
-void *pmln_alloc(struct pml_ast *ast, int type)
-{
-	union pml_node *n;
-
-	abort_unless(ast != NULL);
-	n = _pmln_alloc(type);
-	if (n == NULL)
-		pml_ast_err(ast, "Out of memory allocating '%s'-type node\n",
-			    nts(type));
-
-	return n;
 }
 
 
@@ -1197,38 +1153,27 @@ void pmln_free(void *nodep)
 }
 
 
-union pml_expr_u *pml_binop_alloc(struct pml_ast *ast, int op, 
-				  union pml_expr_u *left, 
+union pml_expr_u *pml_binop_alloc(int op, union pml_expr_u *left, 
 		                  union pml_expr_u *right)
 {
-	struct pml_op *o = pmln_alloc(ast, PMLTT_BINOP);
-	if (o != NULL) {
-		o->op = op;
-		o->arg1 = left;
-		o->arg2 = right;
-	} else {
-		pmln_free(left);
-		pmln_free(right);
-	}
+	struct pml_op *o = pmln_alloc(PMLTT_BINOP);
+	o->op = op;
+	o->arg1 = left;
+	o->arg2 = right;
 	return (union pml_expr_u *)o;
 }
 
 
-union pml_expr_u *pml_unop_alloc(struct pml_ast *ast, int op,
-				 union pml_expr_u *ex)
+union pml_expr_u *pml_unop_alloc(int op, union pml_expr_u *ex)
 {
-	struct pml_op *o = pmln_alloc(ast, PMLTT_UNOP);
-	if (o != NULL) {
-		o->op = op;
-		o->arg1 = ex;
-	} else {
-		pmln_free(ex);
-	}
+	struct pml_op *o = pmln_alloc(PMLTT_UNOP);
+	o->op = op;
+	o->arg1 = ex;
 	return (union pml_expr_u *)o;
 }
 
 
-static int find_gstr_init_size(union pml_expr_u *init)
+int pml_find_gstr_init_size(union pml_expr_u *init)
 {
 	struct pml_literal *lit;
 	struct pml_locator *loc;
@@ -1272,17 +1217,10 @@ static int find_gstr_init_size(union pml_expr_u *init)
 }
 
 
-struct pml_variable *pml_var_alloc(struct pml_ast *ast, char *name, 
-				   int vtype, int etype, int size,
+struct pml_variable *pml_var_alloc(char *name, int vtype, int etype, int size,
 				   union pml_expr_u *init)
 {
-	struct pml_variable *v = pmln_alloc(ast, PMLTT_VAR);
-
-	if (v == NULL) {
-		free(name);
-		pmln_free(init);
-		return NULL;
-	}
+	struct pml_variable *v = pmln_alloc(PMLTT_VAR);
 
 	v->name = name;
 	v->etype = etype;
@@ -1292,17 +1230,6 @@ struct pml_variable *pml_var_alloc(struct pml_ast *ast, char *name,
 	} else if (etype == PML_ETYPE_STRREF) {
 		v->width = PML_STRREF_SIZE;
 	} else {
-		if (size < 0) {
-			abort_unless(init != NULL);
-			abort_unless(vtype == PML_VTYPE_GLOBAL);
-			size = find_gstr_init_size(init);
-			if (size < 0) {
-				free(name);
-				pmln_free(init);
-				pmln_free(v);
-				return NULL;
-			}
-		}
 		v->width = size;
 		v->etype = PML_ETYPE_BYTESTR;
 	}
@@ -1312,44 +1239,19 @@ struct pml_variable *pml_var_alloc(struct pml_ast *ast, char *name,
 }
 
 
-static struct pml_variable *pml_var_alloc_nc(struct pml_ast *ast, char *name, 
-				             int vtype, int etype, int size,
-				             union pml_expr_u *init)
+static struct pml_variable *pml_var_alloc_nc(char *name, int vtype, int etype,
+					     int size, union pml_expr_u *init)
 {
-	struct pml_variable *v;
-	char *nc = strdup(name);
-
-	if (nc == NULL)
-		return NULL;
-	v = pml_var_alloc(ast, nc, vtype, etype, size, init);
-	if (v == NULL)
-		free(nc);
-
-	return v;
+	return pml_var_alloc(estrdup(name), vtype, etype, size, init);
 }
 
 
-struct pml_call *pml_call_alloc(struct pml_ast *ast, struct pml_function *func,
+struct pml_call *pml_call_alloc(struct pml_function *func,
 				struct pml_list *args)
 {
-	uint alen;
 	struct pml_call *c;
 
-	alen = l_length(&args->list);
-	if (alen != func->arity) {
-		pml_ast_err(ast, "argument length for call of '%s' does"
-				 "not match function arity (%u vs %u)\n",
-			    func->name, alen, func->arity);
-		return NULL;
-	}
-
-	c = pmln_alloc(ast, PMLTT_CALL);
-	if (c == NULL) {
-		pmln_free(args);
-		return NULL;
-	}
-
-
+	c = pmln_alloc(PMLTT_CALL);
 	c->func = func;
 	c->args = args;
 	c->etype = func->rtype;
@@ -1374,16 +1276,10 @@ struct pml_call *pml_call_alloc(struct pml_ast *ast, struct pml_function *func,
 }
 
 
-struct pml_print *pml_print_alloc(struct pml_ast *ast, union pml_expr_u *expr,
+struct pml_print *pml_print_alloc(union pml_expr_u *expr,
 				  const struct pml_print_fmt *fmt)
 {
-	struct pml_print *p = pmln_alloc(ast, PMLTT_PRINT);
-
-	if (p == NULL) {
-		pmln_free(expr);
-		return NULL;
-	}
-
+	struct pml_print *p = pmln_alloc(PMLTT_PRINT);
 	abort_unless(expr);
 	p->expr = expr;
 	if (fmt != NULL) {
@@ -1422,12 +1318,9 @@ int pml_bytestr_copy(struct pml_ast *ast, struct pml_bytestr *bs, int seg,
 		     void *data, ulong len)
 {
 	int r;
-	abort_unless(ast && bs && data && len > 0);
 
-	if (seg < PML_SEG_MIN || seg > PML_SEG_MAX) {
-		pml_ast_err(ast, "Invalid segment for bytestr copy: %d\n", seg);
-		return -1;
-	}
+	abort_unless(ast && bs && data && len > 0);
+	abort_unless(seg >= PML_SEG_MIN && seg <= PML_SEG_MAX);
 
 	bs->ispkt = 0;
 	bs->segnum = seg;
@@ -1435,7 +1328,7 @@ int pml_bytestr_copy(struct pml_ast *ast, struct pml_bytestr *bs, int seg,
 	bs->len = len;
 	r = dyb_cat_a(&ast->mi_bufs[seg], data, len);
 	if (r < 0)
-		pml_ast_err(ast, "out of memory in bytestr copy\n");
+		err("out of memory in bytestr copy\n");
 	return r;
 }
 
@@ -2380,36 +2273,21 @@ struct pml_literal *pml_lookup_ns_literal(struct pml_ast *ast,
 
 	if (e->type == NST_BYTESTR) {
 		struct ns_bytestr *nbs;
-		lit = pmln_alloc(ast, PMLTT_BYTESTR);
-		if (lit == NULL)
-			return NULL;
-
+		lit = pmln_alloc(PMLTT_BYTESTR);
 		nbs = (struct ns_bytestr *)e;
-		if (pml_bytestr_copy(ast, &lit->u.bytestr, PML_SEG_ROMEM,
-				     nbs->value.data, nbs->value.len) < 0) {
-			pmln_free((union pml_node *)lit);
-			return NULL;
-		}
+		pml_bytestr_copy(ast, &lit->u.bytestr, PML_SEG_ROMEM,
+				 nbs->value.data, nbs->value.len);
 	} else if (e->type == NST_MASKSTR) {
 		struct ns_maskstr *ms;
-		lit = pmln_alloc(ast, PMLTT_MASKVAL);
-		if (lit == NULL)
-			return NULL;
-
+		lit = pmln_alloc(PMLTT_MASKVAL);
 		ms = (struct ns_maskstr *)e;
-		if ((pml_bytestr_copy(ast, &lit->u.maskval.val, PML_SEG_ROMEM,
-				      ms->value.data, ms->value.len) < 0) ||
-		    (pml_bytestr_copy(ast, &lit->u.maskval.mask, PML_SEG_ROMEM,
-				      ms->mask.data, ms->mask.len) < 0)) {
-			pmln_free((union pml_node *)lit);
-			return NULL;
-		}
+		pml_bytestr_copy(ast, &lit->u.maskval.val, PML_SEG_ROMEM,
+				 ms->value.data, ms->value.len);
+		pml_bytestr_copy(ast, &lit->u.maskval.mask, PML_SEG_ROMEM,
+				 ms->mask.data, ms->mask.len);
 	} else if (e->type == NST_SCALAR) {
 		struct ns_scalar *sc;
-		lit = pmln_alloc(ast, PMLTT_SCALAR);
-		if (lit == NULL)
-			return NULL;
-
+		lit = pmln_alloc(PMLTT_SCALAR);
 		sc = (struct ns_scalar *)e;
 		lit->u.scalar = sc->value;
 	} else {
@@ -2481,12 +2359,7 @@ int pml_locator_resolve_nsref(struct pml_ast *ast, struct pml_locator *l)
 		ulong blen = cp - l->name;
 		++cp;
 		if ((rpf = find_reserved_pktfld(cp)) != PML_RPF_NONE) {
-			if ((name = malloc(blen + 1)) == NULL) {
-				pml_ast_err(ast,
-					    "out of memory duplicating "
-					    "packet field name\n");
-				return -1;
-			}
+			name = emalloc(blen + 1);
 			memcpy(name, l->name, blen);
 			name[blen] = '\0';
 		}
@@ -2551,9 +2424,7 @@ int pml_locator_resolve_nsref(struct pml_ast *ast, struct pml_locator *l)
 		if (l->pkt != NULL || l->idx != NULL || l->off != NULL ||
 		    l->len != NULL)
 			return -1;
-		lit = pmln_alloc(ast, PMLTT_SCALAR);
-		if (lit == NULL)
-			return -1;
+		lit = pmln_alloc(PMLTT_SCALAR);
 		sc = (struct ns_scalar *)e;
 		lit->u.scalar = sc->value;
 		l->u.litref = lit;
@@ -2584,15 +2455,10 @@ int pml_locator_resolve_nsref(struct pml_ast *ast, struct pml_locator *l)
 		if (nbs->value.len - off > len)
 			return -1;
 
-		lit = pmln_alloc(ast, PMLTT_BYTESTR);
-		if (lit == NULL)
-			return -1;
+		lit = pmln_alloc(PMLTT_BYTESTR);
 		lit->eflags = PML_EFLAG_CONST|PML_EFLAG_PCONST;
-		if (pml_bytestr_copy(ast, &lit->u.bytestr, PML_SEG_ROMEM,
-				     nbs->value.data + off, len) < 0) {
-			pmln_free((union pml_node *)lit);
-			return -1;
-		}
+		pml_bytestr_copy(ast, &lit->u.bytestr, PML_SEG_ROMEM,
+				 nbs->value.data + off, len);
 
 		if (l->off != NULL) {
 			pmln_free((union pml_node *)l->off);
@@ -2618,17 +2484,12 @@ int pml_locator_resolve_nsref(struct pml_ast *ast, struct pml_locator *l)
 		ms = (struct ns_maskstr *)e;
 		abort_unless(ms->value.len == ms->mask.len);
 
-		lit = pmln_alloc(ast, PMLTT_MASKVAL);
-		if (lit == NULL)
-			return -1;
+		lit = pmln_alloc(PMLTT_MASKVAL);
 		lit->eflags = PML_EFLAG_CONST|PML_EFLAG_PCONST;
-		if ((pml_bytestr_copy(ast, &lit->u.maskval.val, PML_SEG_ROMEM,
-				      ms->value.data, ms->value.len) < 0) ||
-		    (pml_bytestr_copy(ast, &lit->u.maskval.mask, PML_SEG_ROMEM,
-				      ms->mask.data, ms->mask.len) < 0)) {
-			pmln_free((union pml_node *)lit);
-			return -1;
-		}
+		pml_bytestr_copy(ast, &lit->u.maskval.val, PML_SEG_ROMEM,
+				 ms->value.data, ms->value.len);
+		pml_bytestr_copy(ast, &lit->u.maskval.mask, PML_SEG_ROMEM,
+				 ms->mask.data, ms->mask.len);
 
 		l->u.litref = lit;
 		l->reftype = PML_REF_LITERAL;
@@ -2713,10 +2574,8 @@ static int resolve_locsym(struct pml_resolve_ctx *ctx, struct pml_locator *l)
 	}
 
 	t = ctx->symtabs[ctx->vtidx];
-	v = pml_var_alloc_nc(ctx->ast, l->name, PML_VTYPE_LOCAL, 
-			     PML_ETYPE_SCALAR, 0, NULL);
-	if (v == NULL)
-		return -1;
+	v = pml_var_alloc_nc(l->name, PML_VTYPE_LOCAL, PML_ETYPE_SCALAR, 0,
+			     NULL);
 	v->etype = PML_ETYPE_SCALAR;
 	abort_unless(pml_func_add_var(t, ctx->livefunc, v) >= 0);
 
@@ -3331,9 +3190,7 @@ static struct pml_stack_frame *stkalloc(struct pml_ast *ast,
 {
 	struct pml_stack_frame *fr = NULL;
 
-	fr = malloc(sizeof(struct pml_stack_frame));
-	if (fr == NULL)
-		goto oomerr;
+	fr = emalloc(sizeof(struct pml_stack_frame));
 
 	if (node->base.type == PMLTT_FUNCTION) {
 		struct pml_function *p = (struct pml_function *)node;
@@ -3351,16 +3208,8 @@ static struct pml_stack_frame *stkalloc(struct pml_ast *ast,
 		return NULL;
 	}
 
-	fr->stack = calloc(1, fr->ssz);
-	if (fr->stack == NULL)
-		goto oomerr;
-
+	fr->stack = ecalloc(1, fr->ssz);
 	return fr;
-
-oomerr:
-	pml_ast_err(ast, "Out of memory in stkalloc()\n");
-	stkfree(fr);
-	return NULL;
 }
 
 
@@ -3979,9 +3828,7 @@ static int pml_opt_cexpr(union pml_expr_u *e, void *astp, union pml_expr_u **ne)
 
 		switch(r.etype) {
 		case PML_ETYPE_SCALAR:
-			lit = pmln_alloc(astp, PMLTT_SCALAR);
-			if (lit == NULL)
-				return -1;
+			lit = pmln_alloc(PMLTT_SCALAR);
 			lit->etype = PML_ETYPE_SCALAR;
 			lit->eflags = PML_EFLAG_CONST|PML_EFLAG_PCONST;
 			lit->width = PML_SCALAR_SIZE;
@@ -3989,9 +3836,7 @@ static int pml_opt_cexpr(union pml_expr_u *e, void *astp, union pml_expr_u **ne)
 			break;
 
 		case PML_ETYPE_BYTESTR:
-			lit = pmln_alloc(astp, PMLTT_BYTESTR);
-			if (lit == NULL)
-				return -1;
+			lit = pmln_alloc(PMLTT_BYTESTR);
 			lit->etype = PML_ETYPE_BYTESTR;
 			lit->eflags = PML_EFLAG_CONST|PML_EFLAG_PCONST;
 			lit->u.bytestr = r.bytes;
@@ -3999,9 +3844,7 @@ static int pml_opt_cexpr(union pml_expr_u *e, void *astp, union pml_expr_u **ne)
 			break;
 
 		case PML_ETYPE_MASKVAL:
-			lit = pmln_alloc(astp, PMLTT_MASKVAL);
-			if (lit == NULL)
-				return -1;
+			lit = pmln_alloc(PMLTT_MASKVAL);
 			lit->etype = PML_ETYPE_MASKVAL;
 			lit->eflags = PML_EFLAG_CONST|PML_EFLAG_PCONST;
 			lit->u.maskval.val = r.bytes;
@@ -4192,7 +4035,7 @@ extern void PML(void *parser, int tok, struct pmll_val xtok,
 
 pml_parser_t pml_alloc()
 {
-	return PMLAlloc(malloc);
+	return PMLAlloc(emalloc);
 }
 
 

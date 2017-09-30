@@ -82,8 +82,8 @@ struct pml_ast {
 	pml_parser_t *		parser;
 };
 
-/* 
- * we keep the size of the PML_SEG_ROMEM segment in the size of the mi_buf 
+/*
+ * we keep the size of the PML_SEG_ROMEM segment in the size of the mi_buf
  * that corresponds to that segment.  We keep the size of the RW segment in
  * the variable symbol table:  'vars.addr_rw2'.  vars.addr_rw1 is the
  * length of the explictly initialized portion.
@@ -461,7 +461,7 @@ struct pml_sym {
 
 
 enum {
-	PML_VTYPE_UNKNOWN, 
+	PML_VTYPE_UNKNOWN,
 	PML_VTYPE_CONST,
 	PML_VTYPE_GLOBAL,
 	PML_VTYPE_PARAM,
@@ -623,7 +623,7 @@ void pml_ast_clear_err(struct pml_ast *ast);
 
 /* -- PML AST node allocation -- */
 /* returns type (union pml_node *) */
-void *pmln_alloc(struct pml_ast *ast, int pmltt);
+void *pmln_alloc(int pmltt);
 /* takes type (union pml_node *) */
 void pmln_free(void *node);
 
@@ -633,16 +633,15 @@ int  pml_bytestr_copy(struct pml_ast *ast, struct pml_bytestr *bs, int seg,
 
 /* The following 'alloc()' calls all free their subtree arguments if */
 /* there is an error creating their respective node. */
-union pml_expr_u *pml_binop_alloc(struct pml_ast *ast, int op,
-				  union pml_expr_u *left, 
+union pml_expr_u *pml_binop_alloc(int op, union pml_expr_u *left,
 		                  union pml_expr_u *right);
-union pml_expr_u *pml_unop_alloc(struct pml_ast *ast, int op,
-				 union pml_expr_u *ex);
-struct pml_variable *pml_var_alloc(struct pml_ast *ast, char *name, int vtype, 
-				   int etype, int size, union pml_expr_u *init);
-struct pml_call *pml_call_alloc(struct pml_ast *ast, struct pml_function *func,
+union pml_expr_u *pml_unop_alloc(int op, union pml_expr_u *ex);
+int pml_find_gstr_init_size(union pml_expr_u *init);
+struct pml_variable *pml_var_alloc(char *name, int vtype, int etype, int size,
+				   union pml_expr_u *init);
+struct pml_call *pml_call_alloc(struct pml_function *func,
 				struct pml_list *args);
-struct pml_print *pml_print_alloc(struct pml_ast *ast, union pml_expr_u *expr,
+struct pml_print *pml_print_alloc(union pml_expr_u *expr,
 				  const struct pml_print_fmt *fmt);
 void pml_prlist_free(struct pml_print *p);
 int pml_print_strtofmt(const char *s);
@@ -651,13 +650,13 @@ int pml_print_strtofmt(const char *s);
 int pml_func_add_param(struct pml_function *func, struct pml_variable *var);
 int pml_func_add_var(struct pml_symtab *t, struct pml_function *f,
 		     struct pml_variable *v);
-int pml_check_func_proto(struct pml_ast *ast, struct pml_function *f1, 
+int pml_check_func_proto(struct pml_ast *ast, struct pml_function *f1,
 			 struct pml_function *f2);
 int pml_ast_add_func_proto(struct pml_ast *ast, struct pml_function *func);
 int pml_ast_add_func(struct pml_ast *ast, struct pml_function *func);
 int pml_ast_add_intrinsic(struct pml_ast *ast, struct pml_intrinsic *intr);
 struct pml_function *pml_ast_lookup_func(struct pml_ast *ast, char *name);
-struct pml_variable *pml_func_lookup_param(struct pml_function *func, 
+struct pml_variable *pml_func_lookup_param(struct pml_function *func,
 					   char *name);
 int pml_ast_add_var(struct pml_ast *ast, struct pml_variable *var);
 int pml_ast_add_rule(struct pml_ast *ast, struct pml_rule *rule);
@@ -674,7 +673,7 @@ void pml_ast_get_rexarr(struct pml_ast *ast, struct pml_literal ***larr,
 /* Returns 1 if the locator was resolved. */
 int  pml_locator_resolve_nsref(struct pml_ast *ast, struct pml_locator *loc);
 int  pml_resolve_refs(struct pml_ast *ast, union pml_node *node);
-struct pml_literal *pml_lookup_ns_literal(struct pml_ast *ast, 
+struct pml_literal *pml_lookup_ns_literal(struct pml_ast *ast,
 					  struct pml_locator *loc);
 
 void pml_ast_finalize(struct pml_ast *ast);
@@ -682,9 +681,9 @@ int  pml_ast_optimize(struct pml_ast *ast);
 
 
 /* -- Utility functions on a completed tree -- */
-/* 
-   Walk an abstract syntax tree.  
-   Call 'pre' before processing each node, 'in' between subnodes, and 
+/*
+   Walk an abstract syntax tree.
+   Call 'pre' before processing each node, 'in' between subnodes, and
    'post' after all subnodes are visited.  If the callbacks return < 0,
    abort processing.  If they return > 1 stop visiting the current node
    (and subnodes) but continue on the traversal.  If the return value is
@@ -701,7 +700,7 @@ int  pml_lit_val(struct pml_ast *ast, struct pml_literal *lit, ulong *val);
 
 /* -- PML tree evaluation -- */
 void pml_ast_mem_init(struct pml_ast *ast);
-int  pml_eval(struct pml_ast *ast, struct pml_stack_frame *fr, 
+int  pml_eval(struct pml_ast *ast, struct pml_stack_frame *fr,
 	      union pml_node *node, struct pml_retval *v);
 
 
