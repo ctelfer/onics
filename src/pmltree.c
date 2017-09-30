@@ -71,7 +71,6 @@
 
 
 static ulong val32(struct pml_ast *ast, struct pml_retval *v);
-static const char *nts(int type);
 static struct pml_variable *pml_var_alloc_nc(char *name, int vtype, int etype,
 					     int size, union pml_expr_u *init);
 
@@ -1153,6 +1152,54 @@ void pmln_free(void *nodep)
 }
 
 
+struct pml_rule *pml_rule_alloc(int trigger, union pml_expr_u *pattern)
+{
+	struct pml_rule *r = pmln_alloc(PMLTT_RULE);
+	r->trigger = trigger;
+	r->pattern = pattern;
+	return r;
+}
+
+
+struct pml_assign *pml_assign_alloc(struct pml_locator *loc,
+				    union pml_expr_u *val)
+{
+	struct pml_assign *a = pmln_alloc(PMLTT_ASSIGN);
+	a->loc = loc;
+	a->expr = val;
+	return a;
+}
+
+
+struct pml_while *pml_while_alloc(union pml_expr_u *test, struct pml_list *body)
+{
+	struct pml_while *w = pmln_alloc(PMLTT_WHILE);
+	w->test = test;
+	w->body = body;
+	return w;
+}
+
+
+struct pml_if *pml_if_alloc(union pml_expr_u *test, struct pml_list *tbody,
+			    struct pml_list *fbody)
+{
+	struct pml_if *ifs = pmln_alloc(PMLTT_IF);
+	ifs->test = test;
+	ifs->tbody = tbody;
+	ifs->fbody = fbody;
+	return ifs;
+}
+
+
+struct pml_cfmod *pml_cfmod_alloc(int type, union pml_expr_u *val)
+{
+	struct pml_cfmod *m = pmln_alloc(PMLTT_CFMOD);
+	m->cftype = type;
+	m->expr = val;
+	return m;
+}
+
+
 union pml_expr_u *pml_binop_alloc(int op, union pml_expr_u *left, 
 		                  union pml_expr_u *right)
 {
@@ -1314,22 +1361,28 @@ void pml_prlist_free(struct pml_print *p)
 }
 
 
-int pml_bytestr_copy(struct pml_ast *ast, struct pml_bytestr *bs, int seg,
-		     void *data, ulong len)
+void pml_bytestr_copyro(struct pml_ast *ast, struct pml_bytestr *bs, void *data,
+			ulong len)
 {
-	int r;
+	int rv;
 
 	abort_unless(ast && bs && data && len > 0);
-	abort_unless(seg >= PML_SEG_MIN && seg <= PML_SEG_MAX);
 
 	bs->ispkt = 0;
-	bs->segnum = seg;
-	bs->addr = dyb_last(&ast->mi_bufs[seg]);
+	bs->segnum = PML_SEG_ROMEM;
+	bs->addr = dyb_last(&ast->mi_bufs[PML_SEG_ROMEM]);
 	bs->len = len;
-	r = dyb_cat_a(&ast->mi_bufs[seg], data, len);
-	if (r < 0)
+	rv = dyb_cat_a(&ast->mi_bufs[PML_SEG_ROMEM], data, len);
+	if (rv < 0)
 		err("out of memory in bytestr copy\n");
-	return r;
+}
+
+
+void pml_maskval_copyro(struct pml_ast *ast, struct pml_maskval *mv, void *val,
+			ulong vlen, void *mask, ulong mlen)
+{
+	pml_bytestr_copyro(ast, &mv->val, val, vlen);
+	pml_bytestr_copyro(ast, &mv->mask, mask, mlen);
 }
 
 
@@ -1396,23 +1449,6 @@ static void print_bytes(struct pml_ast *ast, struct pml_bytestr *bs, uint depth)
 		if ((i == bs->len - 1) || (i % 8 == 7))
 			fputc('\n', stdout);
 	}
-}
-
-
-static const char *nt_strs[] = {
-	"list", "scalar", "byte string", "mask string", "binary operator",
-	"unary operator", "call", "locator", "location address", 
-	"if statement", "while statement", "assignment",
-	"control flow modifier", "print", "variable", "function", "rule"
-};
-
-
-static const char *nts(int type)
-{
-	if ((type >= PMLTT_LIST) && (type <= PMLTT_RULE))
-		return nt_strs[type];
-	else
-		return "INVALID!";
 }
 
 
@@ -2275,16 +2311,14 @@ struct pml_literal *pml_lookup_ns_literal(struct pml_ast *ast,
 		struct ns_bytestr *nbs;
 		lit = pmln_alloc(PMLTT_BYTESTR);
 		nbs = (struct ns_bytestr *)e;
-		pml_bytestr_copy(ast, &lit->u.bytestr, PML_SEG_ROMEM,
-				 nbs->value.data, nbs->value.len);
+		pml_bytestr_copyro(ast, &lit->u.bytestr, nbs->value.data,
+				   nbs->value.len);
 	} else if (e->type == NST_MASKSTR) {
 		struct ns_maskstr *ms;
 		lit = pmln_alloc(PMLTT_MASKVAL);
 		ms = (struct ns_maskstr *)e;
-		pml_bytestr_copy(ast, &lit->u.maskval.val, PML_SEG_ROMEM,
-				 ms->value.data, ms->value.len);
-		pml_bytestr_copy(ast, &lit->u.maskval.mask, PML_SEG_ROMEM,
-				 ms->mask.data, ms->mask.len);
+		pml_maskval_copyro(ast, &lit->u.maskval, ms->value.data,
+				   ms->value.len, ms->mask.data, ms->mask.len);
 	} else if (e->type == NST_SCALAR) {
 		struct ns_scalar *sc;
 		lit = pmln_alloc(PMLTT_SCALAR);
@@ -2457,8 +2491,8 @@ int pml_locator_resolve_nsref(struct pml_ast *ast, struct pml_locator *l)
 
 		lit = pmln_alloc(PMLTT_BYTESTR);
 		lit->eflags = PML_EFLAG_CONST|PML_EFLAG_PCONST;
-		pml_bytestr_copy(ast, &lit->u.bytestr, PML_SEG_ROMEM,
-				 nbs->value.data + off, len);
+		pml_bytestr_copyro(ast, &lit->u.bytestr, nbs->value.data + off,
+				   len);
 
 		if (l->off != NULL) {
 			pmln_free((union pml_node *)l->off);
@@ -2486,10 +2520,8 @@ int pml_locator_resolve_nsref(struct pml_ast *ast, struct pml_locator *l)
 
 		lit = pmln_alloc(PMLTT_MASKVAL);
 		lit->eflags = PML_EFLAG_CONST|PML_EFLAG_PCONST;
-		pml_bytestr_copy(ast, &lit->u.maskval.val, PML_SEG_ROMEM,
-				 ms->value.data, ms->value.len);
-		pml_bytestr_copy(ast, &lit->u.maskval.mask, PML_SEG_ROMEM,
-				 ms->mask.data, ms->mask.len);
+		pml_maskval_copyro(ast, &lit->u.maskval, ms->value.data,
+				   ms->value.len, ms->mask.data, ms->mask.len);
 
 		l->u.litref = lit;
 		l->reftype = PML_REF_LITERAL;

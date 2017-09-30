@@ -628,11 +628,21 @@ void *pmln_alloc(int pmltt);
 void pmln_free(void *node);
 
 int  pml_locator_extend_name(struct pml_locator *l, char *name, ulong len);
-int  pml_bytestr_copy(struct pml_ast *ast, struct pml_bytestr *bs, int seg,
-		      void *data, ulong len);
+void pml_bytestr_copyro(struct pml_ast *ast, struct pml_bytestr *bs, void *data,
+			ulong len);
+void pml_maskval_copyro(struct pml_ast *ast, struct pml_maskval *mv, void *val,
+			ulong vlen, void *mask, ulong mlen);
 
 /* The following 'alloc()' calls all free their subtree arguments if */
 /* there is an error creating their respective node. */
+struct pml_rule *pml_rule_alloc(int trigger, union pml_expr_u *pattern);
+struct pml_assign *pml_assign_alloc(struct pml_locator *loc,
+				    union pml_expr_u *val);
+struct pml_while *pml_while_alloc(union pml_expr_u *test,
+				  struct pml_list *body);
+struct pml_if *pml_if_alloc(union pml_expr_u *test, struct pml_list *tbody,
+			    struct pml_list *fbody);
+struct pml_cfmod *pml_cfmod_alloc(int type, union pml_expr_u *val);
 union pml_expr_u *pml_binop_alloc(int op, union pml_expr_u *left,
 		                  union pml_expr_u *right);
 union pml_expr_u *pml_unop_alloc(int op, union pml_expr_u *ex);
@@ -693,7 +703,6 @@ int  pmln_walk(union pml_node *np, void *ctx, pml_walk_f pre, pml_walk_f in,
 	       pml_walk_f post);
 int  pml_ast_walk(struct pml_ast *ast, void *ctx, pml_walk_f pre,
 		  pml_walk_f in, pml_walk_f post);
-void pmln_print(union pml_node *node, uint depth);
 void pml_ast_print(struct pml_ast *ast);
 int  pml_lit_val(struct pml_ast *ast, struct pml_literal *lit, ulong *val);
 
