@@ -32,10 +32,6 @@
 #include "ns.h"
 #include "util.h"
 
-
-/* macros to simplify list management */
-#define l_to_node(p) (union pml_node *)container(p, struct pml_node_base, ln)
-
 #define sym_for_each(_n, _st) l_for_each((_n), &(_st)->list)
 #define sym_for_each_safe(_n, _x, _st) l_for_each_safe((_n), (_x), &(_st)->list)
 
@@ -571,6 +567,7 @@ int pml_check_func_proto(struct pml_ast *ast, struct pml_function *f1,
 		pml_ast_err(ast,
 			    "Function %s does not match prototype\n",
 			    f1->name);
+		return -1;
 	}
 
 	n1 = l_head(&f1->vars.list);

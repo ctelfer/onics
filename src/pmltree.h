@@ -573,6 +573,9 @@ union pml_node {
 	struct pml_locator	locator;
 };
 
+/* macros to simplify list management */
+#define l_to_node(p) (union pml_node *)container(p, struct pml_node_base, ln)
+
 
 /* PML expression (and maybe statement) evaluation */
 struct pml_stack_frame {
@@ -711,14 +714,5 @@ int  pml_lit_val(struct pml_ast *ast, struct pml_literal *lit, ulong *val);
 void pml_ast_mem_init(struct pml_ast *ast);
 int  pml_eval(struct pml_ast *ast, struct pml_stack_frame *fr,
 	      union pml_node *node, struct pml_retval *v);
-
-
-/* -- Parser interface -- */
-pml_parser_t pml_alloc();
-int pml_parse(pml_parser_t p, struct pml_ast *ast, int tok,
-	      struct pmll_val xtok);
-void pml_free(pml_parser_t p);
-
-
 
 #endif /* __pmtree_h */

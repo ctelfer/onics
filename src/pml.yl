@@ -566,6 +566,7 @@ gvar(G) ::= iddecl(I) ASSIGN expr(E) SEMICOLON. {
 	G = NULL;
 	if (I.type == PML_ETYPE_STRREF) {
 		free(I.name);
+		pmln_free(E);
 		pml_ast_err(ast,
 			    "String reference with initializer not supported.");
 	} else {
@@ -577,6 +578,7 @@ gvar(G) ::= iddecl(I) LBRACKET NUM(N) RBRACKET ASSIGN value(VAL) SEMICOLON. {
 	if (I.type != PML_ETYPE_STRREF) {
 		pml_ast_err(ast, "non-str declaration with length");
 		free(I.name);
+		pmln_free(VAL);
 	} else {
 		G = pml_var_alloc(I.name, PML_VTYPE_GLOBAL, PML_ETYPE_BYTESTR,
 				  N.u.num, VAL);
