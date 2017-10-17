@@ -27,7 +27,6 @@
 #include <cat/buffer.h>
 #include <stdio.h>
 #include <stdint.h>
-#include "pmllex.h"
 
 
 /* -- Data structures for the PML Abstract Syntax Tree -- */
@@ -78,8 +77,6 @@ struct pml_ast {
 	struct pml_symtab *	ltab;
 	struct pml_function *	livefunc;
 	char			errbuf[256];
-	struct pmllex *		scanner;
-	pml_parser_t *		parser;
 };
 
 /*
@@ -617,9 +614,6 @@ struct pml_intrinsic {
 /* -- basic AST initialization and maintenance -- */
 int  pml_ast_init(struct pml_ast *ast);
 int  pml_ast_add_std_intrinsics(struct pml_ast *ast);
-void pml_ast_set_parser(struct pml_ast *ast, struct pmllex *scanner,
-		        pml_parser_t *parser);
-void pml_ast_free_parser(struct pml_ast *ast);
 void pml_ast_clear(struct pml_ast *ast);
 void pml_ast_err(struct pml_ast *ast, const char *fmt, ...);
 void pml_ast_clear_err(struct pml_ast *ast);

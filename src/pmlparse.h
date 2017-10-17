@@ -36,19 +36,19 @@ struct pml_parser *pmlp_alloc(void);
  * Reset the import path the parser.
  */
 
-void pmlp_ipath_reset(struct pmllex *lex);
+void pmlp_ipath_reset(struct pml_parser *pmlp);
 
 
 /*
  * Append a directory to the import path.
  */
-int pmll_ipath_append(struct pmllex *lex, const char *dir);
+int pmlp_ipath_append(struct pml_parser *pmlp, const char *dir);
 
 
 /*
  * Reset the input stream for the parser
  */
-void pmlp_reset_input(struct pml_parser *parser);
+void pmlp_reset_input(struct pml_parser *pmlp);
 
 
 /* 
@@ -73,7 +73,7 @@ int pmlp_add_infile(struct pml_parser *pmlp, FILE *f, int front,
  * pmlp_add_infile().  This routine searches the library search path
  * for the file if it can't open the base file name.
  */
-int pmll_open_add_infile(struct pml_parser *pmlp, const char *fn, int front);
+int pmlp_open_add_infile(struct pml_parser *pmlp, const char *fn, int front);
 
 
 /* set a callback to invoke on end of input */
@@ -91,8 +91,5 @@ int pmlp_parse(struct pml_parser *pmlp, struct pml_ast *ast);
  */
 void pmlp_free(struct pml_parser *pmlp);
 
-
-/* Get the error string for the scanner */
-const char *pmlp_get_err(struct pml_parser *pmlp);
 
 #endif /* __PMLPARSE_H */

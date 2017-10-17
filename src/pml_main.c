@@ -36,8 +36,8 @@
 #include "netvm.h"
 #include "netvm_std_coproc.h"
 #include "netvm_prog.h"
-#include "pmllex.h"
 #include "pmltree.h"
+#include "pmlparse.h"
 #include "pmlncg.h"
 
 
@@ -103,7 +103,7 @@ void usage()
 }
 
 
-void pmleoi(struct pmllex *scanner)
+void pmleoi(struct pml_parser *pmlp)
 {
 	struct pmlinput *pi;
 	static char insname[64];
@@ -117,12 +117,12 @@ void pmleoi(struct pmllex *scanner)
 		infile = fopen(pi->str, "r");
 		if (!infile)
 			errsys("Error opening file '%s'\n", pi->str);
-		if (pmll_add_infile(scanner, infile, 0, pi->str) < 0)
+		if (pmlp_add_infile(pmlp, infile, 0, pi->str) < 0)
 			errsys("Error adding input file '%s'\n", pi->str);
 	} else {
 		++insnum;
 		snprintf(insname, sizeof(insname), "-expr%d-", insnum);
-		if (pmll_add_instr(scanner, pi->str, 0, insname) < 0)
+		if (pmlp_add_instring(pmlp, pi->str, 0, insname) < 0)
 			errsys("Error adding expression '%d'\n", insnum);
 	}
 }
@@ -206,56 +206,35 @@ void parse_options(int argc, char *argv[], FILE **fin, FILE **fout)
 
 void parse_pml_program(struct netvm_program *prog)
 {
-	int tok;
-	struct pmllex *scanner;
-	pml_parser_t parser;
+	struct pml_parser *pmlp;
 	struct pml_ast ast;
-	struct pmll_val extra;
 	char estr[PMLNCG_MAXERR];
 	
-	if ((scanner = pmll_alloc()) == NULL)
-		errsys("pmllex_init: ");
+	if ((pmlp = pmlp_alloc()) == NULL)
+		errsys("pmlp_alloc(): ");
 	if (ipath[0] != '\0')
-		if (pmll_ipath_append(scanner, ipath) < 0)
+		if (pmlp_ipath_append(pmlp, ipath) < 0)
 			err("Import path too long");
 	if (include_system_path)
-		if (pmll_ipath_append(scanner, PML_SYS_PATH) < 0)
+		if (pmlp_ipath_append(pmlp, PML_SYS_PATH) < 0)
 			err("Import path too long");
 	if (import_std_lib)
-		if (pmll_open_add_infile(scanner, STDLIB_FILENAME, 1) < 0)
+		if (pmlp_open_add_infile(pmlp, STDLIB_FILENAME, 1) < 0)
 			errsys("Unable to open %s: ", STDLIB_FILENAME);
-	pmll_set_eoicb(scanner, &pmleoi);
+	pmlp_set_eoicb(pmlp, &pmleoi);
 
-	if (!(parser = pml_alloc()))
-		errsys("pml_alloc: ");
 	if (pml_ast_init(&ast) < 0)
 		errsys("pml_ast_init(): ");
-	pml_ast_set_parser(&ast, scanner, parser);
 	if (pml_ast_add_std_intrinsics(&ast) < 0)
 		errsys("pml_ast_add_std_intrinsics(): ");
 
 	if (verbosity > 0)
 		fprintf(stderr, "Starting program parse\n");
 
-	do {
-		tok = pmll_nexttok(scanner, &extra);
-		if (tok < 0)
-			err("Syntax error on line %lu of %s: '%s'\n",
-			    pmll_get_lineno(scanner), 
-			    pmll_get_iname(scanner),
-			    pmll_get_err(scanner));
-		if (pml_parse(parser, &ast, tok, extra)) {
-			err("parse error on line %lu of %s: %s\n",
-			    pmll_get_lineno(scanner),
-			    pmll_get_iname(scanner), 
-			    ast.errbuf);
-		}
-	} while (tok > 0);
+	if (pmlp_parse(pmlp, &ast) < 0)
+		err("Parse error: %s\n", ast.errbuf);
 
-	if (!ast.done)
-		err("Program file is not a complete PML program\n");
-
-	pml_ast_free_parser(&ast);
+	pmlp_free(pmlp);
 
 	/* TODO: modify pml_ast_print() to take a file to print to files */
 

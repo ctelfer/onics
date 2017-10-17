@@ -26,6 +26,25 @@
  *  # gcc -c pmlp.c -Ipath/to/catlib/include
  */
 
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include <stdarg.h>
+#include <errno.h>
+#include <ctype.h>
+#include <cat/cat.h>
+#include <cat/list.h>
+#include <cat/str.h>
+#include <cat/inport.h>
+#include <cat/stdclio.h>
+#include <cat/emalloc.h>
+#include <cat/err.h>
+#include "onics_config.h"
+#include "pmltree.h"
+#include "pmlparse.h"
+#include "ns.h"
+
+
 /*
 Language summary:
 
@@ -170,34 +189,16 @@ int Count;
 */
 
 
-/* ----- Basic Lemon Declarations ----- */
-
-#include <stdio.h>
-#include <string.h>
-#include <stdlib.h>
-#include <stdarg.h>
-#include <errno.h>
-#include <cat/cat.h>
-#include <cat/list.h>
-#include <cat/str.h>
-#include <cat/inport.h>
-#include <cat/stdclio.h>
-#include "onics_config.h"
-#include "pmltree.h"
-#include "pmlparse.h"
-#include "ns.h"
-
+/* ----- Basic Declarations ----- */
 
 struct pml_stack_entry {
 	int pse_type;
 	union {
-		union pml_node *node;
-		void *str;
+		void *ptr;
 		ulong ival;
 	} pse_u;
 };
-#define pse_node      pse_u.node
-#define pse_ptr	      pse_u.str
+#define pse_ptr	      pse_u.ptr
 #define pse_int       pse_u.ival
 
 
@@ -209,6 +210,59 @@ enum {
 };
 
 
+#define PML_LIB_PATH	"lib/pml"
+
+#define NEXTCNONE	-1
+#define NEXTCEOF	-2
+#define NEXTCERR	-3
+
+#define DEFAULT_PATH "."
+
+enum {
+	NTYPE, FTYPE, STYPE
+};
+
+
+struct inputs {
+	struct list			ln;
+	int				type;
+	ulong				lineno;
+	union {
+		struct cstr_inport	csi;
+		struct file_inport	fi;
+	} inp_u;
+	struct inport *			inp;
+	char				name[256];
+};
+
+#define l_to_input(_n) (container((_n), struct inputs, ln))
+
+
+struct pml_peg_parser;
+
+#define MAXSTACK 65536
+struct pml_parser {
+	struct pml_peg_parser *	pegp;
+	struct pml_ast *	ast;
+	char 			ipath[512];
+	struct inputs		inputs;
+	pmlp_eoi_f		eoicb;
+	byte_t			idchars[32];
+	byte_t			wschars[32];
+	struct pml_stack_entry	stack[MAXSTACK];
+	uint			sp;
+};
+
+#define INLIST(_pmlp) (&(_pmlp)->inputs.ln)
+#define CURINPUT(_pmlp) (l_to_input(l_head(INLIST(_pmlp))))
+#define NOINPUT(_pmlp, _pi) (&(_pi)->ln == INLIST(_pmlp))
+
+
+/* assumes that the next character is a ':' */
+static int nextc(void *pmlp);
+static void popinput(struct pml_parser *pmlp);
+
+
 static struct pml_stack_entry *_push(struct pml_parser *p, int type,
 				     const char *file, uint line);
 static struct pml_stack_entry *_pop(struct pml_parser *p, int type,
@@ -217,70 +271,86 @@ static struct pml_stack_entry *_top(struct pml_parser *p, int type,
 				     const char *file, uint line);
 
 
-#define _PUSH(_val, _type, _field, _err_test)				\
+#define _PUSH_PTR(_val, _type, _err_test)				\
 	do {								\
 		struct pml_stack_entry *pse;				\
-		if (_err_test(_val)) return -1;				\
-		pse =_push(pmlp_ctx, (_type), __FILE__, __LINE__);	\
+		void *_hold = (_val);					\
+		if (_err_test(_hold)) return -1;			\
+		pse =_push(PMLP, (_type), __FILE__, __LINE__);	\
 		if (pse == NULL) return -1;				\
-		pse->(_field) = (_val);					\
+		pse->pse_ptr = (_hold);					\
 	} while (0)
 
+#define _PUSH_INT(_val)							\
+	do {								\
+		struct pml_stack_entry *pse;				\
+		pse =_push(PMLP, PSE_TYPE_INT, __FILE__, __LINE__);	\
+		if (pse == NULL) return -1;				\
+		pse->pse_int = (_val);					\
+	} while (0)
 
 #define _POP(_var, _ntype, _field, _rtype)				\
 	do {								\
 		struct pml_stack_entry *pse =				\
-			_pop(pmlp_ctx, (_ntype) , __FILE__, __LINE__);	\
+			_pop(PMLP, (_ntype) , __FILE__, __LINE__);	\
+		(_var) = (_rtype)pse->_field;				\
+	} while (0)
+/*
 		if (pse == NULL)					\
 			return -1;					\
-		(_var) = (_rtype)pse->(_field);				\
-	} while (0)
+*/
 
 #define _TOP(_var, _ntype, _field, _rtype)				\
 	do {								\
 		struct pml_stack_entry *pse =				\
-			_top(pmlp_ctx, (_ntype) , __FILE__, __LINE__);	\
+			_top(PMLP, (_ntype) , __FILE__, __LINE__);	\
 		if (pse == NULL)					\
 			return -1;					\
-		(_var) = (_rtype)pse->(_field);				\
+		(_var) = (_rtype)pse->_field;				\
 	} while (0)
 
 
-#define NULL_TEST(_val) ((_val) == NULL)
-#define NO_ERR(_val) (0)
-#define PUSH_NULL_NODE() _PUSH(NULL, PSE_TYPE_NODE, pse_node, NO_ERR)
-#define PUSH_NODE(_val)  _PUSH(_val, PSE_TYPE_NODE, pse_node, NULL_TEST)
-#define POP_NODE(_var)   _POP(_var, PSE_TYPE_NODE, pse_node, void *)
-#define TOP_NODE(_var)   _TOP(_var, PSE_TYPE_NODE, pse_node, void *)
+#define NULL_TEST(_val)  ((_val) == NULL)
+#define NO_ERR(_val)     0
+#define PUSH_NULL_NODE() _PUSH_PTR(NULL, PSE_TYPE_NODE, NO_ERR)
+#define PUSH_NODE(_val)  _PUSH_PTR(_val, PSE_TYPE_NODE, NULL_TEST)
+#define POP_NODE(_var)   _POP(_var, PSE_TYPE_NODE, pse_ptr, void *)
+#define TOP_NODE(_var)   _TOP(_var, PSE_TYPE_NODE, pse_ptr, void *)
 #define PUSH_LIST()      PUSH_NODE(pmln_alloc(PMLTT_LIST))
-#define PUSH_PTR(_val)   _PUSH(_val, PSE_TYPE_PTR, pse_ptr, NULL_TEST)
+#define PUSH_PTR(_val)   _PUSH_PTR(_val, PSE_TYPE_PTR, NULL_TEST)
 #define POP_PTR(_var)    _POP(_var, PSE_TYPE_PTR, pse_ptr, void *)
 #define TOP_PTR(_var)    _TOP(_var, PSE_TYPE_PTR, pse_ptr, void *)
-#define PUSH_INT(_val)   _PUSH(_val, PSE_TYPE_INT, pse_int, NO_ERR)
+#define PUSH_INT(_val)   _PUSH_INT(_val)
 #define POP_INT(_var)    _POP(_var, PSE_TYPE_INT, pse_int, ulong) 
 #define TOP_INT(_var)    _TOP(_var, PSE_TYPE_INT, pse_int, ulong)
 
-#define pmlp_ast (((struct pml_parser *)pmlp_ctx)->ast)
+#define PMLP ((struct pml_parser *)pml_peg_ctx)
+#define AST  (PMLP->ast)
+#define TEXT pml_peg_text
 
 
+static char *_r2str(struct raw *r);
+static struct raw *_ralloc(size_t len);
 static struct raw *hex2str(struct raw *s);
+static uint hexpairval(char *s);
 static struct raw *qstr2str(struct raw *s, int qchar);
 static struct raw *eth2str(struct raw *s);
 static struct raw *ipv42str(struct raw *s);
-static struct raw *ipv62str(struct pml_parser *p, struct raw *s);
+static struct raw *ipv62str(struct pml_ast *ast, struct raw *s);
 static struct pml_literal *atloc2value(struct pml_parser *p, char *name);
 static struct pml_literal *_alloc_str(struct pml_ast *, struct raw *val,
 				      int lenadj);
+static ulong text2num(struct raw *r);
 static struct pml_literal *_alloc_num(unsigned long val);
-static struct pml_call *_alloc_call(struct pml_ast *ast, struct pml_function *f,
+static struct pml_call *_alloc_call(struct pml_ast *ast, char *name,
 				    struct pml_list *args);
-static int push_func_hdr(struct pml_parser *pmlp_ctx);
-static int add_func_proto_or_decl(struct pml_parser *pmlp_ctx);
-static void compare_fixed_string(struct pml_parser *pmlp);
-static void compare_masked_string(struct pml_parser *pmlp_ctx);
-static int num_to_mask(struct pml_parser *pmlp_ctx, int bytes)
-static void simple_binop(struct pml_parser *pmlp_ctx, int op);
-static void push_unop(struct pml_parser *pmlp_ctx, int op);
+static int push_func_hdr(struct pml_parser *pml_peg_ctx);
+static int add_func_proto_or_decl(struct pml_parser *pml_peg_ctx);
+static int compare_fixed_string(struct pml_parser *pmlp);
+static int compare_masked_string(struct pml_parser *pml_peg_ctx);
+static int num_to_mask(struct pml_parser *pml_peg_ctx, int bytes);
+static int simple_binop(struct pml_parser *pml_peg_ctx, int op);
+static int push_unop(struct pml_parser *pml_peg_ctx, int op);
 
 
 %%
@@ -288,22 +358,22 @@ static void push_unop(struct pml_parser *pmlp_ctx, int op);
 
 # Top Level Grammar
 
-prog <- decl* EOF { pml_ast_finalize(pmlp_ast); }
+prog <- decl* EOF { pml_ast_finalize(AST); }
 
 decl <- import / rule / inlineDecl / constant / funcOrProtoOrGlobal_
 
 
 # Declarations
 
-import <- IMPORT '"' Filename '"' SEMICOLON { 
+import <- IMPORT '"' Filename '"' SPACING SEMICOLON { 
 	char *filename;
 	POP_PTR(filename);
-	if (pmlp_open_add_infile(ast->scanner, filename, 1) < 0) {
-		pml_ast_err(pmlp_ast, "unable to open file '%s' for import",
+	if (pmlp_open_add_infile(PMLP, filename, 1) < 0) {
+		pml_ast_err(AST, "unable to open file '%s' for import",
 			    filename);
-		pmlp_error = -1; 
+		pml_peg_error = -1; 
 	}
-	free(filenaem);
+	free(filename);
 }
 
 
@@ -313,26 +383,26 @@ rule <- RulePattern Body_ {
 	POP_NODE(body);
 	POP_NODE(rule);
 	rule->stmts = body;
-	pmlp_ast->ltab = NULL;
-	if (pml_ast_add_rule(pmlp_ast, rule) < 0) {
-		pmlp_free(rule);
-		pmlp_error = -1;
+	AST->ltab = NULL;
+	if (pml_ast_add_rule(AST, rule) < 0) {
+		pmln_free(rule);
+		pml_peg_error = -1;
 	}
 }
 
 RulePattern <- BEGIN {
 	struct pml_rule *rule = pml_rule_alloc(PML_RULE_BEGIN, NULL);
-	pmlp_ast->ltab = &rule->vars;
+	AST->ltab = &rule->vars;
 	PUSH_NODE(rule);
 }
 / END {
 	struct pml_rule *rule = pml_rule_alloc(PML_RULE_END, NULL);
-	pmlp_ast->ltab = &rule->vars;
+	AST->ltab = &rule->vars;
 	PUSH_NODE(rule);
 }
 / TICK {
 	struct pml_rule *rule = pml_rule_alloc(PML_RULE_TICK, NULL);
-	pmlp_ast->ltab = &rule->vars;
+	AST->ltab = &rule->vars;
 	PUSH_NODE(rule);
 }
 / PPBEGIN Expr PPEND {
@@ -340,20 +410,21 @@ RulePattern <- BEGIN {
 	struct pml_rule *rule;
 	POP_NODE(pattern);
 	rule = pml_rule_alloc(PML_RULE_TICK, pattern);
-	pmlp_ast->ltab = &rule->vars;
+	AST->ltab = &rule->vars;
 	PUSH_NODE(rule);
 }
 / &LBRACE {
 	struct pml_rule *rule = pml_rule_alloc(PML_RULE_PACKET, NULL);
-	pmlp_ast->ltab = &rule->vars;
+	AST->ltab = &rule->vars;
 	PUSH_NODE(rule);
 }
 
 
 inlineDecl <- INLINE Ident ParamList LBRACE Expr RBRACE {
-	struct list *params, *t, *x;
-	struct pml_variable *param;
+	struct list *t, *x;
 	struct pml_function *inln;
+	struct pml_list *params;
+	struct pml_variable *param;
 
 	inln = pmln_alloc(PMLTT_FUNCTION);
 	inln->rtype = PML_ETYPE_SCALAR;
@@ -365,18 +436,18 @@ inlineDecl <- INLINE Ident ParamList LBRACE Expr RBRACE {
 	l_for_each_safe(t, x, &params->list) {
 		inln->arity += 1;
 		param = container(t, struct pml_variable, ln);
-		l_rem(&p->ln);
+		l_rem(&param->ln);
 		if (pml_func_add_param(inln, param) < 0) {
 			pmln_free(param);
 			pmln_free(inln);
-			pmlp_error = -1;
+			pml_peg_error = -1;
 			break;
 		}
 	}
 	pmln_free(params);
-	if (pml_ast_add_func(pmlp_ast, inln) < 0) {
+	if (pml_ast_add_func(AST, inln) < 0) {
 		pmln_free(inln);
-		pmlp_error = -1;
+		pml_peg_error = -1;
 	}
 }
 
@@ -387,10 +458,10 @@ constant <- CONST Ident ASSIGN Expr SEMICOLON {
 	union pml_expr_u *init;
 	POP_NODE(init);
 	POP_NODE(name);
-	v = pml_var_alloc(name, PML_VTYPE_CONST, PML_ETYPE_SCALAR, 0, expr);
-	if (pml_ast_add_var(pmlp_ast, v) < 0) {
+	v = pml_var_alloc(name, PML_VTYPE_CONST, PML_ETYPE_SCALAR, 0, init);
+	if (pml_ast_add_var(AST, v) < 0) {
 		pmln_free(v);
-		pmlp_error = -1;
+		pml_peg_error = -1;
 	}
 }
 
@@ -409,9 +480,9 @@ _funcOrProtoOrGlobalRest <- &LPAREN _funcOrProtoRest
                         
 
 _funcOrProtoRest <- ParamList { 
-	return push_func_hdr(pmlp_ctx); 
+	return push_func_hdr(PMLP); 
 } _FuncOrProtoSwitch {
-	return add_func_proto_or_decl(pmlp_ctx); 
+	return add_func_proto_or_decl(PMLP); 
 }
 
 _FuncOrProtoSwitch <- SEMICOLON { PUSH_NULL_NODE(); } / Body_
@@ -438,9 +509,9 @@ Param <- VarType Ident {
 _globalVar <- _GlobalRest {
 	struct pml_variable *v;
 	POP_NODE(v);
-	if (pml_ast_add_var(pmlp_ast, v) < 0) {
+	if (pml_ast_add_var(AST, v) < 0) {
 		pmln_free(v);
-		pmlp_error = -1;
+		pml_peg_error = -1;
 	}
 }
 
@@ -448,7 +519,6 @@ _globalVar <- _GlobalRest {
 _GlobalRest <- SEMICOLON {
 	char *name;
 	int type;
-	struct pml_variable *v;
 	POP_PTR(name);
 	POP_INT(type);
 	PUSH_NODE(pml_var_alloc(name, PML_VTYPE_GLOBAL, type, 0, NULL));
@@ -456,18 +526,17 @@ _GlobalRest <- SEMICOLON {
 / ASSIGN Value SEMICOLON {
 	char *name;
 	int type;
-	struct pml_variable *v;
 	union pml_expr_u *init;
 	POP_NODE(init);
 	POP_PTR(name);
 	POP_INT(type);
 	if (type == PML_ETYPE_STRREF) {
 		free(name);
-		pml_ast_err(pmlp_ast,
+		pml_ast_err(AST,
 			"String reference with initializer not suppported.");
-		pmlp_error = -1;
+		pml_peg_error = -1;
 	} else {
-		PUSH_NODE(pml_var_alloc(name, PML_VTYPE_GLOBAL, type, 0, init);
+		PUSH_NODE(pml_var_alloc(name, PML_VTYPE_GLOBAL, type, 0, init));
 	}
 }
 / LBRACKET _GlobalStrDecl
@@ -485,18 +554,18 @@ _GlobalStrDecl <- RBRACKET ASSIGN Value SEMICOLON {
 
 	size = pml_find_gstr_init_size(init);
 	if (size <= 0) {
-		pml_ast_err(pmlp_ast, "Unable to find size of global string %s",
+		pml_ast_err(AST, "Unable to find size of global string %s",
 			    name);
-		pmlp_error = -1;
+		pml_peg_error = -1;
 	} else if (type != PML_ETYPE_STRREF) {
-		pml_ast_err(pmlp_ast, "non-str with \"[]\"");
-		pmlp_error = -1;
+		pml_ast_err(AST, "non-str with \"[]\"");
+		pml_peg_error = -1;
 	} else {
 		PUSH_NODE(pml_var_alloc(name, PML_VTYPE_GLOBAL,
 				        PML_ETYPE_BYTESTR, size, init));
 	}
 
-	if (pmlp_error < 0) {
+	if (pml_peg_error < 0) {
 		free(name);
 		pmln_free(init);
 	}
@@ -513,7 +582,7 @@ _GlobalStrDecl <- RBRACKET ASSIGN Value SEMICOLON {
 	POP_INT(type);
 
 	if (type != PML_ETYPE_STRREF) {
-		pml_ast_err(pmlp_ast, "non-string declaration with length");
+		pml_ast_err(AST, "non-string declaration with length");
 		free(name);
 		pmln_free(init);
 		return -1;
@@ -538,10 +607,10 @@ localVars <- (VarType Ident SEMICOLON {
 	POP_PTR(name);
 	POP_INT(type);
 	v = pml_var_alloc(name, PML_VTYPE_LOCAL, type, 0, NULL);
-	if (pml_func_add_var(pmlp_ast->ltab, pmlp_ast->livefunc, v) < 0) {
-		pml_ast_err(ast, "error adding local var '%s'", I.name);
+	if (pml_func_add_var(AST->ltab, AST->livefunc, v) < 0) {
+		pml_ast_err(AST, "error adding local var '%s'", name);
 		pmln_free(v);
-		pmlp_error = -1;
+		pml_peg_error = -1;
 	}
 })*
 
@@ -596,9 +665,9 @@ PrintFmt <- !MOD { PUSH_NULL_NODE(); }
 	POP_PTR(fmtstr);
 	fid = pml_print_strtofmt(fmtstr);
 	if (fid == PML_FMT_UNKNOWN) {
-		pml_ast_err(pmlp_ast, "Unknown print format type '%s'\n",
+		pml_ast_err(AST, "Unknown print format type '%s'\n",
 			    fmtstr);
-		pmlp_error = -1;
+		pml_peg_error = -1;
 	}
 	free(fmtstr);
 	TOP_NODE(fmt);
@@ -610,7 +679,7 @@ _PrintEnd <- SEMICOLON {
 	struct pml_list *list;
 	struct pml_print *p;
 	TOP_NODE(list);
-	p = (struct pml_print *)l_to_node(l_last(&list->list));
+	p = (struct pml_print *)l_to_node(l_tail(&list->list));
 	p->flags |= PML_PFLAG_NEWLINE;
 } 
 / COMMA SEMICOLON
@@ -630,35 +699,33 @@ StmtOrList <- !LBRACE { PUSH_LIST(); } _Statement
 
 RefAssignment <- AMP Ident ASSIGN Expr SEMICOLON {
 	struct pml_assign *assign;
-	struct pml_list *list;
-	union pml_expr_u *expr;
-	char *name;
 	struct pml_locator *loc;
+	union pml_expr_u *rhs;
+	char *name;
+	struct pml_list *list;
 
-	POP_NODE(expr);
+	POP_NODE(rhs);
 	POP_PTR(name);
 	TOP_NODE(list);
 	
 	loc = pmln_alloc(PMLTT_LOCATOR);
 	loc->type = PMLTT_LOCADDR;
 	loc->name = name;
-	assign = pml_assign_alloc(loc, expr);
-	l_enq(&list->list, &loc->ln);
+	assign = pml_assign_alloc(loc, rhs);
+	l_enq(&list->list, &assign->ln);
 }
 
 
 WhileLoop <- WHILE LPAREN Expr RPAREN StmtOrList {
 	struct pml_list *stmts;
 	union pml_expr_u *test;
-	struct pml_while *loop;
 	POP_NODE(stmts);
-	POP_NODE(expr);
+	POP_NODE(test);
 	PUSH_NODE(pml_while_alloc(test, stmts));
 }
 
 
 IfStatement <- IF LPAREN Expr RPAREN StmtOrList ElseClause {
-	struct pml_if *ifstmt;
 	union pml_expr_u *test;
 	struct pml_list *tbody;
 	struct pml_list *fbody;
@@ -676,7 +743,7 @@ ControlFlowMod <- (&(ECFKW SEMICOLON) CtrlFlowSimple / CtrlFlowWithExpr) {
 	int type;
 	union pml_expr_u *expr;
 	POP_NODE(expr);
-	POP_NODE(type);
+	POP_INT(type);
 	PUSH_NODE(pml_cfmod_alloc(type, expr));
 }
 
@@ -708,11 +775,11 @@ _AssignOrExprRest <- ASSIGN Expr SEMICOLON {
 
 Expr <- OrExpr
 
-OrExpr <- AndExpr (OR OrExpr { simple_binop(pmlp_ctx, PMLP_OR); })*
+OrExpr <- AndExpr (OR OrExpr { return simple_binop(PMLP, PMLOP_OR); })*
 
-AndExpr <- CmpExpr (AND AndExpr { simple_binop(pmlp_ctx, PMLP_AND); })*
+AndExpr <- CmpExpr (AND AndExpr { return simple_binop(PMLP, PMLOP_AND); })*
 
-CmpExpr <- BorExpr (SimpleCmpOP BorExpr { simple_binop(pmlp_ctx, -1); } 
+CmpExpr <- BorExpr (SimpleCmpOp BorExpr { return simple_binop(PMLP, -1); } 
                     / MatchOp _MatchPat)?
 
 SimpleCmpOp <- EQ  { PUSH_INT(PMLOP_EQ);  }
@@ -730,46 +797,48 @@ MatchOp <- MATCH   { PUSH_INT(PMLOP_MATCH);    }
          / NOMATCH { PUSH_INT(PMLOP_NOTMATCH); }
 
 
-_HexPat <- HEXSTR { PUSH_PTR(hex2str(pmlp_text)); } SPACING (!DIV { 
-	compare_fixed_string(pmlp_ctx);
+_HexPat <- HEXSTR { PUSH_PTR(hex2str(TEXT)); } SPACING (!DIV { 
+	return compare_fixed_string(PMLP);
 } 
-/ DIV (HEXSTR { PUSH_PTR(hex2str(pmlp_text)); }) SPACING { 
-	compare_masked_string(pmlp_text);
+/ DIV (HEXSTR { PUSH_PTR(hex2str(TEXT)); }) SPACING { 
+	return compare_masked_string(PMLP);
 })
 
 _StrPat <- QUOTESTR SPACING {
-	PUSH_PTR(qstr2str(pmlp_text, '"'));
-	compare_fixed_string(pmlp_ctx);
+	PUSH_PTR(qstr2str(TEXT, '"'));
+	return compare_fixed_string(PMLP);
 } 
 
-_IPv4Pat <- IPV4ADDR { PUSH_PTR(ipv42str(pmlp_text)); } SPACING
+_IPv4Pat <- IPV4ADDR { PUSH_PTR(ipv42str(TEXT)); } SPACING
 (!DIV {
-	compare_fixed_string(pmlp_ctx);
+	return compare_fixed_string(PMLP);
 }
-/ DIV (IPV4ADDR { PUSH_PTR(ipv42str(pmlp_text)); }) SPACING {
-	compare_masked_string(pmlp_ctx);
+/ DIV (IPV4ADDR { PUSH_PTR(ipv42str(TEXT)); }) SPACING {
+	return compare_masked_string(PMLP);
 }
 / DIV Number {
-	return num_to_mask(pmlp_ctx, 4); 
-	compare_masked_string(pmlp_ctx);
+	pml_peg_error = num_to_mask(PMLP, 4); 
+	if (pml_peg_error >= 0)
+		return compare_masked_string(PMLP);
 })
 
-_IPv6Pat <- IPV6ADDR { PUSH_PTR(ipv62str(pmlp_ast, pmlp_text)); } SPACING
+_IPv6Pat <- IPV6ADDR { PUSH_PTR(ipv62str(AST, TEXT)); } SPACING
 (!DIV {
-	compare_fixed_string(pmlp_ctx);
+	return compare_fixed_string(PMLP);
 }
-/ DIV IPV6ADDR { PUSH_PTR(ipv62str(pmlp_ast, pmlp_text)); } SPACING {
-	compare_masked_string(pmlp_ctx);
+/ DIV IPV6ADDR { PUSH_PTR(ipv62str(AST, TEXT)); } SPACING {
+	return compare_masked_string(PMLP);
 }
 / DIV Number {
-	return num_to_mask(pmlp_ctx, 16);
-	compare_masked_string(pmlp_ctx);
+	pml_peg_error = num_to_mask(PMLP, 16);
+	if (pml_peg_error >= 0)
+		return compare_masked_string(PMLP);
 })
 
 
-_EthPat <- ETHADDR { PUSH_PTR(eth2str(pmlp_text)); } SPACING DIV 
-           (ETHADDR { PUSH_PTR(eth2str(pmlp_text)); }) SPACING {
-	compare_masked_string(pmlp_ctx);
+_EthPat <- ETHADDR { PUSH_PTR(eth2str(TEXT)); } SPACING DIV 
+           (ETHADDR { PUSH_PTR(eth2str(TEXT)); }) SPACING {
+	return compare_masked_string(PMLP);
 }
 
 _ProtoPat <- LocName {
@@ -779,26 +848,27 @@ _ProtoPat <- LocName {
 	int op;
 
 	POP_NODE(loc);
-	pat = pml_lookup_ns_literal(pmlp_ast, loc);
+	pat = pml_lookup_ns_literal(AST, loc);
 	if (pat == NULL) {
-		pml_ast_err(pmlp_ast, "unable to find protocol value '%s'",
+		pml_ast_err(AST, "unable to find protocol value '%s'",
 			    loc->name);
-		pmlp_error = -1;
+		pml_peg_error = -1;
 	} else if (pat->type == PMLTT_SCALAR) {
-		pml_ast_err(ast, "Protocol field '%s' on right side of match "
-				 "operator is neither a byte nor mask string",
+		pml_ast_err(AST, 
+			    "Protocol field '%s' on right side of match "
+			    "operator is neither a byte nor mask string",
 			    loc->name);
 		pmln_free(pat);
-		pmlp_error = -1;
+		pml_peg_error = -1;
 	} else {
 		POP_INT(op);
 		POP_NODE(left);
-		PUSH_NODE(pml_binop_alloc(op, left, (union pml_expr_u *)pat);
+		PUSH_NODE(pml_binop_alloc(op, left, (union pml_expr_u *)pat));
 	}
 	pmln_free(loc);
 }
 
-_RegexPat <- REGEXSTR { PUSH_PTR(qstr2str(pmlp_text, '`')); } SPACING {
+_RegexPat <- REGEXSTR { PUSH_PTR(qstr2str(TEXT, '`')); } SPACING {
 	struct raw *pat;
 	struct pml_literal *lit = pmln_alloc(PMLTT_BYTESTR);
 	union pml_expr_u *left;
@@ -807,72 +877,73 @@ _RegexPat <- REGEXSTR { PUSH_PTR(qstr2str(pmlp_text, '`')); } SPACING {
 	POP_PTR(pat);
 	POP_INT(op);
 	op = (op == PMLOP_MATCH) ? PMLOP_REXMATCH : PMLOP_NOTREXMATCH;
-	pml_bytestr_copyro(pmlp_ast, &lit->u.bytestr, pat->data, pat->len);
+	pml_bytestr_copyro(AST, &lit->u.bytestr, pat->data, pat->len);
 	lit->u.bytestr.len -= 1;
-	pml_ast_add_regex(pmlp_ast, lit);
+	pml_ast_add_regex(AST, lit);
 	POP_NODE(left);
-	E = pml_binop_alloc(op, left, (union pml_expr_u *)lit);
+	PUSH_NODE(pml_binop_alloc(op, left, (union pml_expr_u *)lit));
 	free(pat);
 }
 
 
-BorExpr <- BXorExpr (BOR BorExpr { simple_binop(pmlp_ctx, PMLP_BOR); })*
+BorExpr <- BXorExpr (BOR BorExpr { return simple_binop(PMLP, PMLOP_BOR); })*
 
-BXorExpr <- BAndExpr (BXOR BXorExpr { simple_binop(pmlp_ctx, PMLP_BXOR); })*
+BXorExpr <- BAndExpr (BXOR BXorExpr { return simple_binop(PMLP, PMLOP_BXOR); })*
 
-BAndExpr <- AddExpr (AMP AddExpr { simple_binop(pmlp_ctx, PMLP_BAND); })*
+BAndExpr <- AddExpr (AMP AddExpr { return simple_binop(PMLP, PMLOP_BAND); })*
 
-AddExpr <- MulExpr (AddOp AddExpr { simple_binop(pmlp_ctx, -1); })*
+AddExpr <- MulExpr (AddOp AddExpr { return simple_binop(PMLP, -1); })*
 AddOp <- PLUS { PUSH_INT(PMLOP_PLUS); } / MINUS { PUSH_INT(PMLOP_MINUS); } 
 
-MulExpr <- ShiftExpr (MulOp MulExpr { simple_binop(pmlp_ctx, -1); })*
+MulExpr <- ShiftExpr (MulOp MulExpr { return simple_binop(PMLP, -1); })*
 MulOp <- TIMES { PUSH_INT(PMLOP_TIMES); } 
        / DIV { PUSH_INT(PMLOP_DIV); }
        / MOD { PUSH_INT(PMLOP_MOD); }
 
 
-ShiftExpr <- UnopExpr (ShiftOp ShiftExpr { simple_binop(pmlp_ctx, -1); })*
-MulOp <- SHL { PUSH_INT(PMLOP_SHL); } 
-       / SHR { PUSH_INT(PMLOP_SHR); }
+ShiftExpr <- UnopExpr (ShiftOp ShiftExpr { return simple_binop(PMLP, -1); })*
+ShiftOp <- SHL { PUSH_INT(PMLOP_SHL); } 
+         / SHR { PUSH_INT(PMLOP_SHR); }
 
-UnopExpr <- NOT ParenExpr { push_unop(pmlp_ctx, PMLOP_NOT); } 
-          / BINV ParenExpr { push_unop(pmlp_ctx, PMLOP_BINV); }
-          / MINUS ParenExpr { push_unop(pmlp_ctx, PMLOP_NEG); }
+UnopExpr <- NOT ParenExpr { return push_unop(PMLP, PMLOP_NOT); } 
+          / BINV ParenExpr { return push_unop(PMLP, PMLOP_BINV); }
+          / MINUS ParenExpr { return push_unop(PMLP, PMLOP_NEG); }
 	  / ParenExpr
 
 ParenExpr <- LPAREN Expr RPAREN / Value
 
 Value <- HEXSTR SPACING { 
-	PUSH_NODE(_alloc_str(pmlp_ast, hex2str(pmlp_text), 0));
+	PUSH_NODE(_alloc_str(AST, hex2str(TEXT), 0));
 }
 / QUOTESTR SPACING { 
-	PUSH_NODE(_alloc_str(pmlp_ast, qstr2str(pmlp_text, '"'), 1));
+	PUSH_NODE(_alloc_str(AST, qstr2str(TEXT, '"'), 1));
 }
 / REGEXSTR SPACING { 
-	PUSH_NODE(_alloc_str(pmlp_ast, qstr2str(pmlp_text, '`'), 1));
+	PUSH_NODE(_alloc_str(AST, qstr2str(TEXT, '`'), 1));
 }
 / IPV4ADDR SPACING { 
-	PUSH_NODE(_alloc_str(pmlp_ast, ipv42str(pmlp_text), 0));
+	PUSH_NODE(_alloc_str(AST, ipv42str(TEXT), 0));
 }
 / IPV6ADDR SPACING { 
-	PUSH_NODE(_alloc_str(pmlp_ast, ipv62str(pmlp_ast, pmlp_text), 0));
+	PUSH_NODE(_alloc_str(AST, ipv62str(AST, TEXT), 0));
 }
 / ETHADDR SPACING { 
-	PUSH_NODE(_alloc_str(pmlp_ast, eth2str(pmlp_text), 0));
+	PUSH_NODE(_alloc_str(AST, eth2str(TEXT), 0));
 }
 / NUMBER SPACING { 
-	PUSH_NODE(_alloc_num(strtoul(pmlp_text, NULL, 0)));
+	PUSH_NODE(_alloc_num(text2num(TEXT)));
 }
 / AT (DottedName / IDSTRING) SPACING {
-	size_t off = str_spn(pmlp_text->data + 1, pmpl_ctx->wschars) + 1;
-	PUSH_NODE(atloc2value(pmlp_ctx, pmlp_text->data + off));
+	struct pml_parser *pmlp = PMLP;
+	size_t off = str_spn(TEXT->data + 1, pmlp->wschars) + 1;
+	PUSH_NODE(atloc2value(PMLP, TEXT->data + off));
 }
 / &LOCSTART Locator 
 / Call
 
 
 LocName <- DottedName / Ident {
-	struct pml_location *loc = pmln_alloc(PMLTT_LOCATOR);
+	struct pml_locator *loc = pmln_alloc(PMLTT_LOCATOR);
 	POP_PTR(loc->name);
 	if (strchr(loc->name, '.'))
 		loc->reftype = PML_REF_UNKNOWN_NS_ELEM;
@@ -882,14 +953,14 @@ LocName <- DottedName / Ident {
 Locator <- (LocName / PacketLocator) _SubRegion_?
 
 PacketLocator <- DOLLAR_LP Expr _PacketLocatorRest {
-	struct pml_location *loc;
+	struct pml_locator *loc;
 	POP_NODE(loc);
 	POP_NODE(loc->pkt);
 	loc->reftype = PML_REF_UNKNOWN_NS_ELEM;
 	PUSH_NODE(loc);
 }
 _PacketLocatorRest <- COMMA Expr RPAREN LocName {
-	struct pml_location *loc;
+	struct pml_locator *loc;
 	POP_NODE(loc);
 	POP_NODE(loc->idx);
 	PUSH_NODE(loc);
@@ -897,12 +968,12 @@ _PacketLocatorRest <- COMMA Expr RPAREN LocName {
 / RPAREN LocName
 
 
-Call <- Ident Arglist_ { 
+Call <- Ident ArgList_ { 
 	struct pml_list *args;
 	char *name;
 	POP_NODE(args);
 	POP_NODE(name);
-	PUSH_NODE(_alloc_call(pmlp_ast, name, args);
+	PUSH_NODE(_alloc_call(AST, name, args));
 }
 
 
@@ -938,17 +1009,20 @@ _SubRegionRest <- COMMA Expr RBRACKET {
 }
 
 
-DottedName <- IDCHARS ('.' IDCHARS)+ { PUSH_PTR(_r2str(pmlp_text)); } SPACING
+DottedName <- IDCHARS ('.' IDCHARS)+ { PUSH_PTR(_r2str(TEXT)); } SPACING
 
-Number <- NUMBER { PUSH_INT(strtoul(pmlp_text, NULL, 0)); } SPACING
+Number <- NUMBER { PUSH_INT(text2num(TEXT)); } SPACING
 
-Ident <- IDCHARS { PUSH_PTR(_r2str(pmlp_text)); } SPACING
+Ident <- IDCHARS { PUSH_PTR(_r2str(TEXT)); } SPACING
+
+Filename <- FNCHARS { PUSH_PTR(_r2str(TEXT)); }
 
 
 # Tokens
 
 IDSTRING <- IDCHARS SPACING
 IDCHARS  <- [_a-zA-Z] [_a-zA-Z0-9]*
+FNCHARS  <- [-a-zA-Z._/\0-9]+
 
 LOCSTART <- IDSTRING !LPAREN / IDCHARS ('.' IDCHARS)+ / DOLLAR_LP
 
@@ -1031,9 +1105,12 @@ LEQ        <- "<=" SPACING
 SHL        <- "<<" SPACING
 GEQ        <- ">=" SPACING
 SHR        <- ">>" SPACING
+DOLLAR_LP  <- "$(" SPACING
 
 ### One-character
+SEMICOLON  <- ";" SPACING
 PLUS       <- "+" SPACING
+MINUS      <- "-" SPACING
 TIMES      <- "*" SPACING
 DIV        <- "/" SPACING
 MOD        <- "%" SPACING
@@ -1045,14 +1122,13 @@ LBRACE     <- "{" SPACING
 RBRACE     <- "}" SPACING
 LPAREN     <- "(" SPACING
 RPAREN     <- ")" SPACING
-DOLLAR_LP  <- "$(" SPACING
 LBRACKET   <- "[" SPACING
 RBRACKET   <- "]" SPACING
 COMMA      <- "," SPACING
 AT         <- "@" SPACING
 ASSIGN     <- "=" SPACING
 LT         <- "<" SPACING
-GT         <- "<" SPACING
+GT         <- ">" SPACING
 
 # Basic definitions for comments, spaces and end-of-line
 SPACING <- (SPACE / COMMENT)*
@@ -1065,64 +1141,7 @@ EOF     <- !.
 %%
 
 
-#define PML_LIB_PATH	"lib/pml"
-
-#define NEXTCNONE	-1
-#define NEXTCEOF	-2
-#define NEXTCERR	-3
-
-#define DEFAULT_PATH "."
-
-enum {
-	NTYPE, FTYPE, STYPE
-};
-
-
-struct inputs {
-	struct list			ln;
-	int				type;
-	ulong				lineno;
-	union {
-		struct cstr_inport	csi;
-		struct file_inport	fi;
-	} inp_u;
-	struct inport *			inp;
-	char				name[256];
-};
-
-#define l_to_input(_n) (container((_n), struct inputs, ln))
-
-
-#define MAXSTACK 65536
-struct pml_parser {
-	struct pml_peg_parser	pegp;
-	sturct pml_ast *	ast;
-	char 			ipath[512];
-	struct inputs		inputs;
-	pmll_eoi_f		eoicb;
-	byte_t			idchars[32];
-	byte_t			wschars[32];
-	struct pml_stack_entry	stack[MAXSTACK];
-	uint			sp;
-};
-
-#define INLIST(_pmlp) (&(_pmlp)->inputs.ln)
-#define CURINPUT(_pmlp) (l_to_input(l_head(INLIST(_pmlp))))
-#define NOINPUT(_pmlp, _pi) (&(_pi)->ln == INLIST(_pmlp))
-
-
-/* assumes that the next character is a ':' */
-static int nextc(void *pmlp);
-static void popinput(struct pml_parser *pmlp);
-
-
-static uint hexpairval(char *s)
-{
-	return (chnval(s[0]) << 4) | chnval(s[1]);
-}
-
-
-char *_r2str(struct raw *r)
+static char *_r2str(struct raw *r)
 {
 	char *s = emalloc(r->len + 1);
 	memmove(s, r->data, r->len);
@@ -1131,7 +1150,7 @@ char *_r2str(struct raw *r)
 }
 
 
-struct raw *_ralloc(size_t len)
+static struct raw *_ralloc(size_t len)
 {
 	struct raw *r;
 	if (SIZE_MAX - sizeof(struct raw) < len)
@@ -1147,7 +1166,7 @@ static struct raw *hex2str(struct raw *s)
 {
 	struct raw *r;
 	size_t len;
-	uchar *sp = r->data + 2;
+	uchar *sp = s->data + 2;
 	uchar *dp;
 
 	abort_unless(s->len >= 4 && s->len % 2 == 0);
@@ -1164,11 +1183,20 @@ static struct raw *hex2str(struct raw *s)
 }
 
 
+static uint hexpairval(char *s)
+{
+	return (chnval(s[0]) << 4) | chnval(s[1]);
+}
+
+
+static int isodigit(int x) { return x >= '0' && x <= '7'; }
+
 static struct raw *qstr2str(struct raw *s, int qchar)
 {
 	struct raw *r = _ralloc(s->len);
 	uchar *dp = r->data;
 	uchar v;
+	ulong i;
 	
 	abort_unless(s->len >= 2 && s->data[0] == qchar);
 
@@ -1192,25 +1220,25 @@ static struct raw *qstr2str(struct raw *s, int qchar)
 			case '`':  *dp++ = '`' ; break;
 			case 'x':
 				abort_unless(i + 4 < s->len);
-				abort_unless(isxdigit(r->data[i+2]);
-				abort_unless(isxdigit(r->data[i+3]);
+				abort_unless(isxdigit(r->data[i+2]));
+				abort_unless(isxdigit(r->data[i+3]));
 				*dp++ = hexpairval(&r->data[i+2]);
 				i += 2;
 				break;
 			default:
 				abort_unless(i < s->len - 1);
-				abort_unless(isodigit(r->data[i+1]);
-				v = chnval(&r->data[i+1]);
+				abort_unless(isodigit(r->data[i+1]));
+				v = chnval(r->data[i+1]);
 				if (isodigit(r->data[i+2])) {
 					abort_unless(i < s->len - 2);
 					v = (v << 3) |
-					    chnval(&r->data[i+2]);
+					    chnval(r->data[i+2]);
 					i += 1;
 				}
 				if (isodigit(r->data[i+2])) {
 					abort_unless(i < s->len - 2);
 					v = (v << 3) |
-					    chnval(&r->data[i+2]);
+					    chnval(r->data[i+2]);
 					i += 1;
 				}
 				*dp++ = v;
@@ -1233,7 +1261,7 @@ static struct raw *ipv62str(struct pml_ast *ast, struct raw *s)
 	st->data[s->len] = '\0';
 	st->len = s->len;
 	if (str_parse_ip6a(r->data, st->data) < 0) {
-		pml_ast_err(pml_ast, "Invalid IPv6 address: '%s'", st->data);
+		pml_ast_err(ast, "Invalid IPv6 address: '%s'", st->data);
 		free(r);
 		r = NULL;
 	}
@@ -1269,13 +1297,13 @@ static struct raw *eth2str(struct raw *s)
 }
 
 
-static struct pml_literal *atloc2value(struct pml_parser *p, char *name)
+static struct pml_literal *atloc2value(struct pml_parser *pmlp, char *name)
 {
 	struct pml_literal *v = NULL;
 	struct ns_elem *ne = ns_lookup(NULL, name);
 
 	if (ne == NULL) {
-		pml_ast_err(p->ast, "invalid @location: '%s'\n", name);
+		pml_ast_err(pmlp->ast, "invalid @location: '%s'\n", name);
 	} else if (ne->type == NST_NAMESPACE) {
 		struct ns_namespace *ns = (struct ns_namespace *)ne;
 		v = pmln_alloc(PMLTT_SCALAR);
@@ -1287,8 +1315,8 @@ static struct pml_literal *atloc2value(struct pml_parser *p, char *name)
 		v->width = 4;
 		v->u.scalar = pf->prid;
 	} else {
-		pml_ast_err(p->ast, "@location '%s' is neither a namespace "
-				    "or a packet field\n", name);
+		pml_ast_err(pmlp->ast, "@location '%s' is neither a namespace "
+				       "or a packet field\n", name);
 	}
 	free(name);
 
@@ -1299,16 +1327,24 @@ static struct pml_literal *_alloc_str(struct pml_ast *ast, struct raw *val,
 				      int lenadj)
 		
 {
-	struct pml_literal *lit
+	struct pml_literal *lit;
 	if (val == NULL)
 		return NULL;
 	lit = pmln_alloc(PMLTT_BYTESTR);
-	pml_bytestr_copyro(ast, &lit->u.bytestr, raw->data, raw->val)
+	pml_bytestr_copyro(ast, &lit->u.bytestr, val->data, val->len);
 	lit->u.bytestr.len -= lenadj;
-	free(raw);
+	free(val);
 	return lit;
 }
 
+
+static ulong text2num(struct raw *r)
+{
+	char *s = _r2str(r);
+	ulong x = strtoul(r->data, NULL, 0);
+	free(s);
+	return x;
+}
 
 static struct pml_literal *_alloc_num(unsigned long val)
 {
@@ -1322,7 +1358,7 @@ static struct pml_literal *_alloc_num(unsigned long val)
 static struct pml_call *_alloc_call(struct pml_ast *ast, char *name,
 				    struct pml_list *args)
 {
-	struct pml_call *c;
+	struct pml_call *c = NULL;
 	struct pml_function *f = pml_ast_lookup_func(ast, name);
 	uint alen = l_length(&args->list);
 
@@ -1343,65 +1379,65 @@ static struct pml_call *_alloc_call(struct pml_ast *ast, char *name,
 }
 
 
-static int push_func_hdr(struct pml_parser *pmlp_ctx)
+static int push_func_hdr(struct pml_parser *pml_peg_ctx)
 {
-	int pmlp_error = 0;
+	int pml_peg_error = 0;
 	struct list *t, *x;
-	struct pml_variable *p;
+	struct pml_variable *param;
 	struct pml_list *params;
 	struct pml_function *f = pmln_alloc(PMLTT_FUNCTION);
 
 	POP_NODE(params);
-	POP_NODE(f->name);
-	POP_NODE(f->rtype);
+	POP_PTR(f->name);
+	POP_INT(f->rtype);
 
 	l_for_each_safe(t, x, &params->list) {
 		f->arity += 1;
-		p = container(t, struct pml_variable, ln);
-		l_rem(&p->ln);
-		if (pml_func_add_param(f, p) < 0) {
-			pml_ast_err(pmlp_ast, "Error adding parameter '%s' "
-					      "to function '%s'\n",
-				    f->name, p->name);
-			pmln_free(p);
+		param = container(t, struct pml_variable, ln);
+		l_rem(&param->ln);
+		if (pml_func_add_param(f, param) < 0) {
+			pml_ast_err(AST, "Error adding parameter '%s' "
+					 "to function '%s'\n",
+				    f->name, param->name);
+			pmln_free(param);
 			pmln_free(f);
-			pmlp_error = -1;
+			pml_peg_error = -1;
 			goto out;
 		}
 	}
 
-	pmlp_ast->livefunc = f;
-	pmlp_ast->ltab = &f->vars;
+	AST->livefunc = f;
+	AST->ltab = &f->vars;
 	PUSH_NODE(f);
 
 out:
-	pmln_free(P);
-	return pmlp_error;
+	pmln_free(params);
+	return pml_peg_error;
 }
 
 
-static int add_func_proto_or_decl(struct pml_parser *pmlp_ctx)
+static int add_func_proto_or_decl(struct pml_parser *pml_peg_ctx)
 {
-	int pmlp_error = 0;
+	int pml_peg_error = 0;
 	struct pml_function *f, *f0;
 	struct pml_list *body;
 
 	POP_NODE(body);
 	POP_NODE(f);
 
-	f0 = pml_ast_lookup_func(pmlp_ast, f->name);
+	f0 = pml_ast_lookup_func(AST, f->name);
 	if (f0 != NULL) {
 		if (body != NULL && 
-		    ((f0->body != NULL || PML_FUNC_IS_INTRINSIC(f0))) {
-			pml_ast_err(pmlp_ast,
+		    (f0->body != NULL || PML_FUNC_IS_INTRINSIC(f0))) {
+			pml_ast_err(AST,
 				    "duplicate function declaration '%s'",
 				    f->name);
-			pmlp_error = -1;
+			pml_peg_error = -1;
 			pmln_free(body);
 			goto out;
 		}
-		if (pml_check_func_proto(pmlp_ast, f0, f) < 0) {
-			pmlp_error = -1;
+		if (pml_check_func_proto(AST, f0, f) < 0) {
+			pml_peg_error = -1;
 			pmln_free(body);
 			goto out;
 		}
@@ -1411,22 +1447,22 @@ static int add_func_proto_or_decl(struct pml_parser *pmlp_ctx)
 
 	if (body != NULL) {
 		f->body = (union pml_node *)body;
-		pmlp_error = pml_ast_add_func(pmlp_ast, f);
+		pml_peg_error = pml_ast_add_func(AST, f);
 	} else {
-		pmlp_error = pml_ast_add_func_proto(pmlp_ast, f);
+		pml_peg_error = pml_ast_add_func_proto(AST, f);
 	}
 
 out:
-	if (pmlp_error < 0)
+	if (pml_peg_error < 0)
 		pmln_free(f);
-	pmlp_ast->livefunc = NULL;
-	pmlp_ast->ltab = NULL;
+	AST->livefunc = NULL;
+	AST->ltab = NULL;
 
-	return pmlp_error;
+	return pml_peg_error;
 }
 
 
-static void compare_fixed_string(struct pml_parser *pmlp_ctx)
+static int compare_fixed_string(struct pml_parser *pml_peg_ctx)
 {
 	struct raw *val;
 	int op;
@@ -1436,13 +1472,14 @@ static void compare_fixed_string(struct pml_parser *pmlp_ctx)
 	POP_PTR(val);
 	POP_INT(op);
 	POP_NODE(left);
-        pml_bytestr_copyro(pmlp_ast, &right->u.bytestr, val->data, val->len);
-	PUSH_NODE(pml_binop_alloc(op, left, right));
+        pml_bytestr_copyro(AST, &right->u.bytestr, val->data, val->len);
+	PUSH_NODE(pml_binop_alloc(op, left, (union pml_expr_u *)right));
 	free(val);
+	return 0;
 }
 
 
-static void compare_masked_string(struct pml_parser *pmlp_ctx)
+static int compare_masked_string(struct pml_parser *pml_peg_ctx)
 {
 	struct raw *mask;
 	struct raw *val;
@@ -1455,15 +1492,16 @@ static void compare_masked_string(struct pml_parser *pmlp_ctx)
 	POP_INT(op);
 	POP_NODE(left);
 
-	pml_maskval_copyro(pmlp_ast, &right->u.maskval, val->data, val->len,
+	pml_maskval_copyro(AST, &right->u.maskval, val->data, val->len,
 			   mask->data, mask->len);
-	PUSH_NODE(pml_binop_alloc(op, left, right));
+	PUSH_NODE(pml_binop_alloc(op, left, (union pml_expr_u *)right));
 	free(val);
 	free(mask);
+	return 0;
 }
 
 
-static int num_to_mask(struct pml_parser *pmlp_ctx, int bytes)
+static int num_to_mask(struct pml_parser *pml_peg_ctx, int nbytes)
 {
 	struct pml_literal *right;
 	struct raw *addr;
@@ -1474,17 +1512,17 @@ static int num_to_mask(struct pml_parser *pmlp_ctx, int bytes)
 
 	
 	POP_INT(nbits);
-	if (bytes == 4 && nbits > 32) {
-		pml_ast_err(pmlp_ast, "IPv4 address mask > 32 bits\n");
+	if (nbytes == 4 && nbits > 32) {
+		pml_ast_err(AST, "IPv4 address mask > 32 bits\n");
 		return -1;
 	} else if (nbits > 128) {
 		abort_unless(nbytes == 16);
-		pml_ast_err(ast, "IPv6 address mask > 128 bits.\n");
+		pml_ast_err(AST, "IPv6 address mask > 128 bits.\n");
 		return -1;
 	}
 	
 
-	mask = emalloc(bytes);
+	mask = emalloc(nbytes);
 	i = 0;
 	while (nbits > 8) {
 		mask[i++] = 0xff;
@@ -1494,14 +1532,35 @@ static int num_to_mask(struct pml_parser *pmlp_ctx, int bytes)
 
 	POP_PTR(addr);
 	right = pmln_alloc(PMLTT_MASKVAL);
-	pml_maskval_copyro(pmlp_ast, &right->u.maskval, addr->data, nbytes,
+	pml_maskval_copyro(AST, &right->u.maskval, addr->data, nbytes,
 			   mask, nbytes);
 	POP_INT(op);
 	POP_NODE(left);
-	PUSH_NODE(pml_binop_alloc(op, left, (union pml_expr_u *)right);
+	PUSH_NODE(pml_binop_alloc(op, left, (union pml_expr_u *)right));
 	free(mask);
 	free(addr);
 
+	return 0;
+}
+
+
+static int simple_binop(struct pml_parser *pml_peg_ctx, int op)
+{
+	union pml_expr_u *e1, *e2;
+	POP_NODE(e2);
+	if (op < 0)
+		POP_INT(op);
+	POP_NODE(e1);
+	PUSH_NODE(pml_binop_alloc(op, e1, e2));
+	return 0;
+}
+
+
+static int push_unop(struct pml_parser *pml_peg_ctx, int op)
+{
+	union pml_expr_u *e;
+	POP_NODE(e);
+	PUSH_NODE(pml_unop_alloc(op, e));
 	return 0;
 }
 
@@ -1510,31 +1569,12 @@ static struct pml_stack_entry *_push(struct pml_parser *pmlp, int type,
 				     const char *line, uint file)
 {
 	if (pmlp->sp >= MAXSTACK) {
-		pml_ast_err(pmlp_ctx->ast, "stack overflow at %s:%d", 
-			   file, line);
+		pml_ast_err(pmlp->ast, "stack overflow at %s:%d", 
+			    file, line);
 		return NULL;
 	}
-	pmlp->stack[pmlp->sp].type = type;
+	pmlp->stack[pmlp->sp].pse_type = type;
 	return &pmlp->stack[pmlp->sp++];
-}
-
-
-static void simple_binop(struct pmlp_parser *pmlp_ctx, int op)
-{
-	union pml_expr_u *e1, *e2;
-	POP_NODE(e2);
-	if (op < 0)
-		POP_INT(op);
-	POP_NODE(e1);
-	PUSH_NODE(pml_binop_alloc(op, e1, e2));
-}
-
-
-static void push_unop(struct pmlp_parser *pmlp_ctx, int op)
-{
-	union pml_expr_u *e;
-	POP_NODE(e);
-	PUSH_NODE(pml_unop_alloc(op, e));
 }
 
 
@@ -1542,13 +1582,13 @@ static struct pml_stack_entry *_pop(struct pml_parser *pmlp, int type,
 				    const char *file, uint line)
 {
 	if (pmlp->sp <= 0) {
-		pml_ast_err(pmlp_ctx->ast, "stack underflow at %s:%d", 
-			   file, line);
+		pml_ast_err(pmlp->ast, "stack underflow at %s:%d", 
+			    file, line);
 		return NULL;
 	}
 	abort_unless(type == PSE_TYPE_INVALID ||
-		     pmlp->stack[pmlp->sp - 1].type == type);
-	pmlp->stack[pmlp->sp - q].type = PSE_TYPE_INVALID;
+		     pmlp->stack[pmlp->sp - 1].pse_type == type);
+	pmlp->stack[pmlp->sp - 1].pse_type = PSE_TYPE_INVALID;
 	return &pmlp->stack[--pmlp->sp];
 }
 
@@ -1557,12 +1597,12 @@ static struct pml_stack_entry *_top(struct pml_parser *pmlp, int type,
 				    const char *file, uint line)
 {
 	if (pmlp->sp <= 0 || pmlp->sp >= MAXSTACK) {
-		pml_ast_err(pmlp_ctx->ast, "stack underflow at %s:%d", 
-			   file, line);
+		pml_ast_err(pmlp->ast, "stack underflow at %s:%d", 
+			    file, line);
 		return NULL;
 	}
 	abort_unless(type == PSE_TYPE_INVALID ||
-		     pmlp->stack[pmlp->sp - 1].type == type);
+		     pmlp->stack[pmlp->sp - 1].pse_type == type);
 	return &pmlp->stack[pmlp->sp - 1];
 }
 
@@ -1578,7 +1618,12 @@ struct pml_parser *pmlp_alloc(void)
 	if (pmlp == NULL)
 		return NULL;
 
-	pml_peg_init(&pmlp->pegp, &nextc);
+	pmlp->pegp = calloc(sizeof(*pmlp->pegp), 1);
+	if (pmlp == NULL) {
+		free(pmlp);
+		return NULL;
+	}
+	pml_peg_init(pmlp->pegp, &nextc);
 	l_init(&pmlp->inputs.ln);
 	pmlp->inputs.type = NTYPE;
 	pmlp->inputs.lineno = 0;
@@ -1592,14 +1637,14 @@ struct pml_parser *pmlp_alloc(void)
 }
 
 
-void pmlp_ipath_reset(struct pml_parse *pmlp)
+void pmlp_ipath_reset(struct pml_parser *pmlp)
 {
 	memset(pmlp->ipath, 0, sizeof(pmlp->ipath));	/* paranoia */
 	str_copy(pmlp->ipath, DEFAULT_PATH, sizeof(pmlp->ipath));
 }
 
 
-int pmlp_ipath_append(struct pml_parse *pmlp, const char *dir)
+int pmlp_ipath_append(struct pml_parser *pmlp, const char *dir)
 {
 	size_t n;
 	n = str_cat(pmlp->ipath, ":", sizeof(pmlp->ipath));
@@ -1609,7 +1654,7 @@ int pmlp_ipath_append(struct pml_parse *pmlp, const char *dir)
 	}
 	n = str_cat(pmlp->ipath, dir, sizeof(pmlp->ipath));
 	if (n >= sizeof(pmlp->ipath)) {
-		pmlp_ipath_reset(lex);
+		pmlp_ipath_reset(pmlp);
 		return -1;
 	}
 	return 0;
@@ -1649,9 +1694,9 @@ int pmlp_add_infile(struct pml_parser *pmlp, FILE *f, int front, const char *fn)
 	finp_init(&pi->inp_u.fi, f);
 	pi->inp = &pi->inp_u.fi.in;
 	if (front)
-		l_push(INLIST(lex), &pi->ln);
+		l_push(INLIST(pmlp), &pi->ln);
 	else
-		l_enq(INLIST(lex), &pi->ln);
+		l_enq(INLIST(pmlp), &pi->ln);
 
 	return 0;
 }
@@ -1665,7 +1710,7 @@ int pmlp_open_add_infile(struct pml_parser *pmlp, const char *fn, int front)
 	int esave;
 	struct path_walker pw;
 
-	pwalk_init(&pw, lex->ipath, ":", '/');
+	pwalk_init(&pw, pmlp->ipath, ":", '/');
 	while ((path = pwalk_next(&pw, fn, pbuf, sizeof(pbuf))) != NULL) {
 		fp = fopen(path, "r");
 		if (fp != NULL)
@@ -1677,7 +1722,7 @@ int pmlp_open_add_infile(struct pml_parser *pmlp, const char *fn, int front)
 		return -1;
 	}
 
-	if (pmll_add_infile(lex, fp, 1, path) < 0) {
+	if (pmlp_add_infile(pmlp, fp, 1, path) < 0) {
 		esave = errno;
 		fclose(fp);
 		errno = esave;
@@ -1688,25 +1733,24 @@ int pmlp_open_add_infile(struct pml_parser *pmlp, const char *fn, int front)
 }
 
 
-static void popinput(struct pmllex *lex)
+static void popinput(struct pml_parser *pmlp)
 {
-	struct inputs *pi = CURINPUT(lex);
-
+	struct inputs *pi = CURINPUT(pmlp);
 	l_rem(&pi->ln);
 	inp_close(pi->inp);
 	free(pi);
 }
 
 
-void pmll_set_eoicb(struct pml_parser *pmlp, pmll_eoi_f eoicb)
+void pmlp_set_eoicb(struct pml_parser *pmlp, pmlp_eoi_f eoicb)
 {
 	pmlp->eoicb = eoicb;
 }
 
 
-static int nextc(void *pmlp)
+static int nextc(void *pmlpp)
 {
-	struct pml_parse *pmlp = pmlpp
+	struct pml_parser *pmlp = pmlpp;
 	int c;
 	struct inputs *pi;
 
@@ -1718,8 +1762,8 @@ static int nextc(void *pmlp)
 	/* TODO: handle input error */
 	if (NOINPUT(pmlp, pi)) {
 		if (pmlp->eoicb != NULL)
-			(*pmlp->eoicb)(lex);
-		pi = CURINPUT(lex);
+			(*pmlp->eoicb)(pmlp);
+		pi = CURINPUT(pmlp);
 		if (NOINPUT(pmlp, pi))
 			return NEXTCEOF;
 	} else {
@@ -1736,46 +1780,50 @@ out:
 }
 
 
-int pmlp_parse(struct pml_parser *pmlp, struct pml_ast *ast)
+static void stack_clear(struct pml_parser *pmlp)
 {
-	pml_peg_reset(&pmlp->pegp);
-	pmlp->ast = ast;
-	return pml_peg_parse(&pmlp->pegp, pmlp, pmlp);
-}
-
-
-void pmlp_free(struct pml_parser *pmlp)
-{
-	struce pml_stack_entry *pse;
-	if (pmlp == NULL)
-		return;
-
-	/* free the PEG buffers */
-	pml_peg_fini(&pmlp->pegp);
+	struct pml_stack_entry *pse;
 
 	/* clear the input stack */
-	while (!NOINPUT(pmlp, pi))
+	while (!NOINPUT(pmlp, CURINPUT(pmlp)))
 		popinput(pmlp);
 
 	/* clear the parse stack */
 	while (pmlp->sp > 0) {
 		pse = &pmlp->stack[--pmlp->sp];
-		if (pse->type == PSE_TYPE_NODE)
-			pmln_free(pse->pse_node);
-		else if (pse->type == PSE_TYPE_PTR)
+		if (pse->pse_type == PSE_TYPE_NODE)
+			pmln_free(pse->pse_ptr);
+		else if (pse->pse_type == PSE_TYPE_PTR)
 			free(pse->pse_ptr);
 		memset(pse, 0, sizeof(*pse));
-		pse->type = PSE_TYPE_INVALID;
+		pse->pse_type = PSE_TYPE_INVALID;
 	}
+}
+
+
+int pmlp_parse(struct pml_parser *pmlp, struct pml_ast *ast)
+{
+	int rv;
+	pml_peg_reset(pmlp->pegp);
+	pmlp->ast = ast;
+	rv = pml_peg_parse(pmlp->pegp, pmlp, pmlp);
+	stack_clear(pmlp);
+	return rv;
+}
+
+
+void pmlp_free(struct pml_parser *pmlp)
+{
+	if (pmlp == NULL)
+		return;
+
+	/* clear the input and parse stacks */
+	stack_clear(pmlp);
+
+	/* free the PEG buffers */
+	pml_peg_fini(pmlp->pegp);
 
 	/* free the data structure */
+	free(pmlp->pegp);
 	free(pmlp);
 }
-
-
-const char *pmlp_get_err(struct pml_parser *pmlp)
-{
-	return pmlp->errbuf;
-}
-
-

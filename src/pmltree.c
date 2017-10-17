@@ -266,8 +266,6 @@ int pml_ast_init(struct pml_ast *ast)
 	ast->livefunc = NULL;
 	ast->ltab = NULL;
 	str_copy(ast->errbuf, "", sizeof(ast->errbuf));
-	ast->scanner = NULL;
-	ast->parser = NULL;
 	return 0;
 }
 
@@ -470,35 +468,10 @@ int pml_ast_add_std_intrinsics(struct pml_ast *ast)
 }
 
 
-void pml_ast_set_parser(struct pml_ast *ast, struct pmllex *scanner,
-		        pml_parser_t *parser)
-{
-	if (ast->scanner != NULL || ast->parser != NULL)
-		pml_ast_free_parser(ast);
-	ast->scanner = scanner;
-	ast->parser = parser;
-}
-
-
-void pml_ast_free_parser(struct pml_ast *ast)
-{
-	if (ast->scanner != NULL) {
-		pmll_free(ast->scanner);
-		ast->scanner = NULL;
-	}
-	if (ast->parser != NULL) {
-		pml_free(ast->parser);
-		ast->parser = NULL;
-	}
-}
-
-
 void pml_ast_clear(struct pml_ast *ast)
 {
 	struct list *n, *x;
 	int i;
-
-	pml_ast_free_parser(ast);
 
 	ast->error = 0;
 	ast->done = 0;
@@ -4054,34 +4027,4 @@ int pml_ast_optimize(struct pml_ast *ast)
 {
 	return pml_ast_walk(ast, ast, pml_cexpr_walker, NULL, NULL);
 }
-
-
-extern void *PMLAlloc(void *(*mallocProc)(size_t));
-extern void PMLFree(void *p, void (*freeProc)(void*));
-extern void PML(void *parser, int tok, struct pmll_val xtok,
-		struct pml_ast *ast);
-
-
-pml_parser_t pml_alloc()
-{
-	return PMLAlloc(emalloc);
-}
-
-
-int pml_parse(pml_parser_t p, struct pml_ast *ast, int tok,
-	      struct pmll_val xtok)
-{
-	PML(p, tok, xtok, ast);
-	if (ast->error)
-		return -1;
-	else
-		return 0;
-}
-
-
-void pml_free(pml_parser_t p)
-{
-	PMLFree(p, free);
-}
-
 

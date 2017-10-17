@@ -10,12 +10,11 @@ BINDIR=../bin
 # common objects for packets
 PKTOBJ= xpkt.o protoparse.o ns.o util.o pktbuf.o prload.o
 PKTHDR= xpkt.h protoparse.h ns.h util.h pktbuf.h prid.h prload.h \
-	onics_config.h sysdeps.h 
+	onics_config.h sysdeps.h
 
 # all base object files
 LIBOBJS= ${PKTOBJ} stdproto.o netvm.o netvm_prog.o pmltree.o \
-	 netvm_std_coproc.o pmllex.o pml.o pmlncg.o pml_tok_strs.o fld.o \
-	 opcap.o 
+	 netvm_std_coproc.o pmlp.o pmlncg.o fld.o opcap.o
 
 ALL_BINARIES= \
 	rawpkt pktdemux pktmux pktrel x2hpkt h2xpkt nvmas nvmpf pml pc2xpkt \
@@ -172,11 +171,11 @@ ${BINDIR}/nvmpf: nvmpf.o stdproto.o netvm.o netvm_std_coproc.o netvm_prog.o \
 		netvm_prog.o ${PKTOBJ} \
 		${DEFS} ${OPTS} ${INCS} ${LIBS}
 
-${BINDIR}/pml: pml_main.o pmllex.o pml.o pmltree.o pmlncg.o stdproto.o netvm.o \
-		netvm_std_coproc.o netvm_prog.o pmllex.h pmltree.h pmlncg.h \
+${BINDIR}/pml: pml_main.o pmlp.o pmltree.o pmlncg.o stdproto.o netvm.o \
+		netvm_std_coproc.o netvm_prog.o pmltree.h pmlncg.h \
 	        netvm.h netvm_prog.h netvm_std_coproc.h stdproto.h \
 		tcpip_hdrs.h ${PKTOBJ} ${PKTHDR}
-	${CC} -o ${BINDIR}/pml pml_main.o pmllex.o pml.o pmltree.o pmlncg.o \
+	${CC} -o ${BINDIR}/pml pml_main.o pmlp.o pmltree.o pmlncg.o \
 		stdproto.o netvm.o netvm_std_coproc.o netvm_prog.o ${PKTOBJ} \
 		${DEFS} ${OPTS} ${INCS} ${LIBS}
 
@@ -219,24 +218,13 @@ ${BINDIR}/ipreasm: ipreasm.o stdproto.o ${PKTOBJ} ${PKTHDR}
 pmllex.o: pmllex.c pml.h
 	${CC} -c pmllex.c -o pmllex.o ${DEFS} ${INCS} ${OPTS}
 
-pml.c pml.h: pml.yl ../lemon/lemon
-	../lemon/lemon pml.yl
-	touch pml.h
-
-pml_tok_strs.c: pml.h
-	echo "const char *pml_tok_strs[] = {" > pml_tok_strs.c
-	echo "	\"EOF\"," >> pml_tok_strs.c
-	sed -e 's/#.*_/	"/' -e 's/ .*$$/",/' pml.h >> pml_tok_strs.c
-	echo "};" >> pml_tok_strs.c
-
-../lemon/lemon: ../lemon/lemon.c
-	(cd ../lemon ; make)
+pmlp.c: pml.peg
+	${CATLIB_ROOT}/utils/pegcc -o pmlp -p pml_peg pml.peg
 
 clean:
 	rm -f ${TARGETS}
 	rm -f *.o
-	rm -f lex.pml.c pml.c pml.h pml.out pml_tok_strs.c
-	rm -f ../lemon/lemon
+	rm -f pmlp.c
 
 veryclean: clean
 	rm -f .has_pcap
