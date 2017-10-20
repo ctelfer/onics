@@ -26,6 +26,7 @@
 #include <cat/cat.h>
 
 struct pml_parser;
+struct pml_ast;
 
 typedef void (*pmlp_eoi_f)(struct pml_parser *pmlp);
 
@@ -90,6 +91,19 @@ int pmlp_parse(struct pml_parser *pmlp, struct pml_ast *ast);
  * Free the parser and its associated metadata
  */
 void pmlp_free(struct pml_parser *pmlp);
+
+
+
+/*
+ * Enable or disable debug in the parser.
+ */
+void pmlp_set_debug(struct pml_parser *pmlp, int on);
+
+
+/*
+ * Return a reference to the error buffer.
+ */
+const char *pmlp_get_error(struct pml_parser *pmlp);
 
 
 #endif /* __PMLPARSE_H */

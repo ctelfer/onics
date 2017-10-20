@@ -17,7 +17,6 @@ TARGETS= \
 	$(BINDIR)/testpp \
 	$(BINDIR)/testvm \
 	$(BINDIR)/testns \
-	$(BINDIR)/testpmllex \
 	$(BINDIR)/testpmlparse \
 	$(BINDIR)/testfld \
 	$(BINDIR)/testpkb
@@ -49,17 +48,12 @@ $(BINDIR)/testns: testns.c $(TOOLSRC)/ns.o $(TOOLSRC)/util.o \
 		 $(TOOLSRC)/stdproto.o $(TOOLSRC)/protoparse.o \
 		 $(DEFS) $(OPTS) $(INCS) $(LIBS)
 
-$(BINDIR)/testpmlparse: testpmlparse.c $(TOOLSRC)/pmllex.o $(TOOLSRC)/pml.o \
+$(BINDIR)/testpmlparse: testpmlparse.c $(TOOLSRC)/pmlp.o \
 			$(TOOLSRC)/pmltree.o $(TOOLSRC)/util.o $(TOOLSRC)/ns.o \
 			$(TOOLSRC)/stdproto.o $(TOOLSRC)/protoparse.o
-	$(CC) -o ../bin/testpmlparse testpmlparse.c $(TOOLSRC)/pmllex.o \
-		$(TOOLSRC)/pml.o $(TOOLSRC)/pmltree.o $(TOOLSRC)/util.o \
-		$(TOOLSRC)/ns.o $(TOOLSRC)/stdproto.o $(TOOLSRC)/protoparse.o \
-		$(DEFS) $(OPTS) $(INCS) $(LIBS)
-
-$(BINDIR)/testpmllex: testpmllex.c $(TOOLSRC)/pml_tok_strs.o $(TOOLSRC)/pmllex.o
-	$(CC) -o ../bin/testpmllex testpmllex.c $(TOOLSRC)/pmllex.o \
-		$(TOOLSRC)/pml_tok_strs.o \
+	$(CC) -o ../bin/testpmlparse testpmlparse.c $(TOOLSRC)/pmlp.o \
+		$(TOOLSRC)/pmltree.o $(TOOLSRC)/util.o $(TOOLSRC)/ns.o \
+		$(TOOLSRC)/stdproto.o $(TOOLSRC)/protoparse.o \
 		$(DEFS) $(OPTS) $(INCS) $(LIBS)
 
 

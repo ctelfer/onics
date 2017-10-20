@@ -26,8 +26,8 @@
 #include <cat/err.h>
 
 #include "prid.h"
+#include "pmlparse.h"
 #include "pmltree.h"
-#include "pmllex.h"
 #include "stdproto.h"
 
 #define VERBOSE		1
@@ -35,15 +35,10 @@
 #define TREE1		4
 #define TREE2		8
 
-extern void PMLTrace(FILE *trace, char *pfx);
-
 int main(int argc, char *argv[])
 {
-	int tok;
-	struct pmllex *scanner;
-	pml_parser_t parser;
+	struct pml_parser *pmlp;
 	struct pml_ast tree;
-	struct pmll_val extra;
 	int printmask = VERBOSE|LEX|TREE1|TREE2;
 
 	if (argc > 1) {
@@ -67,16 +62,13 @@ int main(int argc, char *argv[])
 
 	register_std_proto();
 
-	if ((scanner = pmll_alloc()) == NULL)
-		errsys("pmllex_init:");
-	if (pmll_add_infile(scanner, stdin, 0, "-") < 0)
-		errsys("pmll_add_input_file:");
+	if ((pmlp = pmlp_alloc()) == NULL)
+		errsys("pmlp_alloc():");
+	if (pmlp_add_infile(pmlp, stdin, 0, "-") < 0)
+		errsys("pmlp_add_infile:");
 
-	if (!(parser = pml_alloc()))
-		errsys("pml_alloc:");
 	pml_ast_init(&tree);
 	pml_ast_add_std_intrinsics(&tree);
-	pml_ast_set_parser(&tree, scanner, parser);
 
 	if (printmask & VERBOSE) {
 		printf("#########\n");
@@ -84,22 +76,9 @@ int main(int argc, char *argv[])
 		printf("#########\n");
 	}
 
-	if (printmask & LEX)
-		PMLTrace(stdout, "  ---  ");
-
-	do {
-		tok = pmll_nexttok(scanner, &extra);
-		if (tok < 0)
-			err("Syntax error: %s\n", pmll_get_err(scanner));
-		if (printmask & LEX)
-			printf("Token -- %d -> '%s'\n", tok,
-			       pmll_get_text(scanner));
-		if (pml_parse(parser, &tree, tok, extra)) {
-			err("parse error on file %s line %d: %s\n",
-			    pmll_get_iname(scanner),
-			    pmll_get_lineno(scanner), tree.errbuf);
-		}
-	} while (tok > 0);
+	if (pmlp_parse(pmlp, &tree) < 0)
+		err("%s\n", pmlp_get_error(pmlp));
+	pmlp_free(pmlp);
 
 	if (!tree.done)
 		err("File did not reduce to a complete tree\n");

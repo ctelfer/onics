@@ -250,6 +250,7 @@ static int add_resv_var(struct pml_ast *ast, const char *name,
 int pml_ast_init(struct pml_ast *ast)
 {
 	int i;
+
 	ast->error = 0;
 	ast->done = 0;
 	symtab_init(&ast->vars);
@@ -266,6 +267,7 @@ int pml_ast_init(struct pml_ast *ast)
 	ast->livefunc = NULL;
 	ast->ltab = NULL;
 	str_copy(ast->errbuf, "", sizeof(ast->errbuf));
+
 	return 0;
 }
 
@@ -841,6 +843,7 @@ void pml_ast_finalize(struct pml_ast *ast)
 	abort_unless(v != NULL);
 	v->addr = 0;
 	v->width = gsz;
+	ast->done = 1;
 }
 
 
