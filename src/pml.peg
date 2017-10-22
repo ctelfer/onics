@@ -262,7 +262,6 @@ struct pml_parser {
 #define NOINPUT(_pmlp, _pi) (&(_pi)->ln == INLIST(_pmlp))
 
 
-/* assumes that the next character is a ':' */
 static int nextc(void *pmlp);
 static void popinput(struct pml_parser *pmlp);
 
@@ -360,7 +359,7 @@ static int push_unop(struct pml_parser *pml_peg_ctx, int op);
 
 # Top Level Grammar
 
-prog <- SPACING decl* EOF { pml_ast_finalize(AST); }
+prog <- SPACING decl* { pml_ast_finalize(AST); }
 
 decl <- import / rule / inlineDecl / constant / funcOrProtoOrGlobal_
 
@@ -433,7 +432,7 @@ inlineDecl <- INLINE Ident ParamList LBRACE Expr RBRACE {
 	inln->flags |= PML_FF_INLINE;
 	POP_NODE(inln->body);
 	POP_NODE(params);
-	POP_NODE(inln->name);
+	POP_PTR(inln->name);
 
 	l_for_each_safe(t, x, &params->list) {
 		inln->arity += 1;
@@ -500,10 +499,9 @@ Param <- VarType Ident {
 
 	POP_PTR(name);
 	POP_INT(type);
-	POP_NODE(list);
+	TOP_NODE(list);
 	v = pml_var_alloc(name, PML_VTYPE_PARAM, type, 0, NULL);
-	l_ins(&list->list, &v->ln);
-	PUSH_NODE(list);
+	l_enq(&list->list, &v->ln);
 }
 
 
@@ -746,7 +744,7 @@ ControlFlowMod <- (&(ECFKW SEMICOLON) CtrlFlowSimple / CtrlFlowWithExpr) {
 	POP_NODE(expr);
 	POP_INT(type);
 	PUSH_NODE(pml_cfmod_alloc(type, expr));
-}
+} SEMICOLON
 
 CtrlFlowSimple <- BREAK    { PUSH_INT(PML_CFM_BREAK);    PUSH_NULL_NODE(); }
                 / CONTINUE { PUSH_INT(PML_CFM_CONTINUE); PUSH_NULL_NODE(); }
@@ -776,9 +774,9 @@ _AssignOrExprRest <- ASSIGN Expr SEMICOLON {
 
 Expr <- OrExpr
 
-OrExpr <- AndExpr (OR OrExpr { return simple_binop(PMLP, PMLOP_OR); })*
+OrExpr <- AndExpr (OR AndExpr { return simple_binop(PMLP, PMLOP_OR); })*
 
-AndExpr <- CmpExpr (AND AndExpr { return simple_binop(PMLP, PMLOP_AND); })*
+AndExpr <- CmpExpr (AND CmpExpr { return simple_binop(PMLP, PMLOP_AND); })*
 
 CmpExpr <- BorExpr (SimpleCmpOp BorExpr { return simple_binop(PMLP, -1); }
                     / MatchOp _MatchPat)?
@@ -887,22 +885,22 @@ _RegexPat <- REGEXSTR { PUSH_PTR(qstr2str(TEXT, '`')); } SPACING {
 }
 
 
-BorExpr <- BXorExpr (BOR BorExpr { return simple_binop(PMLP, PMLOP_BOR); })*
+BorExpr <- BXorExpr (BOR BXorExpr { return simple_binop(PMLP, PMLOP_BOR); })*
 
-BXorExpr <- BAndExpr (BXOR BXorExpr { return simple_binop(PMLP, PMLOP_BXOR); })*
+BXorExpr <- BAndExpr (BXOR BAndExpr { return simple_binop(PMLP, PMLOP_BXOR); })*
 
 BAndExpr <- AddExpr (AMP AddExpr { return simple_binop(PMLP, PMLOP_BAND); })*
 
-AddExpr <- MulExpr (AddOp AddExpr { return simple_binop(PMLP, -1); })*
+AddExpr <- MulExpr (AddOp MulExpr { return simple_binop(PMLP, -1); })*
 AddOp <- PLUS { PUSH_INT(PMLOP_PLUS); } / MINUS { PUSH_INT(PMLOP_MINUS); }
 
-MulExpr <- ShiftExpr (MulOp MulExpr { return simple_binop(PMLP, -1); })*
+MulExpr <- ShiftExpr (MulOp ShiftExpr { return simple_binop(PMLP, -1); })*
 MulOp <- TIMES { PUSH_INT(PMLOP_TIMES); }
        / DIV { PUSH_INT(PMLOP_DIV); }
        / MOD { PUSH_INT(PMLOP_MOD); }
 
 
-ShiftExpr <- UnopExpr (ShiftOp ShiftExpr { return simple_binop(PMLP, -1); })*
+ShiftExpr <- UnopExpr (ShiftOp UnopExpr { return simple_binop(PMLP, -1); })*
 ShiftOp <- SHL { PUSH_INT(PMLOP_SHL); }
          / SHR { PUSH_INT(PMLOP_SHR); }
 
@@ -1850,7 +1848,7 @@ static void set_parse_error(struct pml_parser *pmlp)
 	}
 
 	for (i = 0, lch = 1, line = 1; icc + i < ech; ++i, ++lch) {
-		if (cpg->buf[i + icc] == '\n') {
+		if (cpg->buf[1 + i + icc] == '\n') {
 			++line;
 			lch = 1;
 		}
@@ -1862,7 +1860,8 @@ static void set_parse_error(struct pml_parser *pmlp)
 			 line, lch, pmlp->ast->errbuf);
 	} else {
 		snprintf(pmlp->errbuf, sizeof(pmlp->errbuf),
-			 "Parse error on line %lu character %lu", line, lch);
+			 "parse error on file %s line %lu: syntax error",
+			 ir->name, line);
 	}
 }
 
