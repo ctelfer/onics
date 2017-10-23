@@ -232,7 +232,7 @@ void parse_pml_program(struct netvm_program *prog)
 		fprintf(stderr, "Starting program parse\n");
 
 	if (pmlp_parse(pmlp, &ast) < 0)
-		err("Parse error: %s\n", ast.errbuf);
+		err("Parse error: %s\n", pmlp_get_error(pmlp));
 
 	pmlp_free(pmlp);
 

@@ -786,10 +786,10 @@ CmpExpr <- BorExpr (SimpleCmpOp BorExpr { return simple_binop(PMLP, -1); }
 
 SimpleCmpOp <- EQ  { PUSH_INT(PMLOP_EQ);  }
              / NEQ { PUSH_INT(PMLOP_NEQ); }
-             / LT  { PUSH_INT(PMLOP_LT);  }
-             / GT  { PUSH_INT(PMLOP_GT);  }
              / LEQ { PUSH_INT(PMLOP_LEQ); }
              / GEQ { PUSH_INT(PMLOP_GEQ); }
+             / LT  { PUSH_INT(PMLOP_LT);  }
+             / GT  { PUSH_INT(PMLOP_GT);  }
 
 
 _MatchPat <- _HexPat / _StrPat / _IPv4Pat / _EthPat / _IPv6Pat / _ProtoPat
@@ -997,11 +997,11 @@ _SubRegionRest <- COMMA ExprOrError RBracketOrError {
 	PUSH_NODE(loc);
 }
 
-DottedName <- (IDCHARS ('.' IDCHARS)+) { PUSH_PTR(_r2str(TEXT)); } SPACING
+DottedName <- (IDSTRING ('.' IDSTRING)+) { PUSH_PTR(_r2str(TEXT)); } SPACING
 
 Number <- NUMBER { PUSH_INT(text2num(TEXT)); } SPACING
 
-Ident <- !KEYWORD IDCHARS { PUSH_PTR(_r2str(TEXT)); } SPACING
+Ident <- !KEYWORD IDSTRING { PUSH_PTR(_r2str(TEXT)); } SPACING
 
 Filename <- FNCHARS { PUSH_PTR(_r2str(TEXT)); }
 
@@ -1035,11 +1035,12 @@ RBracketOrError <- RBRACKET
 
 # Tokens
 
-IDSTRING <- IDCHARS
-IDCHARS  <- [_a-zA-Z] [_a-zA-Z0-9]*
-FNCHARS  <- [-a-zA-Z._/\0-9]+
+IDSTRING <- IDSTART IDREST*
+IDSTART  <- [_a-zA-Z]
+IDREST   <- [_a-zA-Z0-9]
+FNCHARS  <- [-a-zA-Z0-9._/\\]+
 
-LOCSTART <- IDSTRING SPACING !LPAREN / IDCHARS ('.' IDCHARS)+ / DOLLAR_LP
+LOCSTART <- IDSTRING SPACING !LPAREN / IDSTRING ('.' IDSTRING)+ / DOLLAR_LP
 
 ## Literal Strings
 HEXSTR     <- '\\x' HEXPAIR+
@@ -1088,34 +1089,34 @@ OCTDIGIT   <- [0-7]
 
 ## Keywords
 # TODO: be careful about which ones require space to follow
-BEGIN      <- "BEGIN" SPACING
-TICK       <- "TICK" SPACING
-END        <- "END" SPACING
-INT        <- "int" SPACE SPACING
-STR        <- "str" SPACE SPACING
-VOID       <- "void" SPACE SPACING
-INLINE     <- "inline" SPACE SPACING
-CONST      <- "const" SPACE SPACING
-NOT        <- "not" SPACE SPACING
-AND        <- "and" SPACE SPACING
-OR         <- "or" SPACE SPACING
-WHILE      <- "while" SPACING
-IF         <- "if" SPACING
-ELSE       <- "else" SPACING
-RETURN     <- "return" SPACING
-BREAK      <- "break" SPACING
-CONTINUE   <- "continue" SPACING
-NEXTRULE   <- "nextrule" SPACING
-SEND       <- "send" SPACING
-SENDNOFREE <- "send_no_free" SPACING
-DROP       <- "drop" SPACING
-PRINT      <- "print" SPACING
-IMPORT     <- "import" SPACING
+KWEND      <- !(IDREST / EOF)
+BEGIN      <- "BEGIN"        KWEND SPACING
+TICK       <- "TICK"         KWEND SPACING
+END        <- "END"          KWEND SPACING
+INT        <- "int"          KWEND SPACING
+STR        <- "str"          KWEND SPACING
+VOID       <- "void"         KWEND SPACING
+INLINE     <- "inline"       KWEND SPACING
+CONST      <- "const"        KWEND SPACING
+NOT        <- "not"          KWEND SPACING
+AND        <- "and"          KWEND SPACING
+OR         <- "or"           KWEND SPACING
+WHILE      <- "while"        KWEND SPACING
+IF         <- "if"           KWEND SPACING
+ELSE       <- "else"         KWEND SPACING
+RETURN     <- "return"       KWEND SPACING
+BREAK      <- "break"        KWEND SPACING
+CONTINUE   <- "continue"     KWEND SPACING
+NEXTRULE   <- "nextrule"     KWEND SPACING
+SEND       <- "send"         KWEND SPACING
+SENDNOFREE <- "send_no_free" KWEND SPACING
+DROP       <- "drop"         KWEND SPACING
+PRINT      <- "print"        KWEND SPACING
+IMPORT     <- "import"       KWEND SPACING
 
-KEYWORD <- ( "BEGIN" / "TICK" / "END" / "int" / "str" / "void" / "const" / "not"
-           / "and" / "or" / "while" / "if" / "else" / "return" / "break"
-	   / "continue" / "nextrule" / "send" / "send_no_free" / "drop"
-	   / "print" / "import") !(IDCHARS / EOF)
+KEYWORD <- ( BEGIN / TICK / END / INT / STR / VOID / INLINE / CONST / NOT
+           / AND / OR / WHILE / IF / ELSE / RETURN / BREAK / CONTINUE
+           / NEXTRULE / SEND / SENDNOFREE / DROP / PRINT / IMPORT )
 
 ## Operator Symbols
 
@@ -1152,8 +1153,8 @@ RBRACKET   <- "]" SPACING
 COMMA      <- "," SPACING
 AT         <- "@" SPACING
 ASSIGN     <- "=" ![=~] SPACING
-LT         <- "<" SPACING
-GT         <- ">" SPACING
+LT         <- "<" ![=<] SPACING
+GT         <- ">" ![=>] SPACING
 
 # Basic definitions for comments, spaces and end-of-line
 SPACING <- (SPACE / COMMENT)*
@@ -1664,6 +1665,7 @@ struct pml_parser *pmlp_alloc(void)
 	pmlp->inputs.inp = &null_inport;
 	pmlp->echar = 0;
 	str_copy(pmlp->errbuf, "", sizeof(pmlp->errbuf));
+	pmlp_ipath_reset(pmlp);
 
 	return pmlp;
 }
