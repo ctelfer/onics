@@ -254,6 +254,7 @@ struct pml_parser {
 	pmlp_eoi_f		eoicb;
 	struct pml_stack_entry	stack[MAXSTACK];
 	uint			sp;
+	uint			echar;
 	char			errbuf[256];
 };
 
@@ -266,6 +267,7 @@ static int nextc(void *pmlp);
 static void popinput(struct pml_parser *pmlp);
 
 
+static void _err(struct pml_parser *p, const char *s);
 static struct pml_stack_entry *_push(struct pml_parser *p, int type,
 				     const char *file, uint line);
 static struct pml_stack_entry *_pop(struct pml_parser *p, int type,
@@ -273,6 +275,8 @@ static struct pml_stack_entry *_pop(struct pml_parser *p, int type,
 static struct pml_stack_entry *_top(struct pml_parser *p, int type,
 				     const char *file, uint line);
 
+
+#define _ERR(_s)do { _err(PMLP, (_s)); return -1; } while (0)
 
 #define _PUSH_PTR(_val, _type, _err_test)				\
 	do {								\
@@ -328,7 +332,8 @@ static struct pml_stack_entry *_top(struct pml_parser *p, int type,
 #define PMLP ((struct pml_parser *)pml_peg_ctx)
 #define AST  (PMLP->ast)
 #define TEXT pml_peg_text
-
+#define DBG  fprintf(stderr, "%s:%d -> '%s[%lu]'\n", \
+             __FILE__, __LINE__, TEXT->data, TEXT->len);
 
 static char *_r2str(struct raw *r);
 static struct raw *_ralloc(size_t len);
@@ -366,7 +371,7 @@ decl <- import / rule / inlineDecl / constant / funcOrProtoOrGlobal_
 
 # Declarations
 
-import <- IMPORT '"' Filename '"' SPACING SEMICOLON {
+import <- IMPORT '"' Filename '"' SPACING SemiOrError {
 	char *filename;
 	POP_PTR(filename);
 	if (pmlp_open_add_infile(PMLP, filename, 1) < 0) {
@@ -406,7 +411,7 @@ RulePattern <- BEGIN {
 	AST->ltab = &rule->vars;
 	PUSH_NODE(rule);
 }
-/ PPBEGIN Expr PPEND {
+/ PPBEGIN ExprOrError PPEND {
 	union pml_expr_u *pattern;
 	struct pml_rule *rule;
 	POP_NODE(pattern);
@@ -421,7 +426,7 @@ RulePattern <- BEGIN {
 }
 
 
-inlineDecl <- INLINE Ident ParamList LBRACE Expr RBRACE {
+inlineDecl <- INLINE Ident ParamList LBRACE ExprOrError RBraceOrError {
 	struct list *t, *x;
 	struct pml_function *inln;
 	struct pml_list *params;
@@ -453,7 +458,7 @@ inlineDecl <- INLINE Ident ParamList LBRACE Expr RBRACE {
 }
 
 
-constant <- CONST Ident ASSIGN Expr SEMICOLON {
+constant <- CONST Ident ASSIGN ExprOrError SemiOrError {
 	struct pml_variable *v;
 	char *name;
 	union pml_expr_u *init;
@@ -467,17 +472,15 @@ constant <- CONST Ident ASSIGN Expr SEMICOLON {
 }
 
 
+VarType <- INT { PUSH_INT(PML_ETYPE_SCALAR); }
+	 / STR { PUSH_INT(PML_ETYPE_STRREF); }
+
+
 funcOrProtoOrGlobal_ <-
-	VarType Ident _funcOrProtoOrGlobalRest
-	/ VOID { PUSH_INT(PML_ETYPE_VOID); } Ident _funcOrProtoRest
-
-VarType <-
-	  INT { PUSH_INT(PML_ETYPE_SCALAR); }
-	/ STR { PUSH_INT(PML_ETYPE_STRREF); }
-
+	VarType IdentOrError _funcOrProtoOrGlobalRest
+	/ VOID { PUSH_INT(PML_ETYPE_VOID); } IdentOrError _funcOrProtoRest
 
 _funcOrProtoOrGlobalRest <- &LPAREN _funcOrProtoRest / _globalVar
-
 
 _funcOrProtoRest <- ParamList {
 	return push_func_hdr(PMLP);
@@ -488,10 +491,11 @@ _funcOrProtoRest <- ParamList {
 _FuncOrProtoSwitch <- SEMICOLON { PUSH_NULL_NODE(); } / Body_
 
 
-ParamList <- LPAREN { PUSH_LIST(); } (Param (COMMA Param)*)? RPAREN
+ParamList <- LPAREN { PUSH_LIST(); } (!RPAREN Param (COMMA Param)*)?
+	     RParenOrError
 
 
-Param <- VarType Ident {
+Param <- VarType IdentOrError {
 	struct pml_list *list;
 	struct pml_variable *v;
 	int type;
@@ -503,6 +507,7 @@ Param <- VarType Ident {
 	v = pml_var_alloc(name, PML_VTYPE_PARAM, type, 0, NULL);
 	l_enq(&list->list, &v->ln);
 }
+/ ANY { _ERR("type keyword expected"); }
 
 
 _globalVar <- _GlobalRest {
@@ -522,7 +527,7 @@ _GlobalRest <- SEMICOLON {
 	POP_INT(type);
 	PUSH_NODE(pml_var_alloc(name, PML_VTYPE_GLOBAL, type, 0, NULL));
 }
-/ ASSIGN Value SEMICOLON {
+/ ASSIGN ValueOrError SemiOrError {
 	char *name;
 	int type;
 	union pml_expr_u *init;
@@ -541,7 +546,7 @@ _GlobalRest <- SEMICOLON {
 / LBRACKET _GlobalStrDecl
 
 
-_GlobalStrDecl <- RBRACKET ASSIGN Value SEMICOLON {
+_GlobalStrDecl <- RBRACKET ASSIGN ValueOrError SemiOrError {
 	union pml_expr_u *init;
 	char *name;
 	int type;
@@ -569,7 +574,7 @@ _GlobalStrDecl <- RBRACKET ASSIGN Value SEMICOLON {
 		pmln_free(init);
 	}
 }
-/ Number RBRACKET _GlobalFixedStrDecl {
+/ Number RBracketOrError _GlobalFixedStrDecl {
 	union pml_expr_u *init;
 	char *name;
 	int type;
@@ -592,13 +597,14 @@ _GlobalStrDecl <- RBRACKET ASSIGN Value SEMICOLON {
 }
 
 
-_GlobalFixedStrDecl <- ASSIGN Value SEMICOLON / SEMICOLON { PUSH_NULL_NODE(); }
+_GlobalFixedStrDecl <- ASSIGN ValueOrError SemiOrError
+		     / SEMICOLON { PUSH_NULL_NODE(); }
 
 
-Body_ <- LBRACE { PUSH_LIST(); } localVars _StatementList RBRACE
+Body_ <- LBRACE { PUSH_LIST(); } localVars _StatementList RBraceOrError
 
 
-localVars <- (VarType Ident SEMICOLON {
+localVars <- (VarType IdentOrError SemiOrError {
 	char *name;
 	int type;
 	struct pml_variable *v;
@@ -629,7 +635,7 @@ _Statement <- _PrintStatement / Statement {
 
 _PrintStatement <- PRINT _PrintExpr (COMMA !SEMICOLON _PrintExpr)* _PrintEnd
 
-_PrintExpr <- PrintFmt Expr {
+_PrintExpr <- PrintFmt ExprOrError {
 	struct pml_print *p;
 	struct pml_list *list;
 	union pml_expr_u *expr;
@@ -656,7 +662,7 @@ PrintFmt <- !MOD { PUSH_NULL_NODE(); }
 	POP_INT(width);
 	TOP_NODE(fmt);
 	fmt->width = width;
-})? Ident MOD {
+})? IdentOrError {
 	struct pml_print_fmt *fmt;
 	char *fmtstr;
 	int fid;
@@ -672,6 +678,7 @@ PrintFmt <- !MOD { PUSH_NULL_NODE(); }
 	TOP_NODE(fmt);
 	fmt->fmt = fid;
 }
+MOD / ANY { _ERR("unterminated print modifier"); }
 
 
 _PrintEnd <- SEMICOLON {
@@ -682,6 +689,7 @@ _PrintEnd <- SEMICOLON {
 	p->flags |= PML_PFLAG_NEWLINE;
 }
 / COMMA SEMICOLON
+/ ANY { _ERR("semicolon expected"); }
 
 
 Statement <- RefAssignment
@@ -689,33 +697,28 @@ Statement <- RefAssignment
 	   / IfStatement
 	   / ControlFlowMod
 	   / AssignmentOrExpr
-	   / Expr
+	   / Expr SEMICOLON
 
 
 StmtOrList <- !LBRACE { PUSH_LIST(); } _Statement
-	    / LBRACE  { PUSH_LIST(); } _StatementList RBRACE
+	    / LBRACE  { PUSH_LIST(); } _StatementList RBraceOrError
 
 
-RefAssignment <- AMP Ident ASSIGN Expr SEMICOLON {
-	struct pml_assign *assign;
+RefAssignment <- AMP IdentOrError ASSIGN ExprOrError SemiOrError {
 	struct pml_locator *loc;
 	union pml_expr_u *rhs;
 	char *name;
-	struct pml_list *list;
 
 	POP_NODE(rhs);
 	POP_PTR(name);
-	TOP_NODE(list);
-	
 	loc = pmln_alloc(PMLTT_LOCATOR);
 	loc->type = PMLTT_LOCADDR;
 	loc->name = name;
-	assign = pml_assign_alloc(loc, rhs);
-	l_enq(&list->list, &assign->ln);
+	PUSH_NODE(pml_assign_alloc(loc, rhs));
 }
 
 
-WhileLoop <- WHILE LPAREN Expr RPAREN StmtOrList {
+WhileLoop <- WHILE LPAREN ExprOrError RParenOrError StmtOrList {
 	struct pml_list *stmts;
 	union pml_expr_u *test;
 	POP_NODE(stmts);
@@ -724,7 +727,7 @@ WhileLoop <- WHILE LPAREN Expr RPAREN StmtOrList {
 }
 
 
-IfStatement <- IF LPAREN Expr RPAREN StmtOrList ElseClause {
+IfStatement <- IF LPAREN ExprOrError RParenOrError StmtOrList ElseClause {
 	union pml_expr_u *test;
 	struct pml_list *tbody;
 	struct pml_list *fbody;
@@ -744,7 +747,7 @@ ControlFlowMod <- (&(ECFKW SEMICOLON) CtrlFlowSimple / CtrlFlowWithExpr) {
 	POP_NODE(expr);
 	POP_INT(type);
 	PUSH_NODE(pml_cfmod_alloc(type, expr));
-} SEMICOLON
+} SemiOrError
 
 CtrlFlowSimple <- BREAK    { PUSH_INT(PML_CFM_BREAK);    PUSH_NULL_NODE(); }
                 / CONTINUE { PUSH_INT(PML_CFM_CONTINUE); PUSH_NULL_NODE(); }
@@ -752,15 +755,15 @@ CtrlFlowSimple <- BREAK    { PUSH_INT(PML_CFM_BREAK);    PUSH_NULL_NODE(); }
                 / SEND     { PUSH_INT(PML_CFM_SENDALL);  PUSH_NULL_NODE(); }
                 / DROP     { PUSH_INT(PML_CFM_DROPALL);  PUSH_NULL_NODE(); }
 
-CtrlFlowWithExpr <- RETURN     { PUSH_INT(PML_CFM_RETURN);     } Expr
-                  / SEND       { PUSH_INT(PML_CFM_SENDONE);    } Expr
-                  / SENDNOFREE { PUSH_INT(PML_CFM_SENDNOFREE); } Expr
-                  / DROP       { PUSH_INT(PML_CFM_DROPONE);    } Expr
+CtrlFlowWithExpr <- RETURN     { PUSH_INT(PML_CFM_RETURN);     } ExprOrError
+                  / SEND       { PUSH_INT(PML_CFM_SENDONE);    } ExprOrError
+                  / SENDNOFREE { PUSH_INT(PML_CFM_SENDNOFREE); } ExprOrError
+                  / DROP       { PUSH_INT(PML_CFM_DROPONE);    } ExprOrError
 
 
 AssignmentOrExpr <- &LOCSTART Locator _AssignOrExprRest
 
-_AssignOrExprRest <- ASSIGN Expr SEMICOLON {
+_AssignOrExprRest <- ASSIGN ExprOrError SemiOrError {
 	union pml_expr_u *val;
 	struct pml_locator *loc;
 	POP_NODE(val);
@@ -789,7 +792,7 @@ SimpleCmpOp <- EQ  { PUSH_INT(PMLOP_EQ);  }
              / GEQ { PUSH_INT(PMLOP_GEQ); }
 
 
-_MatchPat <- _HexPat / _StrPat / _IPv4Pat / _IPv6Pat / _EthPat / _ProtoPat
+_MatchPat <- _HexPat / _StrPat / _IPv4Pat / _EthPat / _IPv6Pat / _ProtoPat
            / _RegexPat
 
 MatchOp <- MATCH   { PUSH_INT(PMLOP_MATCH);    }
@@ -909,15 +912,15 @@ UnopExpr <- NOT ParenExpr { return push_unop(PMLP, PMLOP_NOT); }
           / MINUS ParenExpr { return push_unop(PMLP, PMLOP_NEG); }
 	  / ParenExpr
 
-ParenExpr <- LPAREN Expr RPAREN / Value
+ParenExpr <- LPAREN Expr RParenOrError / Value
 
-Value <- 
+Value <-
   HEXSTR { PUSH_NODE(_alloc_str(AST, hex2str(TEXT), 0)); } SPACING
 / QUOTESTR { PUSH_NODE(_alloc_str(AST, qstr2str(TEXT, '"'), 1)); } SPACING
 / REGEXSTR { PUSH_NODE(_alloc_str(AST, qstr2str(TEXT, '`'), 1)); } SPACING
 / IPV4ADDR { PUSH_NODE(_alloc_str(AST, ipv42str(TEXT), 0)); } SPACING
-/ IPV6ADDR { PUSH_NODE(_alloc_str(AST, ipv62str(AST, TEXT), 0)); } SPACING
 / ETHADDR { PUSH_NODE(_alloc_str(AST, eth2str(TEXT), 0)); } SPACING
+/ IPV6ADDR { PUSH_NODE(_alloc_str(AST, ipv62str(AST, TEXT), 0)); } SPACING
 / NUMBER { PUSH_NODE(_alloc_num(text2num(TEXT))); } SPACING
 / AT (DottedName / Ident) {
 	char *name;
@@ -938,20 +941,20 @@ LocName <- (DottedName / Ident) {
 
 Locator <- (LocName / PacketLocator) _SubRegion_?
 
-PacketLocator <- DOLLAR_LP Expr _PacketLocatorRest {
+PacketLocator <- DOLLAR_LP ExprOrError _PacketLocatorRest {
 	struct pml_locator *loc;
 	POP_NODE(loc);
 	POP_NODE(loc->pkt);
 	loc->reftype = PML_REF_UNKNOWN_NS_ELEM;
 	PUSH_NODE(loc);
 }
-_PacketLocatorRest <- COMMA Expr RPAREN LocName {
+_PacketLocatorRest <- COMMA ExprOrError RParenOrError LocNameOrError {
 	struct pml_locator *loc;
 	POP_NODE(loc);
 	POP_NODE(loc->idx);
 	PUSH_NODE(loc);
 }
-/ RPAREN LocName
+/ RParenOrError LocNameOrError
 
 
 Call <- Ident ArgList_ {
@@ -963,8 +966,8 @@ Call <- Ident ArgList_ {
 }
 
 
-ArgList_ <- LPAREN { PUSH_LIST(); } (_Arg (COMMA _Arg)*)? RPAREN
-_Arg <- Expr {
+ArgList_ <- LPAREN { PUSH_LIST(); } (!RPAREN _Arg (COMMA _Arg)*)? RParenOrError
+_Arg <- ExprOrError {
 	struct pml_list *list;
 	union pml_expr_u *expr;
 	POP_NODE(expr);
@@ -973,8 +976,8 @@ _Arg <- Expr {
 }
 
 
-_SubRegion_ <- LBRACKET Expr _SubRegionRest
-_SubRegionRest <- COMMA Expr RBRACKET {
+_SubRegion_ <- LBRACKET ExprOrError _SubRegionRest
+_SubRegionRest <- COMMA ExprOrError RBracketOrError {
 	struct pml_locator *loc;
 	union pml_expr_u *len;
 	union pml_expr_u *off;
@@ -985,7 +988,7 @@ _SubRegionRest <- COMMA Expr RBRACKET {
 	loc->off = off;
 	PUSH_NODE(loc);
 }
-/ RBRACKET {
+/ RBracketOrError {
 	struct pml_locator *loc;
 	union pml_expr_u *off;
 	POP_NODE(off);
@@ -994,7 +997,6 @@ _SubRegionRest <- COMMA Expr RBRACKET {
 	PUSH_NODE(loc);
 }
 
-
 DottedName <- (IDCHARS ('.' IDCHARS)+) { PUSH_PTR(_r2str(TEXT)); } SPACING
 
 Number <- NUMBER { PUSH_INT(text2num(TEXT)); } SPACING
@@ -1002,6 +1004,33 @@ Number <- NUMBER { PUSH_INT(text2num(TEXT)); } SPACING
 Ident <- !KEYWORD IDCHARS { PUSH_PTR(_r2str(TEXT)); } SPACING
 
 Filename <- FNCHARS { PUSH_PTR(_r2str(TEXT)); }
+
+
+# Termination Tests
+
+ExprOrError     <- Expr
+	         / ANY { _ERR("expression expected"); }
+
+ValueOrError    <- Value
+	         / ANY { _ERR("value expected"); }
+
+LocNameOrError  <- LocName
+		 / ANY { _ERR("locator expected"); }
+
+IdentOrError    <- Ident
+	         / ANY { _ERR("identifier expected"); }
+
+SemiOrError     <- SEMICOLON
+	         / ANY { _ERR("semicolon expected"); }
+
+RParenOrError   <- RPAREN
+	         / ANY { _ERR("unmatched parentheses"); }
+
+RBraceOrError   <- RBRACE
+	         / ANY { _ERR("unmatched braces"); }
+
+RBracketOrError <- RBRACKET
+	         / ANY { _ERR("unmatched brackets"); }
 
 
 # Tokens
@@ -1020,13 +1049,13 @@ CHAR       <- '\\' [0abtnvfr\\"`] /
               '\\' EOL /
               '\\' [0-2] [0-7] [0-7] /
               '\\' [0-7] [0-7]? /
-              '\\x' HEXDIGIT HEXDIGIT / 
+              '\\x' HEXDIGIT HEXDIGIT /
 	      !'\\' .
 
 
 ## Literal numbers and addresses
 ETHADDR    <- ETHDIGIT ':' ETHDIGIT ':' ETHDIGIT ':'
-              ETHDIGIT ':' ETHDIGIT ':' ETHDIGIT
+              ETHDIGIT ':' ETHDIGIT ':' ETHDIGIT ![:0-9a-fA-F]
 
 ETHDIGIT   <- HEXPAIR / HEXDIGIT
 
@@ -1035,7 +1064,7 @@ IPV6ADDR   <- '::' IPV6TAIL?
 	    / IPV6DIGIT (':' IPV6DIGIT)+ '::'? IPV6TAIL?
 
 IPV6TAIL <- IPV6DIGIT (':' IPV6DIGIT)*
-	             
+
 
 IPV6DIGIT  <- HEXQUAD / HEXTRIPPLE / HEXPAIR / HEXDIGIT
 
@@ -1084,9 +1113,9 @@ PRINT      <- "print" SPACING
 IMPORT     <- "import" SPACING
 
 KEYWORD <- ( "BEGIN" / "TICK" / "END" / "int" / "str" / "void" / "const" / "not"
-           / "and" / "or" / "while" / "if" / "else" / "return" / "break" 
-	   / "continue" / "nextrule" / "send" / "send_no_free" / "drop" 
-	   / "print" / "import") SPACING
+           / "and" / "or" / "while" / "if" / "else" / "return" / "break"
+	   / "continue" / "nextrule" / "send" / "send_no_free" / "drop"
+	   / "print" / "import") !(IDCHARS / EOF)
 
 ## Operator Symbols
 
@@ -1132,6 +1161,7 @@ COMMENT <- '#' (!EOL .)* (EOL / EOF)
 SPACE   <- [ \t\r\n]
 EOL     <- '\r\n' / '\n' / '\r'
 EOF     <- !.
+ANY	<- &. / !.
 
 
 %%
@@ -1548,6 +1578,13 @@ static int push_unop(struct pml_parser *pml_peg_ctx, int op)
 }
 
 
+static void _err(struct pml_parser *pmlp, const char *s)
+{
+	str_copy(pmlp->errbuf, s, sizeof(pmlp->errbuf));
+	pmlp->echar = pmlp->pegp->pstate.cur.i;
+}
+
+
 static struct pml_stack_entry *_push(struct pml_parser *pmlp, int type,
 				     const char *line, uint file)
 {
@@ -1564,41 +1601,42 @@ static struct pml_stack_entry *_push(struct pml_parser *pmlp, int type,
 static struct pml_stack_entry *_pop(struct pml_parser *pmlp, int type,
 				    const char *file, uint line)
 {
-	if (pmlp->sp <= 0) {
+	struct pml_stack_entry *pse;
+	if (pmlp->sp <= 0 || pmlp->sp > MAXSTACK) {
 		pml_ast_err(pmlp->ast, "stack underflow at %s:%d",
 			    file, line);
 		return NULL;
 	}
-	if (type != PSE_TYPE_INVALID && 
-	    pmlp->stack[pmlp->sp - 1].pse_type != type) {
-		pml_ast_err(pmlp->ast, 
+	pse = &pmlp->stack[pmlp->sp - 1];
+	if (type != PSE_TYPE_INVALID && pse->pse_type != type) {
+		pml_ast_err(pmlp->ast,
 			    "unexpected type %d at %s:%d -- %d expected",
-			    pmlp->stack[pmlp->sp - 1].pse_type, file, line,
-			    type);
+			    pse->pse_type, file, line, type);
 		return NULL;
 	}
-	pmlp->stack[pmlp->sp - 1].pse_type = PSE_TYPE_INVALID;
-	return &pmlp->stack[--pmlp->sp];
+	pse->pse_type = PSE_TYPE_INVALID;
+	--pmlp->sp;
+	return pse;
 }
 
 
 static struct pml_stack_entry *_top(struct pml_parser *pmlp, int type,
 				    const char *file, uint line)
 {
-	if (pmlp->sp <= 0 || pmlp->sp >= MAXSTACK) {
+	struct pml_stack_entry *pse;
+	if (pmlp->sp <= 0 || pmlp->sp > MAXSTACK) {
 		pml_ast_err(pmlp->ast, "stack underflow at %s:%d",
 			    file, line);
 		return NULL;
 	}
-	if (type != PSE_TYPE_INVALID && 
-	    pmlp->stack[pmlp->sp - 1].pse_type != type) {
-		pml_ast_err(pmlp->ast, 
+	pse = &pmlp->stack[pmlp->sp - 1];
+	if (type != PSE_TYPE_INVALID && pse->pse_type != type) {
+		pml_ast_err(pmlp->ast,
 			    "unexpected type %d at %s:%d -- %d expected",
-			    pmlp->stack[pmlp->sp - 1].pse_type, file, line,
-			    type);
+			    pse->pse_type, file, line, type);
 		return NULL;
 	}
-	return &pmlp->stack[pmlp->sp - 1];
+	return pse;
 }
 
 
@@ -1624,6 +1662,8 @@ struct pml_parser *pmlp_alloc(void)
 	str_copy(pmlp->inputs.name, "*END OF INPUT*",
 		 sizeof(pmlp->inputs.name));
 	pmlp->inputs.inp = &null_inport;
+	pmlp->echar = 0;
+	str_copy(pmlp->errbuf, "", sizeof(pmlp->errbuf));
 
 	return pmlp;
 }
@@ -1818,6 +1858,7 @@ static void pmlp_reset(struct pml_parser *pmlp)
 	while (!l_isempty(&pmlp->chmap))
 		free(l_pop(&pmlp->chmap));
 
+	pmlp->echar = 0;
 	pmlp->ast = NULL;
 	pmlp->last_input = NULL;
 }
@@ -1832,6 +1873,9 @@ static void set_parse_error(struct pml_parser *pmlp)
 	ulong i;
 	ulong line;
 	ulong lch;
+	char tstr[256];
+
+	ech = pmlp->echar ? pmlp->echar : cpg->cur.i - 1;
 
 	if (l_isempty(&pmlp->chmap)) {
 		str_copy(pmlp->errbuf, "No input specified",
@@ -1854,15 +1898,15 @@ static void set_parse_error(struct pml_parser *pmlp)
 		}
 	}
 
-	if (pmlp->ast->error) {
-		snprintf(pmlp->errbuf, sizeof(pmlp->errbuf),
-			 "Error on line %lu character %lu: %s",
-			 line, lch, pmlp->ast->errbuf);
-	} else {
-		snprintf(pmlp->errbuf, sizeof(pmlp->errbuf),
-			 "parse error on file %s line %lu: syntax error",
-			 ir->name, line);
-	}
+	if (pmlp->ast->error)
+		str_copy(tstr, pmlp->ast->errbuf, sizeof(tstr));
+	else if (pmlp->echar != 0)
+		str_copy(tstr, pmlp->errbuf, sizeof(tstr));
+	else
+		str_copy(tstr, "syntax error", sizeof(tstr));
+
+	snprintf(pmlp->errbuf, sizeof(pmlp->errbuf),
+		 "Error on line %lu character %lu: %s", line, lch, tstr);
 }
 
 
@@ -1876,6 +1920,7 @@ int pmlp_parse(struct pml_parser *pmlp, struct pml_ast *ast)
 	rv = pml_peg_parse(pmlp->pegp, pmlp, pmlp);
 	if (rv < 0)
 		set_parse_error(pmlp);
+	abort_unless(rv < 0 || pmlp->sp == 0);
 	pmlp_reset(pmlp);
 	return rv;
 }
