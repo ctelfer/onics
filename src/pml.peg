@@ -371,7 +371,7 @@ decl <- import / rule / inlineDecl / constant / funcOrProtoOrGlobal_
 
 # Declarations
 
-import <- IMPORT '"' Filename '"' SPACING SemiOrError {
+import <- IMPORT '"' Filename '"' SPACING ';' {
 	char *filename;
 	POP_PTR(filename);
 	if (pmlp_open_add_infile(PMLP, filename, 1) < 0) {
@@ -380,7 +380,7 @@ import <- IMPORT '"' Filename '"' SPACING SemiOrError {
 		pml_peg_error = -1;
 	}
 	free(filename);
-}
+} SPACING
 
 
 rule <- RulePattern Body_ {
@@ -806,10 +806,10 @@ _HexPat <- HEXSTR { PUSH_PTR(hex2str(TEXT)); } SPACING (!DIV {
 	return compare_masked_string(PMLP);
 })
 
-_StrPat <- QUOTESTR SPACING {
+_StrPat <- QUOTESTR {
 	PUSH_PTR(qstr2str(TEXT, '"'));
 	return compare_fixed_string(PMLP, 1);
-}
+} SPACING
 
 _IPv4Pat <- IPV4ADDR { PUSH_PTR(ipv42str(TEXT)); } SPACING
 (!DIV {
@@ -1811,8 +1811,6 @@ restart:
 	pi = CURINPUT(pmlp);
 	c = inp_getc(pi->inp);
 	if (c >= 0) {
-		if (c == '\0')
-			fprintf(stderr, "BAZ\n");
 		if (pi != pmlp->last_input)
 			add_iregion(pmlp, pi);
 		add_iregion_char(pmlp);

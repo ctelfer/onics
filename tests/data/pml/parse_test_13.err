@@ -1,2 +1,2 @@
-parse error on file *END OF INPUT* line 0: unable to resolve variable 'y'
+Error on line 1 character 1: unable to resolve variable 'y'
 

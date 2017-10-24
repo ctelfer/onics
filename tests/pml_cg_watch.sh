@@ -54,7 +54,7 @@ do
 	codegen $f
 done
 
-if [ $CHANGED -eq 0 ] ; then
+if [ $CHANGED -eq 0 -a $ERR -eq 0 ] ; then
 	echo
 	echo "No changes in code generation detected"
 fi
