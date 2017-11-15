@@ -34,6 +34,7 @@
 #include <ctype.h>
 #include <cat/cat.h>
 #include <cat/list.h>
+#include <cat/hash.h>
 #include <cat/str.h>
 #include <cat/inport.h>
 #include <cat/stdclio.h>
@@ -247,6 +248,9 @@ struct iregion {
 struct pml_parser {
 	struct pml_peg_parser *	pegp;
 	struct pml_ast *	ast;
+	struct htab		kwtab;
+	struct hnode *		kwbkts[32];
+	struct hnode 		kwnodes[32];
 	char 			ipath[512];
 	struct inputs		inputs;
 	struct inputs *		last_input;
@@ -343,6 +347,7 @@ static struct raw *qstr2str(struct raw *s, int qchar);
 static struct raw *eth2str(struct raw *s);
 static struct raw *ipv42str(struct raw *s);
 static struct raw *ipv62str(struct pml_ast *ast, struct raw *s);
+static int push_ident(struct pml_parser *pml_peg_ctx, struct raw *s);
 static struct pml_literal *atloc2value(struct pml_parser *p, char *name);
 static struct pml_literal *_alloc_str(struct pml_ast *, struct raw *val,
 				      int nxchars);
@@ -1001,7 +1006,7 @@ DottedName <- (IDSTRING ('.' IDSTRING)+) { PUSH_PTR(_r2str(TEXT)); } SPACING
 
 Number <- NUMBER { PUSH_INT(text2num(TEXT)); } SPACING
 
-Ident <- !KEYWORD IDSTRING { PUSH_PTR(_r2str(TEXT)); } SPACING
+Ident <- IDSTRING { return push_ident(PMLP, TEXT); } SPACING
 
 Filename <- FNCHARS { PUSH_PTR(_r2str(TEXT)); }
 
@@ -1114,9 +1119,6 @@ DROP       <- "drop"         KWEND SPACING
 PRINT      <- "print"        KWEND SPACING
 IMPORT     <- "import"       KWEND SPACING
 
-KEYWORD <- ( BEGIN / TICK / END / INT / STR / VOID / INLINE / CONST / NOT
-           / AND / OR / WHILE / IF / ELSE / RETURN / BREAK / CONTINUE
-           / NEXTRULE / SEND / SENDNOFREE / DROP / PRINT / IMPORT )
 
 ## Operator Symbols
 
@@ -1276,6 +1278,21 @@ static struct raw *qstr2str(struct raw *s, int qchar)
 	r->len = dp - r->data + 1;
 	*dp = '\0';
 	return r;
+}
+
+
+static int push_ident(struct pml_parser *pml_peg_ctx, struct raw *s)
+{
+	char *name = _r2str(s);
+	if (ht_lkup(&pml_peg_ctx->kwtab, name, NULL)) {
+		pml_ast_err(pml_peg_ctx->ast, 
+			    "keyword '%s' found when expecting identifier",
+			    name);
+		free(name);
+		return -1;
+	}
+	PUSH_PTR(name);
+	return 0;
 }
 
 
@@ -1641,6 +1658,26 @@ static struct pml_stack_entry *_top(struct pml_parser *pmlp, int type,
 }
 
 
+static const char *keywords[] = { 
+	"BEGIN", "TICK", "END", "int", "str", "void", "inline", "const",
+	"not", "and", "or", "while", "if", "else", "return", "break",
+	"continue",  "nextrule",  "send", "send_no_free", "drop", "print",
+	"import",  NULL
+};
+
+static void kwtab_init(struct pml_parser *pmlp)
+{
+	const char **kwn;
+	struct hnode *hn;
+	ht_init(&pmlp->kwtab, pmlp->kwbkts, array_length(pmlp->kwbkts),
+		cmp_str, ht_shash, NULL);
+	for (kwn = keywords, hn = pmlp->kwnodes; *kwn != NULL; ++kwn, ++hn) {
+		ht_ninit(hn, kwn);
+		ht_ins_h(&pmlp->kwtab, hn);
+	}
+}
+
+
 struct pml_parser *pmlp_alloc(void)
 {
 	struct pml_parser *pmlp;
@@ -1654,6 +1691,7 @@ struct pml_parser *pmlp_alloc(void)
 		free(pmlp);
 		return NULL;
 	}
+	kwtab_init(pmlp);
 	pml_peg_init(pmlp->pegp, &nextc);
 	l_init(&pmlp->inputs.ln);
 	pmlp->last_input = NULL;
