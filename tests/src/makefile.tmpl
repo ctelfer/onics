@@ -48,12 +48,12 @@ $(BINDIR)/testns: testns.c $(TOOLSRC)/ns.o $(TOOLSRC)/util.o \
 		 $(TOOLSRC)/stdproto.o $(TOOLSRC)/protoparse.o \
 		 $(DEFS) $(OPTS) $(INCS) $(LIBS)
 
-$(BINDIR)/testpmlparse: testpmlparse.c $(TOOLSRC)/pmlp.o \
+$(BINDIR)/testpmlparse: testpmlparse.c $(TOOLSRC)/pmlp.o $(TOOLSRC)/pmllex.o \
 			$(TOOLSRC)/pmltree.o $(TOOLSRC)/util.o $(TOOLSRC)/ns.o \
 			$(TOOLSRC)/stdproto.o $(TOOLSRC)/protoparse.o
 	$(CC) -o ../bin/testpmlparse testpmlparse.c $(TOOLSRC)/pmlp.o \
-		$(TOOLSRC)/pmltree.o $(TOOLSRC)/util.o $(TOOLSRC)/ns.o \
-		$(TOOLSRC)/stdproto.o $(TOOLSRC)/protoparse.o \
+		$(TOOLSRC)/pmllex.o $(TOOLSRC)/pmltree.o $(TOOLSRC)/util.o \
+		 $(TOOLSRC)/ns.o $(TOOLSRC)/stdproto.o $(TOOLSRC)/protoparse.o \
 		$(DEFS) $(OPTS) $(INCS) $(LIBS)
 
 

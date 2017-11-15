@@ -143,7 +143,7 @@ static void symtab_init(struct pml_symtab *t)
 	struct hnode **bins;
 
 	abort_unless(t);
-	bins = ecalloc(sizeof(struct hnode *), SYMTABSIZE);
+	bins = ecalloc(SYMTABSIZE, sizeof(struct hnode *));
 	ht_init(&t->tab, bins, SYMTABSIZE, cmp_str, ht_shash, NULL);
 	l_init(&t->list);
 	t->addr_rw1 = 0;

@@ -171,11 +171,11 @@ ${BINDIR}/nvmpf: nvmpf.o stdproto.o netvm.o netvm_std_coproc.o netvm_prog.o \
 		netvm_prog.o ${PKTOBJ} \
 		${DEFS} ${OPTS} ${INCS} ${LIBS}
 
-${BINDIR}/pml: pml_main.o pmlp.o pmltree.o pmlncg.o stdproto.o netvm.o \
-		netvm_std_coproc.o netvm_prog.o pmltree.h pmlncg.h \
+${BINDIR}/pml: pml_main.o pmlp.o pmllex.o pmltree.o pmlncg.o stdproto.o \
+		netvm.o netvm_std_coproc.o netvm_prog.o pmltree.h pmlncg.h \
 	        netvm.h netvm_prog.h netvm_std_coproc.h stdproto.h \
 		tcpip_hdrs.h ${PKTOBJ} ${PKTHDR}
-	${CC} -o ${BINDIR}/pml pml_main.o pmlp.o pmltree.o pmlncg.o \
+	${CC} -o ${BINDIR}/pml pml_main.o pmlp.o pmllex.o pmltree.o pmlncg.o \
 		stdproto.o netvm.o netvm_std_coproc.o netvm_prog.o ${PKTOBJ} \
 		${DEFS} ${OPTS} ${INCS} ${LIBS}
 
@@ -215,16 +215,16 @@ ${BINDIR}/ipreasm: ipreasm.o stdproto.o ${PKTOBJ} ${PKTHDR}
 .c.o:
 	${CC} -c $< -o $@ ${DEFS} ${INCS} ${OPTS}
 
-pmllex.o: pmllex.c pml.h
+pmllex.o: pmllex.c pmlp.h
 	${CC} -c pmllex.c -o pmllex.o ${DEFS} ${INCS} ${OPTS}
 
-pmlp.c: pml.peg
-	${CATLIB_ROOT}/utils/pegcc -o pmlp -p pml_peg pml.peg
+pmlp.h pmlp.c: pml.peg
+	${CATLIB_ROOT}/utils/pegcc -o pmlp -p pml_peg -H -t -T PMLTOK_ pml.peg
 
 clean:
 	rm -f ${TARGETS}
 	rm -f *.o
-	rm -f pmlp.c
+	rm -f pmlp.c pmlp.h
 
 veryclean: clean
 	rm -f .has_pcap
