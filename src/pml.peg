@@ -1285,7 +1285,7 @@ static int push_ident(struct pml_parser *pml_peg_ctx, struct raw *s)
 {
 	char *name = _r2str(s);
 	if (ht_lkup(&pml_peg_ctx->kwtab, name, NULL)) {
-		pml_ast_err(pml_peg_ctx->ast, 
+		pml_ast_err(pml_peg_ctx->ast,
 			    "keyword '%s' found when expecting identifier",
 			    name);
 		free(name);
@@ -1658,7 +1658,7 @@ static struct pml_stack_entry *_top(struct pml_parser *pmlp, int type,
 }
 
 
-static const char *keywords[] = { 
+static const char *keywords[] = {
 	"BEGIN", "TICK", "END", "int", "str", "void", "inline", "const",
 	"not", "and", "or", "while", "if", "else", "return", "break",
 	"continue",  "nextrule",  "send", "send_no_free", "drop", "print",
