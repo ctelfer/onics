@@ -263,7 +263,7 @@ void build_key_ipv4(struct pktbuf *pkb, struct prparse *ipprp,
 			reset_flow_key(key);
 			build_key_ipv4(pkb, eipprp, key);
 		} else if (ICMPT_IS_QUERY(icmp->type)) {
-			key->sport = ntoh16(icmp->u.echo.id);
+			key->sport = key->dport = ntoh16(icmp->u.echo.id);
 		}
 	} 
 }
@@ -301,7 +301,7 @@ void build_key_ipv6(struct pktbuf *pkb, struct prparse *ip6prp,
 			build_key_ipv6(pkb, eip6prp, key);
 		} else if (ICMP6T_IS_ECHO(icmp6->type)) {
 			i6echo = (struct icmp6_echo *)icmp6;
-			key->sport = ntoh16(i6echo->id);
+			key->sport = key->dport = ntoh16(i6echo->id);
 		}
 	} 
 }
