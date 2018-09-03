@@ -3,7 +3,7 @@
 pktin - Read a packet in from an interface.
 .P
 .SH SYNOPSYS
-\fBpktin\fP [\fB-hIp\fP] [\fB-i\fP \fIifnum\fP] 
+\fBpktin\fP [\fB-hIp\fP] [\fB-n\fP \fIifnum\fP] 
 \fIifname\fP [\fIoutfile\fP]]
 .P
 .SH DESCRIPTION
@@ -20,7 +20,7 @@ that file.
 Print the usage of the command and exit.
 .IP \fB-p\fP
 Don't enable promiscuous mode when opening the interface.
-.IP "\fB-i\fP \fIifnum\fP"
+.IP "\fB-n\fP \fIifnum\fP"
 Tag all incoming packets with an XPKT_TAG_INIFACE tag that has an
 interface number equal to \fIifnum\fP.  This is useful when packets can
 come in from multiple interfaces to disambiguate their origin.  If the
@@ -44,7 +44,7 @@ Read packets from eth0 and store them in a file capture.xpkt
 Read packets in and tag them with interface number 3 before
 passing them to x2hpkt to dump.
 
-    pktin -i 3 eth0 | x2hpkt -x
+    pktin -n 3 eth0 | x2hpkt -x
 
 Copy packets from one interface to another:
 
