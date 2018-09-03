@@ -274,7 +274,7 @@ void shexdump(char *s, size_t ssize, const char *pfx, ulong addr, byte_t *p,
 		len -= 16;
 		aoff += 16;
 
-		if (n < ssize)
+		if (n >= ssize)
 			return;
 		s += n;
 		ssize -= n;
@@ -290,35 +290,35 @@ void shexdump(char *s, size_t ssize, const char *pfx, ulong addr, byte_t *p,
 		}
 
 		n = snprintf(s, ssize, "    %06lx:  ", addr + aoff);
-		if (n < ssize)
+		if (n >= ssize)
 			return;
 		s += n;
 		ssize -= n;
 
 		for (i = 0; i < len; ++i) {
-			n += snprintf(s, ssize, "%02x ", p[i]);
-			if (n < ssize)
+			n = snprintf(s, ssize, "%02x ", p[i]);
+			if (n >= ssize)
 				return;
 			s += n;
 			ssize -= n;
 		}
 		for (; i < 16; ++i) {
-			n += snprintf(s, ssize, "   ");
-			if (n < ssize)
+			n = snprintf(s, ssize, "   ");
+			if (n >= ssize)
 				return;
 			s += n;
 			ssize -= n;
 		}
 
 		n = snprintf(s, ssize, " |");
-		if (n < ssize)
+		if (n >= ssize)
 			return;
 		s += n;
 		ssize -= n;
 
 		for (i = 0; i < len; ++i) {
 			n = snprintf(s, ssize, "%c", CHOF(p[i]));
-			if (n < ssize)
+			if (n >= ssize)
 				return;
 			s += n;
 			ssize -= n;
