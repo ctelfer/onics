@@ -589,7 +589,7 @@ byte_t *ip6findh(void *ip6p, ulong maxlen, int proto, byte_t **nhpp)
 		return hp;
 	}
 
-	while (!isv6ext(*nhp)) {
+	while (isv6ext(*nhp)) {
 		if (maxlen < 8)
 			return NULL;
 

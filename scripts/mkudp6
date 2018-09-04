@@ -22,7 +22,7 @@
 #
 
 usage() { 
-	echo "usage: mkudp [(FILE|-|--) [MODSTR1...]]"
+	echo "usage: mkudp6 [(FILE|-|--) [MODSTR1...]]"
 	echo "	FILE indicates to read payload from FILE"
 	echo "	\"-\" indicates to read payload from standard input"
 	echo "	\"--\" indicates no payload but modification strings follow"
