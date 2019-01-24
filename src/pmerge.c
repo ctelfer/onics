@@ -1,6 +1,6 @@
 /*
  * ONICS
- * Copyright 2016
+ * Copyright 2019
  * Christopher Adam Telfer
  *
  * pmerge.c -- Merge a set of packet streams
@@ -26,6 +26,8 @@
 
 #include <cat/optparse.h>
 #include <cat/err.h>
+#include <cat/emalloc.h>
+#include <cat/time.h>
 
 #include "pktbuf.h"
 
@@ -34,12 +36,19 @@
 
 #define MAXSTREAMS	256
 #define BYTETHRESH	65536
+#define PDATALEN	65536
+#define XDATALEN	4096
 
 
 struct pktstream {
 	FILE *fp;
 	const char *name;
 	int eof;
+	ulong pnum;
+	cat_time_t tnext;
+	struct pktbuf pkb;
+	uchar *pdata;
+	uchar *xdata;
 	ulong weight;
 	ulong credits;
 };
@@ -52,10 +61,10 @@ enum {
 	ROUND_ROBIN,
 	PROP_PKTS,
 	PROP_BYTES,
+	BY_TIME,
 };
 
 int mode = ROUND_ROBIN;
-int used_stdin = 0;
 int nstreams = 0;
 int randomize = 0;
 int last_stream;
@@ -66,9 +75,6 @@ ulong threshold;
 long nwritten = 0;
 long maxwrite = -1;
 const char *progname;
-uchar pdata[65536];
-uchar xdata[4096];
-struct pktbuf pkb;
 
 
 struct clopt g_options[] = {
@@ -83,6 +89,7 @@ struct clopt g_options[] = {
 	CLOPT_I_NOARG('r', NULL, "Randomize stream selection"),
 	CLOPT_I_NOARG('R', NULL, "Schedule round-robin (default)"),
 	CLOPT_I_UINT('s', NULL, "SEED", "Set randomization seed"),
+	CLOPT_I_NOARG('T', NULL, "Merge in timestamp order"),
 };
 struct clopt_parser g_oparse = CLOPTPARSER_INIT_ARR(g_options);
 
@@ -103,12 +110,12 @@ void read_and_rewind(struct pktstream *ps)
 {
 	int rv;
 	ps->weight = 0;
-	while ((rv = pkb_file_read(&pkb, ps->fp)) > 0) {
+	while ((rv = pkb_file_read(&ps->pkb, ps->fp)) > 0) {
 		if (mode == PROP_PKTS)
 			ps->weight += 1;
 		else
-			ps->weight += pkb_get_len(&pkb);
-		pkb_reset(&pkb);
+			ps->weight += pkb_get_len(&ps->pkb);
+		pkb_reset(&ps->pkb);
 	}
 	if (rv < 0)
 		errsys("error reading '%s': ", ps->name);
@@ -116,7 +123,45 @@ void read_and_rewind(struct pktstream *ps)
 }
 
 
-void open_stream(const char *fn, struct pktstream *ps)
+int read_pkt(struct pktstream *ps)
+{
+	int rv;
+	struct xpkt_tag_ts *ts;
+	cat_time_t t;
+
+again:
+	pkb_reset(&ps->pkb);
+	rv = pkb_file_read(&ps->pkb, ps->fp);
+	if (rv < 0)
+		errsys("error reading '%s': ", ps->name);
+	if (rv == 0)
+		return -1;
+	ps->pnum++;
+	if (mode == BY_TIME) {
+		/* extract next timestamp */
+		ts = (struct xpkt_tag_ts *)
+			pkb_find_tag(&ps->pkb, XPKT_TAG_TIMESTAMP, 0);
+		if (!ts) {
+			fprintf(stderr,
+				"packet %lu in %s has no timestamp: skpping",
+				ps->pnum, ps->name);
+			goto again;
+		}
+		t.sec = ts->sec;
+		t.nsec = ts->nsec;
+		if (tm_cmp(t, ps->tnext) < 0) {
+			fprintf(stderr,
+				"packet %lu in %s goes backwards in time:"
+				" skpping", ps->pnum, ps->name);
+			goto again;
+		}
+		ps->tnext = t;
+	}
+	return 0;
+}
+
+
+int open_stream(const char *fn, struct pktstream *ps)
 {
 	abort_unless(fn && ps);
 
@@ -126,11 +171,23 @@ void open_stream(const char *fn, struct pktstream *ps)
 		errsys("unable to open file '%s': ", fn);
 	ps->weight = 1;
 	ps->credits = 0;
+	ps->pnum = 0;
+	ps->tnext = tm_zero;
+	ps->pdata = ecalloc(PDATALEN, sizeof(uchar));
+	ps->xdata = ecalloc(XDATALEN, sizeof(uchar));
+	pkb_init(&ps->pkb, ps->pdata, PDATALEN, ps->xdata, XDATALEN);
 	if (mode == PROP_PKTS || mode == PROP_BYTES)
 		read_and_rewind(ps);
+	if (read_pkt(ps) < 0 || ps->weight == 0) {
+		fprintf(stderr, "WARNING: file %s is empty -- skipping\n", fn);
+		fclose(ps->fp);
+		memset(ps, 0, sizeof(*ps));
+		return -1;
+	}
 	if (total_weight + ps->weight < total_weight)
 		err("overflow in byte/pkt/stream counts");
 	total_weight += ps->weight;
+	return 0;
 }
 
 
@@ -168,9 +225,9 @@ void init_wrr_params()
 			ps->credits = BYTETHRESH;
 		}
 		break;
+	case BY_TIME:
 	default:
-		abort_unless(0);
-
+		break;
 	}
 }
 
@@ -210,6 +267,11 @@ void parse_args(int argc, char *argv[])
 			srandom(opt->val.uint_val);
 			seeded = 1;
 			break;
+		case 'T':
+			mode = BY_TIME;
+			break;
+		default:
+			abort_unless(0);
 		}
 	}
 
@@ -218,15 +280,43 @@ void parse_args(int argc, char *argv[])
 	if (rv > argc - 1)
 		usage("Incorrect # of arguments\n");
 
+	if (mode == BY_TIME && (continuous || randomize))
+		err("-c and -r can't be set when -T is set\n");
+
 	while (rv < argc) {
 		if (nstreams >= MAXSTREAMS)
 			err("Too many streams to merge\n");
 		last_stream = nstreams;
-		open_stream(argv[rv++], &streams[nstreams++]);
+		if (!open_stream(argv[rv], &streams[nstreams])) {
+			rv++;
+			nstreams++;
+		}
 	}
 
 	if (!randomize)
 		init_wrr_params();
+}
+
+
+struct pktstream *next_by_time()
+{
+	int i;
+	int imin = -1;
+	struct pktstream *ps;
+	cat_time_t tmin;
+
+	for (i = 0; i < nstreams; i++) {
+		ps = &streams[i];
+		if (!ps->weight)
+			continue;
+		if (imin < 0 || tm_cmp(tmin, ps->tnext) > 0) {
+			imin = i;
+			tmin = ps->tnext;
+		}
+	}
+	if (imin < 0)
+		return NULL;
+	return &streams[imin];
 }
 
 
@@ -235,7 +325,7 @@ struct pktstream *next_random()
 	int i;
 	if (total_weight == 0)
 		return NULL;
-	ulong x = (ulong)random() % total_weight; 
+	ulong x = (ulong)random() % total_weight;
 	for (i = 0; i < nstreams; ++i) {
 		if (x < streams[i].weight)
 			return &streams[i];
@@ -302,7 +392,9 @@ struct pktstream *next_stream()
 {
 	if (maxwrite >= 0 && nwritten >= maxwrite)
 		return NULL;
-	if (randomize) {
+	if (mode == BY_TIME) {
+		return next_by_time();
+	} else if (randomize) {
 		return next_random();
 	} else {
 		return next_deterministic();
@@ -310,40 +402,37 @@ struct pktstream *next_stream()
 }
 
 
-void update_credits(struct pktstream *ps, struct pktbuf *p)
+void update_credits(struct pktstream *ps)
 {
-	if (!randomize) {
+	if (!randomize && mode != BY_TIME) {
 		if (mode != PROP_BYTES)
 			ps->credits -= threshold;
 		else
-			ps->credits -= pkb_get_len(&pkb);
+			ps->credits -= pkb_get_len(&ps->pkb);
 	}
 }
 
 
 void copy_next_packet(struct pktstream *ps)
 {
-	int rv;
+	++nwritten;
+	update_credits(ps);
+	pkb_pack(&ps->pkb);
+	if (pkb_file_write(&ps->pkb, stdout) < 0)
+		errsys("Error writing packet %lu: ", nwritten);
 
-	pkb_reset(&pkb);
-	rv = pkb_file_read(&pkb, ps->fp);
-	if (rv <= 0) {
-		if (rv < 0)
-			errsys("Error reading from %s: ", ps->name);
+	if (read_pkt(ps) < 0) {
 		if (continuous) {
 			fseek(ps->fp, 0, SEEK_SET);
+			ps->pnum = 0;
+			if (read_pkt(ps) < 0)
+				err("File %s unexpectedly empty: ", ps->name);
 		} else {
 			total_weight -= ps->weight;
 			ps->weight = 0;
 			ps->credits = 0;
 			ps->eof = 1;
 		}
-	} else {
-		++nwritten;
-		update_credits(ps, &pkb);
-		pkb_pack(&pkb);
-		if (pkb_file_write(&pkb, stdout) < 0)
-			errsys("Error writing packet %lu: ", nwritten);
 	}
 }
 
@@ -354,7 +443,11 @@ void close_streams()
 	struct pktstream *ps;
 	for (i = 0; i < nstreams; ++i) {
 		ps = &streams[i];
+		free(ps->pdata);
+		free(ps->xdata);
 		fclose(ps->fp);
+		ps->pdata = NULL;
+		ps->xdata = NULL;
 		ps->fp = NULL;
 		ps->name = NULL;
 	}
@@ -366,7 +459,6 @@ int main(int argc, char *argv[])
 	struct pktstream *ps;
 	struct timeval tv;
 
-	pkb_init(&pkb, pdata, sizeof(pdata), xdata, sizeof(xdata));
 	parse_args(argc, argv);
 	if (randomize && !seeded) {
 		gettimeofday(&tv, NULL);
