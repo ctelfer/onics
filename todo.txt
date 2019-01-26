@@ -63,9 +63,6 @@ psplit:
 scripts:
  + unit tests
 
-pmerge:
- + unit tests
-
 nftrk:
  + unit tests
  + other protocols? (SCTP? DCCP? etc..?)

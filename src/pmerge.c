@@ -254,6 +254,7 @@ void parse_args(int argc, char *argv[])
 			maxwrite = opt->val.uint_val;
 			if (maxwrite < 0)
 				err("Number of packets to write too high\n");
+			break;
 		case 'P':
 			mode = PROP_PKTS;
 			break;

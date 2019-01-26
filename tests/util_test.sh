@@ -129,6 +129,166 @@ t_nftrk_psplit_basic() {
 	done
 }
 
+#
+# For pmerge tests the following traces are used:
+#  * t_pmerge_128.xpkt - 8 128-byte tcp packets w/ timestamps 5, 10, 15, .. 40
+#  * t_pmerge_256.xpkt - 4 256-byte tcp packets w/ timestamps 6, 11, 16, 21
+#  * t_pmerge_512.xpkt - 2 512-byte tcp packets w/ timestamps 7, 12
+#  * t_pmerge_512_x4.xpkt - 4 512-byte tcp packets w/ timestamps 8, 13, 18, 23
+#
+
+t_pmerge_rr() {
+	$BIN/pmerge -R $DATA/t_pmerge_128.xpkt $DATA/t_pmerge_256.xpkt \
+		$DATA/t_pmerge_512.xpkt |
+		pml -e '
+		str esizes[] = \x0102040102040102010201010101;
+		int x;
+		{
+			if (esizes[x,1]*128 != pkt.plen) {
+				print "packet ", x, " has length ", pkt.plen;
+				exit(1);
+			}
+			x = x + 1;
+			drop;
+		}
+		'
+}
+
+t_pmerge_rr_c() {
+	$BIN/pmerge -Rc -n 12 $DATA/t_pmerge_128.xpkt $DATA/t_pmerge_256.xpkt \
+		$DATA/t_pmerge_512.xpkt |
+		pml -e '
+		str esizes[] = \x010204010204010204010204;
+		int x;
+		{
+			if (esizes[x,1]*128 != pkt.plen) {
+				print "packet ", x, " has length ", pkt.plen;
+				exit(1);
+			}
+			x = x + 1;
+			drop;
+		}
+		'
+}
+
+t_pmerge_pkts_c() {
+	$BIN/pmerge -Pc -n 28 $DATA/t_pmerge_128.xpkt $DATA/t_pmerge_256.xpkt \
+		$DATA/t_pmerge_512.xpkt |
+		pml -e '
+		int n128;
+		int n256;
+		int n512;
+		int x;
+		{
+			if (pkt.plen == 128) {
+				n128 = n128 + 1;
+			} else if (pkt.plen == 256) {
+				n256 = n256 + 1;
+			} else if (pkt.plen == 512) {
+				n512 = n512 + 1;
+			}
+			drop;
+		}
+		END {
+			print "Expected 16 128-byte packets. Got ", n128;
+			print "Expected  8 256-byte packets. Got ", n256;
+			print "Expected  4 512-byte packets. Got ", n512;
+			if (n128 != 16 or n256 != 8 or n512 != 4) {
+				print "FAIL";
+				exit(1);
+			}
+		}
+		'
+}
+
+t_pmerge_bytes_c() {
+	$BIN/pmerge -Pc -n 28 $DATA/t_pmerge_128.xpkt $DATA/t_pmerge_256.xpkt \
+		$DATA/t_pmerge_512.xpkt |
+		pml -e '
+		int n128;
+		int n256;
+		int n512;
+		int x;
+		{
+			if (pkt.plen == 128) {
+				n128 = n128 + 1;
+			} else if (pkt.plen == 256) {
+				n256 = n256 + 1;
+			} else if (pkt.plen == 512) {
+				n512 = n512 + 1;
+			}
+			drop;
+		}
+		END {
+			print "Expected 16 128-byte packets. Got ", n128;
+			print "Expected  8 256-byte packets. Got ", n256;
+			print "Expected  4 512-byte packets. Got ", n512;
+			if (n128 != 16 or n256 != 8 or n512 != 4) {
+				print "FAIL";
+				exit(1);
+			}
+		}
+		'
+}
+
+t_pmerge_bytes_c2() {
+	$BIN/pmerge -Bc -n 1000 $DATA/t_pmerge_128.xpkt $DATA/t_pmerge_256.xpkt \
+		$DATA/t_pmerge_512_x4.xpkt |
+		pml -e '
+		int n128;
+		int n256;
+		int n512;
+		int x;
+		{
+			if (pkt.plen == 128) {
+				n128 = n128 + pkt.plen;
+			} else if (pkt.plen == 256) {
+				n256 = n256 + pkt.plen;
+			} else if (pkt.plen == 512) {
+				n512 = n512 + pkt.plen;
+			}
+			drop;
+		}
+		END {
+			print "Got ", n128, " bytes of 128-byte packets.";
+			print "Got ", n256, " bytes of 256-byte packets.";
+			print "Got ", n512, " bytes of 512-byte packets.";
+
+			# if difference is > 2%: fail
+			diff = n512 - (n128 + n256);
+			if (diff < 0) {
+				diff = -diff;
+			}
+			diff = diff / 100;
+			print "Difference is ~", diff, "%";
+			if (diff > 2) {
+				print "FAIL";
+				exit(1);
+			}
+		}
+		'
+}
+
+t_pmerge_ts() {
+	$BIN/pmerge -T $DATA/t_pmerge_128.xpkt $DATA/t_pmerge_256.xpkt \
+		$DATA/t_pmerge_512.xpkt |
+		pml -e '
+		int min;
+		int x;
+		{ 
+			x = x + 1;
+			ts = meta_get_ts_sec(0);
+			if (ts < min) {
+				print "packet ", x, 
+				      " is out of order by timestamp";
+				exit(1);
+			}
+			min = ts;
+			drop;
+		}
+		'
+}
+
 
 run_test t_h2xpkt_immed "h2xpkt -- basic from immediate data"
 run_test t_h2xpkt_immed_nox "h2xpkt -- w/o xpkt header"
@@ -149,5 +309,11 @@ run_test t_ipreasm_ipv6 "ipreasm -- IPv6 basic reassembly"
 run_test t_ipreasm_combined "ipreasm -- combined IPv4+IPv6 reassembly"
 run_test t_ipreasm_ipv6_opts "ipreasm -- IPv6 with hop-by-hop options"
 run_test t_nftrk_psplit_basic "nftrk/psplit -- Basic flow track + split"
+run_test t_pmerge_rr "pmerge -- round robin"
+run_test t_pmerge_rr_c "pmerge -- round robin, continuous"
+run_test t_pmerge_pkts_c "pmerge -- proportional by # of packets, continuous"
+run_test t_pmerge_bytes_c "pmerge -- proportional by # of bytes, continuous"
+run_test t_pmerge_bytes_c2 "pmerge -- proportional by # of bytes, uneven traces"
+run_test t_pmerge_ts "pmerge -- merge by timestamp"
 
 exit $RET
