@@ -28,24 +28,26 @@ the connection through both environment variables and through the
 \fB-m\fP and \fB-M\fP options.
 .P
 .SH "ENVIRONMENT VARIABLES"
-.IP \fBIPAC\fP
+.IP \fBCADDR\fP
 Specifies the IP address of the client of the connection.
 Defaults to 1.2.3.4.
 .IP \fBCPORT\fP
 Specifies the TCP port of the client of the connection.  Defaults to
 31337.
-.IP \fBSEQC\fP
+.IP \fBCSEQ\fP
 Specifies the initial sequence number to use for the client of the
 connection.  Defaults to 1.
-.IP \fBIPAS\fP
+.IP \fBSADDR\fP
 Specifies the IP address of the server of the connection.
 Defaults to 4.5.6.7.
 .IP \fBSPORT\fP
 Specifies the TCP port of the server of the connection.  Defaults to
 80.
-.IP \fBSEQS\fP
+.IP \fBSSEQ\fP
 Specifies the initial sequence number to use for the server of the
 connection.  Defaults to 1.
+.IP \fBMSS\fP
+Specifies the MSS to use for data packets. Defaults to 1460.
 .P
 .SH OPTIONS
 .IP "\fB-c\fP \fIfilename\fP"
@@ -80,13 +82,13 @@ the packet data is divided up into a series of request/response pairs in
 files named request_1 request_2 ... and response_1 response_2 ... .
 .nf
 
-        IPAC=192.168.0.1
+        CADDR=192.168.0.1
         CPORT=12345
-        SEQC=10000
-        IPAS=4.0.0.32
+        CSEQ=10000
+        SADDR=4.0.0.32
         SPORT=443
-        SEQS=20000
-        export IPAC CPORT SEQC IPAS SPORT SEQS
+        SSEQ=20000
+        export CADDR CPORT CSEQ SADDR SPORT SSEQ
 
         # Set the IP ID of all packets from client to server to 1234
         # Set the IP ID of all packets from server to clietn to 4321 
@@ -101,12 +103,12 @@ files named request_1 request_2 ... and response_1 response_2 ... .
                 tcpsess -SF -c request_$p $PARAMS >>
                         https_session.xpkt
                 SIZE=`ls -l request_$p | awk '{print $5}'`
-                SEQC=`expr $SEQC \+ $SIZE`
+                CSEQ=`expr $CSEQ \+ $SIZE`
 
                 tcpsess -SF -s response_$p $PARAMS >>
                         https_session.xpkt
                 SIZE=`ls -l response_$p | awk '{print $5}'`
-                SEQS=`expr $SEQS \+ $SIZE`
+                SSEQ=`expr $SSEQ \+ $SIZE`
                 
         done
 

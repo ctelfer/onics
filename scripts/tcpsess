@@ -1,7 +1,7 @@
 #!/bin/sh
 #
 # ONICS
-# Copyright 2013-2015
+# Copyright 2013-2019
 # Christopher Adam Telfer
 #
 # tcpsess - Generate a partial or complete TCP session from files.
@@ -22,15 +22,17 @@
 #
 
 
-IPAC=${IPAC:-"1.2.3.4"}
+CADDR=${CADDR:-"1.2.3.4"}
 CPORT=${CPORT:-31337}
-SEQC=${ISNC:-1}
-ACKC=0
+CSEQ=${CSEQ:-1}
+CACK=0
 
-IPAS=${IPAS:-"4.5.6.7"}
+SADDR=${SADDR:-"4.5.6.7"}
 SPORT=${SPORT:-80}
-SEQS=${ISNS:-1}
-ACKS=0
+SSEQ=${SSEQ:-1}
+SACK=0
+
+MSS=${MSS:-1460}
 
 DOSYN=1
 DOFIN=1
@@ -67,18 +69,18 @@ genopkt() {
 	if [ $1 -eq 0 ]
 	then
 		dd if=$3 bs=1 skip=$4 count=$5 2>/dev/null | rawpkt |
-			tcpwrap "tcp.seqn = $SEQC; tcp.ackn = $ACKC; " \
+			tcpwrap "tcp.seqn = $CSEQ; tcp.ackn = $CACK; " \
 				"tcp.sport = $CPORT; tcp.dport = $SPORT; " \
 				"tcp.win = 65535; $2 " |
-			ipwrap "ip.saddr = $IPAC; ip.daddr = $IPAS; " \
+			ipwrap "ip.saddr = $CADDR; ip.daddr = $SADDR; " \
 			       "ip.ttl = 64; " |
 			ethwrap "$CMODS fix_lens(0); fix_csums(0); "
 	else
 		dd if=$3 bs=1 skip=$4 count=$5 2>/dev/null | rawpkt |
-			tcpwrap "tcp.seqn = $SEQS; tcp.ackn = $ACKS; " \
+			tcpwrap "tcp.seqn = $SSEQ; tcp.ackn = $SACK; " \
 				"tcp.sport = $SPORT; tcp.dport = $CPORT; " \
 				"tcp.win = 65535; $2 " |
-			ipwrap "ip.saddr = $IPAS; ip.daddr = $IPAC; " \
+			ipwrap "ip.saddr = $SADDR; ip.daddr = $CADDR; " \
 			       "ip.ttl = 64; " |
 			ethwrap "$SMODS fix_lens(0); fix_csums(0); "
 	fi
@@ -90,18 +92,18 @@ genfpkt() {
 	if [ $1 -eq 0 ]
 	then
 		rawpkt $3 |
-			tcpwrap "tcp.seqn = $SEQC; tcp.ackn = $ACKC; " \
+			tcpwrap "tcp.seqn = $CSEQ; tcp.ackn = $CACK; " \
 				"tcp.sport = $CPORT; tcp.dport = $SPORT; " \
 				"tcp.win = 65535; $2 " |
-			ipwrap "ip.saddr = $IPAC; ip.daddr = $IPAS; " \
+			ipwrap "ip.saddr = $CADDR; ip.daddr = $SADDR; " \
 			       "ip.ttl = 64; " |
 			ethwrap "$CMODS fix_lens(0); fix_csums(0); "
 	else
 		rawpkt $3 |
-			tcpwrap "tcp.seqn = $SEQS; tcp.ackn = $ACKS; " \
+			tcpwrap "tcp.seqn = $SSEQ; tcp.ackn = $SACK; " \
 				"tcp.sport = $SPORT; tcp.dport = $CPORT; " \
 				"tcp.win = 65535; $2 " |
-			ipwrap "ip.saddr = $IPAS; ip.daddr = $IPAC; " \
+			ipwrap "ip.saddr = $SADDR; ip.daddr = $CADDR; " \
 			       "ip.ttl = 64; " |
 			ethwrap "$SMODS fix_lens(0); fix_csums(0); "
 	fi
@@ -117,16 +119,16 @@ gencpkt() {
 conn_open() {
 	gencpkt 0 "$SYN"
 
-	ACKS=`seqadd $SEQC 1`
+	SACK=`seqadd $CSEQ 1`
 
 	gencpkt 1 "$SYNACK"
 
-	SEQC=$ACKS
-	ACKC=`seqadd $SEQS 1`
+	CSEQ=$SACK
+	CACK=`seqadd $SSEQ 1`
 
 	gencpkt 0 "$ACK"
 
-	SEQS=$ACKC
+	SSEQ=$CACK
 }
 
 
@@ -134,19 +136,19 @@ conn_open() {
 conn_close() {
 	gencpkt 0 "$FINACK"
 
-	ACKS=`seqadd $SEQC 1`
+	SACK=`seqadd $CSEQ 1`
 
 	gencpkt 1 "$ACK"
 
-	SEQC=$ACKS
+	CSEQ=$SACK
 
 	gencpkt 1 "$FINACK"
 
-	ACKC=`seqadd $SEQS 1`
+	CACK=`seqadd $SSEQ 1`
 
 	gencpkt 0 "$ACK"
 
-	SEQS=$ACKC
+	SSEQ=$CACK
 }
 
 
@@ -159,30 +161,30 @@ senddata() {
 	ACKDIR=0
 	[ $2 -eq 0 ] && ACKDIR=1
 
-	if [ $SIZE -le 1460 ]
+	if [ $SIZE -le $MSS ]
 	then
 		genfpkt $2 "$ACK" $1
-		ACKS=`seqadd $SEQC $SIZE`
+		SACK=`seqadd $CSEQ $SIZE`
 		gencpkt $ACKDIR "$ACK"
-		SEQC=$ACKS
+		CSEQ=$SACK
 	else
 
 		X=0
-		while [ $SIZE -gt 1460 ]
+		while [ $SIZE -gt $MSS ]
 		do
-			genopkt $2 "$ACK" $1 $X 1460
-			ACKS=`seqadd $SEQC 1460`
+			genopkt $2 "$ACK" $1 $X $MSS
+			SACK=`seqadd $CSEQ $MSS`
 			gencpkt $ACKDIR "$ACK"
-			SEQC=$ACKS
+			CSEQ=$SACK
 
-			X=`expr $X \+ 1460`
-			SIZE=`expr $SIZE - 1460`
+			X=`expr $X \+ $MSS`
+			SIZE=`expr $SIZE - $MSS`
 		done
 
 		genopkt $2 "$ACK" $1 $X $SIZE
-		ACKS=`seqadd $SEQC $SIZE`
+		SACK=`seqadd $CSEQ $SIZE`
 		gencpkt $ACKDIR "$ACK"
-		SEQC=$ACKS
+		CSEQ=$SACK
 	fi
 }
 

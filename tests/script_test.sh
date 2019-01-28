@@ -212,6 +212,23 @@ t_mkicmp6_file() {
 		"icmp6.echo.seq = 4444;"
 }
 
+t_tcpsess_basic() {
+	$SCR/tcpsess -c $DATA/testfile -s $DATA/bigtestfile
+}
+
+t_tcpsess_env() {
+	export MSS=512
+	export CADDR=2.3.4.5
+	export CPORT=808
+	export CSEQ=3435973836
+	export SADDR=3.4.5.6
+	export SPORT=443
+	export SSEQ=1431655765
+	$SCR/tcpsess -c $DATA/testfile -s $DATA/bigtestfile
+}
+
+
+
 run_test "ARP test" t_mkarp
 run_test "ARP over IPv4 no modifications test" t_mkarp_nomods
 run_test "TCP over IPv4 empty no modification test" t_mktcp_empty_nomods
@@ -238,5 +255,7 @@ run_test "ICMPv6 empty no modification test" t_mkicmp6_empty_nomods
 run_test "ICMPv6 empty test" t_mkicmp6_empty
 run_test "ICMPv6 stdin data test" t_mkicmp6_stdin
 run_test "ICMPv6 file data test" t_mkicmp6_file
+run_test "tcpsess test" t_tcpsess_basic
+run_test "tcpsess test with overriding environment variables" t_tcpsess_env
 
 exit $RET
