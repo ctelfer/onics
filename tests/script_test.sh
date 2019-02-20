@@ -7,7 +7,7 @@ export PATH
 TOUT=tmp
 SCR=../scripts
 DATA=data/scripts
-RET=0
+ERR=0
 
 
 #
@@ -21,7 +21,7 @@ run_test() {
 	if [ $? -ne 0 ]
 	then
 		echo run-time error
-		RET=1
+		ERR=1
 	elif [ ! -f $DATA/$2.out ] &&
 	     [ ! -f $DATA/$2.err ]
 	then
@@ -258,4 +258,4 @@ run_test "ICMPv6 file data test" t_mkicmp6_file
 run_test "tcpsess test" t_tcpsess_basic
 run_test "tcpsess test with overriding environment variables" t_tcpsess_env
 
-exit $RET
+exit $ERR

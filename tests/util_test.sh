@@ -3,7 +3,7 @@
 TOUT=tmp
 DATA=data/utils
 BIN=../bin
-RET=0
+ERR=0
 
 
 #
@@ -17,7 +17,7 @@ run_test() {
 	if [ $? -ne 0 ]
 	then
 		echo run-time error
-		RET=1
+		ERR=1
 	elif [ ! -f $DATA/$1.out ] &&
 	     [ ! -f $DATA/$1.err ]
 	then
@@ -316,4 +316,4 @@ run_test t_pmerge_bytes_c "pmerge -- proportional by # of bytes, continuous"
 run_test t_pmerge_bytes_c2 "pmerge -- proportional by # of bytes, uneven traces"
 run_test t_pmerge_ts "pmerge -- merge by timestamp"
 
-exit $RET
+exit $ERR
