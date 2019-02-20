@@ -26,13 +26,18 @@ CADDR=${CADDR:-"1.2.3.4"}
 CPORT=${CPORT:-31337}
 CSEQ=${CSEQ:-1}
 CACK=0
+CSW=1
+CMSW=1
 
 SADDR=${SADDR:-"4.5.6.7"}
 SPORT=${SPORT:-80}
 SSEQ=${SSEQ:-1}
 SACK=0
+SSW=1
+SMSW=1
 
 MSS=${MSS:-1460}
+MAXSNDW=${MAXSNDW:-10}
 
 DOSYN=1
 DOFIN=1
@@ -144,7 +149,7 @@ conn_close() {
 }
 
 
-# $1 = filename, $2 = dir, $3 = ackdir, $4 = off, $5 = size
+# $1 = filename, $2 = dir, $3 = ackdir, $4 = off, $5 = size, $6 = do-ack
 sendackdata() {
 	gendpkt $2 "$ACK" $1 $4 $5
 	if [ $2 -eq 0 ] ; then
@@ -152,7 +157,9 @@ sendackdata() {
 	else
 		CACK=`seqadd $SSEQ $5`
 	fi
-	gencpkt $3 "$ACK"
+	if [ $6 -gt 0 ] ; then
+		gencpkt $3 "$ACK"
+	fi
 	if [ $2 -eq 0 ] ; then
 		CSEQ=$SACK
 	else
@@ -161,21 +168,55 @@ sendackdata() {
 }
 
 
+# $1 = dir
+adjswnd() {
+	DOACK=0
+	if [ $1 -eq 0 ] ; then
+		CSW=`expr $CSW - 1`
+		if [ $CSW -le 0 ] ; then
+			DOACK=1
+			CMSW=`expr $CMSW \+ $CMSW`
+			if [ $CMSW -gt $MAXSNDW ]; then
+				CMSW=$MAXSNDW
+			fi
+			CSW=$CMSW
+		fi
+	else
+		SSW=`expr $SSW - 1`
+		if [ $SSW -le 0 ] ; then
+			DOACK=1
+			SMSW=`expr $SMSW \+ $SMSW`
+			if [ $SMSW -gt $MAXSNDW ] ;then
+				SMSW=$MAXSNDW
+			fi
+			SSW=$SMSW
+		fi
+	fi
+}
+
+
 # $1 = filename, $2 = dir
 senddata() {
 	[ ! -f $1 ] && echo "file not found: $1" >&2 && exit 1
 	SIZE=`ls -l $1 | awk '{print $5}'`
-	ACKDIR=0
-	[ $2 -eq 0 ] && ACKDIR=1
+
+	if [ $2 -eq 0 ] ; then
+		CSW=$CMSW
+		ACKDIR=1
+	else
+		SSW=$SMSW
+		ACKDIR=0
+	fi
 
 	X=0
 	while [ $SIZE -gt $MSS ]
 	do
-		sendackdata $1 $2 $ACKDIR $X $MSS
+		adjswnd $2
+		sendackdata $1 $2 $ACKDIR $X $MSS $DOACK
 		X=`expr $X \+ $MSS`
 		SIZE=`expr $SIZE - $MSS`
 	done
-	sendackdata $1 $2 $ACKDIR $X $SIZE
+	sendackdata $1 $2 $ACKDIR $X $SIZE 1
 }
 
 

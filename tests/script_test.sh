@@ -224,6 +224,7 @@ t_tcpsess_env() {
 	export SADDR=3.4.5.6
 	export SPORT=443
 	export SSEQ=1431655765
+	export MAXSNDW=2
 	$SCR/tcpsess -c $DATA/testfile -s $DATA/bigtestfile
 }
 
