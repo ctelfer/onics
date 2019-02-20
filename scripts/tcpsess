@@ -49,7 +49,7 @@ usage() {
 }
 
 
-SYN="tcp.syn = 1;"
+SYN="tcp.syn = 1; tcp.ack = 0;"
 SYNACK="tcp.syn = 1; tcp.ack = 1;"
 ACK="tcp.ack = 1;"
 ACKPSH="tcp.psh = 1; tcp.ack = 1;"
@@ -65,54 +65,46 @@ seqadd() {
 
 
 # $1 = dir, $2 = flags, $3 = file, $4 = off, $5 = len
-genopkt() {
+gendpkt() {
 	if [ $1 -eq 0 ]
 	then
-		dd if=$3 bs=1 skip=$4 count=$5 2>/dev/null | rawpkt |
-			tcpwrap "tcp.seqn = $CSEQ; tcp.ackn = $CACK; " \
-				"tcp.sport = $CPORT; tcp.dport = $SPORT; " \
-				"tcp.win = 65535; $2 " |
-			ipwrap "ip.saddr = $CADDR; ip.daddr = $SADDR; " \
-			       "ip.ttl = 64; " |
-			ethwrap "$CMODS fix_lens(0); fix_csums(0); "
+		dd if=$3 bs=1 skip=$4 count=$5 2>/dev/null | mktcp - \
+			"tcp.seqn = $CSEQ; tcp.ackn = $CACK; " \
+			"tcp.sport = $CPORT; tcp.dport = $SPORT; " \
+			"tcp.win = 65535; $2 " \
+			"ip.saddr = $CADDR; ip.daddr = $SADDR; " \
+			"ip.ttl = 64; " \
+			"$CMODS fix_lens(0); fix_csums(0); "
 	else
-		dd if=$3 bs=1 skip=$4 count=$5 2>/dev/null | rawpkt |
-			tcpwrap "tcp.seqn = $SSEQ; tcp.ackn = $SACK; " \
-				"tcp.sport = $SPORT; tcp.dport = $CPORT; " \
-				"tcp.win = 65535; $2 " |
-			ipwrap "ip.saddr = $SADDR; ip.daddr = $CADDR; " \
-			       "ip.ttl = 64; " |
-			ethwrap "$SMODS fix_lens(0); fix_csums(0); "
-	fi
-}
-
-
-# $1 = dir, $2 = flags, $3 = file
-genfpkt() {
-	if [ $1 -eq 0 ]
-	then
-		rawpkt $3 |
-			tcpwrap "tcp.seqn = $CSEQ; tcp.ackn = $CACK; " \
-				"tcp.sport = $CPORT; tcp.dport = $SPORT; " \
-				"tcp.win = 65535; $2 " |
-			ipwrap "ip.saddr = $CADDR; ip.daddr = $SADDR; " \
-			       "ip.ttl = 64; " |
-			ethwrap "$CMODS fix_lens(0); fix_csums(0); "
-	else
-		rawpkt $3 |
-			tcpwrap "tcp.seqn = $SSEQ; tcp.ackn = $SACK; " \
-				"tcp.sport = $SPORT; tcp.dport = $CPORT; " \
-				"tcp.win = 65535; $2 " |
-			ipwrap "ip.saddr = $SADDR; ip.daddr = $CADDR; " \
-			       "ip.ttl = 64; " |
-			ethwrap "$SMODS fix_lens(0); fix_csums(0); "
+		dd if=$3 bs=1 skip=$4 count=$5 2>/dev/null | mktcp - \
+			"tcp.seqn = $SSEQ; tcp.ackn = $SACK; " \
+			"tcp.sport = $SPORT; tcp.dport = $CPORT; " \
+			"tcp.win = 65535; $2 " \
+			"ip.saddr = $SADDR; ip.daddr = $CADDR; " \
+			"ip.ttl = 64; " \
+			"$SMODS fix_lens(0); fix_csums(0); "
 	fi
 }
 
 
 # $1 = dir, $2 = flags
 gencpkt() {
-	genfpkt "$1" "$2" /dev/null
+	if [ $1 -eq 0 ]
+	then
+		mktcp -- "tcp.seqn = $CSEQ; tcp.ackn = $CACK; " \
+			 "tcp.sport = $CPORT; tcp.dport = $SPORT; " \
+			 "tcp.win = 65535; $2 " \
+			 "ip.saddr = $CADDR; ip.daddr = $SADDR; " \
+			 "ip.ttl = 64; " \
+			 "$CMODS fix_lens(0); fix_csums(0); "
+	else
+		mktcp -- "tcp.seqn = $SSEQ; tcp.ackn = $SACK; " \
+			 "tcp.sport = $SPORT; tcp.dport = $CPORT; " \
+			 "tcp.win = 65535; $2 " \
+			 "ip.saddr = $SADDR; ip.daddr = $CADDR; " \
+			 "ip.ttl = 64; " \
+			 "$SMODS fix_lens(0); fix_csums(0); "
+	fi
 }
 
 
@@ -152,40 +144,38 @@ conn_close() {
 }
 
 
+# $1 = filename, $2 = dir, $3 = ackdir, $4 = off, $5 = size
+sendackdata() {
+	gendpkt $2 "$ACK" $1 $4 $5
+	if [ $2 -eq 0 ] ; then
+		SACK=`seqadd $CSEQ $5`
+	else
+		CACK=`seqadd $SSEQ $5`
+	fi
+	gencpkt $3 "$ACK"
+	if [ $2 -eq 0 ] ; then
+		CSEQ=$SACK
+	else
+		SSEQ=$CACK
+	fi
+}
+
+
 # $1 = filename, $2 = dir
 senddata() {
 	[ ! -f $1 ] && echo "file not found: $1" >&2 && exit 1
-
 	SIZE=`ls -l $1 | awk '{print $5}'`
-
 	ACKDIR=0
 	[ $2 -eq 0 ] && ACKDIR=1
 
-	if [ $SIZE -le $MSS ]
-	then
-		genfpkt $2 "$ACK" $1
-		SACK=`seqadd $CSEQ $SIZE`
-		gencpkt $ACKDIR "$ACK"
-		CSEQ=$SACK
-	else
-
-		X=0
-		while [ $SIZE -gt $MSS ]
-		do
-			genopkt $2 "$ACK" $1 $X $MSS
-			SACK=`seqadd $CSEQ $MSS`
-			gencpkt $ACKDIR "$ACK"
-			CSEQ=$SACK
-
-			X=`expr $X \+ $MSS`
-			SIZE=`expr $SIZE - $MSS`
-		done
-
-		genopkt $2 "$ACK" $1 $X $SIZE
-		SACK=`seqadd $CSEQ $SIZE`
-		gencpkt $ACKDIR "$ACK"
-		CSEQ=$SACK
-	fi
+	X=0
+	while [ $SIZE -gt $MSS ]
+	do
+		sendackdata $1 $2 $ACKDIR $X $MSS
+		X=`expr $X \+ $MSS`
+		SIZE=`expr $SIZE - $MSS`
+	done
+	sendackdata $1 $2 $ACKDIR $X $SIZE
 }
 
 
