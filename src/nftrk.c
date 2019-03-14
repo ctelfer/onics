@@ -100,6 +100,7 @@ static cat_time_t tm_update = TM_LONG_INITIALIZER(10, 0);
 static cat_time_t tm_base = TM_LONG_INITIALIZER(0, 0);
 struct dlist update_event;
 int realtime = 1;
+int dropall = 0;
 int noreport = 0;
 FILE *evtfile;
 
@@ -119,6 +120,7 @@ struct clopt g_optarr[] = {
 	CLOPT_I_NOARG('R', NULL, "report timestamps relative to program start "
 		   		 "(realtime mode only)"),
 	CLOPT_I_NOARG('t', NULL, "run in timestamp mode"),
+	CLOPT_I_NOARG('d', NULL, "drop all packets and send output to stdout"),
 	CLOPT_I_STRING('f', NULL, "FLOWFILE", "file to output flow info to"),
 	CLOPT_I_DOUBLE('u', NULL, "INTERVAL",
 		       "set the interval at which to generate updates"),
@@ -163,6 +165,11 @@ void parse_args(int argc, char *argv[], int *ifd, int *ofd)
 		case 't':
 			realtime = 0;
 			break;
+		case 'd':
+			if (evtfile == stderr)
+				evtfile = stdout;
+			dropall = 1;
+			break;
 		case 'f':
 			evtfile = fopen(opt->val.str_val, "w");
 			if (evtfile == NULL)
@@ -186,6 +193,8 @@ void parse_args(int argc, char *argv[], int *ifd, int *ofd)
 	}
 
 	if (rv < argc) {
+		if (dropall)
+			err("ERROR: packet output file given, but -d set\n");
 		fn = argv[rv++];
 		*ofd = open(fn, O_WRONLY);
 		if (*ofd < 0)
@@ -446,7 +455,7 @@ void gen_flow_event(struct flow *f, int evtype)
 		pf = f->pair;
 		fprintf(evtfile, "|FLOW %s|%s|%s|C2S:%lu,%lu|S2C:%lu,%lu|\n", 
 			fevt_strs[evtype], keystr, tstr, 
-			f->npkts, f->nbytes, pf->npkts, f->nbytes);
+			f->npkts, f->nbytes, pf->npkts, pf->nbytes);
 	} else {
 		fprintf(evtfile, "|FLOW %s|%s|%s|SENT:%lu,%lu|\n", 
 			fevt_strs[evtype], keystr, tstr, 
@@ -693,10 +702,12 @@ int main(int argc, char *argv[])
 		if (pkb_parse(pkb) == 0)
 			track_flows(&ft, pkb);
 
-		rv = pkb_pack(pkb);
-		abort_unless(rv == 0);
-		if (pkb_fd_write(pkb, ofd) < 0)
-			errsys("Error writing packet %lu", npkts);
+		if (!dropall) {
+			rv = pkb_pack(pkb);
+			abort_unless(rv == 0);
+			if (pkb_fd_write(pkb, ofd) < 0)
+				errsys("Error writing packet %lu", npkts);
+		}
 		pkb_free(pkb);
 	}
 	if (rv < 0)
