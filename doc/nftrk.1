@@ -89,6 +89,12 @@ Print flows that are coming in from a live capture from eth0:
 	pktin eth0 | nftrk > /dev/null
 
 .fi
+Print out the flows in a trace file:
+.nf
+
+	nftrk -dt infile.xpkt
+
+.fi
 .P
 .SH AVAILABILITY
 This utility should be available on all supported ONICS platforms.
