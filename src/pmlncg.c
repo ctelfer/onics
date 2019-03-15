@@ -3382,8 +3382,6 @@ static int cg_func_mark_walker(union pml_node *n, void *ctx, void *xstk)
 	call = &n->call;
 	f = call->func;
 	abort_unless(f != NULL);
-	if (PML_FUNC_IS_INLINE(f))
-		return 0;
 	fc = (struct cg_func_ctx *)f->cgctx;
 	++fc->called;
 	if (fc->called == 1 && f->body != NULL)
@@ -3485,7 +3483,7 @@ static int cg_funcs(struct pmlncg *cg)
 		/* We don't support indirect calling at the moment, so it is safe */
 		/* to omit functions that don't actually have callers. */
 		fc = (struct cg_func_ctx *)f->cgctx;
-		if (fc->called == 0)
+		if (fc->called == 0 || PML_FUNC_IS_INLINE(f))
 			continue;
 
 		if (PML_FUNC_IS_INTRINSIC(f)) {
