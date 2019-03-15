@@ -28,6 +28,7 @@ inline pkt_headroom() { pkt.hlen }
 inline pkt_tailroom() { pkt.tlen }
 inline pkt_headroom_pn(int pn) { $(pn)pkt.hlen }
 inline pkt_tailroom_pn(int pn) { $(pn)pkt.tlen }
+inline flowid() { meta_get_flowid(0) }
 
 
 void fix()
