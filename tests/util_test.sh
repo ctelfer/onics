@@ -2,6 +2,8 @@
 
 TOUT=tmp
 DATA=data/utils
+PATH=../bin:../scripts:$PATH
+export PATH
 BIN=../bin
 ERR=0
 
