@@ -34,10 +34,14 @@ then
 	shift
 fi
 
-if [ $# -gt 1 ] || [ $# -eq 1 -a "x$1" = "x-h" ]
+if [ $# -ge 1 -a "$1" = "-h" ]
 then
-	echo "usage: $0 [-x] [INFILE]" >&2
+	echo "usage: $0 [-h] [-x] [INFILE...]" >&2
 	exit 1
 fi
 
-x2hpkt $OPTS $* | $PAGER
+if [ $# -gt 1 ] ; then
+	cat $* | x2hpkt $OPTS | $PAGER
+else
+	x2hpkt $OPTS $* | $PAGER
+fi
