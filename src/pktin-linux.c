@@ -111,10 +111,53 @@ void parse_args(int argc, char *argv[])
 }
 
 
+/*
+ * XXX
+ * Linux 5.2 removed SIOGCSTAMP and created SIOGCSTAMP_OLD and SIOGCSTAMP_NEW
+ * Here's for backard compatibility.  :( ... For now don't provide a timestamp
+ * when this ioctl() isn't available.  Later fix this to check for the new API.
+ */
+#if SIOCGSTAMP
+
+static void init_ts_tag()
+{
+	int rv;
+	struct xpkt_tag_ts ts;
+
+	xpkt_tag_ts_init(&ts, 0, 0);
+	rv = pkb_add_tag(g_pkb, (struct xpkt_tag_hdr *)&ts);
+	abort_unless(rv == 0);
+	g_ts = (struct xpkt_tag_ts *)pkb_find_tag(g_pkb, XPKT_TAG_TIMESTAMP, 0);
+	abort_unless(g_ts);
+}
+
+static void set_ts()
+{
+	struct timeval tv;
+
+	if (ioctl(g_ifsock, SIOCGSTAMP, &tv) < 0)
+		errsys("getting packet timestamp: ");
+	g_ts->sec = tv.tv_sec;
+	g_ts->nsec = tv.tv_usec * 1000;
+}
+
+#else /* SIOCGSTAMP */
+
+static void init_ts_tag()
+{
+	g_ts = NULL;
+}
+
+static void set_ts()
+{
+}
+
+#endif /* SIOCGSTAMP */
+
+
 static void init_pkb()
 {
 	struct xpkt_tag_iface ti;
-	struct xpkt_tag_ts ts;
 	int rv;
 
 	pkb_init_pools(1);
@@ -128,11 +171,7 @@ static void init_pkb()
 	g_tiif = (struct xpkt_tag_iface*)pkb_find_tag(g_pkb,XPKT_TAG_INIFACE,0);
 	abort_unless(g_tiif);
 
-	xpkt_tag_ts_init(&ts, 0, 0);
-	rv = pkb_add_tag(g_pkb, (struct xpkt_tag_hdr *)&ts);
-	abort_unless(rv == 0);
-	g_ts = (struct xpkt_tag_ts *)pkb_find_tag(g_pkb, XPKT_TAG_TIMESTAMP, 0);
-	abort_unless(g_ts);
+	init_ts_tag();
 }
 
 
@@ -184,7 +223,6 @@ void packet_loop()
 	ulong buflen;
 	struct xpkt_tag_snapinfo si;
 	int snapped;
-	struct timeval tv;
 
 	pkb_set_len(g_pkb, 0);
 	pkb_set_off(g_pkb, 2);
@@ -217,11 +255,7 @@ void packet_loop()
 				len = buflen;
 			}
 
-			if (ioctl(g_ifsock, SIOCGSTAMP, &tv) < 0)
-				errsys("getting packet timestamp: ");
-
-			g_ts->sec = tv.tv_sec;
-			g_ts->nsec = tv.tv_usec * 1000;
+			set_ts();
 
 			pkb_set_len(g_pkb, len);
 			pkb_set_dltype(g_pkb, PRID_ETHERNET2);
