@@ -1,6 +1,6 @@
 /*
  * ONICS
- * Copyright 2012-2015
+ * Copyright 2012-2020
  * Christopher Adam Telfer
  *
  * pktbuf.c -- Library for managing ONICS packet buffers.
@@ -120,20 +120,17 @@ static void pkb_free_buf(void *ctx, struct pktbuf *pkb)
 
 struct pktbuf *pkb_create(ulong bufsize)
 {
-	struct pktbuf *pkb; 
+	struct pktbuf *pkb;
 	void *xmp, *dp;
 	int pl;
-
-	/* calculate the total size of the buffer */
-	if (bufsize > PKB_MAX_PKTLEN) {
-		errno = ENOMEM;
-		return NULL;
-	}
 
 	for (pl = 0; pl < pkb_num_data_pools; ++pl)
 		if (bufsize <= pkb_data_pool_sizes[pl])
 			break;
-	abort_unless(pl < pkb_num_data_pools);
+	if (pl >= pkb_num_data_pools) {
+		errno = ENOMEM;
+		return NULL;
+	}
 
 	if (!(pkb = pc_alloc(&pkb_buf_pool))) {
 		errno = ENOMEM;
@@ -222,7 +219,7 @@ struct pktbuf *pkb_copy(struct pktbuf *opkb)
 	}
 
 	/* Set the layers in the new packet buffer */
-	for (i = 0; i < PKB_LAYER_NUM; ++i) { 
+	for (i = 0; i < PKB_LAYER_NUM; ++i) {
 		if (!(layer = opkb->layers[i]))
 			continue;
 		ot = prp_next(&opkb->prp);
@@ -328,16 +325,13 @@ void *pkb_data(struct pktbuf *pkb)
 #define HPADMIN		192
 #define TPADMIN		192
 
-static int pkb_read_finish(struct pktbuf *pkb, struct xpkthdr *xh, uint rdoff)
+static int pkb_read_finish(struct pktbuf *pkb, size_t doff, size_t dlen)
 {
 	struct xpkt *x;
-	size_t tlen = xh->tlen * 4;
 
-	abort_unless(pkb && xh);
+	abort_unless(pkb);
 
 	x = pkb->xpkt;
-	x->hdr = *xh;
-	memcpy(x->tags, pkb->buf + rdoff, tlen);
 	if (xpkt_unpack_tags(x->tags, x->hdr.tlen) < 0) {
 		errno = EIO;
 		return -1;
@@ -347,8 +341,8 @@ static int pkb_read_finish(struct pktbuf *pkb, struct xpkthdr *xh, uint rdoff)
 		return -1;
 	}
 
-	prp_poff(&pkb->prp) = rdoff + tlen;
-	prp_toff(&pkb->prp) = rdoff + tlen + xpkt_data_len(x);
+	prp_poff(&pkb->prp) = doff;
+	prp_toff(&pkb->prp) = doff + dlen;
 
 	/* In unpacked state, the hdr.len says there is no data: only tags */
 	x->hdr.len = xpkt_doff(x);
@@ -359,44 +353,46 @@ static int pkb_read_finish(struct pktbuf *pkb, struct xpkthdr *xh, uint rdoff)
 
 int pkb_file_read(struct pktbuf *pkb, FILE *fp)
 {
-	struct xpkthdr xh;
-	size_t hpad = HPADMIN;
-	size_t n;
+	struct xpkthdr *xh;
+	size_t tlen;
 	size_t xhlen;
-	size_t off;
-	size_t rdlen;
+	size_t doff;
+	size_t dlen;
 	size_t nr;
 
-	abort_unless(fp && pkb);
+	abort_unless(fp && pkb && pkb->buf);
+	abort_unless(pkb->xpkt && pkb->xsize >= XPKT_HLEN);
 
-	if ((nr = fread(&xh, 1, XPKT_HLEN, fp)) < XPKT_HLEN)
+	xh = &pkb->xpkt->hdr;
+	if ((nr = fread(xh, 1, XPKT_HLEN, fp)) < XPKT_HLEN)
 		return (nr == 0) ? 0 : -1;
-	xpkt_unpack_hdr(&xh);
-	if (xpkt_validate_hdr(&xh) < 0) {
+	xpkt_unpack_hdr(xh);
+	if (xpkt_validate_hdr(xh) < 0) {
 		errno = EIO;
 		return -1;
 	}
 
-	xhlen = xh.tlen * 4 + XPKT_HLEN;
-	if (hpad < xhlen)
-		hpad = xhlen;
+	tlen = xh->tlen * 4;
+	xhlen = tlen + XPKT_HLEN;
+	doff = dlt_offset(xh->dltype) + HPADMIN;
+	dlen = xh->len - xhlen;
 
-	off = dlt_offset(xh.dltype) + hpad;
-	n = TPADMIN + off;
-
-	if (xhlen > pkb->xsize || pkb->bufsize < n ||
-	    xh.len > pkb->bufsize - n) {
+	if (xhlen > pkb->xsize || dlen > PKB_MAX_PKTLEN ||
+	    doff + dlen + TPADMIN < dlen || /* overflow check */
+	    doff + dlen + TPADMIN > pkb->bufsize) {
 		errno = ENOMEM;
 		return -1;
 	}
 
-	n = off - xh.tlen * 4;
-	rdlen = xh.len - XPKT_HLEN;
-	nr = fread(pkb->buf + n, 1, rdlen, fp);
-	if (nr < rdlen)
+	nr = fread(pkb->xpkt->tags, 1, tlen, fp);
+	if (nr < tlen)
 		return -1;
 
-	return pkb_read_finish(pkb, &xh, n);
+	nr = fread(pkb->buf + doff, 1, dlen, fp);
+	if (nr < dlen)
+		return -1;
+
+	return pkb_read_finish(pkb, doff, dlen);
 }
 
 
@@ -406,12 +402,11 @@ int pkb_file_read_a(struct pktbuf **pkbp, FILE *fp, pkb_alloc_f alloc,
 	struct xpkthdr xh;
 	int errval;
 	struct pktbuf *pkb;
-	size_t hpad = HPADMIN;
-	size_t n;
-	size_t off;
+	size_t tlen;
 	size_t xhlen;
-	size_t rdlen;
-	size_t nr;
+	size_t doff;
+	size_t dlen;
+	ssize_t nr;
 	int rv = 0;
 
 	abort_unless(fp && pkbp);
@@ -429,24 +424,31 @@ int pkb_file_read_a(struct pktbuf **pkbp, FILE *fp, pkb_alloc_f alloc,
 		return -1;
 	}
 
-	xhlen = xh.tlen * 4 + XPKT_HLEN;
-	if (hpad < xhlen)
-		hpad = xhlen;
+	tlen = xh.tlen * 4;
+	xhlen = tlen + XPKT_HLEN;
+	doff = dlt_offset(xh.dltype) + HPADMIN;
+	dlen = xh.len - xhlen;
 
-	off = dlt_offset(xh.dltype) + hpad;
-	n = TPADMIN + off;
+	/* overflow check */
+	if (dlen > PKB_MAX_PKTLEN || doff + dlen + TPADMIN < dlen) {
+		errno = ENOMEM;
+		return -1;
+	}
 
-	pkb = (*alloc)(ctx, xhlen, n + xh.len);
+	pkb = (*alloc)(ctx, xhlen, doff + dlen + TPADMIN);
 	if (pkb == NULL)
 		return -1;
 
-	n = off - xh.tlen * 4;
-	rdlen = xh.len - XPKT_HLEN;
-	nr = fread(pkb->buf + n, 1, rdlen, fp);
-	if (nr < rdlen)
+	pkb->xpkt->hdr = xh;
+	nr = fread(pkb->xpkt->tags, 1, tlen, fp);
+	if (nr < tlen)
 		goto err_free_pkb;
 
-	rv = pkb_read_finish(pkb, &xh, n);
+	nr = fread(pkb->buf + doff, 1, dlen, fp);
+	if (nr < dlen)
+		goto err_free_pkb;
+
+	rv = pkb_read_finish(pkb, doff, dlen);
 	if (rv < 0)
 		goto err_free_pkb;
 
@@ -463,44 +465,46 @@ err_free_pkb:
 
 int pkb_fd_read(struct pktbuf *pkb, int fd)
 {
-	struct xpkthdr xh;
-	size_t hpad = HPADMIN;
-	size_t n;
-	size_t off;
+	struct xpkthdr *xh;
+	size_t tlen;
 	size_t xhlen;
-	ssize_t rdlen;
+	size_t doff;
+	ssize_t dlen;
 	ssize_t nr;
 
-	abort_unless((fd >= 0) && pkb);
+	abort_unless((fd >= 0) && pkb && pkb->buf);
+	abort_unless(pkb->xpkt && pkb->xsize >= XPKT_HLEN);
 
-	if ((nr = io_read(fd, &xh, XPKT_HLEN)) < XPKT_HLEN)
+	xh = &pkb->xpkt->hdr;
+	if ((nr = io_read(fd, xh, XPKT_HLEN)) < XPKT_HLEN)
 		return (nr == 0) ? 0 : -1;
-	xpkt_unpack_hdr(&xh);
-	if (xpkt_validate_hdr(&xh) < 0) {
+	xpkt_unpack_hdr(xh);
+	if (xpkt_validate_hdr(xh) < 0) {
 		errno = EIO;
 		return -1;
 	}
 
-	xhlen = xh.tlen * 4 + XPKT_HLEN;
-	if (hpad < xhlen)
-		hpad = xhlen;
+	tlen = xh->tlen * 4;
+	xhlen = tlen + XPKT_HLEN;
+	doff = dlt_offset(xh->dltype) + HPADMIN;
+	dlen = xh->len - xhlen;
 
-	off = dlt_offset(xh.dltype) + hpad;
-	n = TPADMIN + off;
-
-	if (xhlen > pkb->xsize || pkb->bufsize < n ||
-	    xh.len > pkb->bufsize - n) {
+	if (xhlen > pkb->xsize || dlen < 0 || dlen > PKB_MAX_PKTLEN ||
+	    doff + dlen + TPADMIN < dlen || /* overflow check */
+	    doff + dlen + TPADMIN > pkb->bufsize) {
 		errno = ENOMEM;
 		return -1;
 	}
 
-	n = off - xh.tlen * 4;
-	rdlen = xh.len - XPKT_HLEN;
-	nr = io_read(fd, pkb->buf + n, rdlen);
-	if (nr < rdlen)
+	nr = io_read(fd, pkb->xpkt->tags, tlen);
+	if (nr < tlen)
 		return -1;
 
-	return pkb_read_finish(pkb, &xh, n);
+	nr = io_read(fd, pkb->buf + doff, dlen);
+	if (nr < dlen)
+		return -1;
+
+	return pkb_read_finish(pkb, doff, (size_t)dlen);
 }
 
 
@@ -509,11 +513,10 @@ int pkb_fd_read_a(struct pktbuf **pkbp, int fd, pkb_alloc_f alloc, void *ctx)
 	struct xpkthdr xh;
 	int errval;
 	struct pktbuf *pkb;
-	size_t hpad = HPADMIN;
-	size_t n;
-	size_t off;
+	size_t tlen;
 	size_t xhlen;
-	ssize_t rdlen;
+	size_t doff;
+	ssize_t dlen;
 	ssize_t nr;
 	int rv;
 
@@ -532,24 +535,31 @@ int pkb_fd_read_a(struct pktbuf **pkbp, int fd, pkb_alloc_f alloc, void *ctx)
 		return -1;
 	}
 
-	xhlen = xh.tlen * 4 + XPKT_HLEN;
-	if (hpad < xhlen)
-		hpad = xhlen;
+	tlen = xh.tlen * 4;
+	xhlen = tlen + XPKT_HLEN;
+	doff = dlt_offset(xh.dltype) + HPADMIN;
+	dlen = xh.len - xhlen;
 
-	off = dlt_offset(xh.dltype) + hpad;
-	n = TPADMIN + off;
+	/* overflow check */
+	if (dlen < 0 || dlen > PKB_MAX_PKTLEN || doff + dlen + TPADMIN < dlen) {
+		errno = ENOMEM;
+		return -1;
+	}
 
-	pkb = (*alloc)(ctx, xhlen, n + xh.len);
+	pkb = (*alloc)(ctx, xhlen, doff + dlen + TPADMIN);
 	if (pkb == NULL)
 		return -1;
 
-	n = off - xh.tlen * 4;
-	rdlen = xh.len - XPKT_HLEN;
-	nr = io_read(fd, pkb->buf + n, rdlen);
-	if (nr < rdlen)
+	pkb->xpkt->hdr = xh;
+	nr = io_read(fd, pkb->xpkt->tags, tlen);
+	if (nr < tlen)
 		goto err_free_pkb;
 
-	rv = pkb_read_finish(pkb, &xh, n);
+	nr = io_read(fd, pkb->buf + doff, dlen);
+	if (nr < dlen)
+		goto err_free_pkb;
+
+	rv = pkb_read_finish(pkb, doff, (size_t)dlen);
 	if (rv < 0)
 		goto err_free_pkb;
 
@@ -751,11 +761,11 @@ void pkb_set_layer(struct pktbuf *pkb, struct prparse *prp, int layer)
 		pkb->layers[layer] = prp;
 	} else {
 		if (islink(prp->prid)) {
-			if (!pkb->layers[PKB_LAYER_DL] || 
+			if (!pkb->layers[PKB_LAYER_DL] ||
 			    layer == SET_LAYER_FORCE)
 				pkb->layers[PKB_LAYER_DL] = prp;
 		} else if (istunnel(prp->prid)) {
-			if (!pkb->layers[PKB_LAYER_TUN] || 
+			if (!pkb->layers[PKB_LAYER_TUN] ||
 			    layer == SET_LAYER_FORCE)
 				pkb->layers[PKB_LAYER_TUN] = prp;
 		} else if (isnet(prp->prid)) {
@@ -916,7 +926,7 @@ int pkb_add_tag(struct pktbuf *pkb, struct xpkt_tag_hdr *xth)
 
 	abort_unless(pkb && xth);
 	if ((pkb->flags & PKB_F_PACKED))
-		return -1; 
+		return -1;
 
 	/* none of these can overflow:  long is 32 bits and tlen is 16, and */
 	/* xpkt_tag_size will return <= 1024.  */

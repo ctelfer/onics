@@ -1060,7 +1060,7 @@ static void ni_pknew(struct netvm *vm)
 	S_POP(vm, len);
 	S_POP(vm, pktnum);
 	FATAL(vm, NETVM_ERR_PKTNUM, pktnum >= NETVM_MAXPKTS);
-	FATAL(vm, NETVM_ERR_NOMEM, (PKB_MAX_PKTLEN - HDRPAD) < len);
+	FATAL(vm, NETVM_ERR_NOMEM, PKB_MAX_PKTLEN < len);
 
 	pnew = pkb_create(len + HDRPAD);
 	FATAL(vm, NETVM_ERR_NOMEM, !pnew);
