@@ -944,6 +944,8 @@ static int udp_fixcksum(struct prparse *prp, byte_t *buf)
 	if (udp->cksum != 0) {
 		udp->cksum = 0;
 		udp->cksum = pseudo_cksum(prp, ipprp, buf, IPPROT_UDP);
+		if (udp->cksum == 0)
+			hton16i(0xFFFF, &udp->cksum);
 	}
 	prp->error &= ~PRP_ERR_CKSUM;
 
