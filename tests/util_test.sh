@@ -67,29 +67,29 @@ EOF
 }
 
 t_h2xpkt_tcpdump() {
-	tcpdump -nvvvvXXXXes 0 -r $DATA/udp.pcap 2>/dev/null | 
-		grep '^[ 	]*0x' |
+	tcpdump -nvvvvXXXXes 65535 -r $DATA/udp.pcap 2>/dev/null |
+		grep '^[ 	][	 ]*[0-9x][0-9x]*:' |
 		$BIN/h2xpkt -l eth -
 }
 
 t_psort_basic() {
-	$BIN/psort $DATA/psort_tcp.xpkt 
+	$BIN/psort $DATA/psort_tcp.xpkt
 }
 
 t_psort_tcpseq_rev() {
-	$BIN/psort -r -k tcp.seqn $DATA/psort_tcp.xpkt 
+	$BIN/psort -r -k tcp.seqn $DATA/psort_tcp.xpkt
 }
 
 t_psort_udp_2keys() {
-	$BIN/psort -k udp.sport -k udp.dport $DATA/psort_udp.xpkt 
+	$BIN/psort -k udp.sport -k udp.dport $DATA/psort_udp.xpkt
 }
 
 t_ipfrag_ipv4() {
-	$BIN/ipfrag -m 576 -i 10 -d $DATA/tcp-fragtest.xpkt 
+	$BIN/ipfrag -m 576 -i 10 -d $DATA/tcp-fragtest.xpkt
 }
 
 t_ipfrag_ipv6() {
-	$BIN/ipfrag -6 -m 1280 -i 10 $DATA/tcp6-fragtest.xpkt 
+	$BIN/ipfrag -6 -m 1280 -i 10 $DATA/tcp6-fragtest.xpkt
 }
 
 t_ipfrag_combined() {
@@ -98,11 +98,11 @@ t_ipfrag_combined() {
 }
 
 t_ipreasm_ipv4() {
-	$BIN/ipreasm -4 $DATA/tcp-reasm.xpkt 
+	$BIN/ipreasm -4 $DATA/tcp-reasm.xpkt
 }
 
 t_ipreasm_ipv6() {
-	$BIN/ipreasm -6 $DATA/tcp6-reasm.xpkt 
+	$BIN/ipreasm -6 $DATA/tcp6-reasm.xpkt
 }
 
 t_ipreasm_combined() {
@@ -110,17 +110,17 @@ t_ipreasm_combined() {
 }
 
 t_ipreasm_ipv6_opts() {
-	$BIN/ipfrag -m 1500 -6 < $DATA/udp6opt.xpkt | $BIN/ipreasm -6 
+	$BIN/ipfrag -m 1500 -6 < $DATA/udp6opt.xpkt | $BIN/ipreasm -6
 }
 
 t_nftrk_psplit_basic() {
 	mkdir -p $TOUT/t_nftrk_psplit_basic_flows
 	rm -f $TOUT/t_nftrk_psplit_basic_flows/*
-	$BIN/nftrk -q $DATA/flows.xpkt | 
+	$BIN/nftrk -q $DATA/flows.xpkt |
 		$BIN/psplit -r -p $TOUT/t_nftrk_psplit_basic_flows/flow
 	echo Flow files
-	ls $TOUT/t_nftrk_psplit_basic_flows
-	for f in `(cd $TOUT/t_nftrk_psplit_basic_flows; ls)`; do 
+	ls $TOUT/t_nftrk_psplit_basic_flows | sort -d
+	for f in `(cd $TOUT/t_nftrk_psplit_basic_flows; ls | sort -d)`; do
 		if [ -f $DATA/t_nftrk_psplit_basic/$f ] ; then
 			echo comparing $f
 			cmp $TOUT/t_nftrk_psplit_basic_flows/$f \
@@ -277,11 +277,11 @@ t_pmerge_ts() {
 		pml -e '
 		int min;
 		int x;
-		{ 
+		{
 			x = x + 1;
 			ts = meta_get_ts_sec(0);
 			if (ts < min) {
-				print "packet ", x, 
+				print "packet ", x,
 				      " is out of order by timestamp";
 				exit(1);
 			}
@@ -294,7 +294,7 @@ t_pmerge_ts() {
 
 run_test t_h2xpkt_immed "h2xpkt -- basic from immediate data"
 run_test t_h2xpkt_immed_nox "h2xpkt -- w/o xpkt header"
-if which tcpdump > /dev/null 2>&1 
+if which tcpdump > /dev/null 2>&1
 then
 	run_test t_h2xpkt_tcpdump "h2xpkt -- tcpdump to xpkt via h2xpkt"
 else

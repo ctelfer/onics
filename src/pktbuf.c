@@ -171,9 +171,16 @@ static struct pktbuf *pkb_alloc_default(void *ctx, size_t xlen, size_t plen)
 }
 
 
-void pkb_reset(struct pktbuf *pkb)
+static void reset_layers(struct pktbuf *pkb)
 {
 	int i;
+	for (i = 0; i < PKB_LAYER_NUM; ++i)
+		pkb->layers[i] = NULL;
+}
+
+
+void pkb_reset(struct pktbuf *pkb)
+{
 	struct xpkthdr *xh;
 
 	abort_unless(pkb);
@@ -182,8 +189,7 @@ void pkb_reset(struct pktbuf *pkb)
 	pkb->flags &= PKB_F_RESET_MASK;
 
 	prp_init_parse_base(&pkb->prp, pkb->bufsize);
-	for (i = 0; i < PKB_LAYER_NUM; ++i)
-		pkb->layers[i] = NULL;
+	reset_layers(pkb);
 
 	xh = &pkb->xpkt->hdr;
 	xh->len = XPKT_HLEN;
@@ -712,6 +718,7 @@ void pkb_clear_parse(struct pktbuf *pkb)
 {
 	abort_unless(pkb);
 	if ((pkb->flags & PKB_F_PARSED)) {
+		reset_layers(pkb);
 		prp_clear(&pkb->prp);
 		pkb->flags &= ~PKB_F_PARSED;
 	}
