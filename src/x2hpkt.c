@@ -409,7 +409,7 @@ ulong walk_and_print_parse(struct prparse *from, struct prparse *region,
 	eoff = prp_poff(next) * 8;
 
 	if (off < soff) {
-		print_fields(eoff);
+		print_fields(soff);
 		dump_data(region, off, soff, from != region);
 	}
 
