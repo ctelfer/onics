@@ -20,7 +20,7 @@ LIBOBJS= ${PKTOBJ} stdproto.o netvm.o netvm_prog.o pmltree.o \
 ALL_BINARIES= \
 	rawpkt pktdemux pktmux pktrel x2hpkt h2xpkt nvmas nvmpf pml pc2xpkt \
 	xpkt2pc pdiff nftrk pktin pktout pcapin pcapout pmerge psort psplit \
-	ipfrag ipreasm
+	ipfrag ipreasm tcpcarve
 
 COMMON_TARGETS= \
 	${BINDIR}/rawpkt \
@@ -40,7 +40,8 @@ COMMON_TARGETS= \
 	${BINDIR}/psort \
 	${BINDIR}/psplit \
 	${BINDIR}/ipfrag \
-	${BINDIR}/ipreasm
+	${BINDIR}/ipreasm \
+	${BINDIR}/tcpcarve
 
 
 PCAP_TARGETS= \
@@ -210,6 +211,10 @@ ${BINDIR}/ipfrag: ipfrag.o stdproto.o ${PKTOBJ} ${PKTHDR}
 
 ${BINDIR}/ipreasm: ipreasm.o stdproto.o ${PKTOBJ} ${PKTHDR}
 	${CC} -o ${BINDIR}/ipreasm ipreasm.o stdproto.o ${PKTOBJ} \
+		${DEFS} ${OPTS} ${INCS} ${LIBS}
+
+${BINDIR}/tcpcarve: tcpcarve.o stdproto.o ${PKTOBJ} ${PKTHDR}
+	${CC} -o ${BINDIR}/tcpcarve tcpcarve.o stdproto.o ${PKTOBJ} \
 		${DEFS} ${OPTS} ${INCS} ${LIBS}
 
 

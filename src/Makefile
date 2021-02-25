@@ -16,7 +16,8 @@ COMMON_TARGETS= \
 	${BINDIR}/psort \
 	${BINDIR}/psplit \
 	${BINDIR}/ipfrag \
-	${BINDIR}/ipreasm
+	${BINDIR}/ipreasm \
+	${BINDIR}/tcpcarve
 
 
 PCAP_TARGETS= \
