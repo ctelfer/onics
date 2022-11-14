@@ -1,6 +1,6 @@
 /*
  * ONICS
- * Copyright 2012-2015
+ * Copyright 2012-2022
  * Christopher Adam Telfer
  *
  * pcapin.c -- Read pcap files or interfaces and output the packets in

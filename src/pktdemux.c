@@ -1,6 +1,6 @@
 /*
  * ONICS
- * Copyright 2012-2015
+ * Copyright 2012-2022
  * Christopher Adam Telfer
  *
  * pktdemux.c -- Demultiplex packets according to their output

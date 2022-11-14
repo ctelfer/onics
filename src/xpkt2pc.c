@@ -1,6 +1,6 @@
 /*
  * ONICS
- * Copyright 2012-2015
+ * Copyright 2012-2022
  * Christopher Adam Telfer
  *
  * xpkt2pc.c -- Write an xpkt stream of packets to a pcap file.

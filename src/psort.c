@@ -1,6 +1,6 @@
 /*
  * ONICS
- * Copyright 2013-2015
+ * Copyright 2013-2022
  * Christopher Adam Telfer
  *
  * psort.c -- Sort a set of packets according to a user specified key.
@@ -338,7 +338,7 @@ int add_nspf_key(struct kfnspf *kpf, struct pktbuf *p, int koff, ulong pn)
 	kp = p->cb + koff;
 
 	if (NSF_IS_INBITS(pf->flags)) {
-		if (fld_get_vi(p->buf, &p->prp, pf, kpf->idx, &val) < 0) {
+		if (fld_get_vi(p->buf, &p->pdus, pf, kpf->idx, &val) < 0) {
 			++fldmiss;
 			check_strict("Lookup miss", kpf->name, pn);
 			return koff;
@@ -369,7 +369,7 @@ int add_nspf_key(struct kfnspf *kpf, struct pktbuf *p, int koff, ulong pn)
 			abort_unless(0);
 		}
 	} else {
-		pfp = fld_get_pi(p->buf, &p->prp, pf, kpf->idx, &len);
+		pfp = fld_get_pi(p->buf, &p->pdus, pf, kpf->idx, &len);
 		if (pfp == NULL) {
 			++fldmiss;
 			check_strict("Lookup miss", kpf->name, pn);

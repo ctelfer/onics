@@ -56,45 +56,45 @@ struct yaph {
 
 /* forward declarations */
 struct proto_parser_ops yap_ops;
-struct prparse_ops yap_parse_ops;
+struct pdu_ops yap_pdu_ops;
 
 
 /* 
- * This function parses a PDU and stores the parse info in 'prp'
+ * This function parses a PDU and stores the parse info in 'pdu'
  */
-static void yap_update(struct prparse *prp, byte_t *buf)
+static void yap_update(struct pdu *pdu, byte_t *buf)
 {
 	struct yaph *yh;
 	uint16_t len;
 
-	prp->error = 0;				/* reset error */
-	if (prp_totlen(prp) < YAPHLEN) {	/* check for truncation */
-		prp->error |= PRP_ERR_TOOSMALL;
+	pdu->error = 0;				/* reset error */
+	if (pdu_totlen(pdu) < YAPHLEN) {	/* check for truncation */
+		pdu->error |= PDU_ERR_TOOSMALL;
 		/* if there's no full header, consider all fields invalid */
 		return;
 	}
 
 	/* Set the payload offset based on the parsed header length */
-	prp_poff(prp) = prp_soff(prp) + YAPHLEN;
+	pdu_poff(pdu) = pdu_soff(pdu) + YAPHLEN;
 
 	/* There is no trailer: set the trailer offset to the end of the PDU */
-	prp_toff(prp) = prp_eoff(prp);
+	pdu_toff(pdu) = pdu_eoff(pdu);
 
 	/* Get a pointer to the YP header */
-	yh = prp_header(prp, buf, struct yaph);
+	yh = pdu_header(pdu, buf, struct yaph);
 
 	/* perform the "checksum" check */
 	/* our checksum is just a simple xor here */
 	if (yh->tag ^ yh->len ^ yh->etype ^ yh->csum)
-		prp->error |= PRP_ERR_CKSUM;
+		pdu->error |= PDU_ERR_CKSUM;
 
 	/* Check the length field of the header */
 	len = ntohs(yh->len);
-	if (len != prp_plen(prp)) {
-		if (prp_plen(prp) < len)
-			prp->error |= PRP_ERR_TRUNC;
+	if (len != pdu_plen(pdu)) {
+		if (pdu_plen(pdu) < len)
+			pdu->error |= PDU_ERR_TRUNC;
 		else
-			prp->error |= PRP_ERR_INVALID;
+			pdu->error |= PDU_ERR_INVALID;
 	}
 }
 
@@ -103,13 +103,13 @@ static void yap_update(struct prparse *prp, byte_t *buf)
  * This function updates any fields in the header that tell
  * which protocol follows this protocol.
  */
-static int yap_fixnxt(struct prparse *prp, byte_t *buf)
+static int yap_fixnxt(struct pdu *pdu, byte_t *buf)
 {
-	struct yaph *yh = prp_header(prp, buf, struct yaph);
-	struct prparse *next;
+	struct yaph *yh = pdu_header(pdu, buf, struct yaph);
+	struct pdu *next;
 
 	/* Find the next PDU after ours */
-	next = prp_next_in_region(prp, prp);
+	next = pdu_next_in_region(pdu, pdu);
 	if (next != NULL) {
 		/* if it exists, then set this header's ethertype */
 		/* based on the PRID mapping of the PDU. */
@@ -128,14 +128,14 @@ static int yap_fixnxt(struct prparse *prp, byte_t *buf)
  * API does not know how parses are allocated (or copied).
  * The protocol library handles this detail.
  */
-static struct prparse *yap_copy(struct prparse *oprp)
+static struct pdu *yap_copy(struct pdu *opdu)
 {
-	struct prparse *prp;
-       	prp = calloc(sizeof(struct prparse), 1);
-	if (prp == NULL)
+	struct pdu *pdu;
+       	pdu = calloc(sizeof(struct pdu), 1);
+	if (pdu == NULL)
 		return NULL;
-	memcpy(prp, oprp, sizeof(*prp));
-	return prp;
+	memcpy(pdu, opdu, sizeof(*pdu));
+	return pdu;
 }
 
 
@@ -144,10 +144,10 @@ static struct prparse *yap_copy(struct prparse *oprp)
  * on the values in the parse.  This can include both
  * header and data lengths.
  */
-int yap_fixlen(struct prparse *prp, byte_t *buf)
+int yap_fixlen(struct pdu *pdu, byte_t *buf)
 {
-	struct yaph *yh = prp_header(prp, buf, struct yaph);
-	yh->len = htons(prp_plen(prp));
+	struct yaph *yh = pdu_header(pdu, buf, struct yaph);
+	yh->len = htons(pdu_plen(pdu));
 	return 0;
 }
 
@@ -155,9 +155,9 @@ int yap_fixlen(struct prparse *prp, byte_t *buf)
 /*
  * This function fixes any checksum fields in the PDU.
  */
-int yap_fixcksum(struct prparse *prp, byte_t *buf)
+int yap_fixcksum(struct pdu *pdu, byte_t *buf)
 {
-	struct yaph *yh = prp_header(prp, buf, struct yaph);
+	struct yaph *yh = pdu_header(pdu, buf, struct yaph);
 	yh->csum = yh->tag ^ yh->len ^ yh->etype;
 	return 0;
 }
@@ -168,17 +168,17 @@ int yap_fixcksum(struct prparse *prp, byte_t *buf)
  * library does not know how the systems allocate and free
  * parses.  That is the responsibility of the protcol library.
  */
-void yap_free(struct prparse *prp)
+void yap_free(struct pdu *pdu)
 {
-	free(prp);
+	free(pdu);
 }
 
 
 /*
- * All prparse structures will refer to this structure.  It
+ * All pdu structures will refer to this structure.  It
  * defines the functions that operate on this parse.
  */
-struct prparse_ops yap_parse_ops = {
+struct pdu_ops yap_pdu_ops = {
 	yap_update,
 	yap_fixnxt,
 	yap_fixlen,
@@ -189,15 +189,14 @@ struct prparse_ops yap_parse_ops = {
 
 
 /* Helper function to allocate and initialize a new yap parse */
-static struct prparse *newypprp(struct prparse *reg, ulong off, ulong maxlen)
+static struct pdu *newyppdu(struct pdu *reg, ulong off, ulong maxlen)
 {
-	struct prparse *prp;
-	prp = calloc(sizeof(struct prparse), 1);
-	if (prp == NULL)
+	struct pdu *pdu;
+	pdu = calloc(sizeof(struct pdu), 1);
+	if (pdu == NULL)
 		return NULL;
-	prp_init_parse(prp, YAPPRID, off, 0, maxlen, 0, &yap_parse_ops,
-		       reg, 0);
-	return prp;
+	pdu_init(pdu, YAPPRID, off, 0, maxlen, 0, &yap_pdu_ops, reg, 0);
+	return pdu;
 }
 
 
@@ -209,14 +208,14 @@ static struct prparse *newypprp(struct prparse *reg, ulong off, ulong maxlen)
  * the data structure and call the _update() function to populate
  * the parse offsets.
  */
-static struct prparse *yap_parse(struct prparse *reg, byte_t *buf,
+static struct pdu *yap_parse(struct pdu *reg, byte_t *buf,
 				    ulong off, ulong maxlen)
 {
-	struct prparse *prp;
-	prp = newypprp(reg, off, maxlen);
-	if (prp != NULL)
-		yap_update(prp, buf);
-	return prp;
+	struct pdu *pdu;
+	pdu = newyppdu(reg, off, maxlen);
+	if (pdu != NULL)
+		yap_update(pdu, buf);
+	return pdu;
 }
 
 
@@ -236,11 +235,11 @@ static struct prparse *yap_parse(struct prparse *reg, byte_t *buf,
  * where there is at most one embedded PDU, the function should return 0
  * on all subsequent calls (i.e. when the 'cld' parameter is non-NULL).
  */
-static int yap_nxtcld(struct prparse *parent, byte_t *buf,
-			 struct prparse *cld, uint *prid, ulong *off,
+static int yap_nxtcld(struct pdu *parent, byte_t *buf,
+			 struct pdu *cld, uint *prid, ulong *off,
 			 ulong *maxlen)
 {
-	struct yaph *yh = (struct yaph *)(buf + prp_soff(parent));
+	struct yaph *yh = (struct yaph *)(buf + pdu_soff(parent));
 
 	/* only one embedded packet per yap PDU */
 	/* if called a second time, return NULL */
@@ -253,9 +252,9 @@ static int yap_nxtcld(struct prparse *parent, byte_t *buf,
 	if (*prid == 0)
 		return 0;
 	/* Payload offset will be start of inner PDU */
-	*off = prp_poff(parent);
+	*off = pdu_poff(parent);
 	/* Payload length will be the maximum length of the PDU */
-	*maxlen = prp_plen(parent);
+	*maxlen = pdu_plen(parent);
 
 	/* return that we found a child protocol */
 	return 1;
@@ -264,8 +263,8 @@ static int yap_nxtcld(struct prparse *parent, byte_t *buf,
 
 /*
  * This function returns the specification of a new PDU and parse to create.
- * In essence, the library should just invoke prpspec_init() with the correct
- * parameters for PRID, header length and trailer length.  'prp' is the
+ * In essence, the library should just invoke pduspec_init() with the correct
+ * parameters for PRID, header length and trailer length.  'pdu' is the
  * the parse of the protocol that the new PDU either contains (if 'enclose' is
  * non-zero) or is contained within (if 'enclose' equals 0).
  *
@@ -273,9 +272,9 @@ static int yap_nxtcld(struct prparse *parent, byte_t *buf,
  * For example, might require a larger header or trailer (due to options) or
  * might require a special PRID for a specific sub-protocol.
  */
-static int yap_getspec(struct prparse *prp, int enclose, struct prpspec *ps)
+static int yap_getspec(struct pdu *pdu, int enclose, struct pduspec *ps)
 {
-	return prpspec_init(ps, prp, YAPPRID, YAPHLEN, 0, enclose);
+	return pduspec_init(ps, pdu, YAPPRID, YAPHLEN, 0, enclose);
 }
 
 
@@ -288,11 +287,11 @@ static int yap_getspec(struct prparse *prp, int enclose, struct prpspec *ps)
  * based on using it as a base.  The 'buf' parameter could be NULL in
  * theory if the parse doesn't refer to an actual packet.
  */
-static int yap_add(struct prparse *reg, byte_t *buf, struct prpspec *ps,
-		      int enclose)
+static int yap_add(struct pdu *reg, byte_t *buf, struct pduspec *ps,
+		   int enclose)
 {
-	struct prparse *prp;
-	struct prparse *cld;
+	struct pdu *pdu;
+	struct pdu *cld;
 	struct yaph *yh;
 
 	/* If the spec doesn't give enough headroom, it's an error */
@@ -302,26 +301,26 @@ static int yap_add(struct prparse *reg, byte_t *buf, struct prpspec *ps,
 	}
 
 	/* allocate the parse and if unable, it's an error */
-	prp = newypprp(reg, ps->off, ps->plen + ps->hlen);
-	if (prp == NULL)
+	pdu = newyppdu(reg, ps->off, ps->plen + ps->hlen);
+	if (pdu == NULL)
 		return -1;
 
 	/* set the payload offset of the new parse */
-	prp_poff(prp) = prp_soff(prp) + ps->hlen;
+	pdu_poff(pdu) = pdu_soff(pdu) + ps->hlen;
 
 	/* add the new parse to the parse list */
-	prp_add_insert(reg, prp, enclose);
+	pdu_add_insert(reg, pdu, enclose);
 
 	if (buf) {
 		/* fill in the default yp header fields */
-		yh = prp_header(prp, buf, struct yaph);
+		yh = pdu_header(pdu, buf, struct yaph);
 		memset(yh, 0, YAPHLEN);
 		yh->tag = htons(0xdead);
-		yh->len = htons(prp_plen(prp));
+		yh->len = htons(pdu_plen(pdu));
 
 		/* If this PDU encloses another, then try to set the */
 		/* ethertype field in the packet */
-		cld = prp_next_in_region(prp, prp);
+		cld = pdu_next_in_region(pdu, pdu);
 		if (cld != NULL)
 			yh->etype = htons(pridtoetype(cld->prid));
 		else

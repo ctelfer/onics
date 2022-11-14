@@ -1,6 +1,6 @@
 /*
  * ONICS
- * Copyright 2012-2015
+ * Copyright 2012-2022
  * Christopher Adam Telfer
  *
  * pmltree.c -- Code for managing PML abstract syntax trees.
@@ -1588,7 +1588,7 @@ static const char *cfmstr(struct pml_cfmod *m)
 static const char *rpfld_strs[] = {
 	"**UNALLOWED**", "exists", 
 	"hlen", "plen", "tlen", "totlen", "error", "prid",
-	"index", "header", "payload", "trailer", "parse"
+	"index", "header", "payload", "trailer", "pdu"
 };
 static const char *rpfstr(int field)
 {
@@ -2431,7 +2431,7 @@ int pml_locator_resolve_nsref(struct pml_ast *ast, struct pml_locator *l)
 				abort_unless(l->type == PMLTT_LOCATOR);
 				rpf = PML_RPF_EXISTS;
 			} else {
-				rpf = PML_RPF_PARSE;
+				rpf = PML_RPF_PDU;
 			}
 		} else if (ns->prid == PRID_INVALID) {
 			pml_ast_err(ast, "'%s' is not a protocol\n", ns->name);

@@ -1,6 +1,6 @@
 /*
  * ONICS
- * Copyright 2012-2015
+ * Copyright 2012-2022
  * Christopher Adam Telfer
  *
  * x2hpkt.c -- Program to convert from xkpt format to hexpkt format.
@@ -47,7 +47,7 @@ FILE *outfile;
 struct field {
 	struct list		le;
 	struct ns_elem *	elem;
-	struct prparse *	prp;
+	struct pdu *		pdu;
 	struct ns_namespace *	ns;
 	ulong			off;	/* in bits */
 	ulong			len;	/* in bits */
@@ -167,7 +167,7 @@ void printerr(uint err)
 	int i;
 	if (err) {
 		fprintf(outfile, "#    Errors [0x%0x]: ", err);
-		for (i = 0; i <= PRP_ERR_MAXBIT; ++i) {
+		for (i = 0; i <= PDU_ERR_MAXBIT; ++i) {
 			if (err & (1 << i)) {
 				if (!first)
 					fputs(", ", outfile);
@@ -181,10 +181,10 @@ void printerr(uint err)
 }
 
 
-int get_depth(struct prparse *prp)
+int get_depth(struct pdu *pdu)
 {
 	int i;
-	for (i = 0; prp != NULL; prp = prp->region, ++i)
+	for (i = 0; pdu != NULL; pdu = pdu->region, ++i)
 		;
 	return i;
 }
@@ -241,7 +241,7 @@ void release_fields()
 }
 
 
-int add_fields(struct prparse *prp, struct ns_namespace *ns)
+int add_fields(struct pdu *pdu, struct ns_namespace *ns)
 {
 	ulong off;
 	int i;
@@ -250,10 +250,10 @@ int add_fields(struct prparse *prp, struct ns_namespace *ns)
 	struct ns_namespace *subns;
 	int depth;
 
-	depth = get_depth(prp);
+	depth = get_depth(pdu);
 
 	if (ns == NULL) {
-		ns = ns_lookup_by_prid(prp->prid);
+		ns = ns_lookup_by_prid(pdu->prid);
 		if (ns == NULL)
 			return 0; 
 		
@@ -261,10 +261,10 @@ int add_fields(struct prparse *prp, struct ns_namespace *ns)
 			return -1;
 
 		f->elem = (struct ns_elem *)ns;
-		f->prp = prp;
+		f->pdu = pdu;
 		f->ns = ns;
-		f->off = prp_soff(prp) * 8;
-		f->len = prp_totlen(prp) * 8;
+		f->off = pdu_soff(pdu) * 8;
+		f->len = pdu_totlen(pdu) * 8;
 		f->depth = depth;
 		f->ishdr = 1;
 
@@ -277,25 +277,25 @@ int add_fields(struct prparse *prp, struct ns_namespace *ns)
 		if (e == NULL)
 			break;
 
-		off = fld_get_off(prp, e);
-		if (off == PRP_OFF_INVALID)
+		off = fld_get_off(pdu, e);
+		if (off == PDU_OFF_INVALID)
 			continue;
 
 		if ((f = alloc_field()) == NULL)
 			return -1;
 
 		f->elem = e;
-		f->prp = prp;
+		f->pdu = pdu;
 		f->ns = ns;
 		f->off = off;
-		f->len = fld_get_len(prp, e);
+		f->len = fld_get_len(pdu, e);
 		f->depth = depth;
 
 		insert_field(f);
 			
 		if (e->type == NST_NAMESPACE) {
 			subns = (struct ns_namespace *)e;
-			if (add_fields(prp, subns) < 0)
+			if (add_fields(pdu, subns) < 0)
 				return -1;
 		}
 	}
@@ -334,14 +334,14 @@ void print_fields(ulong eoff)
 
 		if (e->type == NST_NAMESPACE) {
 			printsep();
-			rv = ns_tostr(e, g_p, f->prp, line, sizeof(line), pfx);
+			rv = ns_tostr(e, g_p, f->pdu, line, sizeof(line), pfx);
 			if (rv >= 0)
 				fputs(line, outfile);
 			if (f->ishdr)
-				printerr(f->prp->error);
+				printerr(f->pdu->error);
 			printsep();
 		} else {
-			rv = ns_tostr(e, g_p, f->prp, line, sizeof(line), pfx);
+			rv = ns_tostr(e, g_p, f->pdu, line, sizeof(line), pfx);
 			if (rv >= 0)
 				fputs(line, outfile);
 		}
@@ -355,7 +355,7 @@ void print_fields(ulong eoff)
 /* 
  * Print fields and data between soff and eoff.
  */
-void dump_data(struct prparse *prp, ulong soff, ulong eoff, int prhdr)
+void dump_data(struct pdu *pdu, ulong soff, ulong eoff, int prhdr)
 {
 	char pfx[MAXPFX];
 	struct ns_namespace *ns;
@@ -369,14 +369,14 @@ void dump_data(struct prparse *prp, ulong soff, ulong eoff, int prhdr)
 	sbyte = (soff + 7) / 8;
 	ebyte = (eoff + 7) / 8;
 
-	ns = ns_lookup_by_prid(prp->prid);
+	ns = ns_lookup_by_prid(pdu->prid);
 
 	if (ns != NULL)
 		getpfx(pfx, ns->name, MAXPFX);
-	else if (prp->prid == PRID_NONE)
+	else if (pdu->prid == PRID_NONE)
 		snprintf(pfx, MAXPFX, "# DATA: ");
 	else
-		snprintf(pfx, MAXPFX, "# PRID-%u: ", prp->prid);
+		snprintf(pfx, MAXPFX, "# PRID-%u: ", pdu->prid);
 
 	if (prhdr) {
 		len = ebyte - sbyte;
@@ -389,15 +389,14 @@ void dump_data(struct prparse *prp, ulong soff, ulong eoff, int prhdr)
 
 
 
-ulong walk_and_print_parse(struct prparse *from, struct prparse *region,
-			   ulong off)
+ulong walk_and_print_parse(struct pdu *from, struct pdu *region, ulong off)
 {
-	struct prparse *next;
+	struct pdu *next;
 	ulong soff, eoff;
 
-	if ((next = prp_next_in_region(from, region)) == NULL) {
-		eoff = (prp_list_head(region) ? prp_toff(region) :
-		        prp_eoff(region)) * 8;
+	if ((next = pdu_next_in_region(from, region)) == NULL) {
+		eoff = (pdu_list_head(region) ? pdu_toff(region) :
+		        pdu_eoff(region)) * 8;
 		if (off < eoff) {
 			print_fields(eoff);
 			dump_data(region, off, eoff, 1);
@@ -405,8 +404,8 @@ ulong walk_and_print_parse(struct prparse *from, struct prparse *region,
 		return eoff;
 	}
 
-	soff = prp_soff(next) * 8;
-	eoff = prp_poff(next) * 8;
+	soff = pdu_soff(next) * 8;
+	eoff = pdu_poff(next) * 8;
 
 	if (off < soff) {
 		print_fields(soff);
@@ -418,7 +417,7 @@ ulong walk_and_print_parse(struct prparse *from, struct prparse *region,
 
 	off = walk_and_print_parse(next, next, eoff);
 
-	eoff = prp_eoff(next) * 8;
+	eoff = pdu_eoff(next) * 8;
 	if (off < eoff) {
 		print_fields(eoff);
 		dump_data(next, off, eoff, 1);
@@ -429,11 +428,11 @@ ulong walk_and_print_parse(struct prparse *from, struct prparse *region,
 }
 
 
-void gather_fields(struct prparse *pktp)
+void gather_fields(struct pdu *pktp)
 {
-	struct prparse *prp;
-	prp_for_each(prp, pktp)
-		if (add_fields(prp, NULL) < 0)
+	struct pdu *pdu;
+	pdu_for_each(pdu, pktp)
+		if (add_fields(pdu, NULL) < 0)
 			err("Out of memory for packet %lu\n", g_pktnum);
 }
 
@@ -536,18 +535,18 @@ void dump_xpkt_meta(struct pktbuf *pkb)
 
 void dump_to_hex_packet(struct pktbuf *pkb)
 {
-	struct prparse *prp;
+	struct pdu *pdu;
 	int rv;
 
 	g_len = pkb_get_len(pkb);
 	g_p = pkb->buf;
-	prp = &pkb->prp;
-	g_pbase = prp_poff(prp);
+	pdu = &pkb->pdus;
+	g_pbase = pdu_poff(pdu);
 
 	if (g_keep_xhdr) {
 		struct xpkt *xp = pkb_get_xpkt(pkb);
 		g_ioff = xpkt_doff(xp);
-		abort_unless(prp_toff(prp) + g_ioff > g_ioff);
+		abort_unless(pdu_toff(pdu) + g_ioff > g_ioff);
 		printsep();
 		fprintf(outfile, "# Packet %lu -- %lu bytes\n", g_pktnum,
 			g_len + g_ioff);
@@ -569,10 +568,10 @@ void dump_to_hex_packet(struct pktbuf *pkb)
 		printsep();
 	}
 
-	gather_fields(prp);
+	gather_fields(pdu);
 	reset_field_pointer();
 
-	walk_and_print_parse(prp, prp, prp_poff(prp) * 8);
+	walk_and_print_parse(pdu, pdu, pdu_poff(pdu) * 8);
 
 	fprintf(outfile, "\n\n");
 	if (g_do_flush)

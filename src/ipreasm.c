@@ -1,6 +1,6 @@
 /*
  * ONICS
- * Copyright 2013-2015
+ * Copyright 2013-2022
  * Christopher Adam Telfer
  *
  * ipreasm.c -- Reassemble fragmented IPv4 and/or IPv6 packets.
@@ -195,17 +195,17 @@ void init_tables(void)
 
 static int requires_reassembly(struct pktbuf *p)
 {
-	struct prparse *prp = p->layers[PKB_LAYER_NET];
+	struct pdu *pdu = p->layers[PKB_LAYER_NET];
 	struct ipv4h *ip;
 
-	if (prp == NULL) {
+	if (pdu == NULL) {
 		return 0;
-	} else if (reasm4 && prp->prid == PRID_IPV4) {
-		ip = prp_header(prp, p->buf, struct ipv4h);
+	} else if (reasm4 && pdu->prid == PRID_IPV4) {
+		ip = pdu_header(pdu, p->buf, struct ipv4h);
 		return is_v4_frag(ntoh16(ip->fragoff));
-	} else if (reasm6 && prp->prid == PRID_IPV6) {
-		return prp_off_valid(prp, PRP_IPV6FLD_FRAGH) &&
-		       !prp_off_valid(prp, PRP_IPV6FLD_JLEN);
+	} else if (reasm6 && pdu->prid == PRID_IPV6) {
+		return pdu_off_valid(pdu, PDU_IPV6FLD_FRAGH) &&
+		       !pdu_off_valid(pdu, PDU_IPV6FLD_JLEN);
 	} else {
 		return 0;
 	}
@@ -263,9 +263,9 @@ static void fe_free(struct fragent *fe)
 }
 
 
-static void build_v4_key(byte_t key[FEKSIZE], struct prparse *prp, byte_t *buf)
+static void build_v4_key(byte_t key[FEKSIZE], struct pdu *pdu, byte_t *buf)
 {
-	struct ipv4h *ip = prp_header(prp, buf, struct ipv4h);
+	struct ipv4h *ip = pdu_header(pdu, buf, struct ipv4h);
 	memset(key, 0, FEKSIZE);
 	memcpy(key, &ip->saddr, 4);
 	memcpy(key+4, &ip->daddr, 4);
@@ -273,11 +273,11 @@ static void build_v4_key(byte_t key[FEKSIZE], struct prparse *prp, byte_t *buf)
 }
 
 
-static void build_v6_key(byte_t key[FEKSIZE], struct prparse *prp, byte_t *buf)
+static void build_v6_key(byte_t key[FEKSIZE], struct pdu *pdu, byte_t *buf)
 {
-	struct ipv6h *ip6 = prp_header(prp, buf, struct ipv6h);
+	struct ipv6h *ip6 = pdu_header(pdu, buf, struct ipv6h);
 	struct ipv6_fragh *v6fh = 
-		(struct ipv6_fragh *)(buf + prp->offs[PRP_IPV6FLD_FRAGH]);
+		(struct ipv6_fragh *)(buf + pdu->offs[PDU_IPV6FLD_FRAGH]);
 	memset(key, 0, FEKSIZE);
 	memcpy(key, &ip6->saddr, 16);
 	memcpy(key+16, &ip6->daddr, 16);
@@ -287,14 +287,14 @@ static void build_v6_key(byte_t key[FEKSIZE], struct prparse *prp, byte_t *buf)
 
 static struct fragent *fe_lkup(struct pktbuf *p)
 {
-	struct prparse *prp = p->layers[PKB_LAYER_NET];
+	struct pdu *pdu = p->layers[PKB_LAYER_NET];
 	byte_t key[FEKSIZE];
 	struct hnode *hn;
 	struct fragent *fe;
 	uint h;
 
-	if (prp->prid == PRID_IPV4) {
-		build_v4_key(key, prp, p->buf);
+	if (pdu->prid == PRID_IPV4) {
+		build_v4_key(key, pdu, p->buf);
 		hn = ht_lkup(&v4tab, key, &h);
 		if (hn != NULL) {
 			fe = container(hn, struct fragent, hn);
@@ -305,8 +305,8 @@ static struct fragent *fe_lkup(struct pktbuf *p)
 			ht_ins(&v4tab, &fe->hn, h);
 		}
 	} else {
-		abort_unless(prp->prid == PRID_IPV6);
-		build_v6_key(key, prp, p->buf);
+		abort_unless(pdu->prid == PRID_IPV6);
+		build_v6_key(key, pdu, p->buf);
 		hn = ht_lkup(&v6tab, key, &h);
 		if (hn != NULL) {
 			fe = container(hn, struct fragent, hn);
@@ -390,8 +390,8 @@ static int fe_add_frag(struct fragent *fe, byte_t *bp, uint16_t first,
 int fe_add_v4_frag(struct fragent *fe, struct pktbuf *p)
 {
 	struct pktbuf *fp = fe->pkb;
-	struct prparse *prp = p->layers[PKB_LAYER_NET];
-	struct ipv4h *ip = prp_header(prp, p->buf, struct ipv4h);
+	struct pdu *pdu = p->layers[PKB_LAYER_NET];
+	struct ipv4h *ip = pdu_header(pdu, p->buf, struct ipv4h);
 	ulong first;
 	ulong last;
 	int islast;
@@ -399,14 +399,14 @@ int fe_add_v4_frag(struct fragent *fe, struct pktbuf *p)
 	first = ntoh16(ip->fragoff);
 	islast = (first & IPH_MFMASK) == 0;
 	first = (first & IPH_FRAGOFFMASK) * 8;
-	last = first + prp_plen(prp) - 1;
+	last = first + pdu_plen(pdu) - 1;
 
 	if (last > 65535)
 		return -1;
 
 	if (first == 0) {
 		fe->iphlen = IPH_HLEN(*ip);
-		fe->l2hlen = prp_soff(prp) - pkb_get_off(p);
+		fe->l2hlen = pdu_soff(pdu) - pkb_get_off(p);
 		if (fe->iphlen + fe->l2hlen > FEPOFF)
 			return -1;
 		pkb_set_off(fp, FEPOFF - (fe->iphlen + fe->l2hlen));
@@ -414,7 +414,7 @@ int fe_add_v4_frag(struct fragent *fe, struct pktbuf *p)
 		pkb_set_dltype(fp, pkb_get_dltype(p));
 	}
 
-	if (fe_add_frag(fe, prp_payload(prp, p->buf), first, last, islast) < 0)
+	if (fe_add_frag(fe, pdu_payload(pdu, p->buf), first, last, islast) < 0)
 		return -1;
 
 	if (fe->holes == -1) {
@@ -462,7 +462,7 @@ static int reassemble_v4(struct pktbuf **pp)
 int fe_add_v6_frag(struct fragent *fe, struct pktbuf *p)
 {
 	struct pktbuf *fp = fe->pkb;
-	struct prparse *prp = p->layers[PKB_LAYER_NET];
+	struct pdu *pdu = p->layers[PKB_LAYER_NET];
 	struct ipv6_fragh *fh;
 	struct ipv6h *ip6;
 	ulong first;
@@ -470,21 +470,21 @@ int fe_add_v6_frag(struct fragent *fe, struct pktbuf *p)
 	int islast;
 	byte_t *fragp, *prevp;
 
-	abort_unless(prp_off_valid(prp, PRP_IPV6FLD_FRAGH));
-	fh = (struct ipv6_fragh *)(p->buf + prp->offs[PRP_IPV6FLD_FRAGH]);
+	abort_unless(pdu_off_valid(pdu, PDU_IPV6FLD_FRAGH));
+	fh = (struct ipv6_fragh *)(p->buf + pdu->offs[PDU_IPV6FLD_FRAGH]);
 
 	first = ntoh16(fh->fragoff);
 	islast = (first & IPV6_FRAGH_MFMASK) == 0;
 	first &= IPV6_FRAGH_FOMASK;
-	abort_unless(prp_toff(prp) > prp->offs[PRP_IPV6FLD_FRAGH] + 8);
-	last = first + prp_toff(prp) - (prp->offs[PRP_IPV6FLD_FRAGH] + 8) - 1;
+	abort_unless(pdu_toff(pdu) > pdu->offs[PDU_IPV6FLD_FRAGH] + 8);
+	last = first + pdu_toff(pdu) - (pdu->offs[PDU_IPV6FLD_FRAGH] + 8) - 1;
 
 	if (last > 65535)
 		return -1;
 
 	if (first == 0) {
-		fe->iphlen = prp->offs[PRP_IPV6FLD_FRAGH] - prp_soff(prp);
-		fe->l2hlen = prp_soff(prp) - pkb_get_off(p);
+		fe->iphlen = pdu->offs[PDU_IPV6FLD_FRAGH] - pdu_soff(pdu);
+		fe->l2hlen = pdu_soff(pdu) - pkb_get_off(p);
 		if (fe->iphlen + fe->l2hlen > FEPOFF)
 			return -1;
 		pkb_set_off(fp, FEPOFF - (fe->iphlen + fe->l2hlen));
@@ -536,12 +536,12 @@ static int reassemble_v6(struct pktbuf **pp)
 
 static int reassemble(struct pktbuf **pp)
 {
-	struct prparse *prp = (*pp)->layers[PKB_LAYER_NET];
-	abort_unless(prp != NULL);
-	if (prp->prid == PRID_IPV4) {
+	struct pdu *pdu = (*pp)->layers[PKB_LAYER_NET];
+	abort_unless(pdu != NULL);
+	if (pdu->prid == PRID_IPV4) {
 		return reassemble_v4(pp);
 	} else {
-		abort_unless(prp->prid == PRID_IPV6);
+		abort_unless(pdu->prid == PRID_IPV6);
 		return reassemble_v6(pp);
 	} 
 }

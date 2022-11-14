@@ -1,6 +1,6 @@
 /*
  * ONICS
- * Copyright 2012-2016
+ * Copyright 2012-2022
  * Christopher Adam Telfer
  *
  * utils.c -- generic packet utility routines.

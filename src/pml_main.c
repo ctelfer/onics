@@ -1,6 +1,6 @@
 /*
  * ONICS
- * Copyright 2012-2016
+ * Copyright 2012-2022
  * Christopher Adam Telfer
  *
  * pml_main.c -- Main file for the PML programming language/utility.

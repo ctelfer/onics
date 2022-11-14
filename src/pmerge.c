@@ -1,6 +1,6 @@
 /*
  * ONICS
- * Copyright 2019
+ * Copyright 2019-2022
  * Christopher Adam Telfer
  *
  * pmerge.c -- Merge a set of packet streams

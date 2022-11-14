@@ -1,4 +1,4 @@
-.TH "nvmas" 1 "August 2013" "ONICS 1.0"
+.TH "nvmas" 1 "Novmber 2022" "ONICS 1.0"
 .SH NAME
 nvmas - Assemble a NetVM program.
 .P
@@ -73,7 +73,7 @@ All other non-blank lines have the form:
 or
 .nf
 
-         [label:]    opcode    *PKTN:PRID:INDEX:PRP_FIELD[OFFSET]
+         [label:]    opcode    *PKTN:PRID:INDEX:PDU_FIELD[OFFSET]
 
 .fi
 See below for a discussion of the packet descriptor format.  A branch
@@ -156,8 +156,8 @@ information specifying a packet field.  The assembler allows one to
 specify this in non-encoded form as mentioned above.
 .P
 The PKTN is the packet number, PRID is the protocol ID of of the
-protocol, INDEX is the numeric index of the PRID, PRP_FIELD is the index
-of field in the protocol parse.  OFFSET is the offset from the field
+protocol, INDEX is the numeric index of the PRID, PDU_FIELD is the index
+of field in the PDU.  OFFSET is the offset from the field
 offset in the packet.  If there are multiple PDUs in the packet with the
 same PRID, the NetVM differentiates between them by the INDEX field.
 The first PDU with a given PRID will be index 0, the second PDU with
@@ -230,8 +230,8 @@ accordingly).
         
         MN      Fields  Description
         --      ------  ---------------------------------------------
-        ldpf            [pdesc] load field from proto parse
-        ldpfi   pdesc   load field from proto parse (packed pdesc)
+        ldpf            [pdesc] load field from proto pdu
+        ldpfi   pdesc   load field from pdu (packed pdesc)
 
 
 For these 5 load operations, x must be in [1,8] or [129,136]
@@ -393,23 +393,23 @@ Packet specific operations:
         pkcopy          [pkn2,pkn1] copy packet from pkn1 to pkn2
         pkdel           [pkn] delete packet
 
-        pksla   x       [pdesc] set layer 'x' to prp in pdesc
+        pksla   x       [pdesc] set layer 'x' to pdu in pdesc
         pkcla   x       [pkn] clear layer 'x'
-        pkppsh  x       [pkn,prid] "push" prp of prid in packet
+        pkppsh  x       [pkn,prid] "push" pdu of prid in packet
                           pkn to inner header if !x or outer if x
-        pkppop  x       [pkn] pop the top prp off of packet pkn
+        pkppop  x       [pkn] pop the top pdu off of packet pkn
                           if x then pop from front else innermost
 
         pkprs   x       [pkn] delete parse and if 'x' == 0 reparse
-        pkfxd           [pkn] set dltype to PRID_ of 2nd prp
-        pkpup           [pdesc] update parse fields (stack pdesc)
+        pkfxd           [pkn] set dltype to PRID_ of 2nd pdu
+        pkpup           [pdesc] update pdu fields (stack pdesc)
 
         pkfxl           [pdesc] fix length fields in the packet
-                          If pdesc refers to the base parse, fix
+                          If pdesc refers to the base pdu, fix
                           all lengths that are in a layer
         pkfxli  pdesc   fix length fields in packet (packed pdesc)
         pkfxc           [pdesc] fix checksum fields in the packet
-                          If pdesc refers to the base parse, fix
+                          If pdesc refers to the base pdu, fix
                           all checksums that are in a layer
         pkfxci  pdesc   fix checksums in the packet (packed pdesc)
 
@@ -423,7 +423,7 @@ address doesn't refer to a packet:
         pkcut   x       [addr,len] cut len bytes @ pd.offset
                           move new bytes down if x or up if !x
         pkadj           [pdesc,amt] adjust offset 'field' by
-                          amt (signed) bytes in parse
+                          amt (signed) bytes in pdu
 .fi
 .P
 The format for packet descriptors on the stack is as follows.  Word 0
@@ -435,17 +435,17 @@ the stack.  (the word following word 0).
         -----           ----    ---------
         PRID            0       16-31
         INDEX           0       8-15
-        PRP_FIELD       0       0-7
+        PDU_FIELD       0       0-7
         IS_PACKET       1       31-31 (must be 1)
         PKTN            1       28-30
         OFFSET          1       0-27
 
 .fi
-The NetVM recognizes the following protocol parse fields that the
+The NetVM recognizes the following protocol pdu fields that the
 program can query and even sometimes set:
 .nf
 
-        PRP Field Name                  Value
+        PDU Field Name                  Value
         --------------                  -----
         Header Length                   0
         Payload Length                  1

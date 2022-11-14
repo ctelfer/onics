@@ -128,22 +128,22 @@ void parse_args(int argc, char *argv[])
 }
 
 
-int get_tcp(struct pktbuf *p, struct prparse **prp, struct tcph **tcp)
+int get_tcp(struct pktbuf *p, struct pdu **pdu, struct tcph **tcp)
 {
-	*prp = NULL;
+	*pdu = NULL;
 	*tcp = NULL;
-	if ((*prp = p->layers[PKB_LAYER_XPORT]) == NULL)
+	if ((*pdu = p->layers[PKB_LAYER_XPORT]) == NULL)
 		return -1;
-	if ((*prp)->prid != PRID_TCP)
+	if ((*pdu)->prid != PRID_TCP)
 		return -1;
-	*tcp = prp_header(*prp, p->buf, struct tcph);
+	*tcp = pdu_header(*pdu, p->buf, struct tcph);
 	return 0;
 }
 
 
-void Get_tcp(struct pktbuf *p, struct prparse **prp, struct tcph **tcp)
+void Get_tcp(struct pktbuf *p, struct pdu **pdu, struct tcph **tcp)
 {
-	int rv = get_tcp(p, prp, tcp);
+	int rv = get_tcp(p, pdu, tcp);
 	abort_unless(rv >= 0);
 }
 
@@ -164,16 +164,16 @@ int32_t seq_cmp(uint32_t s1, uint32_t s2)
 
 void tcp_state_enqueue(struct tcp_state *ts, struct pktbuf *p)
 {
-	struct prparse *prp;
+	struct pdu *pdu;
 	struct tcph *tcp;
-	struct prparse *prp2;
+	struct pdu *pdu2;
 	struct tcph *tcp2;
 	struct list *node, *xnode;
 	int32_t n;
 
-	Get_tcp(p, &prp, &tcp);
+	Get_tcp(p, &pdu, &tcp);
 	l_for_each_safe(node, xnode, &ts->pending) {
-		Get_tcp(le2pkb(node), &prp2, &tcp2);
+		Get_tcp(le2pkb(node), &pdu2, &tcp2);
 		n = seq_cmp(ntoh32(tcp->seqn), ntoh32(tcp2->seqn));
 		if (n == 0) {
 			pkb_free(p);
@@ -193,7 +193,7 @@ void tcp_state_enqueue(struct tcp_state *ts, struct pktbuf *p)
 void tcp_state_write_pending(FILE *outfile, struct tcp_state *ts)
 {
 	struct pktbuf *p;
-	struct prparse *prp;
+	struct pdu *pdu;
 	struct tcph *tcp;
 	int32_t n;
 	uint32_t start;
@@ -205,14 +205,14 @@ void tcp_state_write_pending(FILE *outfile, struct tcp_state *ts)
 
 	while (!l_isempty(&ts->pending)) {
 		p = le2pkb(l_head(&ts->pending));
-		Get_tcp(p, &prp, &tcp);
+		Get_tcp(p, &pdu, &tcp);
 		start = ntoh32(tcp->seqn);
 		n = seq_cmp(ts->nxtseq, start);
 		if (n < 0)
 			return;
 
 		l_rem(&p->entry);
-		end = start + prp_plen(prp);
+		end = start + pdu_plen(pdu);
 		if (n > 0) {
 			n = seq_cmp(ts->nxtseq, end);
 			if (n >= 0) {
@@ -220,11 +220,11 @@ void tcp_state_write_pending(FILE *outfile, struct tcp_state *ts)
 				continue;
 			}
 			off = ts->nxtseq - start;
-			data = prp_payload(prp, p->buf) + off;
-			len = prp_plen(prp) - off;
+			data = pdu_payload(pdu, p->buf) + off;
+			len = pdu_plen(pdu) - off;
 		} else {
-			data = prp_payload(prp, p->buf);
-			len = prp_plen(prp);
+			data = pdu_payload(pdu, p->buf);
+			len = pdu_plen(pdu);
 		}
 
 		nw = fwrite(data, 1, len, outfile);
@@ -238,33 +238,33 @@ void tcp_state_write_pending(FILE *outfile, struct tcp_state *ts)
 
 int extract_tuple(struct pktbuf *p, struct conn_tuple *t)
 {
-	struct prparse *prp;
+	struct pdu *pdu;
 	struct ipv4h *ip;
 	struct ipv6h *ip6;
 	struct tcph *tcp;
 
 	memset(t, 0, sizeof(*t));
-	if ((prp = p->layers[PKB_LAYER_NET]) == NULL)
+	if ((pdu = p->layers[PKB_LAYER_NET]) == NULL)
 		return -1;
-	t->netproto = prp->prid;
-	if (prp->prid == PRID_IPV4) {
-		ip = prp_header(prp, p->buf, struct ipv4h);
+	t->netproto = pdu->prid;
+	if (pdu->prid == PRID_IPV4) {
+		ip = pdu_header(pdu, p->buf, struct ipv4h);
 		t->saddr.ip = ip->saddr;
 		t->daddr.ip = ip->daddr;
-	} else if (prp->prid == PRID_IPV6) {
-		ip6 = prp_header(prp, p->buf, struct ipv6h);
+	} else if (pdu->prid == PRID_IPV6) {
+		ip6 = pdu_header(pdu, p->buf, struct ipv6h);
 		t->saddr.ip6 = ip6->saddr;
 		t->daddr.ip6 = ip6->daddr;
 	} else {
 		return -1;
 	}
 
-	if ((prp = p->layers[PKB_LAYER_XPORT]) == NULL)
+	if ((pdu = p->layers[PKB_LAYER_XPORT]) == NULL)
 		return -1;
-	if (prp->prid != PRID_TCP)
+	if (pdu->prid != PRID_TCP)
 		return -1;
-	tcp = prp_header(prp, p->buf, struct tcph);
-	if (get_tcp(p, &prp, &tcp) < 0)
+	tcp = pdu_header(pdu, p->buf, struct tcph);
+	if (get_tcp(p, &pdu, &tcp) < 0)
 		return -1;
 	t->sport = tcp->sport;
 	t->dport = tcp->dport;
@@ -311,7 +311,7 @@ FILE *open_outfile(ulong nfiles, int dir)
 void flush_next_pending(FILE *outfile, struct tcp_state *ts)
 {
 	struct pktbuf *p = le2pkb(l_head(&ts->pending));
-	struct prparse *prp;
+	struct pdu *pdu;
 	struct tcph *tcp;
 	uint32_t start;
 	uint32_t len;
@@ -319,7 +319,7 @@ void flush_next_pending(FILE *outfile, struct tcp_state *ts)
 	int nw = 0;
 	byte_t buf[4096];
 
-	Get_tcp(p, &prp, &tcp);
+	Get_tcp(p, &pdu, &tcp);
 	start = ntoh32(tcp->seqn);
 	abort_unless(seq_cmp(ts->nxtseq, start) < 0);
 	len = start - ts->nxtseq;
@@ -365,7 +365,7 @@ void carve_app_data()
 	struct pktbuf *p;
 	struct conn_tuple conntuple;
 	struct conn_tuple pkttuple;
-	struct prparse *prp;
+	struct pdu *pdu;
 	struct tcph *tcp;
 	ulong pn = 0;
 	ulong nfiles = 0;
@@ -390,7 +390,7 @@ void carve_app_data()
 		pkb_free(p);
 	}
 
-	Get_tcp(p, &prp, &tcp);
+	Get_tcp(p, &pdu, &tcp);
 	if (!(tcp->flags & TCPF_SYN) || (tcp->flags & TCPF_ACK)) {
 		if (!quiet)
 			fprintf(stderr, "Warning: first packet is not a SYN\n");
@@ -419,7 +419,7 @@ void carve_app_data()
 			continue;
 		}
 
-		Get_tcp(p, &prp, &tcp);
+		Get_tcp(p, &pdu, &tcp);
 
 		ts = (pdir == C2S) ? &c2s : &s2c;
 		if (!ts->seen) {
@@ -437,7 +437,7 @@ void carve_app_data()
 				--ts->nxtseq;
 			}
 		}
-		if (prp_plen(prp) <= 0) {
+		if (pdu_plen(pdu) <= 0) {
 			pkb_free(p);
 			continue;
 		}

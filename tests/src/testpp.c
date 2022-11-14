@@ -1,6 +1,6 @@
 /*
  * ONICS
- * Copyright 2012-2015
+ * Copyright 2012-2022
  * Christopher Adam Telfer
  *
  * testpp.c -- Test protocol parse API without parse libraries.
@@ -60,9 +60,9 @@ const char *pnames(uint prid)
 int main(int argc, char *argv[])
 {
 	struct pktbuf *p;
-	struct prparse *prp, *t;
+	struct pdu *pdu, *t;
 	unsigned npkt = 0;
-	unsigned nprp = 0;
+	unsigned npdu = 0;
 
 	register_std_proto();
 	pkb_init_pools(1);
@@ -75,40 +75,40 @@ int main(int argc, char *argv[])
 			printf("Unknown data type for packet %u\n", npkt);
 			continue;
 		}
-		prp = &p->prp;
-		for (nprp = 1, t = prp_next(prp); !prp_list_end(t);
-		     t = prp_next(t), ++nprp) {
-			printf("%4u:\tHeader %u -- %s\n", npkt, nprp,
+		pdu = &p->pdus;
+		for (npdu = 1, t = pdu_next(pdu); !pdu_list_end(t);
+		     t = pdu_next(t), ++npdu) {
+			printf("%4u:\tHeader %u -- %s\n", npkt, npdu,
 			       pnames(t->prid));
 			if (t->error == 0) {
 				printf("\t\tNo errors\n");
 			} else {
-				if ((t->error & PRP_ERR_TOOSMALL)) {
+				if ((t->error & PDU_ERR_TOOSMALL)) {
 					printf("\t\tPacket too small\n");
 					continue;
 				}
-				if ((t->error & PRP_ERR_HLEN)) {
+				if ((t->error & PDU_ERR_HLEN)) {
 					printf("\t\tHeader length error\n");
 					continue;
 				}
-				if ((t->error & PRP_ERR_TRUNC))
+				if ((t->error & PDU_ERR_TRUNC))
 					printf("\t\tPacket truncated\n");
-				if ((t->error & PRP_ERR_CKSUM))
+				if ((t->error & PDU_ERR_CKSUM))
 					printf("\t\tChecksum error\n");
-				if ((t->error & PRP_ERR_OPTLEN))
+				if ((t->error & PDU_ERR_OPTLEN))
 					printf("\t\tOption length error\n");
-				if ((t->error & PRP_ERR_INVALID))
+				if ((t->error & PDU_ERR_INVALID))
 					printf("\t\tInvalid field combination error\n");
 			}
 
 			printf("\t\tOffset: %8u\tLength: %8u\n",
-			       (unsigned)prp_soff(t), (unsigned)prp_totlen(t));
+			       (unsigned)pdu_soff(t), (unsigned)pdu_totlen(t));
 			printf("\t\tHeader length: %8u\n",
-			       (unsigned)prp_hlen(t));
+			       (unsigned)pdu_hlen(t));
 			printf("\t\tPayload length:%8u\n",
-			       (unsigned)prp_plen(t));
+			       (unsigned)pdu_plen(t));
 			printf("\t\tTrailer length:%8u\n",
-			       (unsigned)prp_tlen(t));
+			       (unsigned)pdu_tlen(t));
 		}
 		printf("\n");
 		pkb_free(p);

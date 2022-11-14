@@ -1,6 +1,6 @@
 /*
  * ONICS
- * Copyright 2012-2015
+ * Copyright 2012-2022
  * Christopher Adam Telfer
  *
  * h2xpkt.c -- Convert a hexpkt stream of packets to an xpkt stream of

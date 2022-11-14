@@ -1,6 +1,6 @@
 /*
  * ONICS
- * Copyright 2012-2016
+ * Copyright 2012-2022
  * Christopher Adam Telfer
  *
  * netvm.c -- NetVM core.  Network processing virtual machine.
@@ -47,7 +47,7 @@ int netvm_valid_width(int width)
 
 
 /* Pull a packet descriptor from the stack or from the current instruction */
-void netvm_get_pd(struct netvm *vm, struct netvm_prp_desc *pd, int onstack)
+void netvm_get_pd(struct netvm *vm, struct netvm_pdu_desc *pd, int onstack)
 {
 	struct netvm_inst *inst = &vm->inst[vm->pc];
 	ulong v0, v1;
@@ -76,11 +76,11 @@ void netvm_get_pd(struct netvm *vm, struct netvm_prp_desc *pd, int onstack)
  * means find the 2nd (0-based counting) TCP (PRID_TCP == 8) header in the 4th
  * packet.
  */
-struct prparse *netvm_find_header(struct netvm *vm, struct netvm_prp_desc *pd,
-				  int onstack)
+struct pdu *netvm_find_header(struct netvm *vm, struct netvm_pdu_desc *pd,
+			      int onstack)
 {
 	struct pktbuf *pkb;
-	struct prparse *prp;
+	struct pdu *pdu;
 	int n = 0;
 	int lidx;
 
@@ -92,7 +92,7 @@ struct prparse *netvm_find_header(struct netvm *vm, struct netvm_prp_desc *pd,
 		VMERRRET(vm, NETVM_ERR_PKTNUM, NULL);
 
 	if (!(pkb = vm->packets[pd->pktnum])) {
-		if (pd->field == NETVM_PRP_PIDX)
+		if (pd->field == NETVM_PDU_PIDX)
 			return NULL;
 		VMERRRET(vm, NETVM_ERR_NOPKT, NULL);
 	}
@@ -104,42 +104,42 @@ struct prparse *netvm_find_header(struct netvm *vm, struct netvm_prp_desc *pd,
 		return pkb->layers[lidx];
 	}
 
-	prp = &pkb->prp;
+	pdu = &pkb->pdus;
 	do {
-		if ((pd->prid == PRID_ANY) || (pd->prid == prp->prid)) {
+		if ((pd->prid == PRID_ANY) || (pd->prid == pdu->prid)) {
 			if (n == pd->idx)
-				return prp;
+				return pdu;
 			++n;
 		}
-		prp = prp_next(prp);
-	} while (!prp_list_end(prp));
+		pdu = pdu_next(pdu);
+	} while (!pdu_list_end(pdu));
 	return NULL;
 }
 
 
-void netvm_get_prp_ptr(struct netvm *vm, int onstack, int len, byte_t **p)
+void netvm_get_pdu_ptr(struct netvm *vm, int onstack, int len, byte_t **p)
 {
-	struct netvm_prp_desc pd0;
-	struct prparse *prp;
+	struct netvm_pdu_desc pd0;
+	struct pdu *pdu;
 	uint oidx;
 	ulong off;
 	struct pktbuf *pkb;
 
-	prp = netvm_find_header(vm, &pd0, onstack);
+	pdu = netvm_find_header(vm, &pd0, onstack);
 	VMCKRET(vm);
-	FATAL(vm, NETVM_ERR_NOPRP, prp == NULL);
-	FATAL(vm, NETVM_ERR_PRPFLD, !NETVM_ISPRPOFF(pd0.field));
-	oidx = pd0.field - NETVM_PRP_OFF_BASE;
-	if ((pd0.field < NETVM_PRP_OFF_BASE) || (oidx >= prp->noff))
-		VMERR(vm, NETVM_ERR_PRPFLD);
-	FATAL(vm, NETVM_ERR_PKTADDR, (prp->offs[oidx] == PRP_OFF_INVALID));
+	FATAL(vm, NETVM_ERR_NOPDU, pdu == NULL);
+	FATAL(vm, NETVM_ERR_PDUFLD, !NETVM_ISPDUOFF(pd0.field));
+	oidx = pd0.field - NETVM_PDU_OFF_BASE;
+	if ((pd0.field < NETVM_PDU_OFF_BASE) || (oidx >= pdu->noff))
+		VMERR(vm, NETVM_ERR_PDUFLD);
+	FATAL(vm, NETVM_ERR_PKTADDR, (pdu->offs[oidx] == PDU_OFF_INVALID));
 	pkb = vm->packets[pd0.pktnum];
 
 	FATAL(vm, NETVM_ERR_IOVFL, (pd0.offset + len < pd0.offset));
-	off = prp->offs[oidx] + pd0.offset;
-	FATAL(vm, NETVM_ERR_PKTADDR, off < prp_soff(prp));
+	off = pdu->offs[oidx] + pd0.offset;
+	FATAL(vm, NETVM_ERR_PKTADDR, off < pdu_soff(pdu));
 	FATAL(vm, NETVM_ERR_PKTADDR, off + len < off);
-	FATAL(vm, NETVM_ERR_PKTADDR, off + len > prp_eoff(prp));
+	FATAL(vm, NETVM_ERR_PKTADDR, off + len > pdu_eoff(pdu));
 
 	abort_unless(p);
 	*p = pkb->buf + off;
@@ -306,43 +306,43 @@ static void ni_popfr(struct netvm *vm)
 static void ni_ldpf(struct netvm *vm)
 {
 	struct netvm_inst *inst = &vm->inst[vm->pc];
-	struct netvm_prp_desc pd0;
-	struct prparse *prp;
+	struct netvm_pdu_desc pd0;
+	struct pdu *pdu;
 	uint oidx;
 	long off;
 	ulong val;
 
-	prp = netvm_find_header(vm, &pd0, (inst->op == NETVM_OC_LDPF));
+	pdu = netvm_find_header(vm, &pd0, (inst->op == NETVM_OC_LDPF));
 	VMCKRET(vm);
 
-	if (!prp) {
+	if (!pdu) {
 		val = NETVM_PF_INVALID;
-		if (pd0.field == NETVM_PRP_PIDX)
+		if (pd0.field == NETVM_PDU_PIDX)
 			val = 0;
 		S_PUSH(vm, val);
 		return;
 	}
 
 	switch (pd0.field) {
-	case NETVM_PRP_HLEN:
-		val = prp_hlen(prp);
+	case NETVM_PDU_HLEN:
+		val = pdu_hlen(pdu);
 		break;
-	case NETVM_PRP_PLEN:
-		val = prp_plen(prp);
+	case NETVM_PDU_PLEN:
+		val = pdu_plen(pdu);
 		break;
-	case NETVM_PRP_TLEN:
-		val = prp_tlen(prp);
+	case NETVM_PDU_TLEN:
+		val = pdu_tlen(pdu);
 		break;
-	case NETVM_PRP_LEN:
-		val = prp_totlen(prp);
+	case NETVM_PDU_LEN:
+		val = pdu_totlen(pdu);
 		break;
-	case NETVM_PRP_ERR:
-		val = prp->error;
+	case NETVM_PDU_ERR:
+		val = pdu->error;
 		break;
-	case NETVM_PRP_PRID:
-		val = prp->prid;
+	case NETVM_PDU_PRID:
+		val = pdu->prid;
 		break;
-	case NETVM_PRP_PIDX:
+	case NETVM_PDU_PIDX:
 		/* 
 		 * Very special case: 
 		 * if prid == PRID_NONE and index == 0 we are testing
@@ -352,19 +352,19 @@ static void ni_ldpf(struct netvm *vm)
 		if (pd0.prid == PRID_NONE && pd0.idx == 0) {
 			val = 1;
 		} else  {
-			for (off = 0; !prp_list_end(prp); prp = prp_prev(prp))
+			for (off = 0; !pdu_list_end(pdu); pdu = pdu_prev(pdu))
 				++off;
 			val = off;
 		}
 		break;
 	default:
-		abort_unless(pd0.field >= NETVM_PRP_OFF_BASE);
-		oidx = pd0.field - NETVM_PRP_OFF_BASE;
-		if (oidx >= prp->noff) {
-			VMERR(vm, NETVM_ERR_PRPFLD);
+		abort_unless(pd0.field >= NETVM_PDU_OFF_BASE);
+		oidx = pd0.field - NETVM_PDU_OFF_BASE;
+		if (oidx >= pdu->noff) {
+			VMERR(vm, NETVM_ERR_PDUFLD);
 		}
-		off = prp->offs[oidx];
-		if (off != PRP_OFF_INVALID)
+		off = pdu->offs[oidx];
+		if (off != PDU_OFF_INVALID)
 			val = off + pd0.offset;
 		else
 			val = NETVM_PF_INVALID;
@@ -429,14 +429,14 @@ void netvm_get_pkt_ptr(struct netvm *vm, uint pkt, ulong addr, int iswr,
 		       ulong len, byte_t **p)
 {
 	struct pktbuf *pkb;
-	struct prparse *prp;
+	struct pdu *pdu;
 	pkt &= ~NETVM_SEG_ISPKT;
 	FATAL(vm, NETVM_ERR_PKTNUM, pkt > NETVM_MAXPKTS);
 	FATAL(vm, NETVM_ERR_NOPKT, !(pkb = vm->packets[pkt]));
-	prp = &pkb->prp;
-	FATAL(vm, NETVM_ERR_PKTADDR, addr < prp_poff(prp));
-	FATAL(vm, NETVM_ERR_PKTADDR, addr > prp_toff(prp));
-	FATAL(vm, NETVM_ERR_PKTADDR, len > prp_toff(prp) - addr);
+	pdu = &pkb->pdus;
+	FATAL(vm, NETVM_ERR_PKTADDR, addr < pdu_poff(pdu));
+	FATAL(vm, NETVM_ERR_PKTADDR, addr > pdu_toff(pdu));
+	FATAL(vm, NETVM_ERR_PKTADDR, len > pdu_toff(pdu) - addr);
 	*p = pkb->buf + addr;
 }
 
@@ -505,7 +505,7 @@ static void ni_ldpd(struct netvm *vm)
 	byte_t *p;
 
 	width = inst->x;
-	netvm_get_prp_ptr(vm, (inst->op == NETVM_OC_LDPD), width & 0x7F, &p);
+	netvm_get_pdu_ptr(vm, (inst->op == NETVM_OC_LDPD), width & 0x7F, &p);
 	VMCKRET(vm);
 	netvm_p2stk(vm, p, width);
 }
@@ -1024,7 +1024,7 @@ static void ni_stpd(struct netvm *vm)
 	byte_t *p;
 
 	width = inst->x;
-	netvm_get_prp_ptr(vm, (inst->op == NETVM_OC_STPD), width & 0x7F, &p);
+	netvm_get_pdu_ptr(vm, (inst->op == NETVM_OC_STPD), width & 0x7F, &p);
 	S_POP(vm, val);
 	VMCKRET(vm);
 	netvm_stk2p(vm, p, val, width);
@@ -1112,14 +1112,14 @@ static void ni_pkcopy(struct netvm *vm)
 static void ni_pksla(struct netvm *vm)
 {
 	struct netvm_inst *inst = &vm->inst[vm->pc];
-	struct netvm_prp_desc pd0;
-	struct prparse *prp;
+	struct netvm_pdu_desc pd0;
+	struct pdu *pdu;
 
-	prp = netvm_find_header(vm, &pd0, 0);
+	pdu = netvm_find_header(vm, &pd0, 0);
 	VMCKRET(vm);
 
-	FATAL(vm, NETVM_ERR_NOPRP, prp == NULL);
-	pkb_set_layer(vm->packets[pd0.pktnum], prp, inst->x);
+	FATAL(vm, NETVM_ERR_NOPDU, pdu == NULL);
+	pkb_set_layer(vm->packets[pd0.pktnum], pdu, inst->x);
 }
 
 
@@ -1180,51 +1180,51 @@ static void ni_pkfxd(struct netvm *vm)
 
 static void ni_pkpup(struct netvm *vm)
 {
-	struct netvm_prp_desc pd0;
-	struct prparse *prp;
+	struct netvm_pdu_desc pd0;
+	struct pdu *pdu;
 	struct pktbuf *pkb;
 
-	prp = netvm_find_header(vm, &pd0, 1);
+	pdu = netvm_find_header(vm, &pd0, 1);
 	VMCKRET(vm);
-	FATAL(vm, NETVM_ERR_NOPRP, prp == NULL);
+	FATAL(vm, NETVM_ERR_NOPDU, pdu == NULL);
 	pkb = vm->packets[pd0.pktnum];
-	prp_update(prp, pkb->buf);
+	pdu_update(pdu, pkb->buf);
 }
 
 
 static void ni_pkfxl(struct netvm *vm)
 {
 	struct netvm_inst *inst = &vm->inst[vm->pc];
-	struct netvm_prp_desc pd0;
+	struct netvm_pdu_desc pd0;
 	struct pktbuf *pkb;
-	struct prparse *prp;
+	struct pdu *pdu;
 
-	prp = netvm_find_header(vm, &pd0, (inst->op == NETVM_OC_PKFXL));
+	pdu = netvm_find_header(vm, &pd0, (inst->op == NETVM_OC_PKFXL));
 	VMCKRET(vm);
 
-	FATAL(vm, NETVM_ERR_NOPRP, prp == NULL);
+	FATAL(vm, NETVM_ERR_NOPDU, pdu == NULL);
 
-	if (prp_list_head(prp)) {
+	if (pdu_list_head(pdu)) {
 	        abort_unless(pd0.pktnum < NETVM_MAXPKTS);
 		pkb = vm->packets[pd0.pktnum];
 		abort_unless(pkb);
 		if (pkb->layers[PKB_LAYER_XPORT])
 			FATAL(vm, NETVM_ERR_FIXLEN,
-			      prp_fix_len(pkb->layers[PKB_LAYER_XPORT], 
+			      pdu_fix_len(pkb->layers[PKB_LAYER_XPORT], 
 					  pkb->buf) < 0);
 		if (pkb->layers[PKB_LAYER_NET])
 			FATAL(vm, NETVM_ERR_FIXLEN,
-			      prp_fix_len(pkb->layers[PKB_LAYER_NET],
+			      pdu_fix_len(pkb->layers[PKB_LAYER_NET],
 					  pkb->buf) < 0);
 		if (pkb->layers[PKB_LAYER_DL])
 			FATAL(vm, NETVM_ERR_FIXLEN,
-			      prp_fix_len(pkb->layers[PKB_LAYER_DL],
+			      pdu_fix_len(pkb->layers[PKB_LAYER_DL],
 					  pkb->buf) < 0);
 	} else {
-		abort_unless(prp);
+		abort_unless(pdu);
 		pkb = vm->packets[pd0.pktnum];
 		abort_unless(pkb);
-		FATAL(vm, NETVM_ERR_FIXLEN, prp_fix_len(prp, pkb->buf) < 0);
+		FATAL(vm, NETVM_ERR_FIXLEN, pdu_fix_len(pdu, pkb->buf) < 0);
 	}
 }
 
@@ -1232,36 +1232,36 @@ static void ni_pkfxl(struct netvm *vm)
 static void ni_pkfxc(struct netvm *vm)
 {
 	struct netvm_inst *inst = &vm->inst[vm->pc];
-	struct netvm_prp_desc pd0;
+	struct netvm_pdu_desc pd0;
 	struct pktbuf *pkb;
-	struct prparse *prp;
+	struct pdu *pdu;
 
-	prp = netvm_find_header(vm, &pd0, (inst->op == NETVM_OC_PKFXC));
+	pdu = netvm_find_header(vm, &pd0, (inst->op == NETVM_OC_PKFXC));
 	VMCKRET(vm);
 
-	FATAL(vm, NETVM_ERR_NOPRP, prp == NULL);
+	FATAL(vm, NETVM_ERR_NOPDU, pdu == NULL);
 
-	if (prp_list_head(prp)) {
+	if (pdu_list_head(pdu)) {
 	        abort_unless(pd0.pktnum < NETVM_MAXPKTS);
 		pkb = vm->packets[pd0.pktnum];
 		abort_unless(pkb);
 		if (pkb->layers[PKB_LAYER_XPORT])
 			FATAL(vm, NETVM_ERR_CKSUM,
-			      prp_fix_cksum(pkb->layers[PKB_LAYER_XPORT],
+			      pdu_fix_cksum(pkb->layers[PKB_LAYER_XPORT],
 					    pkb->buf) < 0);
 		if (pkb->layers[PKB_LAYER_NET])
 			FATAL(vm, NETVM_ERR_CKSUM,
-			      prp_fix_cksum(pkb->layers[PKB_LAYER_NET],
+			      pdu_fix_cksum(pkb->layers[PKB_LAYER_NET],
 					    pkb->buf) < 0);
 		if (pkb->layers[PKB_LAYER_DL])
 			FATAL(vm, NETVM_ERR_CKSUM,
-			      prp_fix_cksum(pkb->layers[PKB_LAYER_DL],
+			      pdu_fix_cksum(pkb->layers[PKB_LAYER_DL],
 					    pkb->buf) < 0);
 	} else {
-		abort_unless(prp);
+		abort_unless(pdu);
 		pkb = vm->packets[pd0.pktnum];
 		abort_unless(pkb);
-		FATAL(vm, NETVM_ERR_CKSUM, prp_fix_cksum(prp, pkb->buf) < 0);
+		FATAL(vm, NETVM_ERR_CKSUM, pdu_fix_cksum(pdu, pkb->buf) < 0);
 	}
 }
 
@@ -1285,7 +1285,7 @@ static void ni_pkins(struct netvm *vm)
 	FATAL(vm, NETVM_ERR_NOPKT, !(pkb = vm->packets[pktnum]));
 	FATAL(vm, NETVM_ERR_PKTINS, (len > (ulong)-1));
 	FATAL(vm, NETVM_ERR_PKTINS,
-	      prp_insert(&pkb->prp, pkb->buf, addr, len, inst->x) < 0);
+	      pdu_inject(&pkb->pdus, pkb->buf, addr, len, inst->x) < 0);
 }
 
 
@@ -1308,52 +1308,52 @@ static void ni_pkcut(struct netvm *vm)
 	FATAL(vm, NETVM_ERR_NOPKT, !(pkb = vm->packets[pktnum]));
 	FATAL(vm, NETVM_ERR_PKTINS, (len > (ulong)-1));
 	FATAL(vm, NETVM_ERR_PKTCUT,
-	      prp_cut(&pkb->prp, pkb->buf, addr, len, inst->x) < 0);
+	      pdu_cut(&pkb->pdus, pkb->buf, addr, len, inst->x) < 0);
 }
 
 
 static void ni_pkadj(struct netvm *vm)
 {
-	struct netvm_prp_desc pd0;
-	struct prparse *prp;
+	struct netvm_pdu_desc pd0;
+	struct pdu *pdu;
 	ulong val;
 	uint oid;
 	long amt;
 	int rv;
 
 	S_POP(vm, val);
-	prp = netvm_find_header(vm, &pd0, 1);
+	pdu = netvm_find_header(vm, &pd0, 1);
 	VMCKRET(vm);
 
-	FATAL(vm, NETVM_ERR_NOPRP, prp == NULL);
-	if ((pd0.field < NETVM_PRP_OFF_BASE) ||
-	    (prp_list_head(prp) &&
-	     ((pd0.field == NETVM_PRP_SOFF) || (pd0.field == NETVM_PRP_EOFF))))
-		VMERR(vm, NETVM_ERR_PRPFLD);
-	FATAL(vm, NETVM_ERR_PRPFLD, pd0.field < NETVM_PRP_OFF_BASE);
+	FATAL(vm, NETVM_ERR_NOPDU, pdu == NULL);
+	if ((pd0.field < NETVM_PDU_OFF_BASE) ||
+	    (pdu_list_head(pdu) &&
+	     ((pd0.field == NETVM_PDU_SOFF) || (pd0.field == NETVM_PDU_EOFF))))
+		VMERR(vm, NETVM_ERR_PDUFLD);
+	FATAL(vm, NETVM_ERR_PDUFLD, pd0.field < NETVM_PDU_OFF_BASE);
 	amt = (long)signxul(val, 32);
-	oid = pd0.field - NETVM_PRP_OFF_BASE;
-	rv = prp_adj_off(prp, oid, amt);
-	FATAL(vm, NETVM_ERR_PRPADJ, rv < 0);
+	oid = pd0.field - NETVM_PDU_OFF_BASE;
+	rv = pdu_adj_off(pdu, oid, amt);
+	FATAL(vm, NETVM_ERR_PDUADJ, rv < 0);
 }
 
 
 static void ni_pkpi(struct netvm *vm)
 {
 	int onstack = (vm->inst[vm->pc].op != NETVM_OC_PKPII);
-	struct netvm_prp_desc pd0;
+	struct netvm_pdu_desc pd0;
 	struct pktbuf *pkb;
-	struct prparse *prp;
+	struct pdu *pdu;
 	ulong prid;
 	int rv;
 
-	prp = netvm_find_header(vm, &pd0, onstack);
+	pdu = netvm_find_header(vm, &pd0, onstack);
 	VMCKRET(vm);
 	S_POP(vm, prid);
 
-	FATAL(vm, NETVM_ERR_NOPRP, prp == NULL);
+	FATAL(vm, NETVM_ERR_NOPDU, pdu == NULL);
 	pkb = vm->packets[pd0.pktnum];
-	rv = pkb_insert_pdu(pkb, prp, prid);
+	rv = pkb_insert_pdu(pkb, pdu, prid);
 	FATAL(vm, NETVM_ERR_PKPI, rv < 0);
 }
 
@@ -1361,17 +1361,17 @@ static void ni_pkpi(struct netvm *vm)
 static void ni_pkpd(struct netvm *vm)
 {
 	int onstack = (vm->inst[vm->pc].op != NETVM_OC_PKPDI);
-	struct netvm_prp_desc pd0;
+	struct netvm_pdu_desc pd0;
 	struct pktbuf *pkb;
-	struct prparse *prp;
+	struct pdu *pdu;
 	int rv;
 
-	prp = netvm_find_header(vm, &pd0, onstack);
+	pdu = netvm_find_header(vm, &pd0, onstack);
 	VMCKRET(vm);
 
-	FATAL(vm, NETVM_ERR_NOPRP, prp == NULL);
+	FATAL(vm, NETVM_ERR_NOPDU, pdu == NULL);
 	pkb = vm->packets[pd0.pktnum];
-	rv = pkb_delete_pdu(pkb, prp);
+	rv = pkb_delete_pdu(pkb, pdu);
 	FATAL(vm, NETVM_ERR_PKPD, rv < 0);
 }
 
@@ -1689,7 +1689,7 @@ struct pktbuf *netvm_clr_pkt(struct netvm *vm, int slot, int keeppkb)
 		if (keeppkb) {
 			/* adjust header and trailer slack space and copy    */
 			/* back to packet buffer metadata before returning.  */
-			prp_adj_unused(&pkb->prp);
+			pdu_adj_unused(&pkb->pdus);
 		} else {
 			pkb_free(pkb);
 			pkb = NULL;
@@ -1885,8 +1885,8 @@ static const char *rt_error_strings[NETVM_ERR_MAX] = {
 	"error inserting into packet",
 	"error cutting data from packet",
 	"error adjusting header field",
-	"error inserting new prp",
-	"error removing prp",
+	"error inserting new pdu",
+	"error removing pdu",
 	"error parsing packet",
 	"out of memory",
 	"integer overflow",

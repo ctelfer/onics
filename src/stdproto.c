@@ -1,6 +1,6 @@
 /*
  * ONICS
- * Copyright 2012-2016
+ * Copyright 2012-2022
  * Christopher Adam Telfer
  *
  * stdproto.c -- Standard library of Internet protocol parsers.
@@ -31,176 +31,176 @@
 #include <stdlib.h>
 #include <errno.h>
 
-extern struct prparse_ops eth_prparse_ops;
-extern struct prparse_ops arp_prparse_ops;
-extern struct prparse_ops ipv4_prparse_ops;
-extern struct prparse_ops ipv6_prparse_ops;
-extern struct prparse_ops icmp_prparse_ops;
-extern struct prparse_ops icmpv6_prparse_ops;
-extern struct prparse_ops udp_prparse_ops;
-extern struct prparse_ops tcp_prparse_ops;
-extern struct prparse_ops gre_prparse_ops;
-extern struct prparse_ops nvgre_prparse_ops;
-extern struct prparse_ops vxlan_prparse_ops;
-extern struct prparse_ops mpls_prparse_ops;
+extern struct pdu_ops eth_pdu_ops;
+extern struct pdu_ops arp_pdu_ops;
+extern struct pdu_ops ipv4_pdu_ops;
+extern struct pdu_ops ipv6_pdu_ops;
+extern struct pdu_ops icmp_pdu_ops;
+extern struct pdu_ops icmpv6_pdu_ops;
+extern struct pdu_ops udp_pdu_ops;
+extern struct pdu_ops tcp_pdu_ops;
+extern struct pdu_ops gre_pdu_ops;
+extern struct pdu_ops nvgre_pdu_ops;
+extern struct pdu_ops vxlan_pdu_ops;
+extern struct pdu_ops mpls_pdu_ops;
 
 
-struct eth_parse {
-	struct prparse prp;
-	ulong xfields[PRP_ETH_NXFIELDS];
+struct eth_pdu {
+	struct pdu pdu;
+	ulong xfields[PDU_ETH_NXFIELDS];
 };
 
 
-struct arp_parse {
-	struct prparse prp;
-	ulong xfields[PRP_ARP_NXFIELDS];
+struct arp_pdu {
+	struct pdu pdu;
+	ulong xfields[PDU_ARP_NXFIELDS];
 };
 
 
-struct ip_parse {
-	struct prparse prp;
-	ulong xfields[PRP_IP_NXFIELDS];
+struct ip_pdu {
+	struct pdu pdu;
+	ulong xfields[PDU_IP_NXFIELDS];
 };
 
 
-struct icmp_parse {
-	struct prparse prp;
-	ulong xfields[PRP_ICMP_NXFIELDS];
+struct icmp_pdu {
+	struct pdu pdu;
+	ulong xfields[PDU_ICMP_NXFIELDS];
 };
 
 
-struct ipv6_parse {
-	struct prparse prp;
-	ulong xfields[PRP_IPV6_NXFIELDS];
+struct ipv6_pdu {
+	struct pdu pdu;
+	ulong xfields[PDU_IPV6_NXFIELDS];
 };
 
 
-struct tcp_parse {
-	struct prparse prp;
-	ulong xfields[PRP_TCP_NXFIELDS];
+struct tcp_pdu {
+	struct pdu pdu;
+	ulong xfields[PDU_TCP_NXFIELDS];
 };
 
 
-struct icmp6_parse {
-	struct prparse prp;
-	ulong xfields[PRP_ICMP6_NXFIELDS];
+struct icmp6_pdu {
+	struct pdu pdu;
+	ulong xfields[PDU_ICMP6_NXFIELDS];
 };
 
 
-struct gre_parse {
-	struct prparse prp;
-	ulong xfields[PRP_GRE_NXFIELDS];
+struct gre_pdu {
+	struct pdu pdu;
+	ulong xfields[PDU_GRE_NXFIELDS];
 };
 
 
-struct mpls_parse {
-	struct prparse prp;
-	ulong xfields[PRP_MPLS_NXFIELDS];
+struct mpls_pdu {
+	struct pdu pdu;
+	ulong xfields[PDU_MPLS_NXFIELDS];
 };
 
 
 /* NB:  right now we are using emalloc() fpr header allocation, but we */
 /* may not do that in the future.  When that happens, we need to change */
-/* newprp, and freeprp */
-static struct prparse *newprp(size_t sz, uint prid, ulong off, ulong hlen,
-			      ulong plen, ulong tlen, struct prparse_ops *ops,
-			      struct prparse *reg, uint nxfields)
+/* newpdu, and freepdu */
+static struct pdu *newpdu(size_t sz, uint prid, ulong off, ulong hlen,
+			     ulong plen, ulong tlen, struct pdu_ops *ops,
+			     struct pdu *reg, uint nxfields)
 {
-	struct prparse *prp;
-	abort_unless(sz >= sizeof(struct prparse));
-	prp = emalloc(sz);
-	prp_init_parse(prp, prid, off, hlen, plen, tlen, ops, reg, nxfields);
-	return prp;
+	struct pdu *pdu;
+	abort_unless(sz >= sizeof(struct pdu));
+	pdu = emalloc(sz);
+	pdu_init(pdu, prid, off, hlen, plen, tlen, ops, reg, nxfields);
+	return pdu;
 }
 
 
-static ONICS_INLINE void freeprp(struct prparse *prp)
+static ONICS_INLINE void freepdu(struct pdu *pdu)
 {
-	free(prp);
+	free(pdu);
 }
 
 
-static struct prparse *stdpr_parse(struct prparse *pprp, byte_t *buf,
-				     ulong off, ulong maxlen)
+static struct pdu *stdpr_parse(struct pdu *ppdu, byte_t *buf, ulong off,
+			       ulong maxlen)
 {
 	return NULL;
 }
 
 
-static int stdpr_nxtcld(struct prparse *reg, byte_t *buf, struct prparse *cld,
+static int stdpr_nxtcld(struct pdu *reg, byte_t *buf, struct pdu *cld,
 			  uint *prid, ulong *off, ulong *maxlen)
 {
 	return 0;
 }
 
 
-static int stdpr_getspec(struct prparse *prp, int enclose, struct prpspec *ps)
+static int stdpr_getspec(struct pdu *pdu, int enclose, struct pduspec *ps)
 {
 	errno = ENOTSUP;
 	return -1;
 }
 
 
-static struct prparse *stdpr_add(struct prparse *reg, byte_t *buf,
-				   struct prpspec *ps, int enclose)
+static struct pdu *stdpr_add(struct pdu *reg, byte_t *buf,
+				   struct pduspec *ps, int enclose)
 {
 	return NULL;
 }
 
 
-static void stdpr_update(struct prparse *prp, byte_t *buf)
+static void stdpr_update(struct pdu *pdu, byte_t *buf)
 {
-	prp_reset_xfields(prp);
+	pdu_reset_xfields(pdu);
 }
 
 
-static void stdpr_free(struct prparse *prp)
+static void stdpr_free(struct pdu *pdu)
 {
 	/* presently unused */
 	(void)stdpr_getspec;
 	(void)stdpr_add;
 	(void)stdpr_parse;
 	(void)stdpr_update;
-	freeprp(prp);
+	freepdu(pdu);
 }
 
 
-static struct prparse *simple_copy(struct prparse *oprp, size_t psize)
+static struct pdu *simple_copy(struct pdu *opdu, size_t psize)
 {
-	struct prparse *prp;
-	if (oprp == NULL)
+	struct pdu *pdu;
+	if (opdu == NULL)
 		return NULL;
-	prp = emalloc(psize);
-	memcpy(prp, oprp, psize);
-	prp->region = NULL;
-	l_init(&prp->node);
-	return prp;
+	pdu = emalloc(psize);
+	memcpy(pdu, opdu, psize);
+	pdu->region = NULL;
+	l_init(&pdu->node);
+	return pdu;
 }
 
 
-static struct prparse *stdpr_copy(struct prparse *oprp)
+static struct pdu *stdpr_copy(struct pdu *opdu)
 {
-	return simple_copy(oprp, sizeof(struct prparse));
+	return simple_copy(opdu, sizeof(struct pdu));
 }
 
 
 /* -- ops for Ethernet type -- */
-static void eth_update(struct prparse *prp, byte_t *buf);
+static void eth_update(struct pdu *pdu, byte_t *buf);
 
-static struct prparse *eth_parse(struct prparse *reg, byte_t *buf,
-				 ulong off, ulong maxlen)
+static struct pdu *eth_parse(struct pdu *reg, byte_t *buf, ulong off,
+			     ulong maxlen)
 {
-	struct prparse *prp;
-	prp = newprp(sizeof(struct eth_parse), PRID_ETHERNET2, off, 0,
-		     maxlen, 0, &eth_prparse_ops, reg, PRP_ETH_NXFIELDS);
-	if (!prp)
+	struct pdu *pdu;
+	pdu = newpdu(sizeof(struct eth_pdu), PRID_ETHERNET2, off, 0,
+		     maxlen, 0, &eth_pdu_ops, reg, PDU_ETH_NXFIELDS);
+	if (!pdu)
 		return NULL;
-	eth_update(prp, buf);
-	return prp;
+	eth_update(pdu, buf);
+	return pdu;
 }
 
 
-int eth_nxtcld(struct prparse *reg, byte_t *buf, struct prparse *cld,
+int eth_nxtcld(struct pdu *reg, byte_t *buf, struct pdu *cld,
 	       uint *prid, ulong *off, ulong *maxlen)
 {
 	byte_t *p;
@@ -210,29 +210,29 @@ int eth_nxtcld(struct prparse *reg, byte_t *buf, struct prparse *cld,
 		return 0;
 
 	abort_unless(buf);
-	abort_unless(reg->offs[PRP_ETHFLD_ETYPE] <= prp_poff(reg) - 2);
+	abort_unless(reg->offs[PDU_ETHFLD_ETYPE] <= pdu_poff(reg) - 2);
 
-	p = buf + reg->offs[PRP_ETHFLD_ETYPE];
+	p = buf + reg->offs[PDU_ETHFLD_ETYPE];
 	x = etypetoprid(ntoh16x(p));
 	if (x == PRID_NONE)
 		return 0;
 	*prid = x;
-	*off = prp_poff(reg);
-	*maxlen = prp_plen(reg);
+	*off = pdu_poff(reg);
+	*maxlen = pdu_plen(reg);
 	return 1;
 }
 
 
-static int eth_getspec(struct prparse *prp, int enclose, struct prpspec *ps)
+static int eth_getspec(struct pdu *pdu, int enclose, struct pduspec *ps)
 {
-	return prpspec_init(ps, prp, PRID_ETHERNET2, ETHHLEN, 0, enclose);
+	return pduspec_init(ps, pdu, PRID_ETHERNET2, ETHHLEN, 0, enclose);
 }
 
 
-static int eth_add(struct prparse *reg, byte_t *buf, struct prpspec *ps,
+static int eth_add(struct pdu *reg, byte_t *buf, struct pduspec *ps,
 		   int enclose)
 {
-	struct prparse *prp, *cld;
+	struct pdu *pdu, *cld;
 	uint16_t etype;
 	byte_t *p;
 
@@ -242,21 +242,21 @@ static int eth_add(struct prparse *reg, byte_t *buf, struct prpspec *ps,
 		return -1;
 	}
 
-	prp = newprp(sizeof(struct eth_parse), PRID_ETHERNET2, 
+	pdu = newpdu(sizeof(struct eth_pdu), PRID_ETHERNET2, 
 		     ps->off, ps->hlen, ps->plen, ps->tlen,
-		     &eth_prparse_ops, reg, PRP_ETH_NXFIELDS);
-	if (!prp)
+		     &eth_pdu_ops, reg, PDU_ETH_NXFIELDS);
+	if (!pdu)
 		return -1;
 
-	prp_add_insert(reg, prp, enclose);
-	if (buf && prp_hlen(prp) >= ETHHLEN) {
-		memset(prp_header(prp, buf, void), 0, prp_hlen(prp));
-		prp->offs[PRP_ETHFLD_ETYPE] = prp_poff(prp) - 2;
+	pdu_add_insert(reg, pdu, enclose);
+	if (buf && pdu_hlen(pdu) >= ETHHLEN) {
+		memset(pdu_header(pdu, buf, void), 0, pdu_hlen(pdu));
+		pdu->offs[PDU_ETHFLD_ETYPE] = pdu_poff(pdu) - 2;
 		if (enclose) {
-			cld = prp_next_in_region(prp, prp);
+			cld = pdu_next_in_region(pdu, pdu);
 			if (cld != NULL) {
 				etype = pridtoetype(cld->prid);
-				p = buf + prp_poff(prp) - 2;
+				p = buf + pdu_poff(pdu) - 2;
 				hton16i(etype, p);
 			}
 		}
@@ -273,32 +273,32 @@ static int etype_is_vlan(uint16_t etype)
 }
 
 
-static void eth_update(struct prparse *prp, byte_t *buf)
+static void eth_update(struct pdu *pdu, byte_t *buf)
 {
 	ushort etype;
 	byte_t *p;
 	ulong poff;
 	uint vidx;
 
-	prp->error = 0;
-	prp_reset_xfields(prp);
+	pdu->error = 0;
+	pdu_reset_xfields(pdu);
 
-	if (prp_totlen(prp) < ETHHLEN) {
-		prp->error |= PRP_ERR_TOOSMALL;
+	if (pdu_totlen(pdu) < ETHHLEN) {
+		pdu->error |= PDU_ERR_TOOSMALL;
 		return;
 	}
 
-	p = prp_header(prp, buf, byte_t) + ETHHLEN - 2;
-	vidx = PRP_ETHFLD_VLAN0;
-	poff = prp_soff(prp) + ETHHLEN;
+	p = pdu_header(pdu, buf, byte_t) + ETHHLEN - 2;
+	vidx = PDU_ETHFLD_VLAN0;
+	poff = pdu_soff(pdu) + ETHHLEN;
 	etype = ntoh16x(p);
 	while (etype_is_vlan(etype)) {
-		if (prp_totlen(prp) < (poff - prp_soff(prp) + 4)) {
-			prp->error = PRP_ERR_TOOSMALL;
+		if (pdu_totlen(pdu) < (poff - pdu_soff(pdu) + 4)) {
+			pdu->error = PDU_ERR_TOOSMALL;
 			return;
 		}
-		if (vidx < (PRP_OI_EXTRA + PRP_ETH_NXFIELDS)) {
-			prp->offs[vidx] = poff - 2;
+		if (vidx < (PDU_OI_EXTRA + PDU_ETH_NXFIELDS)) {
+			pdu->offs[vidx] = poff - 2;
 			vidx += 1;
 		}
 		p += 4;
@@ -306,63 +306,63 @@ static void eth_update(struct prparse *prp, byte_t *buf)
 		etype = ntoh16x(p);
 	} 
 
-	prp_poff(prp) = poff;
-	prp->offs[PRP_ETHFLD_ETYPE] = poff - 2;
+	pdu_poff(pdu) = poff;
+	pdu->offs[PDU_ETHFLD_ETYPE] = poff - 2;
 }
 
 
-static int eth_fixnxt(struct prparse *prp, byte_t *buf)
+static int eth_fixnxt(struct pdu *pdu, byte_t *buf)
 {
-	struct prparse *next;
-	next = prp_next(prp);
-	if (!prp_list_end(next))
-		hton16i(pridtoetype(next->prid), buf + prp_poff(prp) - 2);
+	struct pdu *next;
+	next = pdu_next(pdu);
+	if (!pdu_list_end(next))
+		hton16i(pridtoetype(next->prid), buf + pdu_poff(pdu) - 2);
 	return 0;
 }
 
 
 /* -- ops for ARP type -- */
 static byte_t ethiparpstr[6] = {0, 1, 8, 0, 6, 4};
-static void arp_update(struct prparse *prp, byte_t *buf);
+static void arp_update(struct pdu *pdu, byte_t *buf);
 
-static struct prparse *arp_parse(struct prparse *reg, byte_t *buf,
-				 ulong off, ulong maxlen)
+static struct pdu *arp_parse(struct pdu *reg, byte_t *buf, ulong off,
+			     ulong maxlen)
 {
-	struct prparse *prp;
+	struct pdu *pdu;
 	abort_unless(reg && buf);
-	prp = newprp(sizeof(struct arp_parse), PRID_ARP, off, 0, maxlen, 0,
-		     &arp_prparse_ops, reg, PRP_ARP_NXFIELDS);
-	if (!prp)
+	pdu = newpdu(sizeof(struct arp_pdu), PRID_ARP, off, 0, maxlen, 0,
+		     &arp_pdu_ops, reg, PDU_ARP_NXFIELDS);
+	if (!pdu)
 		return NULL;
-	arp_update(prp, buf);
-	return prp;
+	arp_update(pdu, buf);
+	return pdu;
 }
 
 
-static void arp_update(struct prparse *prp, byte_t *buf)
+static void arp_update(struct pdu *pdu, byte_t *buf)
 {
 	struct arph *arp;
-	prp->error = 0;
-	prp_reset_xfields(prp);
+	pdu->error = 0;
+	pdu_reset_xfields(pdu);
 
-	if (prp_totlen(prp) < 8) {
-		prp->error |= PRP_ERR_TOOSMALL;
+	if (pdu_totlen(pdu) < 8) {
+		pdu->error |= PDU_ERR_TOOSMALL;
 		return;
 	}
-	prp_reset_xfields(prp);
-	arp = prp_header(prp, buf, struct arph);
-	if (arp->hwlen * 2 + arp->prlen * 2 > prp_totlen(prp) - 8) {
-		prp->error |= PRP_ERR_TOOSMALL;
+	pdu_reset_xfields(pdu);
+	arp = pdu_header(pdu, buf, struct arph);
+	if (arp->hwlen * 2 + arp->prlen * 2 > pdu_totlen(pdu) - 8) {
+		pdu->error |= PDU_ERR_TOOSMALL;
 		return;
 	} 
-	prp_eoff(prp) = prp_toff(prp) = prp_poff(prp) =
-		prp_soff(prp) + arp->hwlen * 2 + arp->prlen * 2 + 8;
+	pdu_eoff(pdu) = pdu_toff(pdu) = pdu_poff(pdu) =
+		pdu_soff(pdu) + arp->hwlen * 2 + arp->prlen * 2 + 8;
 	if (memcmp(ethiparpstr, arp, sizeof(ethiparpstr)) == 0)
-		prp->offs[PRP_ARPFLD_ETHARP] = prp_soff(prp);
+		pdu->offs[PDU_ARPFLD_ETHARP] = pdu_soff(pdu);
 }
 
 
-static int arp_getspec(struct prparse *prp, int enclose, struct prpspec *ps)
+static int arp_getspec(struct pdu *pdu, int enclose, struct pduspec *ps)
 {
 	ps->prid = PRID_ARP;
 	ps->hlen = 28;
@@ -370,45 +370,45 @@ static int arp_getspec(struct prparse *prp, int enclose, struct prpspec *ps)
 	ps->tlen = 0;
 	if (enclose) {
 		/* ARP can not enclose any real data */
-		if (prp_soff(prp) < 28 || prp_totlen(prp) != 0) {
+		if (pdu_soff(pdu) < 28 || pdu_totlen(pdu) != 0) {
 			errno = EINVAL;
 			return -1;
 		}
-		ps->off = prp_soff(prp) - 28;
+		ps->off = pdu_soff(pdu) - 28;
 	} else {
-		if (prp_plen(prp) < 28) {
+		if (pdu_plen(pdu) < 28) {
 			errno = ENOSPC;
 			return -1;
 		}
-		ps->off = prp_poff(prp);
+		ps->off = pdu_poff(pdu);
 	}
 	return 0;
 }
 
 
-static int arp_add(struct prparse *reg, byte_t *buf, struct prpspec *ps,
+static int arp_add(struct pdu *reg, byte_t *buf, struct pduspec *ps,
 		   int enclose)
 			       
 {
-	struct prparse *prp;
+	struct pdu *pdu;
 	struct arph *arp;
 	
 	if (ps->hlen < 8) {
 		errno = EINVAL;
 		return -1;
 	}
-	prp = newprp(sizeof(struct arp_parse), PRID_ARP, ps->off, ps->hlen,
-		     ps->plen, ps->tlen, &arp_prparse_ops, reg, 
-		     PRP_ARP_NXFIELDS);
-	if (!prp)
+	pdu = newpdu(sizeof(struct arp_pdu), PRID_ARP, ps->off, ps->hlen,
+		     ps->plen, ps->tlen, &arp_pdu_ops, reg, 
+		     PDU_ARP_NXFIELDS);
+	if (!pdu)
 		return -1;
 
-	prp_add_insert(reg, prp, enclose);
+	pdu_add_insert(reg, pdu, enclose);
 	if (buf) {
-		memset(buf + ps->off, 0, prp_totlen(prp));
-		if (prp_hlen(prp) >= 28) {
-			prp->offs[PRP_ARPFLD_ETHARP] = prp_soff(prp);
-			arp = prp_header(prp, buf, struct arph);
+		memset(buf + ps->off, 0, pdu_totlen(pdu));
+		if (pdu_hlen(pdu) >= 28) {
+			pdu->offs[PDU_ARPFLD_ETHARP] = pdu_soff(pdu);
+			arp = pdu_header(pdu, buf, struct arph);
 			pack(arp, 8, "hhbbh", ARPT_ETHERNET, ETHTYPE_IP, 6, 4,
 			     ARPOP_REQUEST);
 		}
@@ -418,37 +418,37 @@ static int arp_add(struct prparse *reg, byte_t *buf, struct prpspec *ps,
 }
 
 
-static int arp_fixlen(struct prparse *prp, byte_t *buf)
+static int arp_fixlen(struct pdu *pdu, byte_t *buf)
 {
 	struct arph *arp;
-	if (prp_hlen(prp) < 8)
+	if (pdu_hlen(pdu) < 8)
 		return -1;
-	arp = prp_header(prp, buf, struct arph);
-	if (arp->hwlen * 2 + arp->prlen * 2 + 8 > prp_hlen(prp))
+	arp = pdu_header(pdu, buf, struct arph);
+	if (arp->hwlen * 2 + arp->prlen * 2 + 8 > pdu_hlen(pdu))
 		return -1;
-	prp->error &= ~(PRP_ERR_TRUNC | PRP_ERR_HLEN | PRP_ERR_TOOSMALL);
+	pdu->error &= ~(PDU_ERR_TRUNC | PDU_ERR_HLEN | PDU_ERR_TOOSMALL);
 	return 0;
 }
 
 
-static struct prparse *arp_copy(struct prparse *oprp)
+static struct pdu *arp_copy(struct pdu *opdu)
 {
-	return simple_copy(oprp, sizeof(struct arp_parse));
+	return simple_copy(opdu, sizeof(struct arp_pdu));
 }
 
 
 /* -- ops for IPV4 type -- */
-static void ipv4_update(struct prparse *prp, byte_t *buf);
+static void ipv4_update(struct pdu *pdu, byte_t *buf);
 
-static int ipv4_parse_opt(struct prparse *prp, byte_t *op, size_t olen)
+static int ipv4_parse_opt(struct pdu *pdu, byte_t *op, size_t olen)
 {
 	byte_t *osave = op;
 	uint oc;
 	uint oidx;
 	uint t;
-	ulong ooff = prp_soff(prp) + 20;
+	ulong ooff = pdu_soff(pdu) + 20;
 
-	prp->offs[PRP_IPFLD_OPT] = ooff;
+	pdu->offs[PDU_IPFLD_OPT] = ooff;
 
 	while (olen > 0) {
 		/* check for type 1 options first */
@@ -469,22 +469,22 @@ static int ipv4_parse_opt(struct prparse *prp, byte_t *op, size_t olen)
 		case IPOPT_LSR:
 		case IPOPT_SSR:
 			if ((op[1] < 7) || ((op[1] & 3) != 3)) {
-				prp->error |= PRP_ERR_OPTERR;
+				pdu->error |= PDU_ERR_OPTERR;
 				return -1;
 			}
 			if (oc == IPOPT_RR) {
-				oidx = PRP_IPFLD_RR;
+				oidx = PDU_IPFLD_RR;
 			} else if (oc == IPOPT_LSR) {
-				oidx = PRP_IPFLD_LSR;
+				oidx = PDU_IPFLD_LSR;
 			} else {
-				oidx = PRP_IPFLD_SRR;
+				oidx = PDU_IPFLD_SRR;
 			}
-			if (prp->offs[oidx] != PRP_OFF_INVALID)
+			if (pdu->offs[oidx] != PDU_OFF_INVALID)
 				goto err;
-			prp->offs[oidx] = ooff + (op - osave);
+			pdu->offs[oidx] = ooff + (op - osave);
 			break;
 		case IPOPT_TS:
-			if ((prp->offs[PRP_IPFLD_TS] != PRP_OFF_INVALID) ||
+			if ((pdu->offs[PDU_IPFLD_TS] != PDU_OFF_INVALID) ||
 			    (op[1] < 4) || (op[1] > 40))
 				goto err;
 			t = (op[3] & 0xF);
@@ -493,7 +493,7 @@ static int ipv4_parse_opt(struct prparse *prp, byte_t *op, size_t olen)
 			if (((t == 0) && ((op[2] % 4) != 1)) ||
 			    ((t != 0) && ((op[2] % 8) != 5)))
 				goto err;
-			prp->offs[PRP_IPFLD_TS] = ooff + (op - osave);
+			pdu->offs[PDU_IPFLD_TS] = ooff + (op - osave);
 			break;
 		case IPOPT_SID:
 			if (op[1] != 4)
@@ -503,10 +503,10 @@ static int ipv4_parse_opt(struct prparse *prp, byte_t *op, size_t olen)
 				goto err;
 			break;
 		case IPOPT_RA:
-			if ((prp->offs[PRP_IPFLD_RA] != PRP_OFF_INVALID) ||
+			if ((pdu->offs[PDU_IPFLD_RA] != PDU_OFF_INVALID) ||
 			    (op[1] != 4))
 				goto err;
-			prp->offs[PRP_IPFLD_RA] = ooff + (op - osave);
+			pdu->offs[PDU_IPFLD_RA] = ooff + (op - osave);
 			break;
 		}
 
@@ -516,25 +516,25 @@ static int ipv4_parse_opt(struct prparse *prp, byte_t *op, size_t olen)
 
 	return 0;
 err:
-	prp->error |= PRP_ERR_OPTERR;
+	pdu->error |= PDU_ERR_OPTERR;
 	return -1;
 }
 
 
-static struct prparse *ipv4_parse(struct prparse *reg, byte_t *buf,
-				  ulong off, ulong maxlen)
+static struct pdu *ipv4_parse(struct pdu *reg, byte_t *buf, ulong off,
+			      ulong maxlen)
 {
-	struct prparse *prp;
-	prp = newprp(sizeof(struct ip_parse), PRID_IPV4, off, 0, maxlen, 0,
-		     &ipv4_prparse_ops, reg, PRP_IP_NXFIELDS);
-	if (!prp)
+	struct pdu *pdu;
+	pdu = newpdu(sizeof(struct ip_pdu), PRID_IPV4, off, 0, maxlen, 0,
+		     &ipv4_pdu_ops, reg, PDU_IP_NXFIELDS);
+	if (!pdu)
 		return NULL;
-	ipv4_update(prp, buf);
-	return prp;
+	ipv4_update(pdu, buf);
+	return pdu;
 }
 
 
-int ipv4_nxtcld(struct prparse *reg, byte_t *buf, struct prparse *cld,
+int ipv4_nxtcld(struct pdu *reg, byte_t *buf, struct pdu *cld,
 	        uint *prid, ulong *off, ulong *maxlen)
 {
 	struct ipv4h *ip;
@@ -543,7 +543,7 @@ int ipv4_nxtcld(struct prparse *reg, byte_t *buf, struct prparse *cld,
 		return 0;
 
 	abort_unless(buf);
-	ip = prp_header(reg, buf, struct ipv4h);
+	ip = pdu_header(reg, buf, struct ipv4h);
 	/* non-first-fragment won't have reliable next proto info */
 	if ((ntoh16(ip->fragoff) & IPH_FRAGOFFMASK) > 0)
 		return 0;
@@ -551,41 +551,41 @@ int ipv4_nxtcld(struct prparse *reg, byte_t *buf, struct prparse *cld,
 		*prid = PRID_IPV6;
 	else
 		*prid = PRID_BUILD(PRID_PF_INET, ip->proto);
-	*off = prp_poff(reg);
-	*maxlen = prp_plen(reg);
+	*off = pdu_poff(reg);
+	*maxlen = pdu_plen(reg);
 	return 1;
 }
 
 
-static int ipv4_getspec(struct prparse *prp, int enclose, struct prpspec *ps)
+static int ipv4_getspec(struct pdu *pdu, int enclose, struct pduspec *ps)
 {
-	return prpspec_init(ps, prp, PRID_IPV4, IPH_MINLEN, 0, enclose);
+	return pduspec_init(ps, pdu, PRID_IPV4, IPH_MINLEN, 0, enclose);
 }
 
 
-static int ipv4_add(struct prparse *reg, byte_t *buf, struct prpspec *ps,
+static int ipv4_add(struct pdu *reg, byte_t *buf, struct pduspec *ps,
 		    int enclose)
 				
 {
-	struct prparse *prp, *cld;
+	struct pdu *pdu, *cld;
 	struct ipv4h *ip;
 
 	if (ps->hlen < 20 || ps->hlen > 60) {
 		errno = EINVAL;
 		return -1;
 	}
-	prp = newprp(sizeof(struct ip_parse), PRID_IPV4, ps->off, ps->hlen, 
-		     ps->plen, ps->tlen, &ipv4_prparse_ops, reg,
-		     PRP_IP_NXFIELDS);
-	if (!prp)
+	pdu = newpdu(sizeof(struct ip_pdu), PRID_IPV4, ps->off, ps->hlen, 
+		     ps->plen, ps->tlen, &ipv4_pdu_ops, reg,
+		     PDU_IP_NXFIELDS);
+	if (!pdu)
 		return -1;
 
-	prp_add_insert(reg, prp, enclose);
+	pdu_add_insert(reg, pdu, enclose);
 	if (buf) {
-		memset(prp_header(prp, buf, void), 0, prp_hlen(prp));
-		ip = prp_header(prp, buf, struct ipv4h);
+		memset(pdu_header(pdu, buf, void), 0, pdu_hlen(pdu));
+		ip = pdu_header(pdu, buf, struct ipv4h);
 		ip->vhl = 0x40 | (ps->hlen >> 2);
-		ip->len = hton16(prp_totlen(prp));
+		ip->len = hton16(pdu_totlen(pdu));
 		if (ps->hlen > IPH_MINLEN) {
 			byte_t *p = (byte_t *)(ip + 1);
 			byte_t *end = p + ps->hlen - IPH_MINLEN;
@@ -595,7 +595,7 @@ static int ipv4_add(struct prparse *reg, byte_t *buf, struct prpspec *ps,
 
 		ip->proto = IPPROT_RESERVED;
 		if (enclose) {
-			cld = prp_next_in_region(prp, prp);
+			cld = pdu_next_in_region(pdu, pdu);
 			if (cld != NULL)
 				ip->proto = pridtoiptype(cld->prid);
 		}
@@ -606,67 +606,67 @@ static int ipv4_add(struct prparse *reg, byte_t *buf, struct prpspec *ps,
 }
 
 
-static void ipv4_update(struct prparse *prp, byte_t *buf)
+static void ipv4_update(struct pdu *pdu, byte_t *buf)
 {
 	ushort sum, iplen, hlen;
 	struct ipv4h *ip;
 	ulong len, fragoff;
 
-	prp->error = 0;
-	prp_reset_xfields(prp);
+	pdu->error = 0;
+	pdu_reset_xfields(pdu);
 
-	len = prp_totlen(prp);
+	len = pdu_totlen(pdu);
 	if (len < IPH_MINLEN) {
-		prp->error |= PRP_ERR_TOOSMALL;
+		pdu->error |= PDU_ERR_TOOSMALL;
 		return;
 	}
 
-	ip = prp_header(prp, buf, struct ipv4h);
+	ip = pdu_header(pdu, buf, struct ipv4h);
 	hlen = IPH_HLEN(*ip);
 	if (hlen < IPH_MINLEN || hlen > len)  {
-		prp->error |= PRP_ERR_HLEN;
+		pdu->error |= PDU_ERR_HLEN;
 		return;
 	}
-	prp_poff(prp) = prp_soff(prp) + hlen;
+	pdu_poff(pdu) = pdu_soff(pdu) + hlen;
 
 	if (IPH_VERSION(*ip) != 4)
-		prp->error |= PRP_ERR_INVALID;
+		pdu->error |= PDU_ERR_INVALID;
 
 	sum = ~ones_sum(ip, hlen, 0) & 0xFFFF;
 	if (sum != 0)
-		prp->error |= PRP_ERR_CKSUM;
+		pdu->error |= PDU_ERR_CKSUM;
 
 	/* check whether datagram is smaller than enclosing packet */
 	iplen = ntoh16x(&ip->len);
 	if (len < iplen) {
-		prp->error |= PRP_ERR_TRUNC;
+		pdu->error |= PDU_ERR_TRUNC;
 	} else if (iplen < len) {
-		prp_eoff(prp) = prp_toff(prp) = prp_soff(prp) + iplen;
+		pdu_eoff(pdu) = pdu_toff(pdu) = pdu_soff(pdu) + iplen;
 	}
 
 	fragoff = ntoh32(ip->fragoff);
 	if (fragoff != 0) {
 		if (IPH_FRAGOFF(fragoff) + iplen > 65535)
-			prp->error |= PRP_ERR_INVALID;
+			pdu->error |= PDU_ERR_INVALID;
 		if ((IPH_RFMASK & fragoff))
-			prp->error |= PRP_ERR_INVALID;
+			pdu->error |= PDU_ERR_INVALID;
 	}
 	if (hlen > IPH_MINLEN) 
-		ipv4_parse_opt(prp, (byte_t *)(ip + 1), hlen - IPH_MINLEN);
+		ipv4_parse_opt(pdu, (byte_t *)(ip + 1), hlen - IPH_MINLEN);
 }
 
 
-static int ipv4_fixnxt(struct prparse *prp, byte_t *buf)
+static int ipv4_fixnxt(struct pdu *pdu, byte_t *buf)
 {
-	struct prparse *next;
+	struct pdu *next;
 	struct ipv4h *ip;
 	uchar proto;
 	ulong sum;
 
-	next = prp_next(prp);
-	if (!prp_list_end(next)) {
+	next = pdu_next(pdu);
+	if (!pdu_list_end(next)) {
 		proto = pridtoiptype(next->prid);
-		ip = prp_header(prp, buf, struct ipv4h);
+		ip = pdu_header(pdu, buf, struct ipv4h);
 		sum = hton16(((~ip->proto & 0xFF) << 8) + (proto << 8)) + 
 		      ip->cksum;
 		sum = (sum >> 16) + (sum & 0xFFFF);
@@ -677,114 +677,114 @@ static int ipv4_fixnxt(struct prparse *prp, byte_t *buf)
 }
 
 
-static int ipv4_fixlen(struct prparse *prp, byte_t *buf)
+static int ipv4_fixlen(struct pdu *pdu, byte_t *buf)
 {
 	struct ipv4h *ip;
 	long hlen;
 	ushort tlen;
 
-	abort_unless(prp);
+	abort_unless(pdu);
 
-	ip = prp_header(prp, buf, struct ipv4h);
-	hlen = prp_hlen(prp);
+	ip = pdu_header(pdu, buf, struct ipv4h);
+	hlen = pdu_hlen(pdu);
 	if ((hlen < IPH_MINLEN) || (hlen > IPH_MAXLEN) || ((hlen & 3) != 0) ||
-	    (hlen > prp_totlen(prp)))
+	    (hlen > pdu_totlen(pdu)))
 		return -1;
 	ip->vhl = 0x40 | (hlen >> 2);
-	if (prp_totlen(prp) > 65535)
+	if (pdu_totlen(pdu) > 65535)
 		return -1;
-	tlen = prp_totlen(prp);
+	tlen = pdu_totlen(pdu);
 	hton16i(tlen, &ip->len);
-	prp->error &= ~(PRP_ERR_TRUNC | PRP_ERR_HLEN | PRP_ERR_TOOSMALL);
+	pdu->error &= ~(PDU_ERR_TRUNC | PDU_ERR_HLEN | PDU_ERR_TOOSMALL);
 
 	return 0;
 }
 
 
-static int ipv4_fixcksum(struct prparse *prp, byte_t *buf)
+static int ipv4_fixcksum(struct pdu *pdu, byte_t *buf)
 {
 	long hlen;
 	struct ipv4h *ip;
 
-	abort_unless(prp);
-	ip = prp_header(prp, buf, struct ipv4h);
+	abort_unless(pdu);
+	ip = pdu_header(pdu, buf, struct ipv4h);
 	hlen = IPH_HLEN(*ip);
 	if (hlen < IPH_MINLEN)
 		return -1;
 	ip->cksum = 0;
 	ip->cksum = ~ones_sum(ip, IPH_HLEN(*ip), 0);
-	prp->error &= ~PRP_ERR_CKSUM;
+	pdu->error &= ~PDU_ERR_CKSUM;
 
 	return 0;
 }
 
 
-static struct prparse *ipv4_copy(struct prparse *oprp)
+static struct pdu *ipv4_copy(struct pdu *opdu)
 {
-	return simple_copy(oprp, sizeof(struct ip_parse));
+	return simple_copy(opdu, sizeof(struct ip_pdu));
 }
 
 
-static void ipv4_free(struct prparse *prp)
+static void ipv4_free(struct pdu *pdu)
 {
-	freeprp(prp);
+	freepdu(pdu);
 }
 
 
-static uint16_t pseudo_cksum(struct prparse *prp, struct prparse *ipprp,
+static uint16_t pseudo_cksum(struct pdu *pdu, struct pdu *ippdu,
 			     byte_t *buf, uint8_t proto)
 {
 	uint16_t sum = 0;
-	if (ipprp->prid == PRID_IPV4) {
+	if (ippdu->prid == PRID_IPV4) {
 		struct pseudoh ph;
-		struct ipv4h *ip = prp_header(ipprp, buf, struct ipv4h);
+		struct ipv4h *ip = pdu_header(ippdu, buf, struct ipv4h);
 		memset(&ph, 0, sizeof(ph));
 		ph.saddr = ip->saddr;
 		ph.daddr = ip->daddr;
 		ph.proto = proto;
-		ph.totlen = hton16(prp_totlen(prp));
+		ph.totlen = hton16(pdu_totlen(pdu));
 		sum = ones_sum(&ph, 12, 0);
 	} else {
 		struct pseudo6h ph;
-		struct ipv6h *ip6 = prp_header(ipprp, buf, struct ipv6h);
-		abort_unless(ipprp->prid == PRID_IPV6);
+		struct ipv6h *ip6 = pdu_header(ippdu, buf, struct ipv6h);
+		abort_unless(ippdu->prid == PRID_IPV6);
 		memset(&ph, 0, sizeof(ph));
 		ph.saddr = ip6->saddr;
 		ph.daddr = ip6->daddr;
 		ph.proto = proto;
-		ph.totlen = hton32(prp_totlen(prp));
+		ph.totlen = hton32(pdu_totlen(pdu));
 		sum = ones_sum(&ph, 40, 0);
 	}
-	sum = ones_sum(prp_header(prp, buf, void), prp_totlen(prp), sum);
+	sum = ones_sum(pdu_header(pdu, buf, void), pdu_totlen(pdu), sum);
 	return ~sum;
 }
 
 
-static struct prparse *find_ipprp(struct prparse *prp)
+static struct pdu *find_ippdu(struct pdu *pdu)
 {
-	while (prp != NULL && prp->prid != PRID_IPV4 && prp->prid != PRID_IPV6)
-		prp = prp->region;
-	return prp;
+	while (pdu != NULL && pdu->prid != PRID_IPV4 && pdu->prid != PRID_IPV6)
+		pdu = pdu->region;
+	return pdu;
 }
 
 
 /* -- parse options for UDP protocol -- */
-static void udp_update(struct prparse *prp, byte_t *buf);
+static void udp_update(struct pdu *pdu, byte_t *buf);
 
-static struct prparse *udp_parse(struct prparse *reg, byte_t *buf,
-				 ulong off, ulong maxlen)
+static struct pdu *udp_parse(struct pdu *reg, byte_t *buf, ulong off,
+			     ulong maxlen)
 {
-	struct prparse *prp;
-	prp = newprp(sizeof(*prp), PRID_UDP, off, 0, maxlen, 0,  
-		     &udp_prparse_ops, reg, 0);
-	if (!prp)
+	struct pdu *pdu;
+	pdu = newpdu(sizeof(*pdu), PRID_UDP, off, 0, maxlen, 0,  
+		     &udp_pdu_ops, reg, 0);
+	if (!pdu)
 		return NULL;
-	udp_update(prp, buf);
-	return prp;
+	udp_update(pdu, buf);
+	return pdu;
 }
 
 
-static int udp_nxtcld(struct prparse *reg, byte_t *buf, struct prparse *cld,
+static int udp_nxtcld(struct pdu *reg, byte_t *buf, struct pdu *cld,
 		      uint *prid, ulong *off, ulong *maxlen)
 {
 	struct udph *udp;
@@ -794,7 +794,7 @@ static int udp_nxtcld(struct prparse *reg, byte_t *buf, struct prparse *cld,
 		return 0;
 
 	/* Look for tunnel encapsulations over UDP */
-	udp = prp_header(reg, buf, struct udph);
+	udp = pdu_header(reg, buf, struct udph);
 	dport = ntoh16x(&udp->dport);
 
 	/* 
@@ -803,21 +803,21 @@ static int udp_nxtcld(struct prparse *reg, byte_t *buf, struct prparse *cld,
 	 *   - have enough room for the header
 	 *   - match the correct fixed value in the first word
 	 */
-	if (dport == VXLAN_PORT && prp_plen(reg) >= VXLAN_HLEN &&
-	    hton32(*(uint32_t *)prp_payload(reg, buf)) == VXLAN_FLAG_VNI) {
+	if (dport == VXLAN_PORT && pdu_plen(reg) >= VXLAN_HLEN &&
+	    hton32(*(uint32_t *)pdu_payload(reg, buf)) == VXLAN_FLAG_VNI) {
 		*prid = PRID_VXLAN;
-		*off = prp_poff(reg);
-		*maxlen = prp_plen(reg);
+		*off = pdu_poff(reg);
+		*maxlen = pdu_plen(reg);
 		return 1;
 	/* 
 	 * MPLS must be:
 	 *   - on the right port
 	 *   - have enough room for the header
 	 */
-	} else if (dport == MPLS_PORT && prp_plen(reg) >= MPLS_HLEN) {
+	} else if (dport == MPLS_PORT && pdu_plen(reg) >= MPLS_HLEN) {
 		*prid = PRID_MPLS;
-		*off = prp_poff(reg);
-		*maxlen = prp_plen(reg);
+		*off = pdu_poff(reg);
+		*maxlen = pdu_plen(reg);
 		return 1;
 	/*
 	 * No further encapsulated protocols yet.
@@ -828,16 +828,16 @@ static int udp_nxtcld(struct prparse *reg, byte_t *buf, struct prparse *cld,
 }
 
 
-static int udp_getspec(struct prparse *prp, int enclose, struct prpspec *ps)
+static int udp_getspec(struct pdu *pdu, int enclose, struct pduspec *ps)
 {
-	return prpspec_init(ps, prp, PRID_UDP, UDPH_LEN, 0, enclose);
+	return pduspec_init(ps, pdu, PRID_UDP, UDPH_LEN, 0, enclose);
 }
 
 
-static int udp_add(struct prparse *reg, byte_t *buf, struct prpspec *ps,
+static int udp_add(struct pdu *reg, byte_t *buf, struct pduspec *ps,
 		   int enclose)
 {
-	struct prparse *prp, *cld;
+	struct pdu *pdu, *cld;
 	struct udph *udp;
 
 	(void)enclose;
@@ -846,18 +846,18 @@ static int udp_add(struct prparse *reg, byte_t *buf, struct prpspec *ps,
 		return -1;
 	}
 
-	prp = newprp(sizeof(*prp), PRID_UDP, ps->off, ps->hlen, ps->plen, 
-		     ps->tlen, &udp_prparse_ops, reg, 0);
-	if (!prp)
+	pdu = newpdu(sizeof(*pdu), PRID_UDP, ps->off, ps->hlen, ps->plen, 
+		     ps->tlen, &udp_pdu_ops, reg, 0);
+	if (!pdu)
 		return -1;
 
-	prp_add_insert(reg, prp, enclose);
+	pdu_add_insert(reg, pdu, enclose);
 	if (buf) {
-		memset(prp_header(prp, buf, void), 0, prp_hlen(prp));
-		udp = prp_header(prp, buf, struct udph);
-		hton16i(prp_totlen(prp), &udp->len);
+		memset(pdu_header(pdu, buf, void), 0, pdu_hlen(pdu));
+		udp = pdu_header(pdu, buf, struct udph);
+		hton16i(pdu_totlen(pdu), &udp->len);
 		/* check for known protocols within UDP */
-		cld = prp_next_in_region(prp, prp);
+		cld = pdu_next_in_region(pdu, pdu);
 		if (cld != NULL) {
 			if (cld->prid == PRID_VXLAN)
 				hton16i(VXLAN_PORT, &udp->dport);
@@ -868,42 +868,42 @@ static int udp_add(struct prparse *reg, byte_t *buf, struct prpspec *ps,
 }
 
 
-static void udp_update(struct prparse *prp, byte_t *buf)
+static void udp_update(struct pdu *pdu, byte_t *buf)
 {
 	ushort ulen;
 	struct udph *udp;
-	struct prparse *ipprp;
+	struct pdu *ippdu;
 
-	if (prp_totlen(prp) < UDPH_LEN) {
-		prp->error = PRP_ERR_TOOSMALL;
+	if (pdu_totlen(pdu) < UDPH_LEN) {
+		pdu->error = PDU_ERR_TOOSMALL;
 		return;
 	}
 
-	prp_poff(prp) = prp_soff(prp) + UDPH_LEN;
+	pdu_poff(pdu) = pdu_soff(pdu) + UDPH_LEN;
 
-	udp = prp_header(prp, buf, struct udph);
+	udp = pdu_header(pdu, buf, struct udph);
 	ulen = ntoh16x(&udp->len);
 
-	if (prp_totlen(prp) < ulen) {
-		prp->error |= PRP_ERR_TRUNC | PRP_ERR_CKSUM;
+	if (pdu_totlen(pdu) < ulen) {
+		pdu->error |= PDU_ERR_TRUNC | PDU_ERR_CKSUM;
 	} else if (udp->cksum != 0) {
-		ipprp = find_ipprp(prp->region);
-		if ((ipprp == NULL) || 
-		    (pseudo_cksum(prp, ipprp, buf, IPPROT_UDP) & 0xFFFF) != 0)
-			prp->error |= PRP_ERR_CKSUM;
+		ippdu = find_ippdu(pdu->region);
+		if ((ippdu == NULL) || 
+		    (pseudo_cksum(pdu, ippdu, buf, IPPROT_UDP) & 0xFFFF) != 0)
+			pdu->error |= PDU_ERR_CKSUM;
 	}
 }
 
 
-static int udp_fixnxt(struct prparse *prp, byte_t *buf)
+static int udp_fixnxt(struct pdu *pdu, byte_t *buf)
 {
-	struct prparse *next;
+	struct pdu *next;
 	struct udph *udp;
 	ulong sum;
 
-	next = prp_next(prp);
-	if (!prp_list_end(next)) {
-		udp = prp_header(prp, buf, struct udph);
+	next = pdu_next(pdu);
+	if (!pdu_list_end(next)) {
+		udp = pdu_header(pdu, buf, struct udph);
 		sum = (~udp->dport) & 0xFFFF;
 		if (next->prid == PRID_VXLAN) {
 			hton16i(VXLAN_PORT, &udp->dport);
@@ -922,48 +922,48 @@ static int udp_fixnxt(struct prparse *prp, byte_t *buf)
 }
 
 
-static int udp_fixlen(struct prparse *prp, byte_t *buf)
+static int udp_fixlen(struct pdu *pdu, byte_t *buf)
 {
-	if (prp_hlen(prp) != UDPH_LEN)
+	if (pdu_hlen(pdu) != UDPH_LEN)
 		return -1;
-	if (prp_plen(prp) > 65527)
+	if (pdu_plen(pdu) > 65527)
 		return -1;
-	hton16i(prp_totlen(prp), &prp_header(prp, buf, struct udph)->len);
-	prp->error &= ~(PRP_ERR_TRUNC | PRP_ERR_HLEN | PRP_ERR_TOOSMALL);
+	hton16i(pdu_totlen(pdu), &pdu_header(pdu, buf, struct udph)->len);
+	pdu->error &= ~(PDU_ERR_TRUNC | PDU_ERR_HLEN | PDU_ERR_TOOSMALL);
 	return 0;
 }
 
 
-static int udp_fixcksum(struct prparse *prp, byte_t *buf)
+static int udp_fixcksum(struct pdu *pdu, byte_t *buf)
 {
-	struct udph *udp = prp_header(prp, buf, struct udph);
-	struct prparse *ipprp = find_ipprp(prp->region);
+	struct udph *udp = pdu_header(pdu, buf, struct udph);
+	struct pdu *ippdu = find_ippdu(pdu->region);
 
-	if ((prp_hlen(prp) != UDPH_LEN) || (ipprp == NULL))
+	if ((pdu_hlen(pdu) != UDPH_LEN) || (ippdu == NULL))
 		return -1;
 	if (udp->cksum != 0) {
 		udp->cksum = 0;
-		udp->cksum = pseudo_cksum(prp, ipprp, buf, IPPROT_UDP);
+		udp->cksum = pseudo_cksum(pdu, ippdu, buf, IPPROT_UDP);
 		if (udp->cksum == 0)
 			hton16i(0xFFFF, &udp->cksum);
 	}
-	prp->error &= ~PRP_ERR_CKSUM;
+	pdu->error &= ~PDU_ERR_CKSUM;
 
 	return 0;
 }
 
 
 /* -- TCP functions -- */
-static void tcp_update(struct prparse *prp, byte_t *buf);
+static void tcp_update(struct pdu *pdu, byte_t *buf);
 
-static int tcp_parse_opt(struct prparse *prp, struct tcph *tcp, size_t olen)
+static int tcp_parse_opt(struct pdu *pdu, struct tcph *tcp, size_t olen)
 {
 	uint oc;
-	ulong ooff = prp_soff(prp) + 20;
+	ulong ooff = pdu_soff(pdu) + 20;
 	byte_t *op = (byte_t *)(tcp + 1);
 	byte_t *osave = op;
 
-	prp->offs[PRP_TCPFLD_OPT] = ooff;
+	pdu->offs[PDU_TCPFLD_OPT] = ooff;
 
 	while (olen > 0) {
 		/* Check for type 1 options first */
@@ -982,42 +982,42 @@ static int tcp_parse_opt(struct prparse *prp, struct tcph *tcp, size_t olen)
 		switch(oc) {
 		case TCPOPT_MSS:
 			if ((op[1] != 4) || ((tcp->flags & TCPF_SYN) == 0) ||
-			    (prp->offs[PRP_TCPFLD_MSS] != PRP_OFF_INVALID))
+			    (pdu->offs[PDU_TCPFLD_MSS] != PDU_OFF_INVALID))
 				goto err;
-			prp->offs[PRP_TCPFLD_MSS] = ooff + (op - osave);
+			pdu->offs[PDU_TCPFLD_MSS] = ooff + (op - osave);
 			break;
 		case TCPOPT_WSCALE:
 			if ((op[1] != 3) || ((tcp->flags & TCPF_SYN) == 0) ||
-			    (prp->offs[PRP_TCPFLD_WSCALE] != PRP_OFF_INVALID) ||
+			    (pdu->offs[PDU_TCPFLD_WSCALE] != PDU_OFF_INVALID) ||
 			    (op[2] > 14))
 				goto err;
-			prp->offs[PRP_TCPFLD_WSCALE] = ooff + (op - osave);
+			pdu->offs[PDU_TCPFLD_WSCALE] = ooff + (op - osave);
 			break;
 		case TCPOPT_SACKOK:
 			if ((op[1] != 2) || ((tcp->flags & TCPF_SYN) == 0) ||
-			    (prp->offs[PRP_TCPFLD_SACKOK] != PRP_OFF_INVALID))
+			    (pdu->offs[PDU_TCPFLD_SACKOK] != PDU_OFF_INVALID))
 				goto err;
-			prp->offs[PRP_TCPFLD_SACKOK] = ooff + (op - osave);
+			pdu->offs[PDU_TCPFLD_SACKOK] = ooff + (op - osave);
 			break;
 		case TCPOPT_SACK:
 			if ((op[1] < 10) || (((op[1] - 2) & 7) != 0) ||
-			    (prp->offs[PRP_TCPFLD_SACK] != PRP_OFF_INVALID))
+			    (pdu->offs[PDU_TCPFLD_SACK] != PDU_OFF_INVALID))
 				goto err;
-			prp->offs[PRP_TCPFLD_SACK] = ooff + (op - osave);
-			prp->offs[PRP_TCPFLD_SACK_END] = 
-				prp->offs[PRP_TCPFLD_SACK] + op[1];
+			pdu->offs[PDU_TCPFLD_SACK] = ooff + (op - osave);
+			pdu->offs[PDU_TCPFLD_SACK_END] = 
+				pdu->offs[PDU_TCPFLD_SACK] + op[1];
 			break;
 		case TCPOPT_TSTAMP:
 			if ((op[1] != 10) ||
-			    (prp->offs[PRP_TCPFLD_TSTAMP] != PRP_OFF_INVALID))
+			    (pdu->offs[PDU_TCPFLD_TSTAMP] != PDU_OFF_INVALID))
 				goto err;
-			prp->offs[PRP_TCPFLD_TSTAMP] = ooff + (op - osave);
+			pdu->offs[PDU_TCPFLD_TSTAMP] = ooff + (op - osave);
 			break;
 		case TCPOPT_MD5:
 			if ((op[1] != 18) ||
-			    (prp->offs[PRP_TCPFLD_MD5] != PRP_OFF_INVALID))
+			    (pdu->offs[PDU_TCPFLD_MD5] != PDU_OFF_INVALID))
 				goto err;
-			prp->offs[PRP_TCPFLD_MD5] = ooff + (op - osave);
+			pdu->offs[PDU_TCPFLD_MD5] = ooff + (op - osave);
 			break;
 		}
 
@@ -1027,35 +1027,35 @@ static int tcp_parse_opt(struct prparse *prp, struct tcph *tcp, size_t olen)
 
 	return 0;
 err:
-	prp->error |= PRP_ERR_OPTERR;
+	pdu->error |= PDU_ERR_OPTERR;
 	return -1;
 }
 
 
-static struct prparse *tcp_parse(struct prparse *reg, byte_t *buf,
-				 ulong off, ulong maxlen)
+static struct pdu *tcp_parse(struct pdu *reg, byte_t *buf, ulong off,
+			     ulong maxlen)
 {
-	struct prparse *prp;
-	prp = newprp(sizeof(struct tcp_parse), PRID_TCP, off, 0, maxlen, 0,
-		     &tcp_prparse_ops, reg, PRP_TCP_NXFIELDS);
-	if (!prp)
+	struct pdu *pdu;
+	pdu = newpdu(sizeof(struct tcp_pdu), PRID_TCP, off, 0, maxlen, 0,
+		     &tcp_pdu_ops, reg, PDU_TCP_NXFIELDS);
+	if (!pdu)
 		return NULL;
-	prp->region = reg;
-	tcp_update(prp, buf);
-	return prp;
+	pdu->region = reg;
+	tcp_update(pdu, buf);
+	return pdu;
 }
 
 
-static int tcp_getspec(struct prparse *prp, int enclose, struct prpspec *ps)
+static int tcp_getspec(struct pdu *pdu, int enclose, struct pduspec *ps)
 {
-	return prpspec_init(ps, prp, PRID_TCP, TCPH_MINLEN, 0, enclose);
+	return pduspec_init(ps, pdu, PRID_TCP, TCPH_MINLEN, 0, enclose);
 }
 
 
-static int tcp_add(struct prparse *reg, byte_t *buf, struct prpspec *ps,
+static int tcp_add(struct pdu *reg, byte_t *buf, struct pduspec *ps,
 		   int enclose)
 {
-	struct prparse *prp, *ipprp;
+	struct pdu *pdu, *ippdu;
 	struct tcph *tcp;
 
 	(void)enclose;
@@ -1064,16 +1064,16 @@ static int tcp_add(struct prparse *reg, byte_t *buf, struct prpspec *ps,
 		return -1;
 	}
 
-	prp = newprp(sizeof(struct tcp_parse), PRID_TCP, 
+	pdu = newpdu(sizeof(struct tcp_pdu), PRID_TCP, 
 		     ps->off, ps->hlen, ps->plen, ps->tlen,
-		     &tcp_prparse_ops, reg, PRP_TCP_NXFIELDS);
-	if (!prp)
+		     &tcp_pdu_ops, reg, PDU_TCP_NXFIELDS);
+	if (!pdu)
 		return -1;
 
-	prp_add_insert(reg, prp, enclose);
+	pdu_add_insert(reg, pdu, enclose);
 	if (buf) {
-		memset(prp_header(prp, buf, void), 0, prp_hlen(prp));
-		tcp = prp_header(prp, buf, struct tcph);
+		memset(pdu_header(pdu, buf, void), 0, pdu_hlen(pdu));
+		tcp = pdu_header(pdu, buf, struct tcph);
 		tcp->doff = ps->hlen << 2;
 		if (ps->hlen > TCPH_MINLEN) {
 			byte_t *p = (byte_t *)(tcp + 1);
@@ -1081,12 +1081,12 @@ static int tcp_add(struct prparse *reg, byte_t *buf, struct prpspec *ps,
 			while (p < end)
 				*p++ = TCPOPT_NOP;
 		}
-		ipprp = find_ipprp(reg);
-		if (ipprp == NULL) {
-			prp->error |= PRP_ERR_CKSUM;
+		ippdu = find_ippdu(reg);
+		if (ippdu == NULL) {
+			pdu->error |= PDU_ERR_CKSUM;
 		} else {
 			tcp->cksum = 0;
-			tcp->cksum = pseudo_cksum(prp, ipprp, buf, IPPROT_TCP);
+			tcp->cksum = pseudo_cksum(pdu, ippdu, buf, IPPROT_TCP);
 		}
 	}
 
@@ -1094,105 +1094,105 @@ static int tcp_add(struct prparse *reg, byte_t *buf, struct prpspec *ps,
 }
 
 
-static void tcp_update(struct prparse *prp, byte_t *buf)
+static void tcp_update(struct pdu *pdu, byte_t *buf)
 {
-	struct prparse *ipprp;
+	struct pdu *ippdu;
 	struct tcph *tcp;
 	uint hlen;
 	ulong len;
 
-	prp->error = 0;
-	prp_reset_xfields(prp);
+	pdu->error = 0;
+	pdu_reset_xfields(pdu);
 
-	len = prp_totlen(prp);
+	len = pdu_totlen(pdu);
 	if (len < TCPH_MINLEN) {
-		prp->error = PRP_ERR_TOOSMALL;
+		pdu->error = PDU_ERR_TOOSMALL;
 		return;
 	}
 
-	tcp = prp_header(prp, buf, struct tcph);
+	tcp = pdu_header(pdu, buf, struct tcph);
 	hlen = TCPH_HLEN(*tcp);
 	if (hlen > len) {
-		prp->error |= PRP_ERR_HLEN;
+		pdu->error |= PDU_ERR_HLEN;
 		return;
 	}
-	prp_poff(prp) = prp_soff(prp) + hlen;
+	pdu_poff(pdu) = pdu_soff(pdu) + hlen;
 
-	ipprp = find_ipprp(prp);
-	if ((ipprp == NULL) ||
-	    (pseudo_cksum(prp, ipprp, buf, IPPROT_TCP) & 0xFFFF) != 0) {
-		prp->error |= PRP_ERR_CKSUM;
+	ippdu = find_ippdu(pdu);
+	if ((ippdu == NULL) ||
+	    (pseudo_cksum(pdu, ippdu, buf, IPPROT_TCP) & 0xFFFF) != 0) {
+		pdu->error |= PDU_ERR_CKSUM;
 	}
 
 	if (hlen > TCPH_MINLEN)
-		tcp_parse_opt(prp, tcp, hlen - TCPH_MINLEN);
+		tcp_parse_opt(pdu, tcp, hlen - TCPH_MINLEN);
 }
 
 
-static int tcp_fixlen(struct prparse *prp, byte_t *buf)
+static int tcp_fixlen(struct pdu *pdu, byte_t *buf)
 {
 	struct tcph *tcp;
 	long hlen;
 
-	abort_unless(prp);
-	tcp = prp_header(prp, buf, struct tcph);
-	hlen = prp_hlen(prp);
+	abort_unless(pdu);
+	tcp = pdu_header(pdu, buf, struct tcph);
+	hlen = pdu_hlen(pdu);
 	if ((hlen < TCPH_MINLEN) || (hlen > TCPH_MAXLEN) || ((hlen & 3) != 0) ||
-	    (hlen > prp_totlen(prp)))
+	    (hlen > pdu_totlen(pdu)))
 		return -1;
 	tcp->doff = hlen << 2;
-	prp->error &= ~(PRP_ERR_TRUNC | PRP_ERR_HLEN | PRP_ERR_TOOSMALL);
+	pdu->error &= ~(PDU_ERR_TRUNC | PDU_ERR_HLEN | PDU_ERR_TOOSMALL);
 
 	return 0;
 }
 
 
-static int tcp_fixcksum(struct prparse *prp, byte_t *buf)
+static int tcp_fixcksum(struct pdu *pdu, byte_t *buf)
 {
 	struct tcph *tcp;
-	struct prparse *ipprp = find_ipprp(prp->region);
+	struct pdu *ippdu = find_ippdu(pdu->region);
 
-	abort_unless(prp);
-	tcp = prp_header(prp, buf, struct tcph);
-	if (prp_hlen(prp) < TCPH_MINLEN || ipprp == NULL)
+	abort_unless(pdu);
+	tcp = pdu_header(pdu, buf, struct tcph);
+	if (pdu_hlen(pdu) < TCPH_MINLEN || ippdu == NULL)
 		return -1;
 	tcp->cksum = 0;
-	tcp->cksum = pseudo_cksum(prp, ipprp, buf, IPPROT_TCP);
-	prp->error &= ~PRP_ERR_CKSUM;
+	tcp->cksum = pseudo_cksum(pdu, ippdu, buf, IPPROT_TCP);
+	pdu->error &= ~PDU_ERR_CKSUM;
 
 	return 0;
 }
 
 
-static struct prparse *tcp_copy(struct prparse *oprp)
+static struct pdu *tcp_copy(struct pdu *opdu)
 {
-	return simple_copy(oprp, sizeof(struct tcp_parse));
+	return simple_copy(opdu, sizeof(struct tcp_pdu));
 }
 
 
-static void tcp_free(struct prparse *prp)
+static void tcp_free(struct pdu *pdu)
 {
-	freeprp(prp);
+	freepdu(pdu);
 }
 
 
 /* -- ICMP Protocol functions -- */
-static void icmp_update(struct prparse *prp, byte_t *buf);
+static void icmp_update(struct pdu *pdu, byte_t *buf);
 
-static struct prparse *icmp_parse(struct prparse *reg, byte_t *buf,
-				  ulong off, ulong maxlen)
+static struct pdu *icmp_parse(struct pdu *reg, byte_t *buf, ulong off,
+			      ulong maxlen)
 {
-	struct prparse *prp;
-	prp = newprp(sizeof(struct icmp_parse), PRID_ICMP, off, 0, maxlen, 0,
-		     &icmp_prparse_ops, reg, PRP_ICMP_NXFIELDS);
-	if (!prp)
+	struct pdu *pdu;
+	pdu = newpdu(sizeof(struct icmp_pdu), PRID_ICMP, off, 0, maxlen, 0,
+		     &icmp_pdu_ops, reg, PDU_ICMP_NXFIELDS);
+	if (!pdu)
 		return NULL;
-	icmp_update(prp, buf);
-	return prp;
+	icmp_update(pdu, buf);
+	return pdu;
 }
 
 
-static int icmp_nxtcld(struct prparse *reg, byte_t *buf, struct prparse *cld,
+static int icmp_nxtcld(struct pdu *reg, byte_t *buf, struct pdu *cld,
 		       uint *prid, ulong *off, ulong *maxlen)
 {
 	struct icmph *icmp;
@@ -1200,12 +1200,12 @@ static int icmp_nxtcld(struct prparse *reg, byte_t *buf, struct prparse *cld,
 	if (cld != NULL)
 		return 0;
 
-	icmp = prp_header(reg, buf, struct icmph);
+	icmp = pdu_header(reg, buf, struct icmph);
 	/* types which can have a returned IP header in them */
 	if (ICMPT_HAS_OPKT(icmp->type)) {
 		*prid = PRID_IPV4;
-		*off = prp_poff(reg);
-		*maxlen = prp_plen(reg);
+		*off = pdu_poff(reg);
+		*maxlen = pdu_plen(reg);
 		return 1;
 	} else {
 		return 0;
@@ -1213,16 +1213,16 @@ static int icmp_nxtcld(struct prparse *reg, byte_t *buf, struct prparse *cld,
 }
 
 
-static int icmp_getspec(struct prparse *prp, int enclose, struct prpspec *ps)
+static int icmp_getspec(struct pdu *pdu, int enclose, struct pduspec *ps)
 {
-	return prpspec_init(ps, prp, PRID_ICMP, ICMPH_LEN, 0, enclose);
+	return pduspec_init(ps, pdu, PRID_ICMP, ICMPH_LEN, 0, enclose);
 }
 
 
-static int icmp_add(struct prparse *reg, byte_t *buf, struct prpspec *ps,
+static int icmp_add(struct pdu *reg, byte_t *buf, struct pduspec *ps,
 		    int enclose)
 {
-	struct prparse *prp;
+	struct pdu *pdu;
 	struct icmph *icmp;
 
 	if (ps->hlen != ICMPH_LEN) {
@@ -1230,75 +1230,75 @@ static int icmp_add(struct prparse *reg, byte_t *buf, struct prpspec *ps,
 		return -1;
 	}
 
-	prp = newprp(sizeof(struct icmp_parse), PRID_ICMP, ps->off, ps->hlen,
-		     ps->plen, ps->tlen, &icmp_prparse_ops, reg,
-		     PRP_ICMP_NXFIELDS);
-	if (!prp)
+	pdu = newpdu(sizeof(struct icmp_pdu), PRID_ICMP, ps->off, ps->hlen,
+		     ps->plen, ps->tlen, &icmp_pdu_ops, reg,
+		     PDU_ICMP_NXFIELDS);
+	if (!pdu)
 		return -1;
 
-	prp_add_insert(reg, prp, enclose);
+	pdu_add_insert(reg, pdu, enclose);
 	if (buf) {
-		memset(prp_header(prp, buf, void), 0, prp_hlen(prp));
-		icmp = prp_header(prp, buf, struct icmph);
+		memset(pdu_header(pdu, buf, void), 0, pdu_hlen(pdu));
+		icmp = pdu_header(pdu, buf, struct icmph);
 		icmp->type = ICMPT_ECHO_REQUEST;
-		icmp->cksum = ~ones_sum(icmp, prp_totlen(prp), 0);
+		icmp->cksum = ~ones_sum(icmp, pdu_totlen(pdu), 0);
 	}
 
 	return 0;
 }
 
 
-static void icmp_update(struct prparse *prp, byte_t *buf)
+static void icmp_update(struct pdu *pdu, byte_t *buf)
 {
 	struct icmph *icmp;
 
-	prp->error = 0;
-	prp_reset_xfields(prp);
+	pdu->error = 0;
+	pdu_reset_xfields(pdu);
 
-	if (prp_totlen(prp) < ICMPH_LEN) {
-		prp->error = PRP_ERR_TOOSMALL;
+	if (pdu_totlen(pdu) < ICMPH_LEN) {
+		pdu->error = PDU_ERR_TOOSMALL;
 		return;
 	}
-	prp_poff(prp) = prp_soff(prp) + ICMPH_LEN;
+	pdu_poff(pdu) = pdu_soff(pdu) + ICMPH_LEN;
 
-	icmp = prp_header(prp, buf, struct icmph);
-	if ((~ones_sum(icmp, prp_totlen(prp), 0) & 0xFFFF) != 0)
-		prp->error |= PRP_ERR_CKSUM;
+	icmp = pdu_header(pdu, buf, struct icmph);
+	if ((~ones_sum(icmp, pdu_totlen(pdu), 0) & 0xFFFF) != 0)
+		pdu->error |= PDU_ERR_CKSUM;
 
 	/* set offsets for the subfields that may or may not be present */
 	if (ICMPT_IS_QUERY(icmp->type)) {
-		prp->offs[PRP_ICMPFLD_QUERY] = prp_soff(prp) + 4;
+		pdu->offs[PDU_ICMPFLD_QUERY] = pdu_soff(pdu) + 4;
 		if (ICMPT_IS_TSTAMP(icmp->type))
-			prp->offs[PRP_ICMPFLD_TS] = prp_soff(prp) + 8;
+			pdu->offs[PDU_ICMPFLD_TS] = pdu_soff(pdu) + 8;
 	} else if (icmp->type == ICMPT_PARAM_PROB) {
-		prp->offs[PRP_ICMPFLD_PPTR] = prp_soff(prp) + 4;
+		pdu->offs[PDU_ICMPFLD_PPTR] = pdu_soff(pdu) + 4;
 	} else if (icmp->type == ICMPT_DEST_UNREACH) {
 		if (icmp->code == ICMPC_TTL_EXCEEDED)
-			prp->offs[PRP_ICMPFLD_MTU] = prp_soff(prp) + 4;
+			pdu->offs[PDU_ICMPFLD_MTU] = pdu_soff(pdu) + 4;
 		else
-			prp->offs[PRP_ICMPFLD_RESERVED] = prp_soff(prp) + 4;
+			pdu->offs[PDU_ICMPFLD_RESERVED] = pdu_soff(pdu) + 4;
 	} else if (icmp->type == ICMPT_REDIRECT) {
-		prp->offs[PRP_ICMPFLD_GW] = prp_soff(prp) + 4;
+		pdu->offs[PDU_ICMPFLD_GW] = pdu_soff(pdu) + 4;
 	} else {
-		prp->offs[PRP_ICMPFLD_RESERVED] = prp_soff(prp) + 4;
+		pdu->offs[PDU_ICMPFLD_RESERVED] = pdu_soff(pdu) + 4;
 	}
 }
 
 
-static int icmp_fixcksum(struct prparse *prp, byte_t *buf)
+static int icmp_fixcksum(struct pdu *pdu, byte_t *buf)
 {
-	struct icmph *icmp = prp_header(prp, buf, struct icmph);
-	if (prp_hlen(prp) != ICMPH_LEN)
+	struct icmph *icmp = pdu_header(pdu, buf, struct icmph);
+	if (pdu_hlen(pdu) != ICMPH_LEN)
 		return -1;
 	icmp->cksum = 0;
-	icmp->cksum = ~ones_sum(icmp, prp_totlen(prp), 0);
-	prp->error &= ~PRP_ERR_CKSUM;
+	icmp->cksum = ~ones_sum(icmp, pdu_totlen(pdu), 0);
+	pdu->error &= ~PDU_ERR_CKSUM;
 	return 0;
 }
 
 
 /* -- IPv6 functions -- */
-static void ipv6_update(struct prparse *prp, byte_t *buf);
+static void ipv6_update(struct pdu *pdu, byte_t *buf);
 
 static int isv6ext(uint8_t proto)
 {
@@ -1316,7 +1316,7 @@ static int isv6ext(uint8_t proto)
 
 
 /* search for jumbogram options */
-static int parse_ipv6_hopopt(struct prparse *prp, struct ipv6h *ip6,
+static int parse_ipv6_hopopt(struct pdu *pdu, struct ipv6h *ip6,
 			     byte_t *p, long olen)
 {
 	byte_t *end = p + olen;
@@ -1330,22 +1330,22 @@ static int parse_ipv6_hopopt(struct prparse *prp, struct ipv6h *ip6,
 			continue;
 		}
 		if (p + p[1] + 2 > end) {	/* padn + all other options */
-			prp->error |= PRP_ERR_OPTLEN | PRP_ERR_HLEN;
+			pdu->error |= PDU_ERR_OPTLEN | PDU_ERR_HLEN;
 			return -1;
 		}
 		if (p[0] == 0xC2) {	/* jumbogram option */
-			if (prp_off_valid(prp, PRP_IPV6FLD_JLEN)) {
-				prp->error |= PRP_ERR_OPTLEN | PRP_ERR_HLEN;
+			if (pdu_off_valid(pdu, PDU_IPV6FLD_JLEN)) {
+				pdu->error |= PDU_ERR_OPTLEN | PDU_ERR_HLEN;
 				return -1;
 			}
 			if ((p[1] != 4) || (ip6->len != 0) ||
-			    prp_off_valid(prp, PRP_IPV6FLD_JLEN) || 
+			    pdu_off_valid(pdu, PDU_IPV6FLD_JLEN) || 
 			    (((p - (byte_t *) ip6) & 3) != 2)) {
-				prp->error |= PRP_ERR_OPTERR | PRP_ERR_HLEN;
+				pdu->error |= PDU_ERR_OPTERR | PDU_ERR_HLEN;
 				return -1;
 			}
-			prp->offs[PRP_IPV6FLD_JLEN] = (p - (byte_t *)ip6) + 
-				          	      prp_soff(prp);
+			pdu->offs[PDU_IPV6FLD_JLEN] = (p - (byte_t *)ip6) + 
+				          	      pdu_soff(pdu);
 		}
 		p += p[1] + 2;
 	}
@@ -1353,10 +1353,10 @@ static int parse_ipv6_hopopt(struct prparse *prp, struct ipv6h *ip6,
 }
 
 
-static int setv6opt(struct prparse *prp, int oidx, ulong xoff)
+static int setv6opt(struct pdu *pdu, int oidx, ulong xoff)
 {
-	if (!prp_off_valid(prp, oidx)) {
-		prp->offs[oidx] = prp_soff(prp) + IPV6H_LEN + xoff;
+	if (!pdu_off_valid(pdu, oidx)) {
+		pdu->offs[oidx] = pdu_soff(pdu) + IPV6H_LEN + xoff;
 		return 1;
 	} else {
 		return 0;
@@ -1364,33 +1364,33 @@ static int setv6opt(struct prparse *prp, int oidx, ulong xoff)
 }
 
 
-static int parse_reg_v6_opt(struct prparse *prp, ulong xoff, uint8_t opt,
+static int parse_reg_v6_opt(struct pdu *pdu, ulong xoff, uint8_t opt,
 			    byte_t *p)
 {
 	switch(opt) {
 	case IPPROT_V6_HOPOPT:
 		/* hop-by-hop options can only come first */
 		if (xoff != 0) {
-			prp->error |= PRP_ERR_OPTERR | PRP_ERR_HLEN;
+			pdu->error |= PDU_ERR_OPTERR | PDU_ERR_HLEN;
 			return -1;
 		}
-		prp->offs[PRP_IPV6FLD_HOPOPT] =
-			prp_soff(prp) + IPV6H_LEN + xoff;
+		pdu->offs[PDU_IPV6FLD_HOPOPT] =
+			pdu_soff(pdu) + IPV6H_LEN + xoff;
 		break;
 
 	case IPPROT_V6_ROUTE_HDR:
-		if (!setv6opt(prp, PRP_IPV6FLD_RTOPT, xoff))
-			setv6opt(prp, PRP_IPV6FLD_EXTOPT, xoff);
+		if (!setv6opt(pdu, PDU_IPV6FLD_RTOPT, xoff))
+			setv6opt(pdu, PDU_IPV6FLD_EXTOPT, xoff);
 		break;
 
 	case IPPROT_V6_DSTOPS:
-		if (!setv6opt(prp, PRP_IPV6FLD_DSTOPT1, xoff))
-			if (!setv6opt(prp, PRP_IPV6FLD_DSTOPT2, xoff))
-				setv6opt(prp, PRP_IPV6FLD_EXTOPT, xoff);
+		if (!setv6opt(pdu, PDU_IPV6FLD_DSTOPT1, xoff))
+			if (!setv6opt(pdu, PDU_IPV6FLD_DSTOPT2, xoff))
+				setv6opt(pdu, PDU_IPV6FLD_EXTOPT, xoff);
 		break;
 	default:
-		if (!setv6opt(prp, PRP_IPV6FLD_UNKOPT, xoff))
-			setv6opt(prp, PRP_IPV6FLD_EXTOPT, xoff);
+		if (!setv6opt(pdu, PDU_IPV6FLD_UNKOPT, xoff))
+			setv6opt(pdu, PDU_IPV6FLD_EXTOPT, xoff);
 		break;
 	}
 
@@ -1398,7 +1398,7 @@ static int parse_reg_v6_opt(struct prparse *prp, ulong xoff, uint8_t opt,
 }
 
 
-static int parse_ipv6_opt(struct prparse *prp, struct ipv6h *ip6, ulong len)
+static int parse_ipv6_opt(struct pdu *pdu, struct ipv6h *ip6, ulong len)
 {
 	ulong xlen = 0;
 	uint8_t nexth;
@@ -1412,7 +1412,7 @@ static int parse_ipv6_opt(struct prparse *prp, struct ipv6h *ip6, ulong len)
 
 	while (isv6ext(nexth)) {
 		if (len - xlen < 8) {
-			prp->error |= PRP_ERR_OPTLEN | PRP_ERR_HLEN;
+			pdu->error |= PDU_ERR_OPTLEN | PDU_ERR_HLEN;
 			return -1;
 		}
 		/* 
@@ -1425,64 +1425,64 @@ static int parse_ipv6_opt(struct prparse *prp, struct ipv6h *ip6, ulong len)
 		if (nexth == IPPROT_AH) {
 			/* AH is idiotic and mostly useless */
 			olen = (p[1] << 2) + 8;
-			setv6opt(prp, PRP_IPV6FLD_AHH, xlen);
+			setv6opt(pdu, PDU_IPV6FLD_AHH, xlen);
 		} else if (nexth == IPPROT_ESP) {
 			if (len - xlen < 12) {
-				prp->error |= PRP_ERR_OPTLEN | PRP_ERR_HLEN;
+				pdu->error |= PDU_ERR_OPTLEN | PDU_ERR_HLEN;
 				return -1;
 			}
-			setv6opt(prp, PRP_IPV6FLD_ESPH, xlen);
+			setv6opt(pdu, PDU_IPV6FLD_ESPH, xlen);
 			/* TODO try to decode NULL encryption headers? */
 			break;
 		} else if (nexth == IPPROT_V6_FRAG_HDR) {
 			/* Only one fragment header is allowed */
-			if (prp_off_valid(prp, PRP_IPV6FLD_FRAGH)) {
-				prp->error |= PRP_ERR_OPTERR | PRP_ERR_HLEN;
+			if (pdu_off_valid(pdu, PDU_IPV6FLD_FRAGH)) {
+				pdu->error |= PDU_ERR_OPTERR | PDU_ERR_HLEN;
 				return -1;
 			}
-			prp->offs[PRP_IPV6FLD_FRAGH] = prp_soff(prp) +
+			pdu->offs[PDU_IPV6FLD_FRAGH] = pdu_soff(pdu) +
 						       IPV6H_LEN + xlen;
 			olen = 8;
 			
 		} else {
-			if (parse_reg_v6_opt(prp, xlen, nexth, p) < 0)
+			if (parse_reg_v6_opt(pdu, xlen, nexth, p) < 0)
 				return -1;
 			olen = (p[1] << 3) + 8;
 		}
 
 		if (len - xlen < olen) {
-			prp->error |= PRP_ERR_OPTLEN | PRP_ERR_HLEN;
+			pdu->error |= PDU_ERR_OPTLEN | PDU_ERR_HLEN;
 			return -1;
 		}
 
 		nexth = p[0];
-		prp->offs[PRP_IPV6FLD_NXTHDR] =
-			xlen + IPV6H_LEN + prp_soff(prp);
+		pdu->offs[PDU_IPV6FLD_NXTHDR] =
+			xlen + IPV6H_LEN + pdu_soff(pdu);
 
 		xlen += olen;
 		p += olen;
 	}
 
-	prp_poff(prp) = prp_soff(prp) + IPV6H_LEN + xlen;
+	pdu_poff(pdu) = pdu_soff(pdu) + IPV6H_LEN + xlen;
 
 	return 0;
 }
 
 
-static struct prparse *ipv6_parse(struct prparse *reg, byte_t *buf,
-				  ulong off, ulong maxlen)
+static struct pdu *ipv6_parse(struct pdu *reg, byte_t *buf, ulong off,
+			      ulong maxlen)
 {
-	struct prparse *prp;
-	prp = newprp(sizeof(struct ipv6_parse), PRID_IPV6, off, 0, maxlen, 0,
-		     &ipv6_prparse_ops, reg, PRP_IPV6_NXFIELDS);
-	if (!prp)
+	struct pdu *pdu;
+	pdu = newpdu(sizeof(struct ipv6_pdu), PRID_IPV6, off, 0, maxlen, 0,
+		     &ipv6_pdu_ops, reg, PDU_IPV6_NXFIELDS);
+	if (!pdu)
 		return NULL;
-	ipv6_update(prp, buf);
-	return prp;
+	ipv6_update(pdu, buf);
+	return pdu;
 }
 
 
-int ipv6_nxtcld(struct prparse *reg, byte_t *buf, struct prparse *cld,
+int ipv6_nxtcld(struct pdu *reg, byte_t *buf, struct pdu *cld,
 	        uint *prid, ulong *off, ulong *maxlen)
 {
 	byte_t *p;
@@ -1500,43 +1500,43 @@ int ipv6_nxtcld(struct prparse *reg, byte_t *buf, struct prparse *cld,
 	/* past said header.  In other words, the IPv6 header may extend */
 	/* past the start of the next protocol. Did I mention how little */
 	/* I like AH's design. */
-	if (prp_off_valid(reg, PRP_IPV6FLD_AHH)) {
+	if (pdu_off_valid(reg, PDU_IPV6FLD_AHH)) {
 		*prid = PRID_BUILD(PRID_PF_INET, IPPROT_AH);
-		*off = reg->offs[PRP_IPV6FLD_AHH];
-		*maxlen = prp_totlen(reg) - reg->offs[PRP_IPV6FLD_AHH];
+		*off = reg->offs[PDU_IPV6FLD_AHH];
+		*maxlen = pdu_totlen(reg) - reg->offs[PDU_IPV6FLD_AHH];
 	} else {
-		ulong nhoff = reg->offs[PRP_IPV6FLD_NXTHDR];
-		abort_unless(nhoff != PRP_OFF_INVALID);
-		abort_unless(nhoff >= prp_soff(reg));
-		abort_unless(nhoff < prp_eoff(reg));
+		ulong nhoff = reg->offs[PDU_IPV6FLD_NXTHDR];
+		abort_unless(nhoff != PDU_OFF_INVALID);
+		abort_unless(nhoff >= pdu_soff(reg));
+		abort_unless(nhoff < pdu_eoff(reg));
 		nexth = buf[nhoff];
 		*prid = PRID_BUILD(PRID_PF_INET, nexth);
-		if (prp_off_valid(reg, PRP_IPV6FLD_FRAGH)) {
+		if (pdu_off_valid(reg, PDU_IPV6FLD_FRAGH)) {
 			/* we can't parse the next header if we aren't the */
 			/* first fragment. */
-			p = buf + reg->offs[PRP_IPV6FLD_FRAGH] + 2;
+			p = buf + reg->offs[PDU_IPV6FLD_FRAGH] + 2;
 			foff = ntoh16x(p);
 			foff &= ~7;
 			if (foff > 0)
 				return 0;
 		}
-		*off = prp_poff(reg);
-		*maxlen = prp_plen(reg);
+		*off = pdu_poff(reg);
+		*maxlen = pdu_plen(reg);
 	}
 	return 1;
 }
 
 
-static int ipv6_getspec(struct prparse *prp, int enclose, struct prpspec *ps)
+static int ipv6_getspec(struct pdu *pdu, int enclose, struct pduspec *ps)
 {
-	return prpspec_init(ps, prp, PRID_IPV6, IPV6H_LEN, 0, enclose);
+	return pduspec_init(ps, pdu, PRID_IPV6, IPV6H_LEN, 0, enclose);
 }
 
 
-static int ipv6_add(struct prparse *reg, byte_t *buf, struct prpspec *ps,
+static int ipv6_add(struct pdu *reg, byte_t *buf, struct pduspec *ps,
 		    int enclose)
 {
-	struct prparse *prp, *cld;
+	struct pdu *pdu, *cld;
 	struct ipv6h *ip6;
 
 	if (ps->hlen < IPV6H_LEN || ps->plen > 65535) {
@@ -1544,22 +1544,22 @@ static int ipv6_add(struct prparse *reg, byte_t *buf, struct prpspec *ps,
 		return -1;
 	}
 
-	prp = newprp(sizeof(struct ipv6_parse), PRID_IPV6, ps->off, ps->hlen,
-		     ps->plen, ps->tlen, &ipv6_prparse_ops, reg,
-		     PRP_IPV6_NXFIELDS);
-	if (!prp)
+	pdu = newpdu(sizeof(struct ipv6_pdu), PRID_IPV6, ps->off, ps->hlen,
+		     ps->plen, ps->tlen, &ipv6_pdu_ops, reg,
+		     PDU_IPV6_NXFIELDS);
+	if (!pdu)
 		return -1;
 
-	prp_add_insert(reg, prp, enclose);
+	pdu_add_insert(reg, pdu, enclose);
 	if (buf) {
-		memset(prp_header(prp, buf, void), 0, prp_hlen(prp));
-		ip6 = prp_header(prp, buf, struct ipv6h);
-		prp->offs[PRP_IPV6FLD_NXTHDR] = prp_soff(prp) + 6;
+		memset(pdu_header(pdu, buf, void), 0, pdu_hlen(pdu));
+		ip6 = pdu_header(pdu, buf, struct ipv6h);
+		pdu->offs[PDU_IPV6FLD_NXTHDR] = pdu_soff(pdu) + 6;
 		*(byte_t *)ip6 = 0x60;
-		ip6->len = hton16(prp_plen(prp));
+		ip6->len = hton16(pdu_plen(pdu));
 		ip6->nxthdr = IPPROT_RESERVED;
 		if (enclose) {
-			cld = prp_next_in_region(prp, prp);
+			cld = pdu_next_in_region(pdu, pdu);
 			if (cld != NULL)
 				ip6->nxthdr = pridtoiptype(cld->prid);
 		}
@@ -1569,7 +1569,7 @@ static int ipv6_add(struct prparse *reg, byte_t *buf, struct prpspec *ps,
 }
 
 
-static void ipv6_update(struct prparse *prp, byte_t *buf)
+static void ipv6_update(struct pdu *pdu, byte_t *buf)
 {
 	struct ipv6h *ip6;
 	ushort paylen;
@@ -1577,133 +1577,133 @@ static void ipv6_update(struct prparse *prp, byte_t *buf)
 	byte_t *p;
 	int rv;
 
-	prp->error = 0;
-	prp_reset_xfields(prp);
-	ip6 = prp_header(prp, buf, struct ipv6h);
-	prp->offs[PRP_IPV6FLD_NXTHDR] = prp_soff(prp) + 6;
+	pdu->error = 0;
+	pdu_reset_xfields(pdu);
+	ip6 = pdu_header(pdu, buf, struct ipv6h);
+	pdu->offs[PDU_IPV6FLD_NXTHDR] = pdu_soff(pdu) + 6;
 
-	len = prp_totlen(prp);
+	len = pdu_totlen(pdu);
 	if (len < IPV6H_LEN) {
-		prp->error = PRP_ERR_TOOSMALL;
+		pdu->error = PDU_ERR_TOOSMALL;
 		return;
 	}
 
 	if (IPV6H_PVERSION(ip6) != 6)
-		prp->error |= PRP_ERR_INVALID;
+		pdu->error |= PDU_ERR_INVALID;
 
 	paylen = ntoh16x(&ip6->len);
 	if (paylen > len - IPV6H_LEN)
-		prp->error |= PRP_ERR_TRUNC;
+		pdu->error |= PDU_ERR_TRUNC;
 
-	prp_poff(prp) = prp_soff(prp) + IPV6H_LEN;
+	pdu_poff(pdu) = pdu_soff(pdu) + IPV6H_LEN;
 	if (paylen == 0 && ip6->nxthdr == IPPROT_V6_HOPOPT) {
 		if (len < 48) {
-			prp->error |= PRP_ERR_OPTERR | PRP_ERR_HLEN |
-				      PRP_ERR_TRUNC;
+			pdu->error |= PDU_ERR_OPTERR | PDU_ERR_HLEN |
+				      PDU_ERR_TRUNC;
 			return;
 		}
-		p = buf + prp_poff(prp);
+		p = buf + pdu_poff(pdu);
 		hbhlen = p[1] * 8;
-		if (hbhlen > prp_plen(prp)) {
-			prp->error |= PRP_ERR_OPTERR | PRP_ERR_HLEN |
-				      PRP_ERR_TRUNC;
+		if (hbhlen > pdu_plen(pdu)) {
+			pdu->error |= PDU_ERR_OPTERR | PDU_ERR_HLEN |
+				      PDU_ERR_TRUNC;
 			return;
 		}
-		rv = parse_ipv6_hopopt(prp, ip6, (byte_t *)(ip6+1), hbhlen);
-		if (rv < 0 || !prp_off_valid(prp, PRP_IPV6FLD_JLEN)) {
-			prp->error |= PRP_ERR_TRUNC;
+		rv = parse_ipv6_hopopt(pdu, ip6, (byte_t *)(ip6+1), hbhlen);
+		if (rv < 0 || !pdu_off_valid(pdu, PDU_IPV6FLD_JLEN)) {
+			pdu->error |= PDU_ERR_TRUNC;
 			return;
 		}
-		jlen = ntoh32x(buf + prp->offs[PRP_IPV6FLD_JLEN]);
+		jlen = ntoh32x(buf + pdu->offs[PDU_IPV6FLD_JLEN]);
 		if (jlen > len - IPV6H_LEN) {
-			prp->error |= PRP_ERR_OPTERR | PRP_ERR_TRUNC;
+			pdu->error |= PDU_ERR_OPTERR | PDU_ERR_TRUNC;
 			return;
 		}
 		if (jlen < len - IPV6H_LEN) {
 			extra = len - jlen - IPV6H_LEN;
-			prp_eoff(prp) = prp_toff(prp) = 
-				prp_soff(prp) + IPV6H_LEN + jlen;
+			pdu_eoff(pdu) = pdu_toff(pdu) = 
+				pdu_soff(pdu) + IPV6H_LEN + jlen;
 			len -= extra;
 		}
 	} else if (paylen < len - IPV6H_LEN) {
 		extra = len - paylen - IPV6H_LEN;
-		prp_eoff(prp) = prp_toff(prp) = prp_soff(prp) + IPV6H_LEN +
+		pdu_eoff(pdu) = pdu_toff(pdu) = pdu_soff(pdu) + IPV6H_LEN +
 						paylen;
 		len -= extra;
 	}
 
 	/* sets hlen */
-	parse_ipv6_opt(prp, ip6, len - IPV6H_LEN);
+	parse_ipv6_opt(pdu, ip6, len - IPV6H_LEN);
 }
 
 
-static int ipv6_fixnxt(struct prparse *prp, byte_t *buf)
+static int ipv6_fixnxt(struct pdu *pdu, byte_t *buf)
 {
-	struct prparse *next;
+	struct pdu *next;
 
-	next = prp_next(prp);
-	if (!prp_list_end(next) && prp_off_valid(prp, PRP_IPV6FLD_NXTHDR))
-		*(buf + prp->offs[PRP_IPV6FLD_NXTHDR]) =
+	next = pdu_next(pdu);
+	if (!pdu_list_end(next) && pdu_off_valid(pdu, PDU_IPV6FLD_NXTHDR))
+		*(buf + pdu->offs[PDU_IPV6FLD_NXTHDR]) =
 			pridtoiptype(next->prid);
 	return 0;
 }
 
 
-static int ipv6_fixlen(struct prparse *prp, byte_t *buf)
+static int ipv6_fixlen(struct pdu *pdu, byte_t *buf)
 {
-	struct ipv6h *ip6 = prp_header(prp, buf, struct ipv6h);
+	struct ipv6h *ip6 = pdu_header(pdu, buf, struct ipv6h);
 	ushort plen;
 
-	abort_unless(prp && buf);
-	if (prp_hlen(prp) < 40)
+	abort_unless(pdu && buf);
+	if (pdu_hlen(pdu) < 40)
 		return -1;
-	if (!prp_off_valid(prp, PRP_IPV6FLD_JLEN)) {
-		if (prp_plen(prp) > 65535)
+	if (!pdu_off_valid(pdu, PDU_IPV6FLD_JLEN)) {
+		if (pdu_plen(pdu) > 65535)
 			return -1;
-		plen = prp_plen(prp) + prp_hlen(prp) - 40;
+		plen = pdu_plen(pdu) + pdu_hlen(pdu) - 40;
 		hton16i(plen, &ip6->len);
 	} else {
-		if (prp->offs[PRP_IPV6FLD_JLEN] > prp_totlen(prp) - 2)
+		if (pdu->offs[PDU_IPV6FLD_JLEN] > pdu_totlen(pdu) - 2)
 			return -1;
 		hton16i(0, &ip6->len);
-		hton32i(prp_plen(prp) + prp_hlen(prp) - 40, 
-			buf + prp->offs[PRP_IPV6FLD_JLEN]);
+		hton32i(pdu_plen(pdu) + pdu_hlen(pdu) - 40, 
+			buf + pdu->offs[PDU_IPV6FLD_JLEN]);
 	}
-	prp->error &= ~(PRP_ERR_TRUNC | PRP_ERR_HLEN | PRP_ERR_TOOSMALL);
+	pdu->error &= ~(PDU_ERR_TRUNC | PDU_ERR_HLEN | PDU_ERR_TOOSMALL);
 
 	return 0;
 }
 
 
-static struct prparse *ipv6_copy(struct prparse *oprp)
+static struct pdu *ipv6_copy(struct pdu *opdu)
 {
-	return simple_copy(oprp, sizeof(struct ipv6_parse));
+	return simple_copy(opdu, sizeof(struct ipv6_pdu));
 }
 
 
-static void ipv6_free(struct prparse *prp)
+static void ipv6_free(struct pdu *pdu)
 {
-	freeprp(prp);
+	freepdu(pdu);
 }
 
 
 /* -- ICMPv6 Functions -- */
-static void icmp6_update(struct prparse *prp, byte_t *buf);
+static void icmp6_update(struct pdu *pdu, byte_t *buf);
 
-static struct prparse *icmp6_parse(struct prparse *reg, byte_t *buf,
-				   ulong off, ulong maxlen)
+static struct pdu *icmp6_parse(struct pdu *reg, byte_t *buf, ulong off,
+			       ulong maxlen)
 {
-	struct prparse *prp;
-	prp = newprp(sizeof(struct icmp6_parse), PRID_ICMP6, off, 0, maxlen, 0,
-		     &icmpv6_prparse_ops, reg, PRP_ICMP6_NXFIELDS);
-	if (!prp)
+	struct pdu *pdu;
+	pdu = newpdu(sizeof(struct icmp6_pdu), PRID_ICMP6, off, 0, maxlen, 0,
+		     &icmpv6_pdu_ops, reg, PDU_ICMP6_NXFIELDS);
+	if (!pdu)
 		return NULL;
-	icmp6_update(prp, buf);
-	return prp;
+	icmp6_update(pdu, buf);
+	return pdu;
 }
 
 
-static int icmp6_nxtcld(struct prparse *reg, byte_t *buf, struct prparse *cld,
+static int icmp6_nxtcld(struct pdu *reg, byte_t *buf, struct pdu *cld,
 		        uint *prid, ulong *off, ulong *maxlen)
 {
 	struct icmp6h *icmp6;
@@ -1711,16 +1711,16 @@ static int icmp6_nxtcld(struct prparse *reg, byte_t *buf, struct prparse *cld,
 	if (cld != NULL)
 		return 0;
 
-	icmp6 = prp_header(reg, buf, struct icmp6h);
+	icmp6 = pdu_header(reg, buf, struct icmp6h);
 	if (ICMP6T_IS_ERR(icmp6->type)) {
 		*prid = PRID_IPV6;
-		*off = prp_poff(reg);
-		*maxlen = prp_plen(reg);
+		*off = pdu_poff(reg);
+		*maxlen = pdu_plen(reg);
 		return 1;
-	} else if (prp_off_valid(reg, PRP_ICMP6FLD_RDRHDR)) { 
+	} else if (pdu_off_valid(reg, PDU_ICMP6FLD_RDRHDR)) { 
 		*prid = PRID_IPV6;
-		*off = reg->offs[PRP_ICMP6FLD_RDRHDR] + 8;
-		*maxlen = reg->offs[PRP_ICMP6FLD_RDRHDR_EOFF] - *off;
+		*off = reg->offs[PDU_ICMP6FLD_RDRHDR] + 8;
+		*maxlen = reg->offs[PDU_ICMP6FLD_RDRHDR_EOFF] - *off;
 		return 1;
 	} else {
 		return 0;
@@ -1728,34 +1728,34 @@ static int icmp6_nxtcld(struct prparse *reg, byte_t *buf, struct prparse *cld,
 }
 
 
-static int icmp6_getspec(struct prparse *prp, int enclose, struct prpspec *ps)
+static int icmp6_getspec(struct pdu *pdu, int enclose, struct pduspec *ps)
 {
-	return prpspec_init(ps, prp, PRID_ICMP6, ICMP6H_LEN, 0, enclose);
+	return pduspec_init(ps, pdu, PRID_ICMP6, ICMP6H_LEN, 0, enclose);
 }
 
 
-static int icmp6_add(struct prparse *reg, byte_t *buf, struct prpspec *ps,
+static int icmp6_add(struct pdu *reg, byte_t *buf, struct pduspec *ps,
 		     int enclose)
 {
-	struct prparse *prp, *ipprp;
+	struct pdu *pdu, *ippdu;
 	struct icmp6h *icmp6;
 
-	prp = newprp(sizeof(struct icmp6_parse), PRID_ICMP6, ps->off, ps->hlen,
-		     ps->plen, ps->tlen, &icmpv6_prparse_ops, reg,
-		     PRP_ICMP6_NXFIELDS);
-	if (!prp)
+	pdu = newpdu(sizeof(struct icmp6_pdu), PRID_ICMP6, ps->off, ps->hlen,
+		     ps->plen, ps->tlen, &icmpv6_pdu_ops, reg,
+		     PDU_ICMP6_NXFIELDS);
+	if (!pdu)
 		return -1;
 
-	prp_add_insert(reg, prp, enclose);
+	pdu_add_insert(reg, pdu, enclose);
 	if (buf) {
-		memset(prp_header(prp, buf, void), 0, prp_hlen(prp));
-		icmp6 = prp_header(prp, buf, struct icmp6h);
+		memset(pdu_header(pdu, buf, void), 0, pdu_hlen(pdu));
+		icmp6 = pdu_header(pdu, buf, struct icmp6h);
 		icmp6->type = ICMP6T_ECHO_REQUEST;
-		ipprp = find_ipprp(reg);
-		if (ipprp == NULL)  {
-			prp->error |= PRP_ERR_CKSUM;
+		ippdu = find_ippdu(reg);
+		if (ippdu == NULL)  {
+			pdu->error |= PDU_ERR_CKSUM;
 		} else {
-			icmp6->cksum = pseudo_cksum(prp, ipprp, buf, 
+			icmp6->cksum = pseudo_cksum(pdu, ippdu, buf, 
 						    IPPROT_ICMPV6);
 		}
 	}
@@ -1764,108 +1764,108 @@ static int icmp6_add(struct prparse *reg, byte_t *buf, struct prpspec *ps,
 }
 
 
-static void parse_icmp6_nd_opt(struct prparse *prp, byte_t *buf, int optoff)
+static void parse_icmp6_nd_opt(struct pdu *pdu, byte_t *buf, int optoff)
 {
 	struct icmp6_nd_opt *opt;
 	ulong off;
 
-	off = prp_soff(prp) + optoff;
-	if (prp_eoff(prp) - off >= ICMP6_ND_OPT_MINLEN)
-		prp->offs[PRP_ICMP6FLD_NDPOPT] = off;
+	off = pdu_soff(pdu) + optoff;
+	if (pdu_eoff(pdu) - off >= ICMP6_ND_OPT_MINLEN)
+		pdu->offs[PDU_ICMP6FLD_NDPOPT] = off;
 
-	while (off < prp_eoff(prp)) {
-		if (prp_eoff(prp) - off < ICMP6_ND_OPT_MINLEN) {
-			prp->error |= PRP_ERR_OPTLEN | PRP_ERR_OPTERR;
+	while (off < pdu_eoff(pdu)) {
+		if (pdu_eoff(pdu) - off < ICMP6_ND_OPT_MINLEN) {
+			pdu->error |= PDU_ERR_OPTLEN | PDU_ERR_OPTERR;
 			break;
 		}
 		opt = (struct icmp6_nd_opt *)(buf + off);
 		/* check for malformed length */
-		if ((opt->len == 0) || (opt->len * 8 > prp_eoff(prp) - off)) {
-			prp->error |= PRP_ERR_OPTLEN;
+		if ((opt->len == 0) || (opt->len * 8 > pdu_eoff(pdu) - off)) {
+			pdu->error |= PDU_ERR_OPTLEN;
 			return;
 		}
 		switch (opt->type) {
 		case ICMP6_ND_OPT_SRCLLA:
-			prp->offs[PRP_ICMP6FLD_SRCLLA] = off;
-			prp->offs[PRP_ICMP6FLD_SRCLLA_EOFF] = off + opt->len*8;
+			pdu->offs[PDU_ICMP6FLD_SRCLLA] = off;
+			pdu->offs[PDU_ICMP6FLD_SRCLLA_EOFF] = off + opt->len*8;
 			break;
                 case ICMP6_ND_OPT_TGTLLA:
-			prp->offs[PRP_ICMP6FLD_TGTLLA] = off;
-			prp->offs[PRP_ICMP6FLD_TGTLLA_EOFF] = off + opt->len*8;
+			pdu->offs[PDU_ICMP6FLD_TGTLLA] = off;
+			pdu->offs[PDU_ICMP6FLD_TGTLLA_EOFF] = off + opt->len*8;
 			break;
 		case ICMP6_ND_OPT_PFXINFO:
-			prp->offs[PRP_ICMP6FLD_PFXINFO] = off;
-			if ((prp_eoff(prp) - off < ICMP6_ND_PFXINFO_OLEN) ||
+			pdu->offs[PDU_ICMP6FLD_PFXINFO] = off;
+			if ((pdu_eoff(pdu) - off < ICMP6_ND_PFXINFO_OLEN) ||
 			    (opt->len != ICMP6_ND_PFXINFO_OLEN / 8))
-				prp->error |= PRP_ERR_OPTLEN;
+				pdu->error |= PDU_ERR_OPTLEN;
 			break;
                 case ICMP6_ND_OPT_RDRHDR:
-			prp->offs[PRP_ICMP6FLD_RDRHDR] = off;
-			prp->offs[PRP_ICMP6FLD_RDRHDR_EOFF] = off + opt->len*8;
+			pdu->offs[PDU_ICMP6FLD_RDRHDR] = off;
+			pdu->offs[PDU_ICMP6FLD_RDRHDR_EOFF] = off + opt->len*8;
 			break;
 		case ICMP6_ND_OPT_MTU:
-			prp->offs[PRP_ICMP6FLD_MTU] = off;
+			pdu->offs[PDU_ICMP6FLD_MTU] = off;
 			if (opt->len != ICMP6_ND_MTU_OLEN / 8)
-				prp->error |= PRP_ERR_OPTLEN;
+				pdu->error |= PDU_ERR_OPTLEN;
 			break;
 		case ICMP6_ND_OPT_RADVIVL:
-			prp->offs[PRP_ICMP6FLD_RADVIVL] = off;
+			pdu->offs[PDU_ICMP6FLD_RADVIVL] = off;
 			if (opt->len != ICMP6_ND_RADVIVL_OLEN / 8)
-				prp->error |= PRP_ERR_OPTLEN;
+				pdu->error |= PDU_ERR_OPTLEN;
 			break;
 		case ICMP6_ND_OPT_AGTINFO:
-			prp->offs[PRP_ICMP6FLD_AGTINFO] = off;
+			pdu->offs[PDU_ICMP6FLD_AGTINFO] = off;
 			if (opt->len != ICMP6_ND_AGTINFO_OLEN / 8)
-				prp->error |= PRP_ERR_OPTLEN;
+				pdu->error |= PDU_ERR_OPTLEN;
 			break;
 		default:
-			prp->error |= PRP_ERR_OPTERR;
+			pdu->error |= PDU_ERR_OPTERR;
 			break;
 		}
 
 		off += opt->len * 8;
 	}
 
-	prp_poff(prp) = off;
+	pdu_poff(pdu) = off;
 }
 
 
-static void icmp6_update(struct prparse *prp, byte_t *buf)
+static void icmp6_update(struct pdu *pdu, byte_t *buf)
 {
-	struct prparse *ip6prp;
+	struct pdu *ip6pdu;
 	struct icmp6h *icmp6;
 	int oidx;
 	int hlen;
 
-	prp->error = 0;
-	prp_reset_xfields(prp);
+	pdu->error = 0;
+	pdu_reset_xfields(pdu);
 
-	if (prp_totlen(prp) < ICMP6H_LEN) {
-		prp->error = PRP_ERR_TOOSMALL;
+	if (pdu_totlen(pdu) < ICMP6H_LEN) {
+		pdu->error = PDU_ERR_TOOSMALL;
 		return;
 	}
 	
-	ip6prp = find_ipprp(prp->region);
-	if ((ip6prp == NULL) ||
-	    ((pseudo_cksum(prp, ip6prp, buf, IPPROT_ICMPV6) & 0xFFFF) != 0)) {
-		prp->error |= PRP_ERR_CKSUM;
+	ip6pdu = find_ippdu(pdu->region);
+	if ((ip6pdu == NULL) ||
+	    ((pseudo_cksum(pdu, ip6pdu, buf, IPPROT_ICMPV6) & 0xFFFF) != 0)) {
+		pdu->error |= PDU_ERR_CKSUM;
 	}
 
-	icmp6 = prp_header(prp, buf, struct icmp6h);
+	icmp6 = pdu_header(pdu, buf, struct icmp6h);
 	if (ICMP6T_IS_ERR(icmp6->type)) {
 
 		/* error types */
-		prp_poff(prp) = prp_soff(prp) + ICMP6H_LEN;
+		pdu_poff(pdu) = pdu_soff(pdu) + ICMP6H_LEN;
 		if (icmp6->type == ICMP6T_PARAM_PROB)
-			prp->offs[PRP_ICMP6FLD_PPTR] = prp_soff(prp) + 4;
+			pdu->offs[PDU_ICMP6FLD_PPTR] = pdu_soff(pdu) + 4;
 		else
-			prp->offs[PRP_ICMP6FLD_ERESV] = prp_soff(prp) + 4;
+			pdu->offs[PDU_ICMP6FLD_ERESV] = pdu_soff(pdu) + 4;
 
 	} else if (ICMP6T_IS_ECHO(icmp6->type)) {
 
 		/* echo request/reply */
-		prp_poff(prp) = prp_soff(prp) + ICMP6H_LEN;
-		prp->offs[PRP_ICMP6FLD_ECHO] = prp_soff(prp) + 4;
+		pdu_poff(pdu) = pdu_soff(pdu) + ICMP6H_LEN;
+		pdu->offs[PDU_ICMP6FLD_ECHO] = pdu_soff(pdu) + 4;
 
 	} else if (ICMP6T_IS_NDP(icmp6->type)) {
 
@@ -1873,62 +1873,62 @@ static void icmp6_update(struct prparse *prp, byte_t *buf)
 		switch(icmp6->type) {
 		case ICMP6T_RSOLICIT:
 			hlen = ICMP6_ND_RSOL_HLEN;
-			oidx = PRP_ICMP6FLD_RSOL;
+			oidx = PDU_ICMP6FLD_RSOL;
 			break;
 		case ICMP6T_RADVERT:
 			hlen = ICMP6_ND_RADV_HLEN;
-			oidx = PRP_ICMP6FLD_RADV;
+			oidx = PDU_ICMP6FLD_RADV;
 			break;
 		case ICMP6T_NSOLICIT:
 		case ICMP6T_NADVERT:
 			hlen = ICMP6_ND_NEIGH_HLEN;
-			oidx = PRP_ICMP6FLD_NEIGH;
+			oidx = PDU_ICMP6FLD_NEIGH;
 			break;
 		case ICMP6T_NREDIR:
 			hlen = ICMP6_ND_RDR_HLEN;
-			oidx = PRP_ICMP6FLD_REDIR;
+			oidx = PDU_ICMP6FLD_REDIR;
 			break;
 		default:
 			abort_unless(0);
 		}
 
-		if (prp_totlen(prp) < hlen) {
-			prp_poff(prp) = prp_soff(prp) + ICMP6H_LEN;
-			prp->error = PRP_ERR_TOOSMALL;
+		if (pdu_totlen(pdu) < hlen) {
+			pdu_poff(pdu) = pdu_soff(pdu) + ICMP6H_LEN;
+			pdu->error = PDU_ERR_TOOSMALL;
 		} else {
-			prp->offs[oidx] = prp_soff(prp) + 4;
-			parse_icmp6_nd_opt(prp, buf, hlen);
+			pdu->offs[oidx] = pdu_soff(pdu) + 4;
+			parse_icmp6_nd_opt(pdu, buf, hlen);
 		}
 
 	} else {
 		/* catch all */
-		prp_poff(prp) = prp_soff(prp) + ICMP6H_LEN;
+		pdu_poff(pdu) = pdu_soff(pdu) + ICMP6H_LEN;
 
 	}
 }
 
 
-static int icmp6_fixcksum(struct prparse *prp, byte_t *buf)
+static int icmp6_fixcksum(struct pdu *pdu, byte_t *buf)
 {
-	struct prparse *ipprp;
-	struct icmp6h *icmp6 = prp_header(prp, buf, struct icmp6h);
-	ipprp = find_ipprp(prp->region);
-	if (ipprp == NULL) 
+	struct pdu *ippdu;
+	struct icmp6h *icmp6 = pdu_header(pdu, buf, struct icmp6h);
+	ippdu = find_ippdu(pdu->region);
+	if (ippdu == NULL) 
 		return -1;
 	icmp6->cksum = 0;
-	icmp6->cksum = pseudo_cksum(prp, ipprp, buf, IPPROT_ICMPV6);
-	prp->error &= ~PRP_ERR_CKSUM;
+	icmp6->cksum = pseudo_cksum(pdu, ippdu, buf, IPPROT_ICMPV6);
+	pdu->error &= ~PDU_ERR_CKSUM;
 	return 0;
 }
 
 
 /* -- ops for GRE type -- */
-static void gre_update(struct prparse *prp, byte_t *buf);
+static void gre_update(struct pdu *pdu, byte_t *buf);
 
-static struct prparse *gre_parse(struct prparse *reg, byte_t *buf,
-				 ulong off, ulong maxlen)
+static struct pdu *gre_parse(struct pdu *reg, byte_t *buf, ulong off,
+			     ulong maxlen)
 {
-	struct prparse *prp;
+	struct pdu *pdu;
 	struct greh *gre;
 	uint prid = PRID_GRE;
 	ushort proto;
@@ -1941,18 +1941,18 @@ static struct prparse *gre_parse(struct prparse *reg, byte_t *buf,
 			prid = PRID_NVGRE;
 	}
 
-	prp = newprp(sizeof(struct gre_parse), prid, off, 0, maxlen, 0,
-		     &gre_prparse_ops, reg, PRP_GRE_NXFIELDS);
-	if (!prp)
+	pdu = newpdu(sizeof(struct gre_pdu), prid, off, 0, maxlen, 0,
+		     &gre_pdu_ops, reg, PDU_GRE_NXFIELDS);
+	if (!pdu)
 		return NULL;
 
-	gre_update(prp, buf);
+	gre_update(pdu, buf);
 
-	return prp;
+	return pdu;
 }
 
 
-int gre_nxtcld(struct prparse *reg, byte_t *buf, struct prparse *cld,
+int gre_nxtcld(struct pdu *reg, byte_t *buf, struct pdu *cld,
 	       uint *prid, ulong *off, ulong *maxlen)
 {
 	struct greh *gre;
@@ -1961,27 +1961,27 @@ int gre_nxtcld(struct prparse *reg, byte_t *buf, struct prparse *cld,
 	if (cld != NULL)
 		return 0;
 
-	gre = prp_header(reg, buf, struct greh);
+	gre = pdu_header(reg, buf, struct greh);
 	x = etypetoprid(ntoh16x(&gre->proto));
 	if (x == PRID_NONE)
 		return 0;
 	*prid = x;
-	*off = prp_poff(reg);
-	*maxlen = prp_plen(reg);
+	*off = pdu_poff(reg);
+	*maxlen = pdu_plen(reg);
 	return 1;
 }
 
 
-static int gre_getspec(struct prparse *prp, int enclose, struct prpspec *ps)
+static int gre_getspec(struct pdu *pdu, int enclose, struct pduspec *ps)
 {
-	return prpspec_init(ps, prp, PRID_GRE, GRE_BASE_HLEN, 0, enclose);
+	return pduspec_init(ps, pdu, PRID_GRE, GRE_BASE_HLEN, 0, enclose);
 }
 
 
-static int gre_add(struct prparse *reg, byte_t *buf, struct prpspec *ps,
+static int gre_add(struct pdu *reg, byte_t *buf, struct pduspec *ps,
 		   int enclose)
 {
-	struct prparse *prp, *cld;
+	struct pdu *pdu, *cld;
 	uint16_t etype;
 	struct greh *gre;
 
@@ -1991,19 +1991,19 @@ static int gre_add(struct prparse *reg, byte_t *buf, struct prpspec *ps,
 		return -1;
 	}
 
-	prp = newprp(sizeof(struct gre_parse), PRID_GRE, ps->off, ps->hlen,
-		     ps->plen, ps->tlen, &gre_prparse_ops, reg,
-		     PRP_GRE_NXFIELDS);
-	if (!prp)
+	pdu = newpdu(sizeof(struct gre_pdu), PRID_GRE, ps->off, ps->hlen,
+		     ps->plen, ps->tlen, &gre_pdu_ops, reg,
+		     PDU_GRE_NXFIELDS);
+	if (!pdu)
 		return -1;
 
-	prp_add_insert(reg, prp, enclose);
-	if (buf && prp_hlen(prp) >= GRE_BASE_HLEN) {
-		memset(prp_header(prp, buf, void), 0, prp_hlen(prp));
+	pdu_add_insert(reg, pdu, enclose);
+	if (buf && pdu_hlen(pdu) >= GRE_BASE_HLEN) {
+		memset(pdu_header(pdu, buf, void), 0, pdu_hlen(pdu));
 		if (enclose) {
-			cld = prp_next_in_region(prp, prp);
+			cld = pdu_next_in_region(pdu, pdu);
 			if (cld != NULL) {
-				gre = prp_header(prp, buf, struct greh);
+				gre = pdu_header(pdu, buf, struct greh);
 				etype = pridtoetype(cld->prid);
 				hton16i(etype, &gre->proto);
 			}
@@ -2014,7 +2014,7 @@ static int gre_add(struct prparse *reg, byte_t *buf, struct prpspec *ps,
 }
 
 
-static void gre_update(struct prparse *prp, byte_t *buf)
+static void gre_update(struct pdu *pdu, byte_t *buf)
 {
 	uint hlen;
 	struct greh *gre;
@@ -2023,95 +2023,95 @@ static void gre_update(struct prparse *prp, byte_t *buf)
 	ulong len;
 	ushort proto;
 
-	prp->error = 0;
-	prp_reset_xfields(prp);
+	pdu->error = 0;
+	pdu_reset_xfields(pdu);
 
-	prp->prid = PRID_GRE;
-	len = prp_totlen(prp);
+	pdu->prid = PRID_GRE;
+	len = pdu_totlen(pdu);
 	if (len < GRE_BASE_HLEN) {
-		prp->error |= PRP_ERR_TOOSMALL;
+		pdu->error |= PDU_ERR_TOOSMALL;
 		return;
 	}
 
-	gre = prp_header(prp, buf, struct greh);
+	gre = pdu_header(pdu, buf, struct greh);
 	hlen = GRE_HLEN(gre);
 	if (len < hlen) {
-		prp->error |= PRP_ERR_HLEN;
+		pdu->error |= PDU_ERR_HLEN;
 		return;
 	}
-	prp_poff(prp) = prp_soff(prp) + hlen;
+	pdu_poff(pdu) = pdu_soff(pdu) + hlen;
 
 	off = GRE_BASE_HLEN;
 	if ((gre->flags & GRE_FLAG_CKSUM) != 0) {
-		prp->offs[PRP_GREFLD_CKSUM] = prp_soff(prp) + off;
+		pdu->offs[PDU_GREFLD_CKSUM] = pdu_soff(pdu) + off;
 		off += 4;
-		sum = ~ones_sum(gre, prp_totlen(prp), 0) & 0xFFFF;
+		sum = ~ones_sum(gre, pdu_totlen(pdu), 0) & 0xFFFF;
 		if (sum != 0)
-			prp->error |= PRP_ERR_CKSUM;
+			pdu->error |= PDU_ERR_CKSUM;
 	}
 
 	if ((gre->flags & GRE_FLAG_KEY) != 0) {
-		prp->offs[PRP_GREFLD_KEY] = prp_soff(prp) + off;
+		pdu->offs[PDU_GREFLD_KEY] = pdu_soff(pdu) + off;
 		off += 4;
 	}
 
 	if ((gre->flags & GRE_FLAG_SEQ) != 0)
-		prp->offs[PRP_GREFLD_SEQ] = prp_soff(prp) + off;
+		pdu->offs[PDU_GREFLD_SEQ] = pdu_soff(pdu) + off;
 
 	if (GRE_VERSION(gre) != 0) {
-		prp->error |= PRP_ERR_INVALID;
+		pdu->error |= PDU_ERR_INVALID;
 	} else {
 		/* check for NVGRE */
 		proto = ntoh16x(&gre->proto);
 		if (proto == ETHTYPE_TEB && GRE_FLAGS(gre) == GRE_FLAG_KEY)
-			prp->prid = PRID_NVGRE;
+			pdu->prid = PRID_NVGRE;
 	}
 }
 
 
-static int gre_fixnxt(struct prparse *prp, byte_t *buf)
+static int gre_fixnxt(struct pdu *pdu, byte_t *buf)
 {
-	struct prparse *next;
+	struct pdu *next;
 	struct greh *gre;
-	next = prp_next(prp);
-	if (!prp_list_end(next)) {
-		gre = prp_header(prp, buf, struct greh);
+	next = pdu_next(pdu);
+	if (!pdu_list_end(next)) {
+		gre = pdu_header(pdu, buf, struct greh);
 		hton16i(pridtoetype(next->prid), &gre->proto);
 	}
 	return 0;
 }
 
 
-static int gre_fixcksum(struct prparse *prp, byte_t *buf)
+static int gre_fixcksum(struct pdu *pdu, byte_t *buf)
 {
 	struct greh *gre;
 	uint16_t *sump;
 
-	abort_unless(prp);
-	gre = prp_header(prp, buf, struct greh);
-	if (prp_hlen(prp) < GRE_HLEN(gre))
+	abort_unless(pdu);
+	gre = pdu_header(pdu, buf, struct greh);
+	if (pdu_hlen(pdu) < GRE_HLEN(gre))
 		return -1;
 	if ((gre->flags & GRE_FLAG_CKSUM) != 0) {
 		sump = (uint16_t *)(gre + 1);
 		*sump = 0;
-		*sump = ~ones_sum(gre, prp_totlen(prp), 0);
+		*sump = ~ones_sum(gre, pdu_totlen(pdu), 0);
 	}
-	prp->error &= ~PRP_ERR_CKSUM;
+	pdu->error &= ~PDU_ERR_CKSUM;
 
 	return 0;
 }
 
 
-static int nvgre_getspec(struct prparse *prp, int enclose, struct prpspec *ps)
+static int nvgre_getspec(struct pdu *pdu, int enclose, struct pduspec *ps)
 {
-	return prpspec_init(ps, prp, PRID_NVGRE, NVGRE_HLEN, 0, enclose);
+	return pduspec_init(ps, pdu, PRID_NVGRE, NVGRE_HLEN, 0, enclose);
 }
 
 
-static int nvgre_add(struct prparse *reg, byte_t *buf, struct prpspec *ps,
+static int nvgre_add(struct pdu *reg, byte_t *buf, struct pduspec *ps,
 		     int enclose)
 {
-	struct prparse *prp, *cld;
+	struct pdu *pdu, *cld;
 	uint16_t etype;
 	struct nvgreh *nvgre;
 
@@ -2121,19 +2121,19 @@ static int nvgre_add(struct prparse *reg, byte_t *buf, struct prpspec *ps,
 		return -1;
 	}
 
-	prp = newprp(sizeof(struct gre_parse), PRID_NVGRE, ps->off, ps->hlen,
-		     ps->plen, ps->tlen, &gre_prparse_ops, reg,
-		     PRP_GRE_NXFIELDS);
-	if (!prp)
+	pdu = newpdu(sizeof(struct gre_pdu), PRID_NVGRE, ps->off, ps->hlen,
+		     ps->plen, ps->tlen, &gre_pdu_ops, reg,
+		     PDU_GRE_NXFIELDS);
+	if (!pdu)
 		return -1;
 
-	prp_add_insert(reg, prp, enclose);
-	if (buf && prp_hlen(prp) == NVGRE_HLEN) {
-		nvgre = prp_header(prp, buf, struct nvgreh);
+	pdu_add_insert(reg, pdu, enclose);
+	if (buf && pdu_hlen(pdu) == NVGRE_HLEN) {
+		nvgre = pdu_header(pdu, buf, struct nvgreh);
 		memset(nvgre, 0, NVGRE_HLEN);
 		nvgre->flags = GRE_FLAG_KEY;
 		if (enclose) {
-			cld = prp_next_in_region(prp, prp);
+			cld = pdu_next_in_region(pdu, pdu);
 			if (cld != NULL) {
 				etype = pridtoetype(cld->prid);
 				hton16i(etype, &nvgre->proto);
@@ -2146,43 +2146,43 @@ static int nvgre_add(struct prparse *reg, byte_t *buf, struct prpspec *ps,
 
 
 /* -- ops for VXLAN type -- */
-static void vxlan_update(struct prparse *prp, byte_t *buf);
+static void vxlan_update(struct pdu *pdu, byte_t *buf);
 
-static struct prparse *vxlan_parse(struct prparse *reg, byte_t *buf,
-				   ulong off, ulong maxlen)
+static struct pdu *vxlan_parse(struct pdu *reg, byte_t *buf, ulong off,
+			       ulong maxlen)
 {
-	struct prparse *prp;
-	prp = newprp(sizeof(struct prparse), PRID_VXLAN, off, 0, maxlen, 0,
-		     &vxlan_prparse_ops, reg, 0);
-	if (!prp)
+	struct pdu *pdu;
+	pdu = newpdu(sizeof(struct pdu), PRID_VXLAN, off, 0, maxlen, 0,
+		     &vxlan_pdu_ops, reg, 0);
+	if (!pdu)
 		return NULL;
-	vxlan_update(prp, buf);
-	return prp;
+	vxlan_update(pdu, buf);
+	return pdu;
 }
 
 
-int vxlan_nxtcld(struct prparse *reg, byte_t *buf, struct prparse *cld,
+int vxlan_nxtcld(struct pdu *reg, byte_t *buf, struct pdu *cld,
 	         uint *prid, ulong *off, ulong *maxlen)
 {
-	if (cld != NULL || prp_plen(reg) < ETHHLEN)
+	if (cld != NULL || pdu_plen(reg) < ETHHLEN)
 		return 0;
 	*prid = PRID_ETHERNET2;
-	*off = prp_poff(reg);
-	*maxlen = prp_plen(reg);
+	*off = pdu_poff(reg);
+	*maxlen = pdu_plen(reg);
 	return 1;
 }
 
 
-static int vxlan_getspec(struct prparse *prp, int enclose, struct prpspec *ps)
+static int vxlan_getspec(struct pdu *pdu, int enclose, struct pduspec *ps)
 {
-	return prpspec_init(ps, prp, PRID_VXLAN, VXLAN_HLEN, 0, enclose);
+	return pduspec_init(ps, pdu, PRID_VXLAN, VXLAN_HLEN, 0, enclose);
 }
 
 
-static int vxlan_add(struct prparse *reg, byte_t *buf, struct prpspec *ps,
+static int vxlan_add(struct pdu *reg, byte_t *buf, struct pduspec *ps,
 		     int enclose)
 {
-	struct prparse *prp;
+	struct pdu *pdu;
 	struct vxlanh *vxh;
 
 	abort_unless(reg && ps && ps->prid == PRID_VXLAN);
@@ -2191,14 +2191,14 @@ static int vxlan_add(struct prparse *reg, byte_t *buf, struct prpspec *ps,
 		return -1;
 	}
 
-	prp = newprp(sizeof(struct prparse), PRID_VXLAN, ps->off, ps->hlen,
-		     ps->plen, ps->tlen, &vxlan_prparse_ops, reg, 0);
-	if (!prp)
+	pdu = newpdu(sizeof(struct pdu), PRID_VXLAN, ps->off, ps->hlen,
+		     ps->plen, ps->tlen, &vxlan_pdu_ops, reg, 0);
+	if (!pdu)
 		return -1;
 
-	prp_add_insert(reg, prp, enclose);
+	pdu_add_insert(reg, pdu, enclose);
 	if (buf) {
-		vxh = prp_header(prp, buf, struct vxlanh);
+		vxh = pdu_header(pdu, buf, struct vxlanh);
 		memset(vxh, 0, VXLAN_HLEN);
 		hton32i(VXLAN_FLAG_VNI, &vxh->flags);
 	}
@@ -2207,74 +2207,74 @@ static int vxlan_add(struct prparse *reg, byte_t *buf, struct prpspec *ps,
 }
 
 
-static void vxlan_update(struct prparse *prp, byte_t *buf)
+static void vxlan_update(struct pdu *pdu, byte_t *buf)
 {
 	uint len;
 	struct vxlanh *vxh;
 	ulong flags;
 
-	prp->error = 0;
-	prp_reset_xfields(prp);
+	pdu->error = 0;
+	pdu_reset_xfields(pdu);
 
-	len = prp_totlen(prp);
+	len = pdu_totlen(pdu);
 	if (len < VXLAN_HLEN) {
-		prp->error |= PRP_ERR_TOOSMALL;
+		pdu->error |= PDU_ERR_TOOSMALL;
 		return;
 	}
 
-	prp_poff(prp) = prp_soff(prp) + VXLAN_HLEN;
-	vxh = prp_header(prp, buf, struct vxlanh);
+	pdu_poff(pdu) = pdu_soff(pdu) + VXLAN_HLEN;
+	vxh = pdu_header(pdu, buf, struct vxlanh);
 	flags = hton32(vxh->flags);
 	if ((flags & VXLAN_FLAG_MSK) != VXLAN_FLAG_VNI)
-		prp->error |= PRP_ERR_INVALID;
+		pdu->error |= PDU_ERR_INVALID;
 }
 
 
 /* -- ops for MPLS type -- */
-static void mpls_update(struct prparse *prp, byte_t *buf);
+static void mpls_update(struct pdu *pdu, byte_t *buf);
 
-static struct prparse *mpls_parse(struct prparse *reg, byte_t *buf,
-				  ulong off, ulong maxlen)
+static struct pdu *mpls_parse(struct pdu *reg, byte_t *buf, ulong off,
+			      ulong maxlen)
 {
-	struct prparse *prp;
-	prp = newprp(sizeof(struct mpls_parse), PRID_MPLS, off, 0,
-		     maxlen, 0, &mpls_prparse_ops, reg, PRP_MPLS_NXFIELDS);
-	if (!prp)
+	struct pdu *pdu;
+	pdu = newpdu(sizeof(struct mpls_pdu), PRID_MPLS, off, 0,
+		     maxlen, 0, &mpls_pdu_ops, reg, PDU_MPLS_NXFIELDS);
+	if (!pdu)
 		return NULL;
-	mpls_update(prp, buf);
-	return prp;
+	mpls_update(pdu, buf);
+	return pdu;
 }
 
 
-int mpls_nxtcld(struct prparse *reg, byte_t *buf, struct prparse *cld,
+int mpls_nxtcld(struct pdu *reg, byte_t *buf, struct pdu *cld,
 	        uint *prid, ulong *off, ulong *maxlen)
 {
 	byte_t *p;
 	struct ipv4h *ip;
 	struct ipv6h *ip6;
 
-	if (cld != NULL || prp_plen(reg) < IPH_MINLEN)
+	if (cld != NULL || pdu_plen(reg) < IPH_MINLEN)
 		return 0;
 
 	abort_unless(buf);
 
-	p = prp_payload(reg, buf);
+	p = pdu_payload(reg, buf);
 	if ((*p & 0xF0) == 0x40) {
 		ip = (struct ipv4h *)p;
 		if (IPH_HLEN(*ip) >= IPH_MINLEN && 
-		    IPH_HLEN(*ip) <= prp_plen(reg) &&
-		    ntoh16(ip->len) <= prp_plen(reg)) {
+		    IPH_HLEN(*ip) <= pdu_plen(reg) &&
+		    ntoh16(ip->len) <= pdu_plen(reg)) {
 			*prid = PRID_IPV4;
-			*off = prp_poff(reg);
-			*maxlen = prp_plen(reg);
+			*off = pdu_poff(reg);
+			*maxlen = pdu_plen(reg);
 			return 1;
 		}
-	} else if ((*p & 0xF0) == 0x60 && prp_plen(reg) >= IPV6H_LEN) {
+	} else if ((*p & 0xF0) == 0x60 && pdu_plen(reg) >= IPV6H_LEN) {
 		ip6 = (struct ipv6h *)p;
-		if (ntoh16(ip6->len) <= prp_plen(reg) - IPV6H_LEN) {
+		if (ntoh16(ip6->len) <= pdu_plen(reg) - IPV6H_LEN) {
 			*prid = PRID_IPV6;
-			*off = prp_poff(reg);
-			*maxlen = prp_plen(reg);
+			*off = pdu_poff(reg);
+			*maxlen = pdu_plen(reg);
 			return 1;
 		}
 	}
@@ -2282,16 +2282,16 @@ int mpls_nxtcld(struct prparse *reg, byte_t *buf, struct prparse *cld,
 }
 
 
-static int mpls_getspec(struct prparse *prp, int enclose, struct prpspec *ps)
+static int mpls_getspec(struct pdu *pdu, int enclose, struct pduspec *ps)
 {
-	return prpspec_init(ps, prp, PRID_MPLS, MPLS_HLEN, 0, enclose);
+	return pduspec_init(ps, pdu, PRID_MPLS, MPLS_HLEN, 0, enclose);
 }
 
 
-static int mpls_add(struct prparse *reg, byte_t *buf, struct prpspec *ps,
+static int mpls_add(struct pdu *reg, byte_t *buf, struct pduspec *ps,
 		    int enclose)
 {
-	struct prparse *prp;
+	struct pdu *pdu;
 	struct mpls_label *mpls;
 	uint i;
 	uint nlabels;
@@ -2302,17 +2302,17 @@ static int mpls_add(struct prparse *reg, byte_t *buf, struct prpspec *ps,
 		return -1;
 	}
 
-	prp = newprp(sizeof(struct mpls_parse), PRID_MPLS, 
+	pdu = newpdu(sizeof(struct mpls_pdu), PRID_MPLS, 
 		     ps->off, ps->hlen, ps->plen, ps->tlen,
-		     &eth_prparse_ops, reg, PRP_MPLS_NXFIELDS);
-	if (!prp)
+		     &eth_pdu_ops, reg, PDU_MPLS_NXFIELDS);
+	if (!pdu)
 		return -1;
 
-	prp_add_insert(reg, prp, enclose);
-	if (buf && prp_hlen(prp) >= MPLS_HLEN) {
-		mpls = prp_header(prp, buf, struct mpls_label);
-		memset(mpls, 0, prp_hlen(prp));
-		nlabels = prp_hlen(prp) / MPLS_HLEN;
+	pdu_add_insert(reg, pdu, enclose);
+	if (buf && pdu_hlen(pdu) >= MPLS_HLEN) {
+		mpls = pdu_header(pdu, buf, struct mpls_label);
+		memset(mpls, 0, pdu_hlen(pdu));
+		nlabels = pdu_hlen(pdu) / MPLS_HLEN;
 		for (i = 0; i < nlabels; ++i)
 			mpls[i].label = hton32(64 << MPLS_TTL_SHF);
 		mpls[nlabels-1].label |= hton32(1 << MPLS_BOS_SHF);
@@ -2322,34 +2322,34 @@ static int mpls_add(struct prparse *reg, byte_t *buf, struct prpspec *ps,
 }
 
 
-static void mpls_update(struct prparse *prp, byte_t *buf)
+static void mpls_update(struct pdu *pdu, byte_t *buf)
 {
 	ulong max;
 	ulong i;
 	struct mpls_label *mpls;
 
-	prp->error = 0;
-	prp_reset_xfields(prp);
+	pdu->error = 0;
+	pdu_reset_xfields(pdu);
 
-	if (prp_totlen(prp) < MPLS_HLEN) {
-		prp->error |= PRP_ERR_TOOSMALL;
+	if (pdu_totlen(pdu) < MPLS_HLEN) {
+		pdu->error |= PDU_ERR_TOOSMALL;
 		return;
 	}
 
-	prp_poff(prp) = prp_soff(prp);
-	max = prp_totlen(prp) / MPLS_HLEN;
-	mpls = prp_header(prp, buf, struct mpls_label);
+	pdu_poff(pdu) = pdu_soff(pdu);
+	max = pdu_totlen(pdu) / MPLS_HLEN;
+	mpls = pdu_header(pdu, buf, struct mpls_label);
 	i = 0;
 	while (i < max) {
-		if (i > 0 && i < PRP_MPLS_NXFIELDS)
-			prp->offs[PRP_OI_EXTRA + i] = prp_poff(prp);
-		prp_poff(prp) += MPLS_HLEN;
+		if (i > 0 && i < PDU_MPLS_NXFIELDS)
+			pdu->offs[PDU_OI_EXTRA + i] = pdu_poff(pdu);
+		pdu_poff(pdu) += MPLS_HLEN;
 		if (MPLS_BOS(ntoh32(mpls->label)))
 			return;
 		++i;
 		++mpls;
 	}
-	prp->error |= PRP_ERR_INVALID;
+	pdu->error |= PDU_ERR_INVALID;
 }
 
 
@@ -2361,11 +2361,11 @@ struct proto_parser_ops eth_proto_parser_ops = {
 	eth_add
 };
 
-struct prparse_ops eth_prparse_ops = {
+struct pdu_ops eth_pdu_ops = {
 	eth_update,
 	eth_fixnxt,
-	prp_nop_fixlen,
-	prp_nop_fixcksum,
+	pdu_nop_fixlen,
+	pdu_nop_fixcksum,
 	stdpr_copy,
 	stdpr_free
 };
@@ -2377,11 +2377,11 @@ struct proto_parser_ops arp_proto_parser_ops = {
 	arp_add
 };
 
-struct prparse_ops arp_prparse_ops = {
+struct pdu_ops arp_pdu_ops = {
 	arp_update,
-	prp_nop_fixnxt,
+	pdu_nop_fixnxt,
 	arp_fixlen,
-	prp_nop_fixcksum,
+	pdu_nop_fixcksum,
 	arp_copy,
 	stdpr_free
 };
@@ -2393,7 +2393,7 @@ struct proto_parser_ops ipv4_proto_parser_ops = {
 	ipv4_add
 };
 
-struct prparse_ops ipv4_prparse_ops = {
+struct pdu_ops ipv4_pdu_ops = {
 	ipv4_update,
 	ipv4_fixnxt,
 	ipv4_fixlen,
@@ -2409,11 +2409,11 @@ struct proto_parser_ops ipv6_proto_parser_ops = {
 	ipv6_add
 };
 
-struct prparse_ops ipv6_prparse_ops = {
+struct pdu_ops ipv6_pdu_ops = {
 	ipv6_update,
 	ipv6_fixnxt,
 	ipv6_fixlen,
-	prp_nop_fixcksum,
+	pdu_nop_fixcksum,
 	ipv6_copy,
 	ipv6_free
 };
@@ -2425,10 +2425,10 @@ struct proto_parser_ops icmp_proto_parser_ops = {
 	icmp_add
 };
 
-struct prparse_ops icmp_prparse_ops = {
+struct pdu_ops icmp_pdu_ops = {
 	icmp_update,
-	prp_nop_fixnxt,
-	prp_nop_fixlen,
+	pdu_nop_fixnxt,
+	pdu_nop_fixlen,
 	icmp_fixcksum,
 	stdpr_copy,
 	stdpr_free
@@ -2441,10 +2441,10 @@ struct proto_parser_ops icmpv6_proto_parser_ops = {
 	icmp6_add
 };
 
-struct prparse_ops icmpv6_prparse_ops = {
+struct pdu_ops icmpv6_pdu_ops = {
 	icmp6_update,
-	prp_nop_fixnxt,
-	prp_nop_fixlen,
+	pdu_nop_fixnxt,
+	pdu_nop_fixlen,
 	icmp6_fixcksum,
 	stdpr_copy,
 	stdpr_free
@@ -2457,7 +2457,7 @@ struct proto_parser_ops udp_proto_parser_ops = {
 	udp_add
 };
 
-struct prparse_ops udp_prparse_ops = {
+struct pdu_ops udp_pdu_ops = {
 	udp_update,
 	udp_fixnxt,
 	udp_fixlen,
@@ -2473,9 +2473,9 @@ struct proto_parser_ops tcp_proto_parser_ops = {
 	tcp_add
 };
 
-struct prparse_ops tcp_prparse_ops = {
+struct pdu_ops tcp_pdu_ops = {
 	tcp_update,
-	prp_nop_fixnxt,
+	pdu_nop_fixnxt,
 	tcp_fixlen,
 	tcp_fixcksum,
 	tcp_copy,
@@ -2489,10 +2489,10 @@ struct proto_parser_ops gre_proto_parser_ops = {
 	gre_add
 };
 
-struct prparse_ops gre_prparse_ops = {
+struct pdu_ops gre_pdu_ops = {
 	gre_update,
 	gre_fixnxt,
-	prp_nop_fixlen,
+	pdu_nop_fixlen,
 	gre_fixcksum,
 	stdpr_copy,
 	stdpr_free
@@ -2512,11 +2512,11 @@ struct proto_parser_ops vxlan_proto_parser_ops = {
 	vxlan_add
 };
 
-struct prparse_ops vxlan_prparse_ops = {
+struct pdu_ops vxlan_pdu_ops = {
 	vxlan_update,
-	prp_nop_fixnxt,
-	prp_nop_fixlen,
-	prp_nop_fixcksum,
+	pdu_nop_fixnxt,
+	pdu_nop_fixlen,
+	pdu_nop_fixcksum,
 	stdpr_copy,
 	stdpr_free
 };
@@ -2528,11 +2528,11 @@ struct proto_parser_ops mpls_proto_parser_ops = {
 	mpls_add
 };
 
-struct prparse_ops mpls_prparse_ops = {
+struct pdu_ops mpls_pdu_ops = {
 	mpls_update,
-	prp_nop_fixnxt,
-	prp_nop_fixlen,
-	prp_nop_fixcksum,
+	pdu_nop_fixnxt,
+	pdu_nop_fixlen,
+	pdu_nop_fixcksum,
 	stdpr_copy,
 	stdpr_free
 };
@@ -2573,7 +2573,7 @@ static struct ns_pktfld eth2_ns_src =
 		       "Source Address", &ns_fmt_etha);
 static struct ns_pktfld eth2_ns_ethtype =
 	NS_BYTEFIELD_IDX_I("ethtype", &eth2_ns, PRID_ETHERNET2, 
-			PRP_ETHFLD_ETYPE, 0, 2,
+			PDU_ETHFLD_ETYPE, 0, 2,
 		       "Ethernet Type", &ns_fmt_hex);
 
 extern struct ns_elem *stdproto_eth2_vlan0_ns_elems[STDPROTO_NS_SUB_ELEN];
@@ -2581,25 +2581,25 @@ extern struct ns_elem *stdproto_eth2_vlan1_ns_elems[STDPROTO_NS_SUB_ELEN];
 
 static struct ns_namespace eth2_vlan0_ns = 
 	NS_NAMESPACE_IDX_I("vlan0", &eth2_ns, PRID_ETHERNET2, PRID_NONE,
-		PRP_ETHFLD_VLAN0, 4,
+		PDU_ETHFLD_VLAN0, 4,
 		"Ethernet VLAN 0", NULL,
 		stdproto_eth2_vlan0_ns_elems,
 		array_length(stdproto_eth2_vlan0_ns_elems));
 static struct ns_pktfld eth2_vlan0_tpid =
 	NS_BYTEFIELD_IDX_I("tpid", &eth2_vlan0_ns, PRID_ETHERNET2,
-		PRP_ETHFLD_VLAN0, 0, 2,
+		PDU_ETHFLD_VLAN0, 0, 2,
 	       "Tag Proto ID", &ns_fmt_hex);
 static struct ns_pktfld eth2_vlan0_pri =
 	NS_BITFIELD_IDX_I("pri", &eth2_vlan0_ns, PRID_ETHERNET2,
-		PRP_ETHFLD_VLAN0, 2, 0, 3,
+		PDU_ETHFLD_VLAN0, 2, 0, 3,
 	       "Priority", &ns_fmt_dec);
 static struct ns_pktfld eth2_vlan0_cfi =
 	NS_BITFIELD_IDX_I("cfi", &eth2_vlan0_ns, PRID_ETHERNET2,
-		PRP_ETHFLD_VLAN0, 2, 3, 1,
+		PDU_ETHFLD_VLAN0, 2, 3, 1,
 	       "Canonical Field Ind", &ns_fmt_dec);
 static struct ns_pktfld eth2_vlan0_vid =
 	NS_BITFIELD_IDX_I("vid", &eth2_vlan0_ns, PRID_ETHERNET2,
-		PRP_ETHFLD_VLAN0, 2, 4, 12,
+		PDU_ETHFLD_VLAN0, 2, 4, 12,
 	       "VLAN ID", &ns_fmt_dec);
 struct ns_elem *stdproto_eth2_vlan0_ns_elems[STDPROTO_NS_SUB_ELEN] = {
 	(struct ns_elem *)&eth2_vlan0_tpid, (struct ns_elem *)&eth2_vlan0_pri, 
@@ -2608,25 +2608,25 @@ struct ns_elem *stdproto_eth2_vlan0_ns_elems[STDPROTO_NS_SUB_ELEN] = {
 
 static struct ns_namespace eth2_vlan1_ns = 
 	NS_NAMESPACE_IDX_I("vlan1", &eth2_ns, PRID_ETHERNET2, PRID_NONE,
-		PRP_ETHFLD_VLAN1, 4,
+		PDU_ETHFLD_VLAN1, 4,
 		"Ethernet VLAN 1", NULL,
 		stdproto_eth2_vlan1_ns_elems,
 		array_length(stdproto_eth2_vlan1_ns_elems));
 static struct ns_pktfld eth2_vlan1_tpid =
 	NS_BYTEFIELD_IDX_I("tpid", &eth2_vlan1_ns, PRID_ETHERNET2,
-		PRP_ETHFLD_VLAN1, 0, 2,
+		PDU_ETHFLD_VLAN1, 0, 2,
 	       "Tag Proto ID", &ns_fmt_hex);
 static struct ns_pktfld eth2_vlan1_pri =
 	NS_BITFIELD_IDX_I("pri", &eth2_vlan1_ns, PRID_ETHERNET2,
-		PRP_ETHFLD_VLAN1, 2, 0, 3,
+		PDU_ETHFLD_VLAN1, 2, 0, 3,
 	       "Priority", &ns_fmt_dec);
 static struct ns_pktfld eth2_vlan1_cfi =
 	NS_BITFIELD_IDX_I("cfi", &eth2_vlan1_ns, PRID_ETHERNET2,
-		PRP_ETHFLD_VLAN1, 2, 3, 1,
+		PDU_ETHFLD_VLAN1, 2, 3, 1,
 	       "Canonical Field Ind", &ns_fmt_dec);
 static struct ns_pktfld eth2_vlan1_vid =
 	NS_BITFIELD_IDX_I("vid", &eth2_vlan1_ns, PRID_ETHERNET2,
-		PRP_ETHFLD_VLAN1, 2, 4, 12,
+		PDU_ETHFLD_VLAN1, 2, 4, 12,
 	       "VLAN ID", &ns_fmt_dec);
 struct ns_elem *stdproto_eth2_vlan1_ns_elems[STDPROTO_NS_SUB_ELEN] = {
 	(struct ns_elem *)&eth2_vlan1_tpid, (struct ns_elem *)&eth2_vlan1_pri, 
@@ -2664,19 +2664,19 @@ static struct ns_pktfld arp_ns_op =
 		"Operation", &ns_fmt_dec);
 static struct ns_pktfld arp_ns_sndhwaddr =
 	NS_BYTEFIELD_IDX_I("sndhwaddr", &arp_ns, PRID_ARP,
-		PRP_ARPFLD_ETHARP, 8, 6, 
+		PDU_ARPFLD_ETHARP, 8, 6, 
 		"Sender HW Address", &ns_fmt_etha);
 static struct ns_pktfld arp_ns_sndpraddr =
 	NS_BYTEFIELD_IDX_I("sndpraddr", &arp_ns, PRID_ARP,
-		PRP_ARPFLD_ETHARP, 14, 4, 
+		PDU_ARPFLD_ETHARP, 14, 4, 
 		"Sender IP Address", &ns_fmt_ipv4a);
 static struct ns_pktfld arp_ns_trghwaddr =
 	NS_BYTEFIELD_IDX_I("trghwaddr", &arp_ns, PRID_ARP,
-		PRP_ARPFLD_ETHARP, 18, 6, 
+		PDU_ARPFLD_ETHARP, 18, 6, 
 		"Target HW Address", &ns_fmt_etha);
 static struct ns_pktfld arp_ns_trgpraddr =
 	NS_BYTEFIELD_IDX_I("trgpraddr", &arp_ns, PRID_ARP,
-		PRP_ARPFLD_ETHARP, 24, 4, 
+		PDU_ARPFLD_ETHARP, 24, 4, 
 		"Target IP Address", &ns_fmt_ipv4a);
 
 struct ns_elem *stdproto_arp_ns_elems[STDPROTO_NS_ELEN] = {
@@ -2742,8 +2742,8 @@ static struct ns_pktfld ipv4_ns_daddr =
 	NS_BYTEFIELD_I("daddr", &ipv4_ns, PRID_IPV4, 16, 4,
 		"Destination Address", &ns_fmt_ipv4a);
 static struct ns_pktfld ipv4_ns_opt =
-	NS_BYTEFIELD_VARLEN_I("opt", &ipv4_ns, PRID_IPV4, PRP_IPFLD_OPT, 0,
-		PRP_OI_POFF, "IP Options", &ns_fmt_raw);
+	NS_BYTEFIELD_VARLEN_I("opt", &ipv4_ns, PRID_IPV4, PDU_IPFLD_OPT, 0,
+		PDU_OI_POFF, "IP Options", &ns_fmt_raw);
 
 extern struct ns_elem *stdproto_ipv4_addr_ns_elems[STDPROTO_NS_SUB_ELEN];
 static struct ns_namespace ipv4_addr_ns = 
@@ -2819,10 +2819,10 @@ static struct ns_pktfld ipv6_ns_daddr =
 		"Destination Address", &ns_fmt_ipv6a);
 static struct ns_pktfld ipv6_ns_xnxthdr =
 	NS_BYTEFIELD_IDX_I("xnxthdr", &ipv6_ns, PRID_IPV6,
-		PRP_IPV6FLD_NXTHDR, 0, 1, "Final Next Header", &ns_fmt_dec);
+		PDU_IPV6FLD_NXTHDR, 0, 1, "Final Next Header", &ns_fmt_dec);
 static struct ns_pktfld ipv6_ns_exth =
-	NS_BYTEFIELD_VARLEN_I("exth", &ipv6_ns, PRID_IPV6, PRP_OI_SOFF, 40,
-		PRP_OI_POFF,
+	NS_BYTEFIELD_VARLEN_I("exth", &ipv6_ns, PRID_IPV6, PDU_OI_SOFF, 40,
+		PDU_OI_POFF,
 		"Extension Headers", &ns_fmt_raw);
 
 struct ns_elem *stdproto_ipv6_ns_elems[STDPROTO_NS_ELEN] = {
@@ -2851,37 +2851,37 @@ static struct ns_pktfld icmp_ns_cksum =
 		"Checksum", &ns_fmt_hex);
 static struct ns_pktfld icmp_ns_id =
 	NS_BYTEFIELD_IDX_I("id", &icmp_ns, PRID_ICMP, 
-		PRP_ICMPFLD_QUERY, 0, 2, "Identifier", &ns_fmt_dec);
+		PDU_ICMPFLD_QUERY, 0, 2, "Identifier", &ns_fmt_dec);
 static struct ns_pktfld icmp_ns_seq =
 	NS_BYTEFIELD_IDX_I("seq", &icmp_ns, PRID_ICMP, 
-		PRP_ICMPFLD_QUERY, 2, 2, "Sequence Number", &ns_fmt_dec);
+		PDU_ICMPFLD_QUERY, 2, 2, "Sequence Number", &ns_fmt_dec);
 static struct ns_pktfld icmp_ns_mtu_resv =
 	NS_BYTEFIELD_IDX_I("mtu_resv", &icmp_ns, PRID_ICMP, 
-		PRP_ICMPFLD_MTU, 0, 2, "MTU Reserved", &ns_fmt_dec);
+		PDU_ICMPFLD_MTU, 0, 2, "MTU Reserved", &ns_fmt_dec);
 static struct ns_pktfld icmp_ns_mtu =
 	NS_BYTEFIELD_IDX_I("mtu", &icmp_ns, PRID_ICMP, 
-		PRP_ICMPFLD_MTU, 2, 2, "MTU", &ns_fmt_dec);
+		PDU_ICMPFLD_MTU, 2, 2, "MTU", &ns_fmt_dec);
 static struct ns_pktfld icmp_ns_ptr =
 	NS_BYTEFIELD_IDX_I("ptr", &icmp_ns, PRID_ICMP, 
-		PRP_ICMPFLD_PPTR, 0, 1, "Pointer", &ns_fmt_dec);
+		PDU_ICMPFLD_PPTR, 0, 1, "Pointer", &ns_fmt_dec);
 static struct ns_pktfld icmp_ns_ptr_resv =
 	NS_BYTEFIELD_IDX_I("ptr_resv", &icmp_ns, PRID_ICMP, 
-		PRP_ICMPFLD_PPTR, 1, 3, "Param Prob Reserved", &ns_fmt_dec);
+		PDU_ICMPFLD_PPTR, 1, 3, "Param Prob Reserved", &ns_fmt_dec);
 static struct ns_pktfld icmp_ns_ots =
 	NS_BYTEFIELD_IDX_I("ots", &icmp_ns, PRID_ICMP, 
-		PRP_ICMPFLD_TS, 0, 4, "Originate Timestamp", &ns_fmt_dec);
+		PDU_ICMPFLD_TS, 0, 4, "Originate Timestamp", &ns_fmt_dec);
 static struct ns_pktfld icmp_ns_rts =
 	NS_BYTEFIELD_IDX_I("rts", &icmp_ns, PRID_ICMP, 
-		PRP_ICMPFLD_TS, 4, 4, "Receive Timestamp", &ns_fmt_dec);
+		PDU_ICMPFLD_TS, 4, 4, "Receive Timestamp", &ns_fmt_dec);
 static struct ns_pktfld icmp_ns_tts =
 	NS_BYTEFIELD_IDX_I("tts", &icmp_ns, PRID_ICMP, 
-		PRP_ICMPFLD_TS, 8, 4, "Transmit Timestamp", &ns_fmt_dec);
+		PDU_ICMPFLD_TS, 8, 4, "Transmit Timestamp", &ns_fmt_dec);
 static struct ns_pktfld icmp_ns_gw =
 	NS_BYTEFIELD_IDX_I("gw", &icmp_ns, PRID_ICMP, 
-		PRP_ICMPFLD_GW, 0, 4, "Gateway", &ns_fmt_ipv4a);
+		PDU_ICMPFLD_GW, 0, 4, "Gateway", &ns_fmt_ipv4a);
 static struct ns_pktfld icmp_ns_reserved =
 	NS_BYTEFIELD_IDX_I("resv", &icmp_ns, PRID_ICMP, 
-		PRP_ICMPFLD_RESERVED, 0, 4, "Reserved", &ns_fmt_hex);
+		PDU_ICMPFLD_RESERVED, 0, 4, "Reserved", &ns_fmt_hex);
 
 struct ns_elem *stdproto_icmp_ns_elems[STDPROTO_NS_ELEN] = {
 	(struct ns_elem *)&icmp_ns_type, (struct ns_elem *)&icmp_ns_code,
@@ -2921,14 +2921,14 @@ extern struct ns_elem *
 /* ICMPv6 echo request/reply packet fields */
 struct ns_namespace icmp6_echo_ns =
 	NS_NAMESPACE_IDX_I("echo", &icmp6_ns, PRID_ICMP6, PRID_NONE, 
-			   PRP_ICMP6FLD_ECHO, 4, "ICMPv6 Echo Info", NULL,
+			   PDU_ICMP6FLD_ECHO, 4, "ICMPv6 Echo Info", NULL,
 			   stdproto_icmp6_echo_ns_elems,
 			   array_length(stdproto_icmp6_echo_ns_elems));
 static struct ns_pktfld icmp6_echo_id =
-	NS_BYTEFIELD_IDX_I("id", &icmp6_echo_ns, PRID_ICMP6, PRP_ICMP6FLD_ECHO,
+	NS_BYTEFIELD_IDX_I("id", &icmp6_echo_ns, PRID_ICMP6, PDU_ICMP6FLD_ECHO,
 			   0, 2, "Identifier", &ns_fmt_dec);
 static struct ns_pktfld icmp6_echo_seq =
-	NS_BYTEFIELD_IDX_I("seq", &icmp6_echo_ns, PRID_ICMP6, PRP_ICMP6FLD_ECHO,
+	NS_BYTEFIELD_IDX_I("seq", &icmp6_echo_ns, PRID_ICMP6, PDU_ICMP6FLD_ECHO,
 			   2, 2, "Sequence Number", &ns_fmt_dec);
 struct ns_elem *stdproto_icmp6_echo_ns_elems[STDPROTO_NS_SUB_ELEN] = {
 	(struct ns_elem *)&icmp6_echo_id, (struct ns_elem *)&icmp6_echo_seq, 
@@ -2937,16 +2937,16 @@ struct ns_elem *stdproto_icmp6_echo_ns_elems[STDPROTO_NS_SUB_ELEN] = {
 /* ICMPv6 Router Solicitation packet fields */
 struct ns_namespace icmp6_rsol_ns =
 	NS_NAMESPACE_IDX_I("rsol", &icmp6_ns, PRID_ICMP6, PRID_NONE, 
-			   PRP_ICMP6FLD_RSOL, 4, "NDP Router Solicit", 
+			   PDU_ICMP6FLD_RSOL, 4, "NDP Router Solicit", 
 			   NULL, stdproto_icmp6_rsol_ns_elems,
 			   array_length(stdproto_icmp6_rsol_ns_elems));
 static struct ns_pktfld icmp6_rsol_resv =
 	NS_BYTEFIELD_IDX_I("resv", &icmp6_rsol_ns, PRID_ICMP6,
-			   PRP_ICMP6FLD_NEIGH, 0, 4, "Reserved",
+			   PDU_ICMP6FLD_NEIGH, 0, 4, "Reserved",
 			   &ns_fmt_hex);
 static struct ns_pktfld icmp6_rsol_opts =
 	NS_BYTEFIELD_VARLEN_I("opts", &icmp6_rsol_ns, PRID_ICMP6,
-			      PRP_ICMP6FLD_NDPOPT, 0, PRP_OI_POFF,
+			      PDU_ICMP6FLD_NDPOPT, 0, PDU_OI_POFF,
 			      "NDP Options", &ns_fmt_summary);
 struct ns_elem *stdproto_icmp6_rsol_ns_elems[STDPROTO_NS_SUB_ELEN] = {
 	(struct ns_elem *)&icmp6_rsol_resv,
@@ -2956,40 +2956,40 @@ struct ns_elem *stdproto_icmp6_rsol_ns_elems[STDPROTO_NS_SUB_ELEN] = {
 /* ICMPv6 Router Advertisement packet fields */
 struct ns_namespace icmp6_radv_ns =
 	NS_NAMESPACE_IDX_I("radv", &icmp6_ns, PRID_ICMP6, PRID_NONE, 
-			   PRP_ICMP6FLD_RADV, 12, "NDP Router Advert", NULL,
+			   PDU_ICMP6FLD_RADV, 12, "NDP Router Advert", NULL,
 			   stdproto_icmp6_radv_ns_elems,
 			   array_length(stdproto_icmp6_radv_ns_elems));
 static struct ns_pktfld icmp6_radv_hoplim =
 	NS_BYTEFIELD_IDX_I("hoplim", &icmp6_radv_ns, PRID_ICMP6,
-			   PRP_ICMP6FLD_RADV, 0, 1, "Current Hop Limit",
+			   PDU_ICMP6FLD_RADV, 0, 1, "Current Hop Limit",
 			   &ns_fmt_dec);
 static struct ns_pktfld icmp6_radv_mcfg =
 	NS_BITFIELD_IDX_I("mcfg", &icmp6_radv_ns, PRID_ICMP6, 
-			  PRP_ICMP6FLD_RADV, 1, 0, 1, "Managed Addr Cfg",
+			  PDU_ICMP6FLD_RADV, 1, 0, 1, "Managed Addr Cfg",
 			  &ns_fmt_dec);
 static struct ns_pktfld icmp6_radv_ocfg =
 	NS_BITFIELD_IDX_I("ocfg", &icmp6_radv_ns, PRID_ICMP6, 
-			  PRP_ICMP6FLD_RADV, 1, 1, 1, "Other Cfg",
+			  PDU_ICMP6FLD_RADV, 1, 1, 1, "Other Cfg",
 			  &ns_fmt_dec);
 static struct ns_pktfld icmp6_radv_resv =
 	NS_BITFIELD_IDX_I("resv", &icmp6_radv_ns, PRID_ICMP6, 
-			  PRP_ICMP6FLD_RADV, 1, 2, 6, "Reserved",
+			  PDU_ICMP6FLD_RADV, 1, 2, 6, "Reserved",
 			  &ns_fmt_dec);
 static struct ns_pktfld icmp6_radv_tlife =
 	NS_BYTEFIELD_IDX_I("tlife", &icmp6_radv_ns, PRID_ICMP6,
-			   PRP_ICMP6FLD_RADV, 2, 2, "Router Lifetime",
+			   PDU_ICMP6FLD_RADV, 2, 2, "Router Lifetime",
 			   &ns_fmt_dec);
 static struct ns_pktfld icmp6_radv_treach =
 	NS_BYTEFIELD_IDX_I("treach", &icmp6_radv_ns, PRID_ICMP6,
-			   PRP_ICMP6FLD_RADV, 4, 4, "Reachable Time",
+			   PDU_ICMP6FLD_RADV, 4, 4, "Reachable Time",
 			   &ns_fmt_dec);
 static struct ns_pktfld icmp6_radv_tretry =
 	NS_BYTEFIELD_IDX_I("tretry", &icmp6_radv_ns, PRID_ICMP6,
-			   PRP_ICMP6FLD_RADV, 8, 4, "Retrans Timer",
+			   PDU_ICMP6FLD_RADV, 8, 4, "Retrans Timer",
 			   &ns_fmt_dec);
 static struct ns_pktfld icmp6_radv_opts =
 	NS_BYTEFIELD_VARLEN_I("opts", &icmp6_radv_ns, PRID_ICMP6,
-			      PRP_ICMP6FLD_NDPOPT, 0, PRP_OI_POFF,
+			      PDU_ICMP6FLD_NDPOPT, 0, PDU_OI_POFF,
 			      "NDP Options", &ns_fmt_summary);
 struct ns_elem *stdproto_icmp6_radv_ns_elems[STDPROTO_NS_SUB_ELEN] = {
 	(struct ns_elem *)&icmp6_radv_hoplim,
@@ -3005,32 +3005,32 @@ struct ns_elem *stdproto_icmp6_radv_ns_elems[STDPROTO_NS_SUB_ELEN] = {
 /* ICMPv6 NDP packet fields */
 struct ns_namespace icmp6_neigh_ns =
 	NS_NAMESPACE_IDX_I("neigh", &icmp6_ns, PRID_ICMP6, PRID_NONE, 
-			   PRP_ICMP6FLD_NEIGH, 20, "ICMPv6 NDP Neighbor Msg",
+			   PDU_ICMP6FLD_NEIGH, 20, "ICMPv6 NDP Neighbor Msg",
 			   NULL, stdproto_icmp6_neigh_ns_elems,
 			   array_length(stdproto_icmp6_neigh_ns_elems));
 static struct ns_pktfld icmp6_neigh_rtr =
 	NS_BITFIELD_IDX_I("rtr", &icmp6_neigh_ns, PRID_ICMP6, 
-			  PRP_ICMP6FLD_NEIGH, 0, 0, 1, "Router flag",
+			  PDU_ICMP6FLD_NEIGH, 0, 0, 1, "Router flag",
 			  &ns_fmt_dec);
 static struct ns_pktfld icmp6_neigh_sol =
 	NS_BITFIELD_IDX_I("sol", &icmp6_neigh_ns, PRID_ICMP6,
-			  PRP_ICMP6FLD_NEIGH, 0, 1, 1, "Solicited flag",
+			  PDU_ICMP6FLD_NEIGH, 0, 1, 1, "Solicited flag",
 			  &ns_fmt_dec);
 static struct ns_pktfld icmp6_neigh_ovd =
 	NS_BITFIELD_IDX_I("ovd", &icmp6_neigh_ns, PRID_ICMP6,
-			  PRP_ICMP6FLD_NEIGH, 0, 2, 1, "Override flag",
+			  PDU_ICMP6FLD_NEIGH, 0, 2, 1, "Override flag",
 			  &ns_fmt_dec);
 static struct ns_pktfld icmp6_neigh_resv =
 	NS_BITFIELD_IDX_I("resv", &icmp6_neigh_ns, PRID_ICMP6,
-			  PRP_ICMP6FLD_NEIGH, 0, 3, 29, "Reserved",
+			  PDU_ICMP6FLD_NEIGH, 0, 3, 29, "Reserved",
 			  &ns_fmt_dec);
 static struct ns_pktfld icmp6_neigh_ip6a =
 	NS_BYTEFIELD_IDX_I("ip6a", &icmp6_neigh_ns, PRID_ICMP6,
-			   PRP_ICMP6FLD_NEIGH, 4, 16, "IPv6 Address",
+			   PDU_ICMP6FLD_NEIGH, 4, 16, "IPv6 Address",
 			   &ns_fmt_ipv6a);
 static struct ns_pktfld icmp6_neigh_opts =
 	NS_BYTEFIELD_VARLEN_I("opts", &icmp6_neigh_ns, PRID_ICMP6,
-			      PRP_ICMP6FLD_NDPOPT, 0, PRP_OI_POFF,
+			      PDU_ICMP6FLD_NDPOPT, 0, PDU_OI_POFF,
 			      "NDP Options", &ns_fmt_summary);
 struct ns_elem *stdproto_icmp6_neigh_ns_elems[STDPROTO_NS_SUB_ELEN] = {
 	(struct ns_elem *)&icmp6_neigh_rtr, (struct ns_elem *)&icmp6_neigh_sol,
@@ -3042,20 +3042,20 @@ struct ns_elem *stdproto_icmp6_neigh_ns_elems[STDPROTO_NS_SUB_ELEN] = {
 /* ICMPv6 Router Advertisement packet fields */
 struct ns_namespace icmp6_nrdr_ns =
 	NS_NAMESPACE_IDX_I("nrdr", &icmp6_ns, PRID_ICMP6, PRID_NONE, 
-			   PRP_ICMP6FLD_REDIR, 36, "NDP Neighbor Redirect",
+			   PDU_ICMP6FLD_REDIR, 36, "NDP Neighbor Redirect",
 			   NULL, stdproto_icmp6_nrdr_ns_elems,
 			   array_length(stdproto_icmp6_nrdr_ns_elems));
 static struct ns_pktfld icmp6_nrdr_tgtaddr =
 	NS_BYTEFIELD_IDX_I("tgtaddr", &icmp6_nrdr_ns, PRID_ICMP6,
-			   PRP_ICMP6FLD_REDIR, 4, 16, "Target Address",
+			   PDU_ICMP6FLD_REDIR, 4, 16, "Target Address",
 			   &ns_fmt_ipv6a);
 static struct ns_pktfld icmp6_nrdr_dstaddr =
 	NS_BYTEFIELD_IDX_I("dstaddr", &icmp6_nrdr_ns, PRID_ICMP6,
-			   PRP_ICMP6FLD_REDIR, 20, 16, "Destination Address",
+			   PDU_ICMP6FLD_REDIR, 20, 16, "Destination Address",
 			   &ns_fmt_ipv6a);
 static struct ns_pktfld icmp6_nrdr_opts =
 	NS_BYTEFIELD_VARLEN_I("opts", &icmp6_nrdr_ns, PRID_ICMP6,
-			      PRP_ICMP6FLD_NDPOPT, 0, PRP_OI_POFF,
+			      PDU_ICMP6FLD_NDPOPT, 0, PDU_OI_POFF,
 			      "NDP Options", &ns_fmt_summary);
 struct ns_elem *stdproto_icmp6_nrdr_ns_elems[STDPROTO_NS_SUB_ELEN] = {
 	(struct ns_elem *)&icmp6_nrdr_tgtaddr,
@@ -3068,19 +3068,19 @@ struct ns_elem *stdproto_icmp6_nrdr_ns_elems[STDPROTO_NS_SUB_ELEN] = {
 /* ICMPv6 NDP Source Link Level Address Option fields */
 struct ns_namespace icmp6_ndo_srclla_ns =
 	NS_NAMESPACE_VARLEN_I("srclla", &icmp6_ns, PRID_ICMP6, PRID_NONE, 
-			      PRP_ICMP6FLD_SRCLLA, PRP_ICMP6FLD_SRCLLA_EOFF,
+			      PDU_ICMP6FLD_SRCLLA, PDU_ICMP6FLD_SRCLLA_EOFF,
 			      "Source Link Layer Address",
 			      NULL, stdproto_icmp6_ndo_srclla_ns_elems,
 			      array_length(stdproto_icmp6_ndo_srclla_ns_elems));
 static struct ns_pktfld icmp6_ndo_srclla_type =
 	NS_BYTEFIELD_IDX_I("type", &icmp6_ndo_srclla_ns, PRID_ICMP6,
-			   PRP_ICMP6FLD_SRCLLA, 0, 1, "Type", &ns_fmt_dec);
+			   PDU_ICMP6FLD_SRCLLA, 0, 1, "Type", &ns_fmt_dec);
 static struct ns_pktfld icmp6_ndo_srclla_len =
 	NS_BYTEFIELD_IDX_I("len", &icmp6_ndo_srclla_ns, PRID_ICMP6,
-			   PRP_ICMP6FLD_SRCLLA, 1, 1, "Length", &ns_fmt_dec);
+			   PDU_ICMP6FLD_SRCLLA, 1, 1, "Length", &ns_fmt_dec);
 static struct ns_pktfld icmp6_ndo_srclla_addr =
 	NS_BYTEFIELD_VARLEN_I("addr", &icmp6_ndo_srclla_ns, PRID_ICMP6, 
-			      PRP_ICMP6FLD_SRCLLA, 2, PRP_ICMP6FLD_SRCLLA_EOFF,
+			      PDU_ICMP6FLD_SRCLLA, 2, PDU_ICMP6FLD_SRCLLA_EOFF,
 			      "Link Layer Address", &ns_fmt_etha);
 struct ns_elem *stdproto_icmp6_ndo_srclla_ns_elems[STDPROTO_NS_SUB_ELEN] = {
 	(struct ns_elem *)&icmp6_ndo_srclla_type,
@@ -3091,19 +3091,19 @@ struct ns_elem *stdproto_icmp6_ndo_srclla_ns_elems[STDPROTO_NS_SUB_ELEN] = {
 /* ICMPv6 NDP Target Link Level Address Option fields */
 struct ns_namespace icmp6_ndo_tgtlla_ns =
 	NS_NAMESPACE_VARLEN_I("tgtlla", &icmp6_ns, PRID_ICMP6, PRID_NONE, 
-			      PRP_ICMP6FLD_TGTLLA, PRP_ICMP6FLD_TGTLLA_EOFF,
+			      PDU_ICMP6FLD_TGTLLA, PDU_ICMP6FLD_TGTLLA_EOFF,
 			      "Dest Link Layer Address",
 			      NULL, stdproto_icmp6_ndo_tgtlla_ns_elems,
 			      array_length(stdproto_icmp6_ndo_tgtlla_ns_elems));
 static struct ns_pktfld icmp6_ndo_tgtlla_type =
 	NS_BYTEFIELD_IDX_I("type", &icmp6_ndo_tgtlla_ns, PRID_ICMP6,
-			   PRP_ICMP6FLD_TGTLLA, 0, 1, "Type", &ns_fmt_dec);
+			   PDU_ICMP6FLD_TGTLLA, 0, 1, "Type", &ns_fmt_dec);
 static struct ns_pktfld icmp6_ndo_tgtlla_len =
 	NS_BYTEFIELD_IDX_I("len", &icmp6_ndo_tgtlla_ns, PRID_ICMP6,
-			   PRP_ICMP6FLD_TGTLLA, 1, 1, "Length", &ns_fmt_dec);
+			   PDU_ICMP6FLD_TGTLLA, 1, 1, "Length", &ns_fmt_dec);
 static struct ns_pktfld icmp6_ndo_tgtlla_addr =
 	NS_BYTEFIELD_VARLEN_I("addr", &icmp6_ndo_tgtlla_ns, PRID_ICMP6,
-			      PRP_ICMP6FLD_TGTLLA, 2, PRP_ICMP6FLD_TGTLLA_EOFF,
+			      PDU_ICMP6FLD_TGTLLA, 2, PDU_ICMP6FLD_TGTLLA_EOFF,
 			      "Link Layer Address", &ns_fmt_etha);
 struct ns_elem *stdproto_icmp6_ndo_tgtlla_ns_elems[STDPROTO_NS_SUB_ELEN] = {
 	(struct ns_elem *)&icmp6_ndo_tgtlla_type,
@@ -3114,47 +3114,47 @@ struct ns_elem *stdproto_icmp6_ndo_tgtlla_ns_elems[STDPROTO_NS_SUB_ELEN] = {
 /* ICMPv6 NDP Prefix Information Option fields */
 struct ns_namespace icmp6_ndo_pfxinfo_ns =
 	NS_NAMESPACE_IDX_I("pfxinfo", &icmp6_ns, PRID_ICMP6, PRID_NONE, 
-			   PRP_ICMP6FLD_PFXINFO, ICMP6_ND_PFXINFO_OLEN, 
+			   PDU_ICMP6FLD_PFXINFO, ICMP6_ND_PFXINFO_OLEN, 
 			   "Dest Link Layer Address",
 			   NULL, stdproto_icmp6_ndo_pfxinfo_ns_elems,
 			   array_length(stdproto_icmp6_ndo_pfxinfo_ns_elems));
 static struct ns_pktfld icmp6_ndo_pfxinfo_type =
 	NS_BYTEFIELD_IDX_I("type", &icmp6_ndo_pfxinfo_ns, PRID_ICMP6,
-			   PRP_ICMP6FLD_PFXINFO, 0, 1, "Type", &ns_fmt_dec);
+			   PDU_ICMP6FLD_PFXINFO, 0, 1, "Type", &ns_fmt_dec);
 static struct ns_pktfld icmp6_ndo_pfxinfo_len =
 	NS_BYTEFIELD_IDX_I("len", &icmp6_ndo_pfxinfo_ns, PRID_ICMP6,
-			   PRP_ICMP6FLD_PFXINFO, 1, 1, "Length", &ns_fmt_dec);
+			   PDU_ICMP6FLD_PFXINFO, 1, 1, "Length", &ns_fmt_dec);
 static struct ns_pktfld icmp6_ndo_pfxinfo_pfxlen =
 	NS_BYTEFIELD_IDX_I("pfxlen", &icmp6_ndo_pfxinfo_ns, PRID_ICMP6,
-			   PRP_ICMP6FLD_PFXINFO, 2, 1, "Prefix Length",
+			   PDU_ICMP6FLD_PFXINFO, 2, 1, "Prefix Length",
 			   &ns_fmt_dec);
 static struct ns_pktfld icmp6_ndo_pfxinfo_onlink =
 	NS_BITFIELD_IDX_I("onlink", &icmp6_ndo_pfxinfo_ns, PRID_ICMP6,
-			  PRP_ICMP6FLD_PFXINFO, 3, 0, 1, "On-link Flag",
+			  PDU_ICMP6FLD_PFXINFO, 3, 0, 1, "On-link Flag",
 			  &ns_fmt_dec);
 static struct ns_pktfld icmp6_ndo_pfxinfo_auto =
 	NS_BITFIELD_IDX_I("auto", &icmp6_ndo_pfxinfo_ns, PRID_ICMP6,
-			  PRP_ICMP6FLD_PFXINFO, 3, 1, 1, "Auto Config Flag",
+			  PDU_ICMP6FLD_PFXINFO, 3, 1, 1, "Auto Config Flag",
 			  &ns_fmt_dec);
 static struct ns_pktfld icmp6_ndo_pfxinfo_resv =
 	NS_BITFIELD_IDX_I("resv", &icmp6_ndo_pfxinfo_ns, PRID_ICMP6,
-			  PRP_ICMP6FLD_PFXINFO, 3, 2, 6, "Reserved", 
+			  PDU_ICMP6FLD_PFXINFO, 3, 2, 6, "Reserved", 
 			  &ns_fmt_hex);
 static struct ns_pktfld icmp6_ndo_pfxinfo_vlife =
 	NS_BYTEFIELD_IDX_I("vlife", &icmp6_ndo_pfxinfo_ns, PRID_ICMP6,
-			   PRP_ICMP6FLD_PFXINFO, 4, 4, "Valid Lifetime",
+			   PDU_ICMP6FLD_PFXINFO, 4, 4, "Valid Lifetime",
 			   &ns_fmt_dec);
 static struct ns_pktfld icmp6_ndo_pfxinfo_plife =
 	NS_BYTEFIELD_IDX_I("plife", &icmp6_ndo_pfxinfo_ns, PRID_ICMP6,
-			   PRP_ICMP6FLD_PFXINFO, 8, 4, "Preferred Lifetime",
+			   PDU_ICMP6FLD_PFXINFO, 8, 4, "Preferred Lifetime",
 			   &ns_fmt_dec);
 static struct ns_pktfld icmp6_ndo_pfxinfo_resv2 =
 	NS_BYTEFIELD_IDX_I("resv2", &icmp6_ndo_pfxinfo_ns, PRID_ICMP6,
-			   PRP_ICMP6FLD_PFXINFO, 12, 4, "Reserved2",
+			   PDU_ICMP6FLD_PFXINFO, 12, 4, "Reserved2",
 			   &ns_fmt_hex);
 static struct ns_pktfld icmp6_ndo_pfxinfo_pfx =
 	NS_BYTEFIELD_IDX_I("pfx", &icmp6_ndo_pfxinfo_ns, PRID_ICMP6,
-			   PRP_ICMP6FLD_PFXINFO,
+			   PDU_ICMP6FLD_PFXINFO,
 			   16, 16, "Prefix", &ns_fmt_ipv6a);
 struct ns_elem *stdproto_icmp6_ndo_pfxinfo_ns_elems[STDPROTO_NS_SUB_ELEN] = {
 	(struct ns_elem *)&icmp6_ndo_pfxinfo_type,
@@ -3172,22 +3172,22 @@ struct ns_elem *stdproto_icmp6_ndo_pfxinfo_ns_elems[STDPROTO_NS_SUB_ELEN] = {
 /* ICMPv6 NDP Redirect Option fields */
 struct ns_namespace icmp6_ndo_rdrhdr_ns =
 	NS_NAMESPACE_VARLEN_I("rdrhdr", &icmp6_ns, PRID_ICMP6, PRID_NONE, 
-			      PRP_ICMP6FLD_RDRHDR, PRP_ICMP6FLD_RDRHDR_EOFF,
+			      PDU_ICMP6FLD_RDRHDR, PDU_ICMP6FLD_RDRHDR_EOFF,
 			      "Redirect Header",
 			      NULL, stdproto_icmp6_ndo_rdrhdr_ns_elems,
 			      array_length(stdproto_icmp6_ndo_rdrhdr_ns_elems));
 static struct ns_pktfld icmp6_ndo_rdrhdr_type =
 	NS_BYTEFIELD_IDX_I("type", &icmp6_ndo_rdrhdr_ns, PRID_ICMP6,
-			   PRP_ICMP6FLD_RDRHDR, 0, 1, "Type", &ns_fmt_dec);
+			   PDU_ICMP6FLD_RDRHDR, 0, 1, "Type", &ns_fmt_dec);
 static struct ns_pktfld icmp6_ndo_rdrhdr_len =
 	NS_BYTEFIELD_IDX_I("len", &icmp6_ndo_rdrhdr_ns, PRID_ICMP6,
-			   PRP_ICMP6FLD_RDRHDR, 1, 1, "Length", &ns_fmt_dec);
+			   PDU_ICMP6FLD_RDRHDR, 1, 1, "Length", &ns_fmt_dec);
 static struct ns_pktfld icmp6_ndo_rdrhdr_resv =
 	NS_BYTEFIELD_IDX_I("resv", &icmp6_ndo_rdrhdr_ns, PRID_ICMP6,
-			   PRP_ICMP6FLD_RDRHDR, 2, 6, "Reserved", &ns_fmt_hex);
+			   PDU_ICMP6FLD_RDRHDR, 2, 6, "Reserved", &ns_fmt_hex);
 static struct ns_pktfld icmp6_ndo_rdrhdr_opkt =
 	NS_BYTEFIELD_VARLEN_I("opkt", &icmp6_ndo_rdrhdr_ns, PRID_ICMP6,
-			      PRP_ICMP6FLD_RDRHDR, 8, PRP_ICMP6FLD_RDRHDR_EOFF,
+			      PDU_ICMP6FLD_RDRHDR, 8, PDU_ICMP6FLD_RDRHDR_EOFF,
 			      "Original Packet", &ns_fmt_summary);
 struct ns_elem *stdproto_icmp6_ndo_rdrhdr_ns_elems[STDPROTO_NS_SUB_ELEN] = {
 	(struct ns_elem *)&icmp6_ndo_rdrhdr_type,
@@ -3199,22 +3199,22 @@ struct ns_elem *stdproto_icmp6_ndo_rdrhdr_ns_elems[STDPROTO_NS_SUB_ELEN] = {
 /* ICMPv6 NDP MTU Option fields */
 struct ns_namespace icmp6_ndo_mtu_ns =
 	NS_NAMESPACE_IDX_I("omtu", &icmp6_ns, PRID_ICMP6, PRID_NONE, 
-			   PRP_ICMP6FLD_MTU, ICMP6_ND_MTU_OLEN, 
+			   PDU_ICMP6FLD_MTU, ICMP6_ND_MTU_OLEN, 
 			   "Maximum Transmission Unit Option",
 			   NULL, stdproto_icmp6_ndo_mtu_ns_elems,
 			   array_length(stdproto_icmp6_ndo_mtu_ns_elems));
 static struct ns_pktfld icmp6_ndo_mtu_type =
 	NS_BYTEFIELD_IDX_I("type", &icmp6_ndo_mtu_ns, PRID_ICMP6,
-			   PRP_ICMP6FLD_MTU, 0, 1, "Type", &ns_fmt_dec);
+			   PDU_ICMP6FLD_MTU, 0, 1, "Type", &ns_fmt_dec);
 static struct ns_pktfld icmp6_ndo_mtu_len =
 	NS_BYTEFIELD_IDX_I("len", &icmp6_ndo_mtu_ns, PRID_ICMP6,
-			   PRP_ICMP6FLD_MTU, 1, 1, "Length", &ns_fmt_dec);
+			   PDU_ICMP6FLD_MTU, 1, 1, "Length", &ns_fmt_dec);
 static struct ns_pktfld icmp6_ndo_mtu_resv =
 	NS_BYTEFIELD_IDX_I("resv", &icmp6_ndo_mtu_ns, PRID_ICMP6,
-			   PRP_ICMP6FLD_MTU, 2, 2, "Reserved", &ns_fmt_dec);
+			   PDU_ICMP6FLD_MTU, 2, 2, "Reserved", &ns_fmt_dec);
 static struct ns_pktfld icmp6_ndo_mtu_mtu =
 	NS_BYTEFIELD_IDX_I("mtu", &icmp6_ndo_mtu_ns, PRID_ICMP6,
-			   PRP_ICMP6FLD_MTU, 4, 4, "Reserved", &ns_fmt_dec);
+			   PDU_ICMP6FLD_MTU, 4, 4, "Reserved", &ns_fmt_dec);
 struct ns_elem *stdproto_icmp6_ndo_mtu_ns_elems[STDPROTO_NS_SUB_ELEN] = {
 	(struct ns_elem *)&icmp6_ndo_mtu_type,
 	(struct ns_elem *)&icmp6_ndo_mtu_len,
@@ -3225,22 +3225,22 @@ struct ns_elem *stdproto_icmp6_ndo_mtu_ns_elems[STDPROTO_NS_SUB_ELEN] = {
 /* ICMPv6 NDP Router Advertisement Interval Option fields */
 struct ns_namespace icmp6_ndo_radvivl_ns =
 	NS_NAMESPACE_IDX_I("radvivl", &icmp6_ns, PRID_ICMP6, PRID_NONE, 
-			   PRP_ICMP6FLD_MTU, ICMP6_ND_RADVIVL_OLEN, 
+			   PDU_ICMP6FLD_MTU, ICMP6_ND_RADVIVL_OLEN, 
 			   "Router Advertisement Interval Option",
 			   NULL, stdproto_icmp6_ndo_radvivl_ns_elems,
 			   array_length(stdproto_icmp6_ndo_radvivl_ns_elems));
 static struct ns_pktfld icmp6_ndo_radvivl_type =
 	NS_BYTEFIELD_IDX_I("type", &icmp6_ndo_radvivl_ns, PRID_ICMP6,
-			   PRP_ICMP6FLD_RADVIVL, 0, 1, "Type", &ns_fmt_dec);
+			   PDU_ICMP6FLD_RADVIVL, 0, 1, "Type", &ns_fmt_dec);
 static struct ns_pktfld icmp6_ndo_radvivl_len =
 	NS_BYTEFIELD_IDX_I("len", &icmp6_ndo_radvivl_ns, PRID_ICMP6,
-			   PRP_ICMP6FLD_RADVIVL, 1, 1, "Length", &ns_fmt_dec);
+			   PDU_ICMP6FLD_RADVIVL, 1, 1, "Length", &ns_fmt_dec);
 static struct ns_pktfld icmp6_ndo_radvivl_resv =
 	NS_BYTEFIELD_IDX_I("resv", &icmp6_ndo_radvivl_ns, PRID_ICMP6,
-			   PRP_ICMP6FLD_RADVIVL, 2, 2, "Reserved", &ns_fmt_dec);
+			   PDU_ICMP6FLD_RADVIVL, 2, 2, "Reserved", &ns_fmt_dec);
 static struct ns_pktfld icmp6_ndo_radvivl_interval =
 	NS_BYTEFIELD_IDX_I("ival", &icmp6_ndo_radvivl_ns, PRID_ICMP6,
-			   PRP_ICMP6FLD_RADVIVL, 4, 4, "Interval", &ns_fmt_dec);
+			   PDU_ICMP6FLD_RADVIVL, 4, 4, "Interval", &ns_fmt_dec);
 struct ns_elem *stdproto_icmp6_ndo_radvivl_ns_elems[STDPROTO_NS_SUB_ELEN] = {
 	(struct ns_elem *)&icmp6_ndo_radvivl_type,
 	(struct ns_elem *)&icmp6_ndo_radvivl_len,
@@ -3251,26 +3251,26 @@ struct ns_elem *stdproto_icmp6_ndo_radvivl_ns_elems[STDPROTO_NS_SUB_ELEN] = {
 /* ICMPv6 NDP Home Agent Info Option fields */
 struct ns_namespace icmp6_ndo_agtinfo_ns =
 	NS_NAMESPACE_IDX_I("agtinfo", &icmp6_ns, PRID_ICMP6, PRID_NONE, 
-			   PRP_ICMP6FLD_AGTINFO, ICMP6_ND_AGTINFO_OLEN, 
+			   PDU_ICMP6FLD_AGTINFO, ICMP6_ND_AGTINFO_OLEN, 
 			   "Home Agent Information Option",
 			   NULL, stdproto_icmp6_ndo_agtinfo_ns_elems,
 			   array_length(stdproto_icmp6_ndo_agtinfo_ns_elems));
 static struct ns_pktfld icmp6_ndo_agtinfo_type =
 	NS_BYTEFIELD_IDX_I("type", &icmp6_ndo_agtinfo_ns, PRID_ICMP6,
-			   PRP_ICMP6FLD_AGTINFO, 0, 1, "Type", &ns_fmt_dec);
+			   PDU_ICMP6FLD_AGTINFO, 0, 1, "Type", &ns_fmt_dec);
 static struct ns_pktfld icmp6_ndo_agtinfo_len =
 	NS_BYTEFIELD_IDX_I("len", &icmp6_ndo_agtinfo_ns, PRID_ICMP6,
-			   PRP_ICMP6FLD_AGTINFO, 1, 1, "Length", &ns_fmt_dec);
+			   PDU_ICMP6FLD_AGTINFO, 1, 1, "Length", &ns_fmt_dec);
 static struct ns_pktfld icmp6_ndo_agtinfo_resv =
 	NS_BYTEFIELD_IDX_I("resv", &icmp6_ndo_agtinfo_ns, PRID_ICMP6,
-			   PRP_ICMP6FLD_AGTINFO, 2, 2, "Reserved", &ns_fmt_dec);
+			   PDU_ICMP6FLD_AGTINFO, 2, 2, "Reserved", &ns_fmt_dec);
 static struct ns_pktfld icmp6_ndo_agtinfo_hapref =
 	NS_BYTEFIELD_IDX_I("pref", &icmp6_ndo_agtinfo_ns, PRID_ICMP6,
-			   PRP_ICMP6FLD_AGTINFO, 4, 2, "Preference",
+			   PDU_ICMP6FLD_AGTINFO, 4, 2, "Preference",
 			   &ns_fmt_dec);
 static struct ns_pktfld icmp6_ndo_agtinfo_halife =
 	NS_BYTEFIELD_IDX_I("life", &icmp6_ndo_agtinfo_ns, PRID_ICMP6,
-			   PRP_ICMP6FLD_AGTINFO, 6, 2, "Lifetime", &ns_fmt_dec);
+			   PDU_ICMP6FLD_AGTINFO, 6, 2, "Lifetime", &ns_fmt_dec);
 struct ns_elem *stdproto_icmp6_ndo_agtinfo_ns_elems[STDPROTO_NS_SUB_ELEN] = {
 	(struct ns_elem *)&icmp6_ndo_agtinfo_type,
 	(struct ns_elem *)&icmp6_ndo_agtinfo_len,
@@ -3290,11 +3290,11 @@ static struct ns_pktfld icmp6_cksum =
 		"Checksum", &ns_fmt_hex);
 static struct ns_pktfld icmp6_eresv =
 	NS_BYTEFIELD_IDX_I("eresv", &icmp6_ns, PRID_ICMP6,
-			   PRP_ICMP6FLD_ERESV, 0, 4, 
+			   PDU_ICMP6FLD_ERESV, 0, 4, 
 			   "Error Reserved", &ns_fmt_hex);
 static struct ns_pktfld icmp6_pptr =
 	NS_BYTEFIELD_IDX_I("pptr", &icmp6_ns, PRID_ICMP6,
-			   PRP_ICMP6FLD_PPTR, 0, 4, 
+			   PDU_ICMP6FLD_PPTR, 0, 4, 
 			   "Param Prob Ptr", &ns_fmt_dec);
 
 struct ns_elem *stdproto_icmp6_ns_elems[STDPROTO_NS_ELEN] = {
@@ -3399,8 +3399,8 @@ static struct ns_pktfld tcp_ns_urgp =
 	NS_BYTEFIELD_I("urgp", &tcp_ns, PRID_TCP, 18, 2,
 		"Urgent Pointer", &ns_fmt_dec);
 static struct ns_pktfld tcp_ns_opt =
-	NS_BYTEFIELD_VARLEN_I("opt", &tcp_ns, PRID_TCP, PRP_TCPFLD_OPT, 0,
-		PRP_OI_POFF,
+	NS_BYTEFIELD_VARLEN_I("opt", &tcp_ns, PRID_TCP, PDU_TCPFLD_OPT, 0,
+		PDU_OI_POFF,
 		"TCP Options", &ns_fmt_summary);
 
 /* option forward declarations */
@@ -3413,18 +3413,18 @@ extern struct ns_elem *stdproto_tcp_md5_ns_elems[STDPROTO_NS_SUB_ELEN];
 
 /* TCP MSS Option */
 static struct ns_namespace tcp_mss_ns = 
-	NS_NAMESPACE_IDX_I("mss", &tcp_ns, PRID_TCP, PRID_NONE, PRP_TCPFLD_MSS, 4,
+	NS_NAMESPACE_IDX_I("mss", &tcp_ns, PRID_TCP, PRID_NONE, PDU_TCPFLD_MSS, 4,
 		"TCP Maximum Segment Size Option", NULL,
 		stdproto_tcp_mss_ns_elems,
 		array_length(stdproto_tcp_mss_ns_elems));
 static struct ns_pktfld tcp_mss_kind =
-	NS_BYTEFIELD_IDX_I("kind", &tcp_mss_ns, PRID_TCP, PRP_TCPFLD_MSS, 0, 1,
+	NS_BYTEFIELD_IDX_I("kind", &tcp_mss_ns, PRID_TCP, PDU_TCPFLD_MSS, 0, 1,
 		"Kind", &ns_fmt_dec);
 static struct ns_pktfld tcp_mss_len =
-	NS_BYTEFIELD_IDX_I("len", &tcp_mss_ns, PRID_TCP, PRP_TCPFLD_MSS, 1, 1,
+	NS_BYTEFIELD_IDX_I("len", &tcp_mss_ns, PRID_TCP, PDU_TCPFLD_MSS, 1, 1,
 		"Length", &ns_fmt_dec);
 static struct ns_pktfld tcp_mss_mss =
-	NS_BYTEFIELD_IDX_I("mss", &tcp_mss_ns, PRID_TCP, PRP_TCPFLD_MSS, 2, 2,
+	NS_BYTEFIELD_IDX_I("mss", &tcp_mss_ns, PRID_TCP, PDU_TCPFLD_MSS, 2, 2,
 		"Max Segment Size", &ns_fmt_dec);
 struct ns_elem *stdproto_tcp_mss_ns_elems[STDPROTO_NS_SUB_ELEN] = {
 	(struct ns_elem *)&tcp_mss_kind, (struct ns_elem *)&tcp_mss_len,
@@ -3434,18 +3434,18 @@ struct ns_elem *stdproto_tcp_mss_ns_elems[STDPROTO_NS_SUB_ELEN] = {
 /* TCP Window Scale Option */
 static struct ns_namespace tcp_wscale_ns = 
 	NS_NAMESPACE_IDX_I("wscale", &tcp_ns, PRID_TCP, PRID_NONE,
-		PRP_TCPFLD_WSCALE, 4,
+		PDU_TCPFLD_WSCALE, 4,
 		"TCP Window Scale Option", NULL,
 		stdproto_tcp_wscale_ns_elems,
 		array_length(stdproto_tcp_wscale_ns_elems));
 static struct ns_pktfld tcp_wscale_kind =
-	NS_BYTEFIELD_IDX_I("kind", &tcp_wscale_ns, PRID_TCP, PRP_TCPFLD_WSCALE,
+	NS_BYTEFIELD_IDX_I("kind", &tcp_wscale_ns, PRID_TCP, PDU_TCPFLD_WSCALE,
 		0, 1, "Kind", &ns_fmt_dec);
 static struct ns_pktfld tcp_wscale_len =
-	NS_BYTEFIELD_IDX_I("len", &tcp_wscale_ns, PRID_TCP, PRP_TCPFLD_WSCALE,
+	NS_BYTEFIELD_IDX_I("len", &tcp_wscale_ns, PRID_TCP, PDU_TCPFLD_WSCALE,
 		1, 1, "Length", &ns_fmt_dec);
 static struct ns_pktfld tcp_wscale_scale =
-	NS_BYTEFIELD_IDX_I("scale", &tcp_wscale_ns, PRID_TCP, PRP_TCPFLD_WSCALE,
+	NS_BYTEFIELD_IDX_I("scale", &tcp_wscale_ns, PRID_TCP, PDU_TCPFLD_WSCALE,
 		2, 1, "Window Scale", &ns_fmt_dec);
 struct ns_elem *stdproto_tcp_wscale_ns_elems[STDPROTO_NS_SUB_ELEN] = {
 	(struct ns_elem *)&tcp_wscale_kind, (struct ns_elem *)&tcp_wscale_len,
@@ -3455,15 +3455,15 @@ struct ns_elem *stdproto_tcp_wscale_ns_elems[STDPROTO_NS_SUB_ELEN] = {
 /* TCP Selective Acknowledgement Permitted Option */
 static struct ns_namespace tcp_sackok_ns = 
 	NS_NAMESPACE_IDX_I("sackok", &tcp_ns, PRID_TCP, PRID_NONE,
-		PRP_TCPFLD_SACKOK, 2,
+		PDU_TCPFLD_SACKOK, 2,
 		"TCP Window Scale Option", NULL,
 		stdproto_tcp_sackok_ns_elems,
 		array_length(stdproto_tcp_sackok_ns_elems));
 static struct ns_pktfld tcp_sackok_kind =
-	NS_BYTEFIELD_IDX_I("kind", &tcp_sackok_ns, PRID_TCP, PRP_TCPFLD_SACKOK,
+	NS_BYTEFIELD_IDX_I("kind", &tcp_sackok_ns, PRID_TCP, PDU_TCPFLD_SACKOK,
 		0, 1, "Kind", &ns_fmt_dec);
 static struct ns_pktfld tcp_sackok_len =
-	NS_BYTEFIELD_IDX_I("len", &tcp_sackok_ns, PRID_TCP, PRP_TCPFLD_SACKOK,
+	NS_BYTEFIELD_IDX_I("len", &tcp_sackok_ns, PRID_TCP, PDU_TCPFLD_SACKOK,
 		1, 1, "Length", &ns_fmt_dec);
 struct ns_elem *stdproto_tcp_sackok_ns_elems[STDPROTO_NS_SUB_ELEN] = {
 	(struct ns_elem *)&tcp_sackok_kind, (struct ns_elem *)&tcp_sackok_len,
@@ -3472,20 +3472,20 @@ struct ns_elem *stdproto_tcp_sackok_ns_elems[STDPROTO_NS_SUB_ELEN] = {
 /* TCP Selective Acknowledgement Option */
 static struct ns_namespace tcp_sack_ns = 
 	NS_NAMESPACE_VARLEN_I("sack", &tcp_ns, PRID_TCP, PRID_NONE,
-		PRP_TCPFLD_SACK,
-		PRP_TCPFLD_SACK_END,
+		PDU_TCPFLD_SACK,
+		PDU_TCPFLD_SACK_END,
 		"TCP Selective Acknowledgement Option", NULL,
 		stdproto_tcp_sack_ns_elems,
 		array_length(stdproto_tcp_sack_ns_elems));
 static struct ns_pktfld tcp_sack_kind =
-	NS_BYTEFIELD_IDX_I("kind", &tcp_sack_ns, PRID_TCP, PRP_TCPFLD_SACK, 
+	NS_BYTEFIELD_IDX_I("kind", &tcp_sack_ns, PRID_TCP, PDU_TCPFLD_SACK, 
 		0, 1, "Kind", &ns_fmt_dec);
 static struct ns_pktfld tcp_sack_len =
-	NS_BYTEFIELD_IDX_I("len", &tcp_sack_ns, PRID_TCP, PRP_TCPFLD_SACK,
+	NS_BYTEFIELD_IDX_I("len", &tcp_sack_ns, PRID_TCP, PDU_TCPFLD_SACK,
 		1, 1, "Length", &ns_fmt_dec);
 static struct ns_pktfld tcp_sack_blocks =
-	NS_BYTEFIELD_VARLEN_I("blocks", &tcp_sack_ns, PRID_TCP, PRP_TCPFLD_SACK,
-		2, PRP_TCPFLD_SACK_END, 
+	NS_BYTEFIELD_VARLEN_I("blocks", &tcp_sack_ns, PRID_TCP, PDU_TCPFLD_SACK,
+		2, PDU_TCPFLD_SACK_END, 
 		"Selective Acknowledgements", &ns_fmt_raw);
 struct ns_elem *stdproto_tcp_sack_ns_elems[STDPROTO_NS_SUB_ELEN] = {
 	(struct ns_elem *)&tcp_sack_kind, (struct ns_elem *)&tcp_sack_len,
@@ -3496,21 +3496,21 @@ struct ns_elem *stdproto_tcp_sack_ns_elems[STDPROTO_NS_SUB_ELEN] = {
 /* TCP Timestamp Option */
 static struct ns_namespace tcp_ts_ns = 
 	NS_NAMESPACE_IDX_I("ts", &tcp_ns, PRID_TCP, PRID_NONE,
-		PRP_TCPFLD_TSTAMP, 10,
+		PDU_TCPFLD_TSTAMP, 10,
 		"TCP Timestamp Option", NULL,
 		stdproto_tcp_ts_ns_elems,
 		array_length(stdproto_tcp_ts_ns_elems));
 static struct ns_pktfld tcp_ts_kind =
-	NS_BYTEFIELD_IDX_I("kind", &tcp_ts_ns, PRID_TCP, PRP_TCPFLD_TSTAMP,
+	NS_BYTEFIELD_IDX_I("kind", &tcp_ts_ns, PRID_TCP, PDU_TCPFLD_TSTAMP,
 		0, 1, "Kind", &ns_fmt_dec);
 static struct ns_pktfld tcp_ts_len =
-	NS_BYTEFIELD_IDX_I("len", &tcp_ts_ns, PRID_TCP, PRP_TCPFLD_TSTAMP,
+	NS_BYTEFIELD_IDX_I("len", &tcp_ts_ns, PRID_TCP, PDU_TCPFLD_TSTAMP,
 		1, 1, "Length", &ns_fmt_dec);
 static struct ns_pktfld tcp_ts_val =
-	NS_BYTEFIELD_IDX_I("val", &tcp_ts_ns, PRID_TCP, PRP_TCPFLD_TSTAMP, 
+	NS_BYTEFIELD_IDX_I("val", &tcp_ts_ns, PRID_TCP, PDU_TCPFLD_TSTAMP, 
 		2, 4, "Value", &ns_fmt_dec);
 static struct ns_pktfld tcp_ts_echo =
-	NS_BYTEFIELD_IDX_I("echo", &tcp_ts_ns, PRID_TCP, PRP_TCPFLD_TSTAMP,
+	NS_BYTEFIELD_IDX_I("echo", &tcp_ts_ns, PRID_TCP, PDU_TCPFLD_TSTAMP,
 		6, 4, "Echoed Value", &ns_fmt_dec);
 struct ns_elem *stdproto_tcp_ts_ns_elems[STDPROTO_NS_SUB_ELEN] = {
 	(struct ns_elem *)&tcp_ts_kind, (struct ns_elem *)&tcp_ts_len,
@@ -3521,18 +3521,18 @@ struct ns_elem *stdproto_tcp_ts_ns_elems[STDPROTO_NS_SUB_ELEN] = {
 /* TCP MD5 Signature Option */
 static struct ns_namespace tcp_md5_ns = 
 	NS_NAMESPACE_IDX_I("md5", &tcp_ns, PRID_TCP, PRID_NONE,
-		PRP_TCPFLD_MD5, 18,
+		PDU_TCPFLD_MD5, 18,
 		"TCP MD5 Signature Option", NULL,
 		stdproto_tcp_md5_ns_elems,
 		array_length(stdproto_tcp_md5_ns_elems));
 static struct ns_pktfld tcp_md5_kind =
-	NS_BYTEFIELD_IDX_I("kind", &tcp_md5_ns, PRID_TCP, PRP_TCPFLD_MD5,
+	NS_BYTEFIELD_IDX_I("kind", &tcp_md5_ns, PRID_TCP, PDU_TCPFLD_MD5,
 		0, 1, "Kind", &ns_fmt_dec);
 static struct ns_pktfld tcp_md5_len =
-	NS_BYTEFIELD_IDX_I("len", &tcp_md5_ns, PRID_TCP, PRP_TCPFLD_MD5,
+	NS_BYTEFIELD_IDX_I("len", &tcp_md5_ns, PRID_TCP, PDU_TCPFLD_MD5,
 		1, 1, "Length", &ns_fmt_dec);
 static struct ns_pktfld tcp_md5_sig =
-	NS_BYTEFIELD_IDX_I("sig", &tcp_md5_ns, PRID_TCP, PRP_TCPFLD_MD5,
+	NS_BYTEFIELD_IDX_I("sig", &tcp_md5_ns, PRID_TCP, PDU_TCPFLD_MD5,
 		2, 16, "Signature", &ns_fmt_raw);
 struct ns_elem *stdproto_tcp_md5_ns_elems[STDPROTO_NS_SUB_ELEN] = {
 	(struct ns_elem *)&tcp_md5_kind, (struct ns_elem *)&tcp_md5_len,
@@ -3586,13 +3586,13 @@ static struct ns_pktfld gre_ns_proto =
 	NS_BYTEFIELD_I("proto", &gre_ns, PRID_GRE, 2, 2,
 		"Protocol Type", &ns_fmt_hex);
 static struct ns_pktfld gre_ns_cksum =
-	NS_BYTEFIELD_IDX_I("cksum", &gre_ns, PRID_GRE, PRP_GREFLD_CKSUM, 0, 2,
+	NS_BYTEFIELD_IDX_I("cksum", &gre_ns, PRID_GRE, PDU_GREFLD_CKSUM, 0, 2,
 		"Checksum", &ns_fmt_hex);
 static struct ns_pktfld gre_ns_key =
-	NS_BYTEFIELD_IDX_I("key", &gre_ns, PRID_GRE, PRP_GREFLD_KEY, 0, 4,
+	NS_BYTEFIELD_IDX_I("key", &gre_ns, PRID_GRE, PDU_GREFLD_KEY, 0, 4,
 		"Key", &ns_fmt_dec);
 static struct ns_pktfld gre_ns_seq =
-	NS_BYTEFIELD_IDX_I("seq", &gre_ns, PRID_GRE, PRP_GREFLD_SEQ, 0, 4,
+	NS_BYTEFIELD_IDX_I("seq", &gre_ns, PRID_GRE, PDU_GREFLD_SEQ, 0, 4,
 		"Sequence Number", &ns_fmt_dec);
 
 
@@ -3696,21 +3696,21 @@ extern struct ns_elem *stdproto_mpls_lbl7_ns_elems[STDPROTO_NS_SUB_ELEN];
 
 static struct ns_namespace mpls_lbl1_ns = 
 	NS_NAMESPACE_IDX_I("mpls1", &mpls_ns, PRID_MPLS, PRID_NONE,
-		PRP_MPLSFLD_LBL1, 4, "MPLS Label 1", NULL,
+		PDU_MPLSFLD_LBL1, 4, "MPLS Label 1", NULL,
 		stdproto_mpls_lbl1_ns_elems,
 		array_length(stdproto_mpls_lbl1_ns_elems));
 static struct ns_pktfld mpls_lbl1_label =
 	NS_BITFIELD_IDX_I("label", &mpls_lbl1_ns, PRID_MPLS,
-		PRP_MPLSFLD_LBL1, 0, 0, 20, "Label", &ns_fmt_dec);
+		PDU_MPLSFLD_LBL1, 0, 0, 20, "Label", &ns_fmt_dec);
 static struct ns_pktfld mpls_lbl1_tc =
 	NS_BITFIELD_IDX_I("tc", &mpls_lbl1_ns, PRID_MPLS,
-		PRP_MPLSFLD_LBL1, 2, 4, 3, "Traffic Class", &ns_fmt_dec);
+		PDU_MPLSFLD_LBL1, 2, 4, 3, "Traffic Class", &ns_fmt_dec);
 static struct ns_pktfld mpls_lbl1_bos =
 	NS_BITFIELD_IDX_I("bos", &mpls_lbl1_ns, PRID_MPLS,
-		PRP_MPLSFLD_LBL1, 2, 7, 1, "Bottom of Stack", &ns_fmt_dec);
+		PDU_MPLSFLD_LBL1, 2, 7, 1, "Bottom of Stack", &ns_fmt_dec);
 static struct ns_pktfld mpls_lbl1_ttl =
 	NS_BYTEFIELD_IDX_I("ttl", &mpls_lbl1_ns, PRID_MPLS,
-		PRP_MPLSFLD_LBL1, 3, 1, "Time to Live", &ns_fmt_dec);
+		PDU_MPLSFLD_LBL1, 3, 1, "Time to Live", &ns_fmt_dec);
 
 struct ns_elem *stdproto_mpls_lbl1_ns_elems[STDPROTO_NS_SUB_ELEN] = {
 	(struct ns_elem *)&mpls_lbl1_label, (struct ns_elem *)&mpls_lbl1_tc,
@@ -3720,21 +3720,21 @@ struct ns_elem *stdproto_mpls_lbl1_ns_elems[STDPROTO_NS_SUB_ELEN] = {
 
 static struct ns_namespace mpls_lbl2_ns = 
 	NS_NAMESPACE_IDX_I("mpls2", &mpls_ns, PRID_MPLS, PRID_NONE,
-		PRP_MPLSFLD_LBL1, 4, "MPLS Label 1", NULL,
+		PDU_MPLSFLD_LBL1, 4, "MPLS Label 1", NULL,
 		stdproto_mpls_lbl2_ns_elems,
 		array_length(stdproto_mpls_lbl2_ns_elems));
 static struct ns_pktfld mpls_lbl2_label =
 	NS_BITFIELD_IDX_I("label", &mpls_lbl2_ns, PRID_MPLS,
-		PRP_MPLSFLD_LBL1, 0, 0, 20, "Label", &ns_fmt_dec);
+		PDU_MPLSFLD_LBL1, 0, 0, 20, "Label", &ns_fmt_dec);
 static struct ns_pktfld mpls_lbl2_tc =
 	NS_BITFIELD_IDX_I("tc", &mpls_lbl2_ns, PRID_MPLS,
-		PRP_MPLSFLD_LBL1, 2, 4, 3, "Traffic Class", &ns_fmt_dec);
+		PDU_MPLSFLD_LBL1, 2, 4, 3, "Traffic Class", &ns_fmt_dec);
 static struct ns_pktfld mpls_lbl2_bos =
 	NS_BITFIELD_IDX_I("bos", &mpls_lbl2_ns, PRID_MPLS,
-		PRP_MPLSFLD_LBL1, 2, 7, 1, "Bottom of Stack", &ns_fmt_dec);
+		PDU_MPLSFLD_LBL1, 2, 7, 1, "Bottom of Stack", &ns_fmt_dec);
 static struct ns_pktfld mpls_lbl2_ttl =
 	NS_BYTEFIELD_IDX_I("ttl", &mpls_lbl2_ns, PRID_MPLS,
-		PRP_MPLSFLD_LBL1, 3, 1, "Time to Live", &ns_fmt_dec);
+		PDU_MPLSFLD_LBL1, 3, 1, "Time to Live", &ns_fmt_dec);
 
 struct ns_elem *stdproto_mpls_lbl2_ns_elems[STDPROTO_NS_SUB_ELEN] = {
 	(struct ns_elem *)&mpls_lbl2_label, (struct ns_elem *)&mpls_lbl2_tc,
@@ -3744,21 +3744,21 @@ struct ns_elem *stdproto_mpls_lbl2_ns_elems[STDPROTO_NS_SUB_ELEN] = {
 
 static struct ns_namespace mpls_lbl3_ns = 
 	NS_NAMESPACE_IDX_I("mpls3", &mpls_ns, PRID_MPLS, PRID_NONE,
-		PRP_MPLSFLD_LBL1, 4, "MPLS Label 1", NULL,
+		PDU_MPLSFLD_LBL1, 4, "MPLS Label 1", NULL,
 		stdproto_mpls_lbl3_ns_elems,
 		array_length(stdproto_mpls_lbl3_ns_elems));
 static struct ns_pktfld mpls_lbl3_label =
 	NS_BITFIELD_IDX_I("label", &mpls_lbl3_ns, PRID_MPLS,
-		PRP_MPLSFLD_LBL1, 0, 0, 20, "Label", &ns_fmt_dec);
+		PDU_MPLSFLD_LBL1, 0, 0, 20, "Label", &ns_fmt_dec);
 static struct ns_pktfld mpls_lbl3_tc =
 	NS_BITFIELD_IDX_I("tc", &mpls_lbl3_ns, PRID_MPLS,
-		PRP_MPLSFLD_LBL1, 2, 4, 3, "Traffic Class", &ns_fmt_dec);
+		PDU_MPLSFLD_LBL1, 2, 4, 3, "Traffic Class", &ns_fmt_dec);
 static struct ns_pktfld mpls_lbl3_bos =
 	NS_BITFIELD_IDX_I("bos", &mpls_lbl3_ns, PRID_MPLS,
-		PRP_MPLSFLD_LBL1, 2, 7, 1, "Bottom of Stack", &ns_fmt_dec);
+		PDU_MPLSFLD_LBL1, 2, 7, 1, "Bottom of Stack", &ns_fmt_dec);
 static struct ns_pktfld mpls_lbl3_ttl =
 	NS_BYTEFIELD_IDX_I("ttl", &mpls_lbl3_ns, PRID_MPLS,
-		PRP_MPLSFLD_LBL1, 3, 1, "Time to Live", &ns_fmt_dec);
+		PDU_MPLSFLD_LBL1, 3, 1, "Time to Live", &ns_fmt_dec);
 
 struct ns_elem *stdproto_mpls_lbl3_ns_elems[STDPROTO_NS_SUB_ELEN] = {
 	(struct ns_elem *)&mpls_lbl3_label, (struct ns_elem *)&mpls_lbl3_tc,

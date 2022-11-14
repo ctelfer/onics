@@ -1,4 +1,4 @@
-.TH "pml" 1 "October 2016" "ONICS 1.0"
+.TH "pml" 1 "November 2022" "ONICS 1.0"
 .SH NAME
 pml - Packet Manipulation Language utility to match and modify packets.
 .P
@@ -178,7 +178,7 @@ An 'intrinsic' is a subroutine whose definition is outside of the PML
 language.  This provides function-style syntax for operations that the
 PML program simply can not perform, but needs access to.  The PML
 language defines intrinsics for accessing packet metadata, manipulating
-packet buffers, manipulating packet parses, premature program exit and
+packet buffers, manipulating packet PDUs, premature program exit and
 accelerated bit operations.  An intrinsic returns an int or void but in
 it is possible for one to return any data type including those not
 usually available to functions.
@@ -695,7 +695,7 @@ present in the packet.  The members for a protocol P are:
   - P.header -- A 'str' value referring to the header of the PDU
   - P.payload-- A 'str' value referring to the payload of the PDU
   - P.trailer-- A 'str' value referring to the trailer of the PDU
-  - P.parse  -- A 'str' value referring to the entire PDU.
+  - P.pdu    -- A 'str' value referring to the entire PDU.
                 (One can access this as P[0] as well.)
 .fi
 .P

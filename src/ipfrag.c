@@ -1,6 +1,6 @@
 /*
  * ONICS
- * Copyright 2013-2015
+ * Copyright 2013-2022
  * Christopher Adam Telfer
  *
  * ipfrag.c -- Fragment packets according to a given MTU.
@@ -165,31 +165,31 @@ void parse_args(int argc, char *argv[])
 
 static int frag_action(struct pktbuf *p)
 {
-	struct prparse *prp;
+	struct pdu *pdu;
 	struct ipv4h *ip;
 
-	prp = p->layers[PKB_LAYER_NET];
-	if (prp == NULL) {
+	pdu = p->layers[PKB_LAYER_NET];
+	if (pdu == NULL) {
 		return PASS;
-	} else if (prp->prid == PRID_IPV4) {
+	} else if (pdu->prid == PRID_IPV4) {
 		if (!frag4)
 			return PASS;
-		if (prp->error != 0 || prp_totlen(prp) <= mtu)
+		if (pdu->error != 0 || pdu_totlen(pdu) <= mtu)
 			return PASS;
-		ip = prp_header(prp, p->buf, struct ipv4h);
+		ip = pdu_header(pdu, p->buf, struct ipv4h);
 		if (ntoh16(ip->fragoff) & IPH_DFMASK)
 			return dfact;
 		else
 			return FRAG;
-	} else if (prp->prid == PRID_IPV6) {
+	} else if (pdu->prid == PRID_IPV6) {
 		if (!frag6)
 			return PASS;
 		/* IPv6 always has a "Don't fragment" bit implied. */
 		/* so if frag6 is non-zero we assume we should fragment. */
-		if (prp->error != 0 || prp_totlen(prp) <= mtu)
+		if (pdu->error != 0 || pdu_totlen(pdu) <= mtu)
 			return PASS;
-		else if (prp_off_valid(prp, PRP_IPV6FLD_FRAGH) || 
-			 prp_off_valid(prp, PRP_IPV6FLD_AHH))
+		else if (pdu_off_valid(pdu, PDU_IPV6FLD_FRAGH) || 
+			 pdu_off_valid(pdu, PDU_IPV6FLD_AHH))
 			return DROP;
 		else
 			return FRAG;
@@ -249,17 +249,17 @@ static int copy_v4_options(byte_t *in, byte_t *out, uint len)
 
 static int fragment_v4(struct pktbuf *p)
 {
-	struct prparse *prp = p->layers[PKB_LAYER_NET];
-	struct ipv4h *ip = prp_header(prp, p->buf, struct ipv4h);
+	struct pdu *pdu = p->layers[PKB_LAYER_NET];
+	struct ipv4h *ip = pdu_header(pdu, p->buf, struct ipv4h);
 	byte_t newhdr[60];
-	int ohlen = prp_hlen(prp);
+	int ohlen = pdu_hlen(pdu);
 	int nhlen;
 	ulong nb;		/* number of 8-byte blocks */
 	ulong plen;		/* packet length */
 	uint16_t foff;		/* next fragment offset */
 
 	abort_unless(ohlen <= 60);
-	abort_unless(prp_totlen(prp) > mtu);
+	abort_unless(pdu_totlen(pdu) > mtu);
 
 	foff = ntoh16(ip->fragoff);
 
@@ -284,16 +284,16 @@ static int fragment_v4(struct pktbuf *p)
 	 * (MTU - old_hdr_len) / 8 bytes of data.
 	 */
 	/* Check that fragment won't overflow. */
-	if (IPH_FRAGOFF(foff) + prp_totlen(prp) > 65535)
+	if (IPH_FRAGOFF(foff) + pdu_totlen(pdu) > 65535)
 		return -1;
 
 	nb = (mtu - ohlen) / 8;
 	ip->fragoff = hton16(foff | IPH_MFMASK | dfbit);
 	ip->len = hton16(nb * 8 + ohlen);
-	prp_fix_cksum(prp, p->buf);
+	pdu_fix_cksum(pdu, p->buf);
 
 	/* now copy out the old header plus the data to a new packet and send */
-	plen = nb * 8 + ohlen + prp_soff(prp) - pkb_get_off(p);
+	plen = nb * 8 + ohlen + pdu_soff(pdu) - pkb_get_off(p);
 	copy_send_firstn(p, plen);
 
 	/*
@@ -302,8 +302,8 @@ static int fragment_v4(struct pktbuf *p)
 	 * difference in header sizes starting just past the new header.  Shift
 	 * up since the L2 headers are likely to be shorter than the payload.
 	 */
-	memcpy(prp_header(prp, p->buf, void), newhdr, nhlen);
-	prp_cut(prp, p->buf, nhlen, ohlen - nhlen + nb * 8, 1);
+	memcpy(pdu_header(pdu, p->buf, void), newhdr, nhlen);
+	pdu_cut(pdu, p->buf, nhlen, ohlen - nhlen + nb * 8, 1);
 	foff += nb;
 
 	/* 
@@ -311,23 +311,23 @@ static int fragment_v4(struct pktbuf *p)
 	 * simpler because the IP header mostly stays the same.  Only
 	 * the fragment offset will change. 
 	 */
-	ip = prp_header(prp, p->buf, struct ipv4h);
+	ip = pdu_header(pdu, p->buf, struct ipv4h);
 	nb = (mtu - nhlen) / 8;
 	ip->len = hton16(nhlen + nb * 8);
-	while (prp_totlen(prp) > mtu) {
+	while (pdu_totlen(pdu) > mtu) {
 		ip->fragoff = hton16(foff | IPH_MFMASK | dfbit);
-		prp_fix_cksum(prp, p->buf);
-		plen = nb * 8 + nhlen + prp_soff(prp) - pkb_get_off(p);
+		pdu_fix_cksum(pdu, p->buf);
+		plen = nb * 8 + nhlen + pdu_soff(pdu) - pkb_get_off(p);
 		copy_send_firstn(p, plen);
-		prp_cut(prp, p->buf, nhlen, nb * 8, 1);
+		pdu_cut(pdu, p->buf, nhlen, nb * 8, 1);
 		foff += nb;
-		ip = prp_header(prp, p->buf, struct ipv4h);
+		ip = pdu_header(pdu, p->buf, struct ipv4h);
 	}
 
 	/* now what is left is just the last fragment */
 	ip->fragoff = hton16(foff | dfbit);
-	ip->len = hton16(nhlen + prp_plen(prp));
-	prp_fix_cksum(prp, p->buf);
+	ip->len = hton16(nhlen + pdu_plen(pdu));
+	pdu_fix_cksum(pdu, p->buf);
 	pkb_pack(p);
 	if (pkb_file_write(p, outfile) < 0)
 		errsys("pkb_file_write(): ");
@@ -338,7 +338,7 @@ static int fragment_v4(struct pktbuf *p)
 
 static ulong find_v6_fragoff(struct pktbuf *p, uint8_t *nxth, uint8_t **fhp)
 {
-	struct prparse *prp = p->layers[PKB_LAYER_NET];
+	struct pdu *pdu = p->layers[PKB_LAYER_NET];
 	struct ipv6h *ip6;
 	byte_t *o;
 	/* 
@@ -346,20 +346,20 @@ static ulong find_v6_fragoff(struct pktbuf *p, uint8_t *nxth, uint8_t **fhp)
 	 * Else if hop-by-hop options present, fragment after it.  Else
 	 * fragment after the base header.
 	 */
-	if (prp_off_valid(prp, PRP_IPV6FLD_RTOPT)) {
-		o = p->buf + prp->offs[PRP_IPV6FLD_RTOPT];
+	if (pdu_off_valid(pdu, PDU_IPV6FLD_RTOPT)) {
+		o = p->buf + pdu->offs[PDU_IPV6FLD_RTOPT];
 		*nxth = o[0];
 		*fhp = o;
 		return o[1] * 8 + 8 + 
-		       prp->offs[PRP_IPV6FLD_FRAGH] - prp_soff(prp);
-	} else if (prp_off_valid(prp, PRP_IPV6FLD_HOPOPT)) {
-		o = p->buf + prp->offs[PRP_IPV6FLD_HOPOPT];
+		       pdu->offs[PDU_IPV6FLD_FRAGH] - pdu_soff(pdu);
+	} else if (pdu_off_valid(pdu, PDU_IPV6FLD_HOPOPT)) {
+		o = p->buf + pdu->offs[PDU_IPV6FLD_HOPOPT];
 		*nxth = o[0];
 		*fhp = o;
 		return o[1] * 8 + 8 +
-		       prp->offs[PRP_IPV6FLD_HOPOPT] - prp_soff(prp);
+		       pdu->offs[PDU_IPV6FLD_HOPOPT] - pdu_soff(pdu);
 	} else {
-		ip6 = prp_header(prp, p->buf, struct ipv6h);
+		ip6 = pdu_header(pdu, p->buf, struct ipv6h);
 		*nxth = ip6->nxthdr;
 		*fhp = &ip6->nxthdr;
 		return 40;
@@ -369,7 +369,7 @@ static ulong find_v6_fragoff(struct pktbuf *p, uint8_t *nxth, uint8_t **fhp)
 
 static int fragment_v6(struct pktbuf *p)
 {
-	struct prparse *prp = p->layers[PKB_LAYER_NET];
+	struct pdu *pdu = p->layers[PKB_LAYER_NET];
 	struct ipv6h *ip6;
 	struct ipv6_fragh *fh;
 	ulong id;	/* the fragment ID */
@@ -390,7 +390,7 @@ static int fragment_v6(struct pktbuf *p)
 	 * through said fragment header. 
 	 */
 	fho = find_v6_fragoff(p, &nxth, &fhp);
-	hl = fho + 8 + prp_soff(prp)- pkb_get_off(p);
+	hl = fho + 8 + pdu_soff(pdu)- pkb_get_off(p);
 	xhl =  fho - 32; /* fho + 8 - 40 */
 
 	/* make sure the MTU is big enough for the various headers */
@@ -400,11 +400,11 @@ static int fragment_v6(struct pktbuf *p)
 
 	/* insert 8 bytes for the fragment header */
 	*fhp = IPPROT_V6_FRAG_HDR;
-	prp_insert(prp, p->buf, fho, 8, 0); 
-	prp->offs[PRP_IPV6FLD_FRAGH] = prp_soff(prp) + fho;
+	pdu_inject(pdu, p->buf, fho, 8, 0); 
+	pdu->offs[PDU_IPV6FLD_FRAGH] = pdu_soff(pdu) + fho;
 
 	/* build the fragment header for the first fragment */
-	fh = (struct ipv6_fragh *)(p->buf + prp->offs[PRP_IPV6FLD_FRAGH]);
+	fh = (struct ipv6_fragh *)(p->buf + pdu->offs[PDU_IPV6FLD_FRAGH]);
 	nb = (mtu - xhl - 40) / 8 * 8;
 	fh->nxthdr = nxth;
 	fh->resv = 0;
@@ -412,35 +412,35 @@ static int fragment_v6(struct pktbuf *p)
 	fh->id = hton32(id);
 
 	/* now we set the payload length correctly in the IPv6 header */
-	ip6 = prp_header(prp, p->buf, struct ipv6h);
+	ip6 = pdu_header(pdu, p->buf, struct ipv6h);
 	ip6->len = hton16(nb + xhl);
 
 	/* we are now set up to copy in the first frag a new buffer and send */
 	copy_send_firstn(p, nb + hl);
 
 	/* now cut out the payload bytes we just sent and adjust offsets */
-	prp_cut(prp, p->buf, xhl + 40, nb, 1);
+	pdu_cut(pdu, p->buf, xhl + 40, nb, 1);
 	foff += nb;
 
 	/*
 	 * Now enter a loop and generate the middle fragments.
 	 * Length will remain the same throughout.
 	 */
-	ip6 = prp_header(prp, p->buf, struct ipv6h);
-	fh = (struct ipv6_fragh *)(p->buf + prp->offs[PRP_IPV6FLD_FRAGH]);
+	ip6 = pdu_header(pdu, p->buf, struct ipv6h);
+	fh = (struct ipv6_fragh *)(p->buf + pdu->offs[PDU_IPV6FLD_FRAGH]);
 	nb = (mtu - xhl - 40) / 8 * 8;
 	ip6->len = hton16(nb + xhl);
-	while (prp_totlen(prp) > mtu) {
+	while (pdu_totlen(pdu) > mtu) {
 		fh->fragoff = hton16(foff | IPV6_FRAGH_MFMASK);
 		copy_send_firstn(p, nb + hl);
-		prp_cut(prp, p->buf, xhl + 40, nb, 1);
+		pdu_cut(pdu, p->buf, xhl + 40, nb, 1);
 		foff += nb;
-		fh = (struct ipv6_fragh *)(p->buf + prp->offs[PRP_IPV6FLD_FRAGH]);
+		fh = (struct ipv6_fragh *)(p->buf + pdu->offs[PDU_IPV6FLD_FRAGH]);
 	}
 
 	/* Finally we just send what is left as the last fragment */
-	ip6 = prp_header(prp, p->buf, struct ipv6h);
-	ip6->len = hton16(prp_totlen(prp) - 40);
+	ip6 = pdu_header(pdu, p->buf, struct ipv6h);
+	ip6->len = hton16(pdu_totlen(pdu) - 40);
 	fh->fragoff = hton16(foff);
 	pkb_pack(p);
 	if (pkb_file_write(p, outfile) < 0)

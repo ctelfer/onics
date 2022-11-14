@@ -1,6 +1,6 @@
 /*
  * ONICS
- * Copyright 2012-2015
+ * Copyright 2012-2022
  * Christopher Adam Telfer
  *
  * netvm_op_macros.h -- APIs for interaction with NetVM internals, including
@@ -77,13 +77,13 @@ extern int netvm_dbgabrt();
 
 
 /* Get a protocol descriptor */
-void netvm_get_pd(struct netvm *vm, struct netvm_prp_desc *pd, int onstack);
+void netvm_get_pd(struct netvm *vm, struct netvm_pdu_desc *pd, int onstack);
 
-/* Get a protocol descriptor and find the prp of the given packet */
-struct prparse *netvm_find_header(struct netvm *vm, struct netvm_prp_desc *pd,
-				  int onstack);
+/* Get a protocol descriptor and find the pdu of the given packet */
+struct pdu *netvm_find_header(struct netvm *vm, struct netvm_pdu_desc *pd,
+				 int onstack);
 
-void netvm_get_prp_ptr(struct netvm *vm, int onstack, int width, byte_t **p);
+void netvm_get_pdu_ptr(struct netvm *vm, int onstack, int width, byte_t **p);
 
 void netvm_get_seg_ptr(struct netvm *vm, uint seg, ulong addr, int iswr, 
 		       ulong len, byte_t **p);

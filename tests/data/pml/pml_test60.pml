@@ -1,4 +1,4 @@
-# Test prp_insert() and prp_delete() functions.
+# Test pdu_insert() and pdu_delete() functions.
 #
 
 ?- gre -? { 

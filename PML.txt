@@ -75,7 +75,7 @@ An 'intrinsic' is a subroutine whose definition is outside of the PML
 language.  This provides function-style syntax for operations that the
 PML program simply can not perform, but needs access to.  The PML
 language defines intrinsics for accessing packet metadata, manipulating
-packet buffers, manipulating packet parses, premature program exit and
+packet buffers, manipulating packet PDUs, premature program exit and
 accelerated bit operations.  An intrinsic returns an int or void but it
 is possible for an intrinsic to return any data type including those not
 usually available to program-defined functions.
@@ -581,8 +581,8 @@ present in the packet.  The members for a protocol P are:
   - P.header -- A 'str' value referring to the header portion of the data
   - P.payload -- A 'str' value referring to the payload portion of the data
   - P.trailer -- A 'str' value referring to the trailer of the data
-  - P.parse -- A 'str' value referring to the entire protocol data unit.
-	       (One can access this as P[0] as well.)
+  - P.pdu -- A 'str' value referring to the entire protocol data unit.
+	     (One can access this as P[0] as well.)
 
 
 Each constant member in a protocol namespace has a type of either 'int', 
@@ -808,7 +808,7 @@ Special Locator Intrinsics
   	- Fix the checksum fields in the given PDU.
 
   void pdu_update(pdesc)
-  	- Update the protocol parsed fields for the PDU.  One might use
+  	- Update the protocol parseable fields for the PDU.  One might use
 	  this, for example, after inserting IP option data in an IP
 	  header to make PML able to recognize the IP option fields.
 
@@ -1167,9 +1167,9 @@ Intrinsics:
 
   /* very low level functions */
   -- int pkt_get_off(pnum, prid, idx, oid) - get offset 'oid' of the 'idx'th
-				'prid' parse in packet 'pnum'
+				'prid' PDU in packet 'pnum'
   -- void pkt_adj_off(pnum, prid, idx, oid, amt) - adjust offset 'oid' of the
-				'idx'th 'prid' parse in packet 'pnum' by 'adj'
+				'idx'th 'prid' PDU in packet 'pnum' by 'adj'
 
   -- int pkt_nlists() - return the number of packet lists in the system.
   -- int pkt_lempty(listnum) - return whether a given packet list is empty.
@@ -1252,8 +1252,8 @@ Formatted printing in PML
 
 Metadata:
  PML currently exposes metadata through intrinsics.  It would be
- relatively simple to expose xpkt headers as another type of protocol
- parse.  This was deliberately NOT done at the present time with the
+ relatively simple to expose xpkt headers as another type of PDU.
+ This was deliberately NOT done at the present time with the
  rationale that PML can exist in environments without xpkt as the core
  packet format.  Furthermore, the user should not be required to know
  xpkt to build and send packets.  (adjusting packets wouldn't be

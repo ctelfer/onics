@@ -1,6 +1,6 @@
 /*
  * ONICS
- * Copyright 2012-2016
+ * Copyright 2012-2022
  * Christopher Adam Telfer
  *
  * protoparse.c -- Framework to parse network protocols.
@@ -28,21 +28,20 @@
 static struct proto_parser *_pp_lookup(uint prid);
 
 /* helper functions for the default parsers */
-static void base_init(struct prparse *prp, ulong off, ulong hlen, ulong plen, 
+static void root_init(struct pdu *pdu, ulong off, ulong hlen, ulong plen,
 		      ulong tlen);
-static struct prparse *new_prp(struct prpspec *ps, struct prparse_ops *ops);
-static int mkspec(struct prparse *prp, int enclose, uint prid,
-		  struct prpspec *ps);
+static struct pdu *new_pdu(struct pduspec *ps, struct pdu_ops *ops);
+static int mkspec(struct pdu *pdu, int enclose, uint prid, struct pduspec *ps);
 
-static int nxtcld_fail(struct prparse *reg, byte_t *buf, struct prparse *cld,
+static int nxtcld_fail(struct pdu *reg, byte_t *buf, struct pdu *cld,
 		       uint *prid, ulong *off, ulong *maxlen);
 
 
 /* parse callbacks for PRID_NONE */
-static struct prparse *none_parse(struct prparse *reg, byte_t *buf, ulong off,
-				  ulong maxlen);
-static int none_getspec(struct prparse *prp, int enclose, struct prpspec *ps);
-static int none_add(struct prparse *reg, byte_t *buf, struct prpspec *ps,
+static struct pdu *none_parse(struct pdu *reg, byte_t *buf, ulong off,
+			       ulong maxlen);
+static int none_getspec(struct pdu *pdu, int enclose, struct pduspec *ps);
+static int none_add(struct pdu *reg, byte_t *buf, struct pduspec *ps,
 		    int enclose);
 				
 static struct proto_parser_ops none_proto_parser_ops = {
@@ -54,10 +53,10 @@ static struct proto_parser_ops none_proto_parser_ops = {
 
 
 /* parse callbacks for PRID_DATA and PRID_RAWPKT */
-static struct prparse *data_parse(struct prparse *reg, byte_t *buf, ulong off,
-				  ulong maxlen);
-static int data_getspec(struct prparse *prp, int enclose, struct prpspec *ps);
-static int data_add(struct prparse *reg, byte_t *buf, struct prpspec *ps,
+static struct pdu *data_parse(struct pdu *reg, byte_t *buf, ulong off,
+			      ulong maxlen);
+static int data_getspec(struct pdu *pdu, int enclose, struct pduspec *ps);
+static int data_add(struct pdu *reg, byte_t *buf, struct pduspec *ps,
 		    int enclose);
 
 static struct proto_parser_ops data_proto_parser_ops = {
@@ -81,7 +80,7 @@ struct proto_parser pp_proto_parsers[PRID_PER_PF] = {
 };
 
 
-static struct proto_parser *proto_families[PRID_NUM_PF] = { 
+static struct proto_parser *proto_families[PRID_NUM_PF] = {
 	&inet_proto_parsers[0], &net_proto_parsers[0], &dlt_proto_parsers[0],
 	&pver_proto_parsers[0], NULL, NULL, NULL, NULL,  /* 0 - 7 */
 	NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, /* 8-15 */
@@ -121,7 +120,7 @@ static struct proto_parser *proto_families[PRID_NUM_PF] = {
 	NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, /* 224-231 */
 	NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, /* 232-239 */
 	NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, /* 240-247 */
-	NULL, NULL, NULL, NULL, NULL, NULL, NULL, 
+	NULL, NULL, NULL, NULL, NULL, NULL, NULL,
 	&pp_proto_parsers[0], /* 248-255 */
 };
 
@@ -199,89 +198,89 @@ int pp_unregister(uint prid)
 }
 
 
-/* -- ops for "NONE", "NONE base" and "DATA" and "RAWPKT" protocol type -- */
+/* -- ops for "NONE", "NONE root" and "DATA" and "RAWPKT" protocol type -- */
 
-static struct prparse *default_copy(struct prparse *oprp);
-static void default_free(struct prparse *prp);
-static struct prparse *base_copy(struct prparse *oprp);
-static void base_free(struct prparse *prp);
+static struct pdu *default_copy(struct pdu *opdu);
+static void default_free(struct pdu *pdu);
+static struct pdu *root_copy(struct pdu *opdu);
+static void root_free(struct pdu *pdu);
 
-static struct prparse_ops none_prparse_ops = {
-	prp_nop_update,
-	prp_nop_fixnxt,
-	prp_nop_fixlen,
-	prp_nop_fixcksum,
+static struct pdu_ops none_pdu_ops = {
+	pdu_nop_update,
+	pdu_nop_fixnxt,
+	pdu_nop_fixlen,
+	pdu_nop_fixcksum,
 	default_copy,
 	default_free
 };
 
 
-static struct prparse_ops data_prparse_ops = {
-	prp_nop_update,
-	prp_nop_fixnxt,
-	prp_nop_fixlen,
-	prp_nop_fixcksum,
+static struct pdu_ops data_pdu_ops = {
+	pdu_nop_update,
+	pdu_nop_fixnxt,
+	pdu_nop_fixlen,
+	pdu_nop_fixcksum,
 	default_copy,
 	default_free
 };
 
 
-static struct prparse_ops base_prparse_ops = {
-	prp_nop_update,
-	prp_nop_fixnxt,
-	prp_nop_fixlen,
-	prp_nop_fixcksum,
-	base_copy,
-	base_free
+static struct pdu_ops root_pdu_ops = {
+	pdu_nop_update,
+	pdu_nop_fixnxt,
+	pdu_nop_fixlen,
+	pdu_nop_fixcksum,
+	root_copy,
+	root_free
 };
 
 /* -- Various helper functions -- */
-static void base_init(struct prparse *prp, ulong off, ulong hlen, ulong plen, 
+static void root_init(struct pdu *pdu, ulong off, ulong hlen, ulong plen,
 		      ulong tlen)
 {
-	prp->prid = PRID_NONE;
-	prp->error = 0;
-	prp->ops = &base_prparse_ops;
-	l_init(&prp->node);
-	prp->region = NULL;
-	prp->noff = PRP_OI_MIN_NUM;
-	prp_soff(prp) = off;
-	prp_poff(prp) = prp_soff(prp) + hlen;
-	prp_toff(prp) = prp_poff(prp) + plen;
-	prp_eoff(prp) = prp_toff(prp) + tlen;
-	abort_unless(prp_soff(prp) <= prp_poff(prp));
-	abort_unless(prp_poff(prp) <= prp_toff(prp));
-	abort_unless(prp_toff(prp) <= prp_eoff(prp));
+	pdu->prid = PRID_NONE;
+	pdu->error = 0;
+	pdu->ops = &root_pdu_ops;
+	l_init(&pdu->node);
+	pdu->region = NULL;
+	pdu->noff = PDU_OI_MIN_NUM;
+	pdu_soff(pdu) = off;
+	pdu_poff(pdu) = pdu_soff(pdu) + hlen;
+	pdu_toff(pdu) = pdu_poff(pdu) + plen;
+	pdu_eoff(pdu) = pdu_toff(pdu) + tlen;
+	abort_unless(pdu_soff(pdu) <= pdu_poff(pdu));
+	abort_unless(pdu_poff(pdu) <= pdu_toff(pdu));
+	abort_unless(pdu_toff(pdu) <= pdu_eoff(pdu));
 }
 
 
-static struct prparse *new_prp(struct prpspec *ps, struct prparse_ops *ops)
+static struct pdu *new_pdu(struct pduspec *ps, struct pdu_ops *ops)
 {
-	struct prparse *prp;
+	struct pdu *pdu;
 
-	prp = malloc(sizeof(*prp));
-	if (!prp)
+	pdu = malloc(sizeof(*pdu));
+	if (!pdu)
 		return NULL;
 
-	prp->prid = ps->prid;
-	prp->error = 0;
-	prp->ops = ops;
-	l_init(&prp->node);
-	prp->region = NULL;
-	prp->noff = PRP_OI_MIN_NUM;
-	prp_soff(prp) = ps->off;
-	prp_poff(prp) = prp_soff(prp) + ps->hlen;
-	prp_toff(prp) = prp_poff(prp) + ps->plen;
-	prp_eoff(prp) = prp_toff(prp) + ps->tlen;
-	abort_unless(prp_soff(prp) <= prp_poff(prp));
-	abort_unless(prp_poff(prp) <= prp_toff(prp));
-	abort_unless(prp_toff(prp) <= prp_eoff(prp));
+	pdu->prid = ps->prid;
+	pdu->error = 0;
+	pdu->ops = ops;
+	l_init(&pdu->node);
+	pdu->region = NULL;
+	pdu->noff = PDU_OI_MIN_NUM;
+	pdu_soff(pdu) = ps->off;
+	pdu_poff(pdu) = pdu_soff(pdu) + ps->hlen;
+	pdu_toff(pdu) = pdu_poff(pdu) + ps->plen;
+	pdu_eoff(pdu) = pdu_toff(pdu) + ps->tlen;
+	abort_unless(pdu_soff(pdu) <= pdu_poff(pdu));
+	abort_unless(pdu_poff(pdu) <= pdu_toff(pdu));
+	abort_unless(pdu_toff(pdu) <= pdu_eoff(pdu));
 
-	return prp;
+	return pdu;
 }
 
 
-static int nxtcld_fail(struct prparse *reg, byte_t *buf, struct prparse *cld,
+static int nxtcld_fail(struct pdu *reg, byte_t *buf, struct pdu *cld,
 		       uint *prid, ulong *off, ulong *maxlen)
 {
 	(void)reg;
@@ -294,19 +293,18 @@ static int nxtcld_fail(struct prparse *reg, byte_t *buf, struct prparse *cld,
 }
 
 
-static int mkspec(struct prparse *prp, int enclose, uint prid,
-		  struct prpspec *ps)
+static int mkspec(struct pdu *pdu, int enclose, uint prid, struct pduspec *ps)
 {
 	ps->prid = prid;
 	if (enclose) {
-		ps->off = prp_soff(prp);
+		ps->off = pdu_soff(pdu);
 		ps->hlen = 0;
-		ps->plen = prp_totlen(prp);
+		ps->plen = pdu_totlen(pdu);
 		ps->tlen = 0;
 	} else {
-		ps->off = prp_poff(prp);
+		ps->off = pdu_poff(pdu);
 		ps->hlen = 0;
-		ps->plen = prp_plen(prp);
+		ps->plen = pdu_plen(pdu);
 		ps->tlen = 0;
 	}
 
@@ -314,12 +312,12 @@ static int mkspec(struct prparse *prp, int enclose, uint prid,
 }
 
 
-/* -- NONE and NONE base parser functions -- */
-static struct prparse *none_parse(struct prparse *reg, byte_t *buf,
-				  ulong off, ulong maxlen)
+/* -- NONE and NONE root parser functions -- */
+static struct pdu *none_parse(struct pdu *reg, byte_t *buf, ulong off,
+			      ulong maxlen)
 {
-	struct prparse *prp;
-	struct prpspec ps;
+	struct pdu *pdu;
+	struct pduspec ps;
 
 	abort_unless(reg);
 	(void)buf;
@@ -329,40 +327,40 @@ static struct prparse *none_parse(struct prparse *reg, byte_t *buf,
 	ps.hlen = 0;
 	ps.plen = maxlen;
 	ps.tlen = 0;
-	prp = new_prp(&ps, &none_prparse_ops);
-	if (prp != NULL)
-		prp->region = reg;
-	return prp;
+	pdu = new_pdu(&ps, &none_pdu_ops);
+	if (pdu != NULL)
+		pdu->region = reg;
+	return pdu;
 }
 
 
-static int none_getspec(struct prparse *prp, int enclose, struct prpspec *ps)
+static int none_getspec(struct pdu *pdu, int enclose, struct pduspec *ps)
 {
-	return mkspec(prp, enclose, PRID_NONE, ps);
+	return mkspec(pdu, enclose, PRID_NONE, ps);
 }
 
 
-static int none_add(struct prparse *reg, byte_t *buf, struct prpspec *ps,
+static int none_add(struct pdu *reg, byte_t *buf, struct pduspec *ps,
 		    int enclose)
 {
-	struct prparse *prp;
+	struct pdu *pdu;
 	(void)buf;
 	abort_unless(ps);
 	ps->prid = PRID_NONE;
-	prp = new_prp(ps, &none_prparse_ops);
-	if (!prp)
+	pdu = new_pdu(ps, &none_pdu_ops);
+	if (!pdu)
 		return -1;
-	prp_add_insert(reg, prp, enclose);
+	pdu_add_insert(reg, pdu, enclose);
 	return 0;
 }
 
 
 /* -- DATA and RAWPKT parser functions -- */
-static struct prparse *data_parse(struct prparse *reg, byte_t *buf, ulong off,
-				  ulong maxlen)
+static struct pdu *data_parse(struct pdu *reg, byte_t *buf, ulong off,
+			      ulong maxlen)
 {
-	struct prparse *prp;
-	struct prpspec ps;
+	struct pdu *pdu;
+	struct pduspec ps;
 
 	abort_unless(reg);
 	(void)buf;
@@ -372,157 +370,157 @@ static struct prparse *data_parse(struct prparse *reg, byte_t *buf, ulong off,
 	ps.hlen = 0;
 	ps.plen = maxlen;
 	ps.tlen = 0;
-	prp = new_prp(&ps, &none_prparse_ops);
-	if (prp != NULL)
-		prp->region = reg;
-	return prp;
+	pdu = new_pdu(&ps, &none_pdu_ops);
+	if (pdu != NULL)
+		pdu->region = reg;
+	return pdu;
 }
 
 
-static int data_getspec(struct prparse *prp, int enclose, struct prpspec *ps)
+static int data_getspec(struct pdu *pdu, int enclose, struct pduspec *ps)
 {
-	return mkspec(prp, enclose, PRID_DATA, ps);
+	return mkspec(pdu, enclose, PRID_DATA, ps);
 }
 
 
-static int data_add(struct prparse *reg, byte_t *buf, struct prpspec *ps,
+static int data_add(struct pdu *reg, byte_t *buf, struct pduspec *ps,
 		    int enclose)
 {
-	struct prparse *prp;
+	struct pdu *pdu;
 	(void)buf;
 	abort_unless(ps);
 	ps->prid = PRID_DATA;
-	prp = new_prp(ps, &data_prparse_ops);
-	if (!prp)
+	pdu = new_pdu(ps, &data_pdu_ops);
+	if (!pdu)
 		return -1;
-	prp_add_insert(reg, prp, enclose);
+	pdu_add_insert(reg, pdu, enclose);
 	return 0;
 }
 
 
-/* -- default prparse handlers -- */
-static struct prparse *default_copy(struct prparse *oprp)
+/* -- default pdu handlers -- */
+static struct pdu *default_copy(struct pdu *opdu)
 {
-	struct prpspec ps;
-	ps.prid = oprp->prid;
-	ps.off = prp_soff(oprp);
-	ps.hlen = prp_hlen(oprp);
-	ps.plen = prp_plen(oprp);
-	ps.tlen = prp_tlen(oprp);
-	return new_prp(&ps, oprp->ops);
+	struct pduspec ps;
+	ps.prid = opdu->prid;
+	ps.off = pdu_soff(opdu);
+	ps.hlen = pdu_hlen(opdu);
+	ps.plen = pdu_plen(opdu);
+	ps.tlen = pdu_tlen(opdu);
+	return new_pdu(&ps, opdu->ops);
 			
 }
 
 
-static void default_free(struct prparse *prp)
+static void default_free(struct pdu *pdu)
 {
-	free(prp);
+	free(pdu);
 }
 
 
-static struct prparse *base_copy(struct prparse *oprp)
+static struct pdu *root_copy(struct pdu *opdu)
 {
 	return NULL;
 }
 
 
-static void base_free(struct prparse *prp)
+static void root_free(struct pdu *pdu)
 {
 	abort_unless(0);
 }
 
 
 /* -- Protocol Parse Functions -- */
-struct prparse *prp_get_base(struct prparse *prp)
+struct pdu *pdu_get_root(struct pdu *pdu)
 {
-	while (prp->region != NULL)
-		prp = prp->region;
-	return prp;
+	while (pdu->region != NULL)
+		pdu = pdu->region;
+	return pdu;
 }
 
 
-struct prparse *prp_next_in_region(struct prparse *from, struct prparse *reg)
+struct pdu *pdu_next_in_region(struct pdu *from, struct pdu *reg)
 {
-	struct prparse *prp;
+	struct pdu *pdu;
 	abort_unless(from && reg);
-	for (prp = prp_next(from);
-	     !prp_list_end(prp) && (prp_soff(prp) <= prp_eoff(reg));
-	     prp = prp_next(prp)) {
-		if (prp->region == reg)
-			return prp;
+	for (pdu = pdu_next(from);
+	     !pdu_list_end(pdu) && (pdu_soff(pdu) <= pdu_eoff(reg));
+	     pdu = pdu_next(pdu)) {
+		if (pdu->region == reg)
+			return pdu;
 	}
 	return NULL;
 }
 
 
-int prp_region_empty(struct prparse *reg)
+int pdu_region_empty(struct pdu *reg)
 {
 	abort_unless(reg);
-	return (prp_next_in_region(reg, reg) == NULL);
+	return (pdu_next_in_region(reg, reg) == NULL);
 }
 
 
-void prp_init_parse_base(struct prparse *base, ulong len)
+void pdu_init_root(struct pdu *root, ulong len)
 {
-	abort_unless(base && (len >= 0));
-	base_init(base, 0, 0, len, 0);
+	abort_unless(root && (len >= 0));
+	root_init(root, 0, 0, len, 0);
 }
 
 
-void prp_insert_parse(struct prparse *from, struct prparse *toins)
+void pdu_insert(struct pdu *from, struct pdu *toins)
 {
-	struct prparse *last = from, *next;
+	struct pdu *last = from, *next;
 	/* search for first node in list with a starting offset */
-	/* greater than or equal to the offset of this prparse */
-	for (next = prp_next(last);
-	     !prp_list_end(next) && prp_soff(next) < prp_soff(toins);
-	     last = next, next = prp_next(next)) ;
+	/* greater than or equal to the offset of this pdu */
+	for (next = pdu_next(last);
+	     !pdu_list_end(next) && pdu_soff(next) < pdu_soff(toins);
+	     last = next, next = pdu_next(next)) ;
 	l_ins(&last->node, &toins->node);
 }
 
 
-int prp_parse_packet(struct prparse *base, byte_t *buf, uint nprid)
+int pdu_parse_packet(struct pdu *root, byte_t *buf, uint nprid)
 {
-	struct prparse *prp, *last, *reg;
+	struct pdu *pdu, *last, *reg;
 	const struct proto_parser *pp;
 	int errval, rv;
 	ulong off, maxlen, noff;
 
 	pp = pp_lookup(nprid);
-	if (!base || base->prid != PRID_NONE || !pp) {
+	if (!root || root->prid != PRID_NONE || !pp) {
 		errno = EINVAL;
 		return -1;
 	}
 
-	off = prp_poff(base);
-	maxlen = prp_plen(base);
-	prp = base;
+	off = pdu_poff(root);
+	maxlen = pdu_plen(root);
+	pdu = root;
 
 	do {
-		last = prp;
-		if (!(prp = (*pp->ops->parse)(last, buf, off, maxlen))) {
+		last = pdu;
+		if (!(pdu = (*pp->ops->parse)(last, buf, off, maxlen))) {
 			errval = errno;
 			goto err;
 		}
-		prp_insert_parse(last, prp);
+		pdu_insert(last, pdu);
 
 		/* don't continue parsing if the lengths are screwed up */
-		if ((prp->error & PRP_ERR_HLENMASK) || !prp_plen(prp))
+		if ((pdu->error & PDU_ERR_HLENMASK) || !pdu_plen(pdu))
 			break;
 
 		reg = NULL;
-		rv = (*pp->ops->nxtcld)(prp, buf, NULL, &nprid, &noff, &maxlen);
+		rv = (*pp->ops->nxtcld)(pdu, buf, NULL, &nprid, &noff, &maxlen);
 		if (!rv) {
 			/* if the new parse does not have a child, then */
 			/* start going up the enclosing regions testing */
 			/* for a new child in each region passing the */
 			/* new parse to provide the position information */
 			/* for determining the presence of a new child. */
-			reg = prp->region;
+			reg = pdu->region;
 			while (reg != NULL) {
 				pp = pp_lookup(reg->prid);
 				abort_unless(pp);
-				rv = (*pp->ops->nxtcld)(reg, buf, prp, &nprid,
+				rv = (*pp->ops->nxtcld)(reg, buf, pdu, &nprid,
 							&noff, &maxlen);
 				if (rv)
 					break;
@@ -546,19 +544,19 @@ int prp_parse_packet(struct prparse *base, byte_t *buf, uint nprid)
 	return 0;
 
 err:
-	prp_clear(base);
+	pdu_clear(root);
 	errno = errval;
 	return -1;
 }
 
 
-int prp_get_spec(uint prid, struct prparse *prp, int flags, struct prpspec *ps)
+int pdu_get_spec(uint prid, struct pdu *pdu, int flags, struct pduspec *ps)
 {
 	const struct proto_parser *pp;
-	struct prparse dummy;
+	struct pdu dummy;
 	int rv;
 
-	if (!prp || !ps) {
+	if (!pdu || !ps) {
 		errno = EINVAL;
 		return -1;
 	}
@@ -571,41 +569,41 @@ int prp_get_spec(uint prid, struct prparse *prp, int flags, struct prpspec *ps)
 
 	/* If we are wrapping an empty data block, treat the payload */
 	/* as an embedded none-type parse to wrap around and pop afterwards. */
-	if (((flags == PRP_GSF_WRAPPRP) && prp_empty(prp)) ||
-	    (flags == PRP_GSF_WRAPPLD)) {
-		base_init(&dummy, prp_poff(prp), 0, prp_plen(prp), 0);
-		dummy.region = prp;
-		prp_insert_parse(prp, &dummy);
-		prp = &dummy;
+	if (((flags == PDU_GSF_WRAPPDU) && pdu_empty(pdu)) ||
+	    (flags == PDU_GSF_WRAPPLD)) {
+		root_init(&dummy, pdu_poff(pdu), 0, pdu_plen(pdu), 0);
+		dummy.region = pdu;
+		pdu_insert(pdu, &dummy);
+		pdu = &dummy;
 	}
 
-	rv = (*pp->ops->getspec)(prp, flags != PRP_GSF_APPEND, ps);
+	rv = (*pp->ops->getspec)(pdu, flags != PDU_GSF_APPEND, ps);
 
-	if (prp == &dummy)
-		prp_remove_parse(&dummy);
+	if (pdu == &dummy)
+		pdu_remove(&dummy);
 
 	return rv;
 }
 
 
-int prp_add(struct prparse *reg, byte_t *buf, struct prpspec *ps, int enclose)
+int pdu_add(struct pdu *reg, byte_t *buf, struct pduspec *ps, int enclose)
 {
 	const struct proto_parser *pp;
 	ulong len;
 
-	if (!reg || !ps || (ps->off == PRP_OFF_INVALID) ||
+	if (!reg || !ps || (ps->off == PDU_OFF_INVALID) ||
 	    (pp = pp_lookup(ps->prid)) == NULL)
 		goto errout;
 
 	/* carefully bounds check the offset and length fields */
-	abort_unless(ps->off <= PRP_OFF_MAX);
-	if (ps->hlen > PRP_OFF_MAX - ps->off)
+	abort_unless(ps->off <= PDU_OFF_MAX);
+	if (ps->hlen > PDU_OFF_MAX - ps->off)
 		goto errout;
 	len = ps->off + ps->hlen;
-	if (ps->plen > PRP_OFF_MAX - len)
+	if (ps->plen > PDU_OFF_MAX - len)
 		goto errout;
 	len += ps->plen;
-	if (ps->tlen > PRP_OFF_MAX - len)
+	if (ps->tlen > PDU_OFF_MAX - len)
 		goto errout;
 
 	/* TODO: check that new parse fits within the given region? */
@@ -622,50 +620,50 @@ errout:
 
 
 /* clear from back to front */
-void prp_clear(struct prparse *prp)
+void pdu_clear(struct pdu *pdu)
 {
-	struct prparse *next, *prev;
-	abort_unless(prp && prp->region == NULL);
-	for (next = prp_prev(prp); next != prp; next = prev) {
+	struct pdu *next, *prev;
+	abort_unless(pdu && pdu->region == NULL);
+	for (next = pdu_prev(pdu); next != pdu; next = prev) {
 		abort_unless(next->ops && next->ops->free);
-		prev = prp_prev(next);
+		prev = pdu_prev(next);
 		l_rem(&next->node);
 		(*next->ops->free)(next);
 	}
 }
 
 
-void prp_remove_parse(struct prparse *prp)
+void pdu_remove(struct pdu *pdu)
 {
-	struct prparse *next;
-	if (!prp)
+	struct pdu *next;
+	if (!pdu)
 		return;
-	abort_unless(prp->region != NULL);
-	for (next = prp_next_in_region(prp, prp); next != NULL;
-	     next = prp_next_in_region(next, prp))
-		next->region = prp->region;
-	l_rem(&prp->node);
+	abort_unless(pdu->region != NULL);
+	for (next = pdu_next_in_region(pdu, pdu); next != NULL;
+	     next = pdu_next_in_region(next, pdu))
+		next->region = pdu->region;
+	l_rem(&pdu->node);
 }
 
 
-void prp_free_parse(struct prparse *prp)
+void pdu_free_parse(struct pdu *pdu)
 {
-	struct prparse *next;
-	if (!prp)
+	struct pdu *next;
+	if (!pdu)
 		return;
-	abort_unless(prp->region != NULL);
-	abort_unless(prp->ops && prp->ops->free);
-	for (next = prp_next_in_region(prp, prp); next != NULL;
-	     next = prp_next_in_region(next, prp))
-		next->region = prp->region;
-	l_rem(&prp->node);
-	(*prp->ops->free)(prp);
+	abort_unless(pdu->region != NULL);
+	abort_unless(pdu->ops && pdu->ops->free);
+	for (next = pdu_next_in_region(pdu, pdu); next != NULL;
+	     next = pdu_next_in_region(next, pdu))
+		next->region = pdu->region;
+	l_rem(&pdu->node);
+	(*pdu->ops->free)(pdu);
 }
 
 
-static int parse_in_region(struct prparse *prp, struct prparse *reg)
+static int parse_in_region(struct pdu *pdu, struct pdu *reg)
 {
-	struct prparse *t = prp->region;
+	struct pdu *t = pdu->region;
 	while (t != NULL) {
 		if (t == reg)
 			return 1;
@@ -679,35 +677,35 @@ static int parse_in_region(struct prparse *prp, struct prparse *reg)
 /* However, the hope is that this library could be used in a stack- */
 /* constrained environment.  So, for now we prefer to do it */
 /* iteratively.  */
-void prp_free_region(struct prparse *prp)
+void pdu_free_region(struct pdu *pdu)
 {
-	struct prparse *trav, *hold;
+	struct pdu *trav, *hold;
 
-	if (prp == NULL)
+	if (pdu == NULL)
 		return;
-	if (prp->region == NULL) {
-		prp_clear(prp);
+	if (pdu->region == NULL) {
+		pdu_clear(pdu);
 		return;
 	}
 
 	/* find the last node potentially in the region */
 	hold = NULL;
-	trav = prp_next(prp);
-	while (!prp_list_end(trav) && (prp_soff(trav) <= prp_eoff(prp))) {
+	trav = pdu_next(pdu);
+	while (!pdu_list_end(trav) && (pdu_soff(trav) <= pdu_eoff(pdu))) {
 		hold = trav;
-		trav = prp_next(trav);
+		trav = pdu_next(trav);
 	}
 	if (hold == NULL)
-		trav = prp;
+		trav = pdu;
 	else
 		trav = hold;
 
 	/* work backwards from last node potentially in the region */
 	/* This is because working backwards we cannot delete a node */
 	/* that might have a dangling region reference. */
-	while (trav != prp) {
-		hold = prp_prev(trav);
-		if (parse_in_region(trav, prp)) {
+	while (trav != pdu) {
+		hold = pdu_prev(trav);
+		if (parse_in_region(trav, pdu)) {
 			abort_unless(trav->ops && trav->ops->free);
 			l_rem(&trav->node);
 			(*trav->ops->free)(trav);
@@ -715,143 +713,142 @@ void prp_free_region(struct prparse *prp)
 		trav = hold;
 	}
 
-	abort_unless(prp->ops && prp->ops->free);
-	l_rem(&prp->node);
-	(*prp->ops->free)(prp);
+	abort_unless(pdu->ops && pdu->ops->free);
+	l_rem(&pdu->node);
+	(*pdu->ops->free)(pdu);
 }
 
 
-int prp_copy(struct prparse *nprp, struct prparse *oprp)
+int pdu_copy(struct pdu *npdu, struct pdu *opdu)
 {
-	struct prparse *trav, *last, *aprp, *oreg, *nreg;
+	struct pdu *trav, *last, *apdu, *oreg, *nreg;
 	int errval;
 
-	if (!nprp || !oprp || oprp->region != NULL) {
+	if (!npdu || !opdu || opdu->region != NULL) {
 		errno = EINVAL;
 		return -1;
 	}
 
-	*nprp = *oprp;
-	l_init(&nprp->node);
+	*npdu = *opdu;
+	l_init(&npdu->node);
 
-	for (last = nprp, trav = prp_next(oprp); !prp_list_end(trav);
-	     last = aprp, trav = prp_next(trav)) {
-		abort_unless(oprp->ops && oprp->ops->copy);
-		if (!(aprp = (*trav->ops->copy)(trav))) {
+	for (last = npdu, trav = pdu_next(opdu); !pdu_list_end(trav);
+	     last = apdu, trav = pdu_next(trav)) {
+		abort_unless(opdu->ops && opdu->ops->copy);
+		if (!(apdu = (*trav->ops->copy)(trav))) {
 			errval = errno;
 			goto err;
 		}
-		l_ins(&last->node, &aprp->node);
+		l_ins(&last->node, &apdu->node);
 	}
 
 	/* patch up regions: recall that each parse (except the root parse) */
 	/* MUST have a region that comes before it in the list. */
-	for (aprp = prp_next(nprp), trav = prp_next(oprp);
-	     !prp_list_end(trav);
-	     aprp = prp_next(aprp), trav = prp_next(trav)) {
-		oreg = prp_prev(trav);
-		nreg = prp_prev(aprp);
+	for (apdu = pdu_next(npdu), trav = pdu_next(opdu);
+	     !pdu_list_end(trav);
+	     apdu = pdu_next(apdu), trav = pdu_next(trav)) {
+		oreg = pdu_prev(trav);
+		nreg = pdu_prev(apdu);
 		abort_unless(trav->region != NULL);
 		while (oreg != trav->region) {
 			abort_unless(oreg != NULL);
-			oreg = prp_prev(oreg);
-			nreg = prp_prev(nreg);
+			oreg = pdu_prev(oreg);
+			nreg = pdu_prev(nreg);
 		}
-		aprp->region = nreg;
+		apdu->region = nreg;
 	}
 
 	return 0;
 
 err:
-	prp_clear(aprp);
+	pdu_clear(apdu);
 	errno = errval;
 	return -1;
 }
 
 
-uint prp_update(struct prparse *prp, byte_t *buf)
+uint pdu_update(struct pdu *pdu, byte_t *buf)
 {
-	abort_unless(prp && prp->ops && prp->ops->update);
-	(*prp->ops->update)(prp, buf);
-	return prp->error;
+	abort_unless(pdu && pdu->ops && pdu->ops->update);
+	(*pdu->ops->update)(pdu, buf);
+	return pdu->error;
 }
 
 
-int prp_fix_nxthdr(struct prparse *prp, byte_t *buf)
+int pdu_fix_nxthdr(struct pdu *pdu, byte_t *buf)
 {
-	abort_unless(prp && prp->ops && prp->ops->fixcksum);
-	return (*prp->ops->fixnxt)(prp, buf);
+	abort_unless(pdu && pdu->ops && pdu->ops->fixcksum);
+	return (*pdu->ops->fixnxt)(pdu, buf);
 }
 
 
-int prp_fix_len(struct prparse *prp, byte_t *buf)
+int pdu_fix_len(struct pdu *pdu, byte_t *buf)
 {
-	abort_unless(prp && prp->ops && prp->ops->fixlen);
-	return (*prp->ops->fixlen)(prp, buf);
+	abort_unless(pdu && pdu->ops && pdu->ops->fixlen);
+	return (*pdu->ops->fixlen)(pdu, buf);
 }
 
 
-int prp_fix_cksum(struct prparse *prp, byte_t *buf)
+int pdu_fix_cksum(struct pdu *pdu, byte_t *buf)
 {
-	abort_unless(prp && prp->ops && prp->ops->fixcksum);
-	return (*prp->ops->fixcksum)(prp, buf);
+	abort_unless(pdu && pdu->ops && pdu->ops->fixcksum);
+	return (*pdu->ops->fixcksum)(pdu, buf);
 }
 
 
-/* 
- * Find the lowest lower bound in the contained region and the 
+/*
+ * Find the lowest lower bound in the contained region and the
  * highest upper bound contained in the region.  If there are
  * no contained region it returns high = region starting offset
  * and low = region ending offset.  So one can test for this
  * condition by checking on return whether low >= high.
  */
-static void ubounds(struct prparse *reg, ulong *low, ulong *high)
+static void ubounds(struct pdu *reg, ulong *low, ulong *high)
 {
 	ulong uend = 0;
-	struct prparse *prp;
+	struct pdu *pdu;
 
 	abort_unless(reg && low && high);
 
-	prp = prp_next_in_region(reg, reg);
-	if (prp == NULL) {
+	pdu = pdu_next_in_region(reg, reg);
+	if (pdu == NULL) {
 		/* zero parses in region */
-		*low = prp_eoff(reg);
-		*high = prp_soff(reg);
+		*low = pdu_eoff(reg);
+		*high = pdu_soff(reg);
 	} else {
 		/* at least one parse in the region */
-		*low = prp_soff(prp);
-		for (; prp != NULL; prp = prp_next_in_region(prp, reg))
-			if (prp_eoff(prp) > uend)
-				uend = prp_eoff(prp);
+		*low = pdu_soff(pdu);
+		for (; pdu != NULL; pdu = pdu_next_in_region(pdu, reg))
+			if (pdu_eoff(pdu) > uend)
+				uend = pdu_eoff(pdu);
 		abort_unless(*low <= uend);
 		*high = uend;
 	}
 }
 
 
-int prp_insert(struct prparse *prp, byte_t *buf, ulong off, ulong len,
-	       int moveup)
+int pdu_inject(struct pdu *pdu, byte_t *buf, ulong off, ulong len, int moveup)
 {
 	byte_t *op, *np;
 	ulong mlen;
 	uint i;
 
-	if (prp == NULL) {
+	if (pdu == NULL) {
 		errno = EINVAL;
 		return -1;
 	}
-	if (off > prp_totlen(prp)) {
+	if (off > pdu_totlen(pdu)) {
 		errno = EINVAL;
 		return -1;
 	}
-	off += prp_soff(prp); /* make offset relative to parse header */
+	off += pdu_soff(pdu); /* make offset relative to parse header */
 
 	/* get the root region */
-	while (prp->region != NULL)
-		prp = prp->region;
+	while (pdu->region != NULL)
+		pdu = pdu->region;
 
 	if (moveup) {
-		if ((off > prp_toff(prp)) || (len > prp_tlen(prp))) {
+		if ((off > pdu_toff(pdu)) || (len > pdu_tlen(pdu))) {
 			errno = EINVAL;
 			return -1;
 		}
@@ -859,48 +856,48 @@ int prp_insert(struct prparse *prp, byte_t *buf, ulong off, ulong len,
 		if (buf != NULL) {
 			op = buf + off;
 			np = op + len;
-			mlen = prp_toff(prp) - off;
+			mlen = pdu_toff(pdu) - off;
 			memmove(np, op, mlen);
 			memset(op, 'U', len);
 		}
 
-		prp_toff(prp) += len;
+		pdu_toff(pdu) += len;
 
-		for (prp = prp_next(prp); 
-		     !prp_list_end(prp); 
-		     prp = prp_next(prp)) {
-			if (prp_eoff(prp) < off)
+		for (pdu = pdu_next(pdu);
+		     !pdu_list_end(pdu);
+		     pdu = pdu_next(pdu)) {
+			if (pdu_eoff(pdu) < off)
 				continue;
-			for (i = 0; i < prp->noff; ++i) {
-				if ((prp->offs[i] != PRP_OFF_INVALID) &&
-				    (prp->offs[i] >= off))
-					prp->offs[i] += len;
+			for (i = 0; i < pdu->noff; ++i) {
+				if ((pdu->offs[i] != PDU_OFF_INVALID) &&
+				    (pdu->offs[i] >= off))
+					pdu->offs[i] += len;
 			}
 		}
 	} else {
-		if ((off < prp_poff(prp)) || (len > prp_hlen(prp))) {
+		if ((off < pdu_poff(pdu)) || (len > pdu_hlen(pdu))) {
 			errno = EINVAL;
 			return -1;
 		}
 
 		if (buf != NULL) {
-			op = buf + prp_poff(prp);
+			op = buf + pdu_poff(pdu);
 			np = op - len;
-			mlen = off - prp_poff(prp);
+			mlen = off - pdu_poff(pdu);
 			memmove(np, op, mlen);
 			memset(buf + off - len, 'D', len);
 		}
 
-		prp_poff(prp) -= len;
-		for (prp = prp_next(prp); 
-		     !prp_list_end(prp); 
-		     prp = prp_next(prp)) {
-			if (prp_soff(prp) >= off)
+		pdu_poff(pdu) -= len;
+		for (pdu = pdu_next(pdu);
+		     !pdu_list_end(pdu);
+		     pdu = pdu_next(pdu)) {
+			if (pdu_soff(pdu) >= off)
 				continue;
-			for (i = 0; i < prp->noff; ++i) {
-				if ((prp->offs[i] != PRP_OFF_INVALID) &&
-				    (prp->offs[i] < off))
-					prp->offs[i] -= len;
+			for (i = 0; i < pdu->noff; ++i) {
+				if ((pdu->offs[i] != PDU_OFF_INVALID) &&
+				    (pdu->offs[i] < off))
+					pdu->offs[i] -= len;
 			}
 		}
 	}
@@ -909,52 +906,52 @@ int prp_insert(struct prparse *prp, byte_t *buf, ulong off, ulong len,
 }
 
 
-int prp_cut(struct prparse *prp, byte_t *buf, ulong off, ulong len, int moveup)
+int pdu_cut(struct pdu *pdu, byte_t *buf, ulong off, ulong len, int moveup)
 {
 	byte_t *op, *np;
 	ulong mlen;
 	uint i;
 
-	if (prp == NULL) {
+	if (pdu == NULL) {
 		errno = EINVAL;
 		return -1;
 	}
-	if (off > prp_totlen(prp)) {
+	if (off > pdu_totlen(pdu)) {
 		errno = EINVAL;
 		return -1;
 	}
-	off += prp_soff(prp);	/* make offset relative to parse */
+	off += pdu_soff(pdu);	/* make offset relative to parse */
 
 	/* get the root region */
-	while (prp->region != NULL)
-		prp = prp->region;
+	while (pdu->region != NULL)
+		pdu = pdu->region;
 
-	if ((off < prp_poff(prp)) || (off >= prp_toff(prp)) ||
-	    (len > prp_toff(prp) - off)) {
+	if ((off < pdu_poff(pdu)) || (off >= pdu_toff(pdu)) ||
+	    (len > pdu_toff(pdu) - off)) {
 		errno = EINVAL;
 		return -1;
 	}
 
 	if (moveup) {
 		if (buf != NULL) {
-			op = buf + prp_poff(prp);
-			mlen = off - prp_poff(prp);
+			op = buf + pdu_poff(pdu);
+			mlen = off - pdu_poff(pdu);
 			np = buf + off + len - mlen;
 			memmove(np, op, mlen);
 			memset(op, 0x3C, len);
 		}
 
-		prp_poff(prp) += len;
-		for (prp = prp_next(prp);
-		     !prp_list_end(prp); 
-		     prp = prp_next(prp)) {
-			for (i = 0; i < prp->noff; ++i) {
-				if ((prp->offs[i] != PRP_OFF_INVALID)
-				    && (prp->offs[i] < off + len)) {
-					if (prp->offs[i] < off)
-						prp->offs[i] += len;
+		pdu_poff(pdu) += len;
+		for (pdu = pdu_next(pdu);
+		     !pdu_list_end(pdu);
+		     pdu = pdu_next(pdu)) {
+			for (i = 0; i < pdu->noff; ++i) {
+				if ((pdu->offs[i] != PDU_OFF_INVALID)
+				    && (pdu->offs[i] < off + len)) {
+					if (pdu->offs[i] < off)
+						pdu->offs[i] += len;
 					else
-						prp->offs[i] = off + len;
+						pdu->offs[i] = off + len;
 				}
 			}
 		}
@@ -962,22 +959,22 @@ int prp_cut(struct prparse *prp, byte_t *buf, ulong off, ulong len, int moveup)
 		if (buf != NULL) {
 			np = buf + off;
 			op = np + len;
-			mlen = prp_toff(prp) - off - len;
+			mlen = pdu_toff(pdu) - off - len;
 			memmove(np, op, mlen);
 			memset(np + mlen, 0x2D, len);
 		}
 
-		prp_toff(prp) -= len;
-		for (prp = prp_next(prp);
-		     !prp_list_end(prp); 
-		     prp = prp_next(prp)) {
-			for (i = 0; i < prp->noff; ++i) {
-				if ((prp->offs[i] != PRP_OFF_INVALID)
-				    && (prp->offs[i] >= off)) {
-					if (prp->offs[i] >= off + len)
-						prp->offs[i] -= len;
+		pdu_toff(pdu) -= len;
+		for (pdu = pdu_next(pdu);
+		     !pdu_list_end(pdu);
+		     pdu = pdu_next(pdu)) {
+			for (i = 0; i < pdu->noff; ++i) {
+				if ((pdu->offs[i] != PDU_OFF_INVALID)
+				    && (pdu->offs[i] >= off)) {
+					if (pdu->offs[i] >= off + len)
+						pdu->offs[i] -= len;
 					else
-						prp->offs[i] = off;
+						pdu->offs[i] = off;
 				}
 			}
 		}
@@ -987,75 +984,75 @@ int prp_cut(struct prparse *prp, byte_t *buf, ulong off, ulong len, int moveup)
 }
 
 
-int prp_adj_off(struct prparse *prp, uint oid, long amt)
+int pdu_adj_off(struct pdu *pdu, uint oid, long amt)
 {
-	struct prparse *reg;
-	struct prparse *trav;
+	struct pdu *reg;
+	struct pdu *trav;
 	long newoff, blo, bhi;
 
 
-	if (!prp || (oid >= prp->noff)) {
+	if (!pdu || (oid >= pdu->noff)) {
 		errno = EINVAL;
 		return -1;
 	}
 
-	reg = prp->region;
+	reg = pdu->region;
 
-	newoff = prp->offs[oid] + (ulong)amt;
+	newoff = pdu->offs[oid] + (ulong)amt;
 
 	switch (oid) {
-	case PRP_OI_SOFF:
+	case PDU_OI_SOFF:
 		if (reg == NULL)
 			blo = 0;
 		else
-			blo = prp_soff(reg);
-		bhi = prp_poff(prp);
+			blo = pdu_soff(reg);
+		bhi = pdu_poff(pdu);
 		break;
-	case PRP_OI_POFF:
-		blo = prp_soff(prp);
-		bhi = prp_toff(prp);
+	case PDU_OI_POFF:
+		blo = pdu_soff(pdu);
+		bhi = pdu_toff(pdu);
 		break;
-	case PRP_OI_TOFF:
-		blo = prp_poff(prp);
-		bhi = prp_eoff(prp);
+	case PDU_OI_TOFF:
+		blo = pdu_poff(pdu);
+		bhi = pdu_eoff(pdu);
 		break;
-	case PRP_OI_EOFF:
-		blo = prp_toff(prp);
+	case PDU_OI_EOFF:
+		blo = pdu_toff(pdu);
 		if (reg == NULL)
 			bhi = LONG_MAX;
 		else
-			bhi = prp_eoff(reg);
+			bhi = pdu_eoff(reg);
 		break;
 	default:
-		blo = prp_soff(prp);
-		bhi = prp_eoff(prp);
+		blo = pdu_soff(pdu);
+		bhi = pdu_eoff(pdu);
 	}
 
 	abort_unless(blo >= 0 && bhi >= 0);
 	if ((newoff < blo) || (newoff > bhi))
 		return -2;
 
-	prp->offs[oid] = newoff;
+	pdu->offs[oid] = newoff;
 
 	/* may need to adjust list placement */
-	if ((oid == PRP_OI_SOFF) && (reg != NULL)) {
-		trav = prp_prev(prp);
-		if (prp_soff(prp) < prp_soff(trav)) {
-			l_rem(&prp->node);
+	if ((oid == PDU_OI_SOFF) && (reg != NULL)) {
+		trav = pdu_prev(pdu);
+		if (pdu_soff(pdu) < pdu_soff(trav)) {
+			l_rem(&pdu->node);
 			do {
-				trav = prp_prev(trav);
-			} while (prp_soff(prp) < prp_soff(trav));
-			l_ins(&trav->node, &prp->node);
+				trav = pdu_prev(trav);
+			} while (pdu_soff(pdu) < pdu_soff(trav));
+			l_ins(&trav->node, &pdu->node);
 		} else {
-			trav = prp_next(prp);
-			if (!prp_list_end(trav)
-			    && (prp_soff(prp) > prp_soff(trav))) {
-				l_rem(&prp->node);
+			trav = pdu_next(pdu);
+			if (!pdu_list_end(trav)
+			    && (pdu_soff(pdu) > pdu_soff(trav))) {
+				l_rem(&pdu->node);
 				do {
-					trav = prp_next(trav);
-				} while (!prp_list_end(trav)
-					 && (prp_soff(prp) > prp_soff(trav)));
-				l_ins(trav->node.prev, &prp->node);
+					trav = pdu_next(trav);
+				} while (!pdu_list_end(trav)
+					 && (pdu_soff(pdu) > pdu_soff(trav)));
+				l_ins(trav->node.prev, &pdu->node);
 			}
 		}
 	}
@@ -1064,7 +1061,7 @@ int prp_adj_off(struct prparse *prp, uint oid, long amt)
 }
 
 
-int prp_adj_plen(struct prparse *prp, long amt)
+int pdu_adj_plen(struct pdu *pdu, long amt)
 {
 	int rv;
 
@@ -1072,14 +1069,14 @@ int prp_adj_plen(struct prparse *prp, long amt)
 	/* be no reason we can't move the end offset down as well. This works */
 	/* in reverse for moving the end and trailer offsets forward.  */
 	if (amt < 0) {
-		if (prp_adj_off(prp, PRP_OI_TOFF, amt) < 0)
+		if (pdu_adj_off(pdu, PDU_OI_TOFF, amt) < 0)
 			return -2;
-		rv = prp_adj_off(prp, PRP_OI_EOFF, amt);
+		rv = pdu_adj_off(pdu, PDU_OI_EOFF, amt);
 		abort_unless(rv >= 0);
 	} else {
-		if (prp_adj_off(prp, PRP_OI_EOFF, amt) < 0)
+		if (pdu_adj_off(pdu, PDU_OI_EOFF, amt) < 0)
 			return -2;
-		rv = prp_adj_off(prp, PRP_OI_TOFF, amt);
+		rv = pdu_adj_off(pdu, PDU_OI_TOFF, amt);
 		abort_unless(rv >= 0);
 	}
 
@@ -1087,7 +1084,7 @@ int prp_adj_plen(struct prparse *prp, long amt)
 }
 
 
-int prp_adj_unused(struct prparse *reg)
+int pdu_adj_unused(struct pdu *reg)
 {
 	ulong ustart, uend;
 
@@ -1098,126 +1095,126 @@ int prp_adj_unused(struct prparse *reg)
 
 	ubounds(reg, &ustart, &uend);
 	if (ustart >= uend) {
-		prp_poff(reg) = prp_soff(reg);
-		prp_toff(reg) = prp_eoff(reg);
+		pdu_poff(reg) = pdu_soff(reg);
+		pdu_toff(reg) = pdu_eoff(reg);
 	} else {
-		prp_poff(reg) = ustart;
-		prp_toff(reg) = uend;
+		pdu_poff(reg) = ustart;
+		pdu_toff(reg) = uend;
 	}
 
 	return 0;
 }
 
 
-void prp_add_insert(struct prparse *reg, struct prparse *prp, int enclose)
+void pdu_add_insert(struct pdu *reg, struct pdu *pdu, int enclose)
 {
-	struct prparse *trav;
-	prp->region = reg;
+	struct pdu *trav;
+	pdu->region = reg;
 
 	/* inserts at earliest possition in list for its offset */
 	/* within the region */
-	prp_insert_parse(reg, prp);
+	pdu_insert(reg, pdu);
 
 	if (enclose) {
 		/* for all parses in the region that are enclosed in the */
 		/* new parse (offset/length-wise), make them point to */
 		/* the new parse as their region.  */
-		for (trav = prp_next_in_region(prp, reg);
+		for (trav = pdu_next_in_region(pdu, reg);
 		     trav != NULL;
-		     trav = prp_next_in_region(trav, reg)) {
-			if (prp_eoff(trav) <= prp_eoff(prp))
-				trav->region = prp;
+		     trav = pdu_next_in_region(trav, reg)) {
+			if (pdu_eoff(trav) <= pdu_eoff(pdu))
+				trav->region = pdu;
 		}
 	}
 }
 
 
 
-void prp_init_parse(struct prparse *prp, uint prid, ulong off, ulong hlen,
-		    ulong plen, ulong tlen, struct prparse_ops *ops,
-		    struct prparse *reg, uint nxfields)
+void pdu_init(struct pdu *pdu, uint prid, ulong off, ulong hlen, ulong plen,
+	      ulong tlen, struct pdu_ops *ops, struct pdu *reg,
+	      uint nxfields)
 {
-	prp->prid = prid;
-	prp->error = 0;
-	prp_soff(prp) = off;
-	prp_poff(prp) = off + hlen;
-	prp_toff(prp) = off + hlen + plen;
-	prp_eoff(prp) = off + hlen + plen + tlen;
-	abort_unless(prp_soff(prp) >= 0 && prp_poff(prp) >= prp_soff(prp) &&
-		     prp_toff(prp) >= prp_poff(prp) &&
-		     prp_eoff(prp) >= prp_toff(prp));
-	prp->ops = ops;
-	l_init(&prp->node);
-	prp->region = reg;
-	prp->noff = PRP_OI_MIN_NUM + nxfields;
-	prp_reset_xfields(prp);
+	pdu->prid = prid;
+	pdu->error = 0;
+	pdu_soff(pdu) = off;
+	pdu_poff(pdu) = off + hlen;
+	pdu_toff(pdu) = off + hlen + plen;
+	pdu_eoff(pdu) = off + hlen + plen + tlen;
+	abort_unless(pdu_soff(pdu) >= 0 && pdu_poff(pdu) >= pdu_soff(pdu) &&
+		     pdu_toff(pdu) >= pdu_poff(pdu) &&
+		     pdu_eoff(pdu) >= pdu_toff(pdu));
+	pdu->ops = ops;
+	l_init(&pdu->node);
+	pdu->region = reg;
+	pdu->noff = PDU_OI_MIN_NUM + nxfields;
+	pdu_reset_xfields(pdu);
 }
 
 
-void prp_reset_xfields(struct prparse *prp)
+void pdu_reset_xfields(struct pdu *pdu)
 {
 	uint i;
-	for (i = PRP_OI_EXTRA; i < prp->noff; ++i)
-		prp->offs[i] = PRP_OFF_INVALID;
+	for (i = PDU_OI_EXTRA; i < pdu->noff; ++i)
+		pdu->offs[i] = PDU_OFF_INVALID;
 }
 
 
-int prpspec_init(struct prpspec *ps, struct prparse *prp, uint prid, uint hlen,
+int pduspec_init(struct pduspec *ps, struct pdu *pdu, uint prid, uint hlen,
 		 uint tlen, int enclose)
 {
 	ps->prid = prid;
 	ps->hlen = hlen;
 	ps->tlen = tlen;
 	if (enclose) {
-		if (prp_soff(prp) < hlen) {
+		if (pdu_soff(pdu) < hlen) {
 			errno = ENOSPC;
 			return -1;
 		}
-		ps->off = prp_soff(prp) - hlen;
-		ps->plen = prp_totlen(prp);
+		ps->off = pdu_soff(pdu) - hlen;
+		ps->plen = pdu_totlen(pdu);
 	} else {
-		if (prp_plen(prp) < hlen + tlen) {
+		if (pdu_plen(pdu) < hlen + tlen) {
 			errno = ENOSPC;
 			return -1;
 		}
-		ps->off = prp_poff(prp);
-		ps->plen = prp_plen(prp) - hlen - tlen;
+		ps->off = pdu_poff(pdu);
+		ps->plen = pdu_plen(pdu) - hlen - tlen;
 	}
 	return 0;
 }
 
 
-void prp_nop_update(struct prparse *prp, byte_t *buf)
+void pdu_nop_update(struct pdu *pdu, byte_t *buf)
 {
 	/* do nothing */
 }
 
 
-int prp_nop_fixnxt(struct prparse *prp, byte_t *buf)
+int pdu_nop_fixnxt(struct pdu *pdu, byte_t *buf)
 {
 	return 0; /* return success */
 }
 
 
-int prp_nop_fixlen(struct prparse *prp, byte_t *buf)
+int pdu_nop_fixlen(struct pdu *pdu, byte_t *buf)
 {
 	return 0; /* return success */
 }
 
 
-int prp_nop_fixcksum(struct prparse *prp, byte_t *buf)
+int pdu_nop_fixcksum(struct pdu *pdu, byte_t *buf)
 {
 	return 0; /* return success */
 }
 
 
-struct prparse *prp_nop_copy(struct prparse *oprp)
+struct pdu *pdu_nop_copy(struct pdu *opdu)
 {
 	return NULL;  /* this we can't do without help */
 }
 
 
-void prp_nop_free(struct prparse *prp)
+void pdu_nop_free(struct pdu *pdu)
 {
 	/* do nothing */
 }

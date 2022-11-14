@@ -1,6 +1,6 @@
 /*
  * ONICS
- * Copyright 2012-2016
+ * Copyright 2012-2022
  * Christopher Adam Telfer
  *
  * netvm.h -- NetVM external API and core data structures.
@@ -75,14 +75,14 @@ struct netvm_inst {
 
 
 /* 
- * Some instructions require metadata about a packet and/or it's
- * parse fields.  Such instructions take a protocol descriptor either
+ * Some instructions require metadata about a packet and/or its
+ * pdu fields.  Such instructions take a protocol descriptor either
  * from the stack or from the instruction itself.  Instructions
  * specify which form they expect.
  *
  * Instruction protocol descriptor form:
  *      y = packet number
- * 	z = prp index:4 prp field:4
+ * 	z = pdu index:4 pdu field:4
  *	w = (prid * 65536) + offset
  *
  * Offset is unsigned and < 2**16.  Also, only the lower 3 bits of the
@@ -94,7 +94,7 @@ struct netvm_inst {
  *
  * Top of stack:
  *     MSB                                        LSB
- *      PRID: 16      prp index:8           field:8  
+ *      PRID: 16      pdu index:8           field:8  
  *      pkt/seg:4                         offset:28
  * Bottom of stack:
  *
@@ -142,50 +142,50 @@ struct netvm_inst {
 	(((((pkt) & NETVM_PD_PKT_MASK) | NETVM_SEG_ISPKT) << NETVM_PD_PKT_OFF)\
 	 ((ulong)(off) & NETVM_PD_OFF_MASK))
 
-struct netvm_prp_desc {
+struct netvm_pdu_desc {
 	uchar			pktnum;	/* which packet entry */
-	uchar			idx;	/* 0 == 1st prp, 1 == 2nd prp,... */
-	uchar			field;	/* NETVM_PRP_* or prp field id */
+	uchar			idx;	/* 0 == 1st pdu, 1 == 2nd pdu,... */
+	uchar			field;	/* NETVM_PDU_* or pdu field id */
 	uchar			pad;
 	uint			prid;	/* PRID_*;  PRID_NONE == absolute idx */
 	ulong			offset;	/* offset into packet for LD/STPKT */
 					/* or proto field index for PRFLD */
 };
 
-#define NETVM_PRP_LAYER   255	/* find header of type MPKT_LAYER_* */
+#define NETVM_PDU_LAYER   255	/* find header of type MPKT_LAYER_* */
 /* 
- * When ptype == NETVM_PRP_LAYER, the header referred to is one of the layer
+ * When ptype == NETVM_PDU_LAYER, the header referred to is one of the layer
  * pointers stored in pktbuf.  This allows quick access to the network, 
  * data link, transport, and tunnel headers.  It also allows them to be accessed
  * by layer. (e.g. transport).  In this case the idx field tells which layer.
  */
 
-/* Packet parse field indices */
+/* Packet pdu field indices */
 enum {
-	NETVM_PRP_HLEN,		/* header length */
-	NETVM_PRP_PLEN,		/* payload length */
-	NETVM_PRP_TLEN,		/* trailer length */
-	NETVM_PRP_LEN,		/* total length */
-	NETVM_PRP_ERR,		/* error mask */
-	NETVM_PRP_PRID,		/* protocol ID: usually used with pclasses */
-	NETVM_PRP_PIDX,		/* protocol parse index (0 == none) SEE BELOW */
-	NETVM_PRP_OFF_BASE,
+	NETVM_PDU_HLEN,		/* header length */
+	NETVM_PDU_PLEN,		/* payload length */
+	NETVM_PDU_TLEN,		/* trailer length */
+	NETVM_PDU_LEN,		/* total length */
+	NETVM_PDU_ERR,		/* error mask */
+	NETVM_PDU_PRID,		/* protocol ID: usually used with pclasses */
+	NETVM_PDU_PIDX,		/* protocol pdu index (0 == none) SEE BELOW */
+	NETVM_PDU_OFF_BASE,
 
-	NETVM_PRP_SOFF = NETVM_PRP_OFF_BASE,	/* parse start offset */
-	NETVM_PRP_POFF,				/* parse payload offset */
-	NETVM_PRP_TOFF,				/* parse trailer offset */
-	NETVM_PRP_EOFF,				/* parse end offset */
+	NETVM_PDU_SOFF = NETVM_PDU_OFF_BASE,	/* pdu start offset */
+	NETVM_PDU_POFF,				/* pdu payload offset */
+	NETVM_PDU_TOFF,				/* pdu trailer offset */
+	NETVM_PDU_EOFF,				/* pdu end offset */
 };
 
-#define NETVM_ISPRPOFF(f)	((f) >= NETVM_PRP_OFF_BASE)
+#define NETVM_ISPDUOFF(f)	((f) >= NETVM_PDU_OFF_BASE)
 #define NETVM_PF_INVALID	0xFFFFFFFF
 
 /*
- * NETVM_PRP_PIDX is a very special field.  Querying this field will not
+ * NETVM_PDU_PIDX is a very special field.  Querying this field will not
  * generate an error when the packet is not present.  Nor will the field
  * offset be NETVM_PF_INVALID.  Instead, a 0 value indicates that the
  * field or even the packet is not present.  A non-zero value indicates
- * the numeric index of the given parse.  But there is an exception to
+ * the numeric index of the given pdu.  But there is an exception to
  * this rule as well!  If the PRID of the packet desriptor is PRID_NONE
  * and the index of the packet descriptor is 0, then NetVM interprets
  * this as a test for the existence of the packet itself.  So, it will
@@ -331,8 +331,8 @@ enum {
 	 * (note: not all fields are offsets from the packet start.  use
 	 * accordingly). 
 	 */
-	NETVM_OC_LDPF,		/* [pdesc] load field from proto parse */
-	NETVM_OC_LDPFI,		/* load field from proto parse (packed pdesc) */
+	NETVM_OC_LDPF,		/* [pdesc] load field from pdu */
+	NETVM_OC_LDPFI,		/* load field from pdu (packed pdesc) */
 
 	/*
 	 * For these 5 load operations, x must be in [1,8] or [129,136]
@@ -466,19 +466,19 @@ enum {
 	NETVM_OC_PKCOPY,	/* [pkn1,pkn2] copy packet from pkn2 to pkn1 */
 	NETVM_OC_PKDEL,		/* [pkn] delete packet */
 
-	NETVM_OC_PKSLA,		/* [pdesc] set layer 'x' to prp in pdesc */
+	NETVM_OC_PKSLA,		/* [pdesc] set layer 'x' to pdu in pdesc */
 	NETVM_OC_PKCLA,		/* [pkn] clear layer 'x' */
 
 	NETVM_OC_PKPRS,		/* [pkn] delete parse and if 'x' == 0 reparse */
-	NETVM_OC_PKFXD,		/* [pkn] set dltype to PRID_ of 2nd prp */
-	NETVM_OC_PKPUP,		/* [pdesc] update parse fields (stack pdesc) */
+	NETVM_OC_PKFXD,		/* [pkn] set dltype to PRID_ of 2nd pdu */
+	NETVM_OC_PKPUP,		/* [pdesc] update pdu fields (stack pdesc) */
 
 	NETVM_OC_PKFXL,		/* [pdesc] fix length fields in the packet */
-				/*   If pdesc refers to the base parse, fix */
+				/*   If pdesc refers to the base pdu, fix */
 				/*   all lengths that are in a layer */
 	NETVM_OC_PKFXLI,	/* fix length fields in packet (packed pdesc) */
 	NETVM_OC_PKFXC,		/* [pdesc] fix checksum fields in the packet */
-				/*   If pdesc refers to the base parse, fix */
+				/*   If pdesc refers to the base pdu, fix */
 				/*   all checksums that are in a layer */
 	NETVM_OC_PKFXCI,	/* fix checksums in the packet (packed pdesc) */
 
@@ -489,13 +489,13 @@ enum {
 	NETVM_OC_PKCUT,		/* [addr,len] cut len bytes @ pd.offset */
 				/*   move new bytes down if x or up if !x */
 	NETVM_OC_PKADJ,		/* [pdesc,amt] adjust offset 'field' by */
-	                        /*   amt (signed) bytes in parse */
+	                        /*   amt (signed) bytes in pdu */
 
-	NETVM_OC_PKPI,		/* [prid,pdesc] Insert a new prp after pdesc */
+	NETVM_OC_PKPI,		/* [prid,pdesc] Insert a new pdu after pdesc */
 				/* in the packet.  Inserts hdr/trailer and */
-				/* updates prev prp's next hdr and cksum */
+				/* updates prev pdu's next hdr and cksum */
 	NETVM_OC_PKPII,		/* [prid] See prev, but pdesc is immediate. */
-	NETVM_OC_PKPD,		/* [pdesc] Remove a prp and its header/ */
+	NETVM_OC_PKPD,		/* [pdesc] Remove a pdu and its header/ */
 				/* trailer data from packet.  Adjust prev hdr */
 				/* 'next' field and checksum if necessary. */
 	NETVM_OC_PKPDI,		/* See prev, but pdesc is immediate */
@@ -566,17 +566,17 @@ enum {
 	NETVM_ERR_MPERM,
 	NETVM_ERR_PKTNUM,
 	NETVM_ERR_NOPKT,
-	NETVM_ERR_NOPRP,
-	NETVM_ERR_NOPRPFLD,
+	NETVM_ERR_NOPDU,
+	NETVM_ERR_NOPDUFLD,
 	NETVM_ERR_PDESC,	/* TODO: make sure this gets used */
-	NETVM_ERR_PRPIDX,
-	NETVM_ERR_PRPFLD,
+	NETVM_ERR_PDUIDX,
+	NETVM_ERR_PDUFLD,
 	NETVM_ERR_LAYER,
 	NETVM_ERR_FIXLEN,
 	NETVM_ERR_CKSUM,
 	NETVM_ERR_PKTINS,
 	NETVM_ERR_PKTCUT,
-	NETVM_ERR_PRPADJ,
+	NETVM_ERR_PDUADJ,
 	NETVM_ERR_PKPI,
 	NETVM_ERR_PKPD,
 	NETVM_ERR_PARSE,

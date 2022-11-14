@@ -1,6 +1,6 @@
 /*
  * ONICS
- * Copyright 2013-2015
+ * Copyright 2013-2022
  * Christopher Adam Telfer
  *
  * nftrk.c -- Network Flow Tracker
@@ -105,14 +105,10 @@ int noreport = 0;
 FILE *evtfile;
 
 void reverse_key(struct flow_key *rkey, struct flow_key *key);
-void build_key_ipv4(struct pktbuf *pkb, struct prparse *dlprp, 
-		    struct flow_key *key);
-void build_key_ipv6(struct pktbuf *pkb, struct prparse *dlprp, 
-		    struct flow_key *key);
-void build_key_arp(struct pktbuf *pkb, struct prparse *dlprp, 
-		   struct flow_key *key);
-void build_key_eth(struct pktbuf *pkb, struct prparse *dlprp, 
-		   struct flow_key *key);
+void build_key_ipv4(struct pktbuf *pkb, struct pdu *dlpdu, struct flow_key *k);
+void build_key_ipv6(struct pktbuf *pkb, struct pdu *dlpdu, struct flow_key *k);
+void build_key_arp(struct pktbuf *pkb, struct pdu *dlpdu, struct flow_key *k);
+void build_key_eth(struct pktbuf *pkb, struct pdu *dlpdu, struct flow_key *k);
 
 struct clopt g_optarr[] = {
 	CLOPT_I_NOARG('q', NULL, "Do not report flows: only mark flowids"),
@@ -225,52 +221,51 @@ void reverse_key(struct flow_key *rkey, struct flow_key *key)
 }
 
 
-void build_key_tcp(struct pktbuf *pkb, struct prparse *tcpprp, 
+void build_key_tcp(struct pktbuf *pkb, struct pdu *tcppdu, 
 		   struct flow_key *key)
 {
-	struct tcph *tcp = prp_header(tcpprp, pkb->buf, struct tcph);
+	struct tcph *tcp = pdu_header(tcppdu, pkb->buf, struct tcph);
 	key->sport  = ntoh16(tcp->sport);
 	key->dport  = ntoh16(tcp->dport);
 }
 
 
-void build_key_udp(struct pktbuf *pkb, struct prparse *udpprp, 
+void build_key_udp(struct pktbuf *pkb, struct pdu *udppdu, 
 		   struct flow_key *key)
 {
-	struct udph *udp = prp_header(udpprp, pkb->buf, struct udph);
+	struct udph *udp = pdu_header(udppdu, pkb->buf, struct udph);
 	key->sport  = ntoh16(udp->sport);
 	key->dport  = ntoh16(udp->dport);
 }
 
 
-void build_key_ipv4(struct pktbuf *pkb, struct prparse *ipprp, 
-		    struct flow_key *key)
+void build_key_ipv4(struct pktbuf *pkb, struct pdu *ippdu, struct flow_key *key)
 {
 	struct ipv4h *ip;
 	struct icmph *icmp;
-	struct prparse *xpprp;
-	struct prparse *eipprp;
+	struct pdu *xppdu;
+	struct pdu *eippdu;
 
-	ip = prp_header(ipprp, pkb->buf, struct ipv4h);
+	ip = pdu_header(ippdu, pkb->buf, struct ipv4h);
 
 	key->saddr.ip = ip->saddr;
 	key->daddr.ip = ip->daddr;
 	key->etype = ETHTYPE_IP;
 	key->netproto = ip->proto;
 
-	xpprp = prp_next(ipprp);
-	if (xpprp->prid == PRID_TCP) {
-		build_key_tcp(pkb, xpprp, key);
-	} else if (xpprp->prid == PRID_UDP) {
-		build_key_udp(pkb, xpprp, key);
-	} else if (xpprp->prid == PRID_ICMP) {
-		icmp = prp_header(xpprp, pkb->buf, struct icmph);
+	xppdu = pdu_next(ippdu);
+	if (xppdu->prid == PRID_TCP) {
+		build_key_tcp(pkb, xppdu, key);
+	} else if (xppdu->prid == PRID_UDP) {
+		build_key_udp(pkb, xppdu, key);
+	} else if (xppdu->prid == PRID_ICMP) {
+		icmp = pdu_header(xppdu, pkb->buf, struct icmph);
 		if (ICMPT_IS_ERR(icmp->type)) {
-			eipprp = prp_next(ipprp);
-			if (eipprp->prid != PRID_IPV4)
+			eippdu = pdu_next(ippdu);
+			if (eippdu->prid != PRID_IPV4)
 				return;
 			reset_flow_key(key);
-			build_key_ipv4(pkb, eipprp, key);
+			build_key_ipv4(pkb, eippdu, key);
 		} else if (ICMPT_IS_QUERY(icmp->type)) {
 			key->sport = key->dport = ntoh16(icmp->u.echo.id);
 		}
@@ -279,35 +274,35 @@ void build_key_ipv4(struct pktbuf *pkb, struct prparse *ipprp,
 
 
 
-void build_key_ipv6(struct pktbuf *pkb, struct prparse *ip6prp, 
+void build_key_ipv6(struct pktbuf *pkb, struct pdu *ip6pdu, 
 		    struct flow_key *key)
 {
 	struct ipv6h *ip6;
 	struct icmp6h *icmp6;
 	struct icmp6_echo *i6echo;
-	struct prparse *xpprp;
-	struct prparse *eip6prp;
+	struct pdu *xppdu;
+	struct pdu *eip6pdu;
 
-	ip6 = prp_header(ip6prp, pkb->buf, struct ipv6h);
+	ip6 = pdu_header(ip6pdu, pkb->buf, struct ipv6h);
 
 	key->saddr.ip6 = ip6->saddr;
 	key->daddr.ip6 = ip6->daddr;
 	key->etype = ETHTYPE_IPV6;
-	key->netproto = PRP_IPV6_NXDHDR(ip6prp, pkb->buf);
+	key->netproto = PDU_IPV6_NXDHDR(ip6pdu, pkb->buf);
 
-	xpprp = prp_next(ip6prp);
-	if (xpprp->prid == PRID_TCP) {
-		build_key_tcp(pkb, xpprp, key);
-	} else if (xpprp->prid == PRID_UDP) {
-		build_key_udp(pkb, xpprp, key);
-	} else if (xpprp->prid == PRID_ICMP6) {
-		icmp6 = prp_header(xpprp, pkb->buf, struct icmp6h);
+	xppdu = pdu_next(ip6pdu);
+	if (xppdu->prid == PRID_TCP) {
+		build_key_tcp(pkb, xppdu, key);
+	} else if (xppdu->prid == PRID_UDP) {
+		build_key_udp(pkb, xppdu, key);
+	} else if (xppdu->prid == PRID_ICMP6) {
+		icmp6 = pdu_header(xppdu, pkb->buf, struct icmp6h);
 		if (ICMP6T_IS_ERR(icmp6->type)) {
-			eip6prp = prp_next(ip6prp);
-			if (eip6prp->prid != PRID_IPV6)
+			eip6pdu = pdu_next(ip6pdu);
+			if (eip6pdu->prid != PRID_IPV6)
 				return;
 			reset_flow_key(key);
-			build_key_ipv6(pkb, eip6prp, key);
+			build_key_ipv6(pkb, eip6pdu, key);
 		} else if (ICMP6T_IS_ECHO(icmp6->type)) {
 			i6echo = (struct icmp6_echo *)icmp6;
 			key->sport = key->dport = ntoh16(i6echo->id);
@@ -316,17 +311,16 @@ void build_key_ipv6(struct pktbuf *pkb, struct prparse *ip6prp,
 }
 
 
-void build_key_arp(struct pktbuf *pkb, struct prparse *arpprp, 
-		   struct flow_key *key)
+void build_key_arp(struct pktbuf *pkb, struct pdu *arppdu, struct flow_key *key)
 {
 	struct arph *arp;
 	struct eth_arph *earp;
 
-	arp = prp_header(arpprp, pkb->buf, struct arph);
+	arp = pdu_header(arppdu, pkb->buf, struct arph);
 	if ((ntoh16(arp->hwfmt) != ARPT_ETHERNET) || 
 	    (ntoh16(arp->prfmt) != ETHTYPE_IP) || 
 	    (arp->hwlen != 6) || (arp->prlen != 4)) {
-		build_key_eth(pkb, prp_prev(arpprp), key);
+		build_key_eth(pkb, pdu_prev(arppdu), key);
 		return;
 	}
 
@@ -338,12 +332,11 @@ void build_key_arp(struct pktbuf *pkb, struct prparse *arpprp,
 }
 
 
-void build_key_eth(struct pktbuf *pkb, struct prparse *dlprp, 
-		   struct flow_key *key)
+void build_key_eth(struct pktbuf *pkb, struct pdu *dlpdu, struct flow_key *key)
 {
 	struct eth2h *eh;
 
-	eh = prp_header(dlprp, pkb->buf, struct eth2h);
+	eh = pdu_header(dlpdu, pkb->buf, struct eth2h);
 
 	key->etype = ntoh16(eh->ethtype);
 	key->saddr.eth = eh->src;
@@ -353,24 +346,24 @@ void build_key_eth(struct pktbuf *pkb, struct prparse *dlprp,
 
 int build_flow_key(struct pktbuf *pkb, struct flow_key *key)
 {
-	struct prparse *dlprp;
-	struct prparse *netprp;
+	struct pdu *dlpdu;
+	struct pdu *netpdu;
 
 	reset_flow_key(key);
 
-	dlprp = prp_next(&pkb->prp);
-	if (dlprp->prid != PRID_ETHERNET2)
+	dlpdu = pdu_next(&pkb->pdus);
+	if (dlpdu->prid != PRID_ETHERNET2)
 		return -1;
 
-	netprp = prp_next(dlprp);
-	if (netprp->prid == PRID_IPV4) {
-		build_key_ipv4(pkb, netprp, key);
-	} else if (netprp->prid == PRID_IPV6) {
-		build_key_ipv6(pkb, netprp, key);
-	} else if (netprp->prid == PRID_ARP) {
-		build_key_arp(pkb, netprp, key);
+	netpdu = pdu_next(dlpdu);
+	if (netpdu->prid == PRID_IPV4) {
+		build_key_ipv4(pkb, netpdu, key);
+	} else if (netpdu->prid == PRID_IPV6) {
+		build_key_ipv6(pkb, netpdu, key);
+	} else if (netpdu->prid == PRID_ARP) {
+		build_key_arp(pkb, netpdu, key);
 	} else {
-		build_key_eth(pkb, dlprp, key);
+		build_key_eth(pkb, dlpdu, key);
 	}
 
 	return 0;

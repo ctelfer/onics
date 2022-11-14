@@ -1,6 +1,6 @@
 /*
  * ONICS
- * Copyright 2012-2015
+ * Copyright 2012-2022
  * Christopher Adam Telfer
  *
  * pmlncg.c -- PML code generation for the NetVM platform.
@@ -530,7 +530,7 @@ static int _i_pdarg(struct pmlncg *cg, struct pml_call *c, struct cg_intr *intr)
 }
 
 
-static int _i_prpfunc(struct pmlncg *cg, struct pml_call *c,
+static int _i_pdufunc(struct pmlncg *cg, struct pml_call *c,
 		      struct cg_intr *intr)
 {
 	struct pml_list *pl = c->args;
@@ -654,7 +654,7 @@ static int _i_pktoff(struct pmlncg *cg, struct pml_call *c,
 	/* generate offset ID (field) */
 	if (cg_expr(cg, oid, PML_ETYPE_SCALAR) < 0)
 		return -1;
-	EMIT_W(cg, ADDI, NETVM_PRP_OFF_BASE);
+	EMIT_W(cg, ADDI, NETVM_PDU_OFF_BASE);
 	EMIT_W(cg, ANDI, NETVM_PD_FLD_MASK);
 	EMIT_W(cg, SHLI, NETVM_PD_FLD_OFF);
 	EMIT_NULL(cg, OR);
@@ -995,9 +995,9 @@ struct cg_intr intrinsics[] = {
 	{ "pkt_pop",    NULL, _i_cg_listop, NULL, 0, { {0} } },
 	{ "pdu_update", NULL, _i_pdarg, NULL, 1, 
 		{ NETVM_OP(PKPUP,0,0,0,0) } },
-	{ "pdu_insert", NULL, _i_prpfunc, NULL, 1 /* override */,
+	{ "pdu_insert", NULL, _i_pdufunc, NULL, 1 /* override */,
 		{ NETVM_OP(PKPI,0,0,0,0), NETVM_OP(PKPII,0,0,0,0) } },
-	{ "pdu_delete", NULL, _i_prpfunc, NULL, 0 /* override */,
+	{ "pdu_delete", NULL, _i_pdufunc, NULL, 0 /* override */,
 		{ NETVM_OP(PKPD,0,0,0,0), NETVM_OP(PKPDI,0,0,0,0) } },
 	{ "fix_dltype", NULL, _i_scarg, NULL, 1, { NETVM_OP(PKFXD,0,0,0,0) } },
 	{ "fix_len", NULL, _i_pdarg, NULL, 1, { NETVM_OP(PKFXL,0,0,0,0) } },
@@ -1784,28 +1784,28 @@ static void cgpd_init(struct cg_pdesc *cgpd, int oc, int oci, uint8_t x,
 		abort_unless(ns->prid != PRID_INVALID);
 
 		if (PML_RPF_IS_BYTESTR(loc->rpfld)) {
-			if (ns->oidx == PRP_OI_SOFF) {
+			if (ns->oidx == PDU_OI_SOFF) {
 				cgpd->field = PML_RPF_TO_NVMOFF(loc->rpfld);
 			} else {
-				abort_unless(loc->rpfld == PML_RPF_PARSE ||
+				abort_unless(loc->rpfld == PML_RPF_PDU ||
 					     loc->rpfld == PML_RPF_EXISTS);
-				cgpd->field = NETVM_PRP_OFF_BASE + ns->oidx;
+				cgpd->field = NETVM_PDU_OFF_BASE + ns->oidx;
 			}
 		} else {
 			if (loc->rpfld == PML_RPF_EXISTS) {
 				/*
 				 * We are testing for parse existence here.
 				 * If the offset index for the namespace is
-				 * PRP_OI_SOFF, then we can check for the
+				 * PDU_OI_SOFF, then we can check for the
 				 * parse index of the parse. (must be > 0).
 				 * Otherwise we have to load the actual
-				 * offset and test for NETVM_PRP_INVALID.
+				 * offset and test for NETVM_PDU_INVALID.
 				 * See cg_rpf().
 				 */
-				if (ns->oidx == PRP_OI_SOFF)
-					cgpd->field = NETVM_PRP_PIDX;
+				if (ns->oidx == PDU_OI_SOFF)
+					cgpd->field = NETVM_PDU_PIDX;
 				else
-					cgpd->field = NETVM_PRP_OFF_BASE +
+					cgpd->field = NETVM_PDU_OFF_BASE +
 						      ns->oidx;
 			} else {
 				cgpd->field = PML_RPF_TO_NVMFIELD(loc->rpfld);
@@ -1818,16 +1818,16 @@ static void cgpd_init(struct cg_pdesc *cgpd, int oc, int oci, uint8_t x,
 		abort_unless(pf->prid != PRID_INVALID);
 
 		if (loc->rpfld == PML_RPF_NONE) {
-			cgpd->field = NETVM_PRP_OFF_BASE + pf->oidx;
+			cgpd->field = NETVM_PDU_OFF_BASE + pf->oidx;
 			cgpd->prid = pf->prid;
 			cgpd->pfoff = pf->off;
 		} else {
 			abort_unless(loc->rpfld == PML_RPF_EXISTS);
 			/* see comment above in namespace block */
-			if (pf->oidx == PRP_OI_SOFF)
-				cgpd->field = NETVM_PRP_PIDX;
+			if (pf->oidx == PDU_OI_SOFF)
+				cgpd->field = NETVM_PDU_PIDX;
 			else
-				cgpd->field = NETVM_PRP_OFF_BASE + pf->oidx;
+				cgpd->field = NETVM_PDU_OFF_BASE + pf->oidx;
 			cgpd->prid = pf->prid;
 			cgpd->pfoff = 0;
 		}
@@ -1955,7 +1955,7 @@ static int cg_pdop(struct pmlncg *cg, struct cg_pdesc *cgpd)
 static int must_calc_ns_len(struct ns_namespace *ns)
 {
 	return NSF_IS_VARLEN(ns->flags) &&
-		ns->oidx != PRP_OI_SOFF;
+		ns->oidx != PDU_OI_SOFF;
 }
 
 
@@ -2055,7 +2055,7 @@ int cg_adjlen(struct pmlncg *cg, struct pml_locator *loc, ulong *known_len)
 		if (must_calc_ns_len(ns)) {
 			cgpd_init2(&cgpd, NETVM_OC_LDPF, 0, loc);
 			cgpd.off = NULL;
-			cgpd.field = NETVM_PRP_OFF_BASE + ns->len;
+			cgpd.field = NETVM_PDU_OFF_BASE + ns->len;
 			if (cg_pdop(cg, &cgpd) < 0)
 				return -1;
 			cgpd_init2(&cgpd, NETVM_OC_LDPF, 0, loc);
@@ -2088,7 +2088,7 @@ int cg_adjlen(struct pmlncg *cg, struct pml_locator *loc, ulong *known_len)
 		if (NSF_IS_VARLEN(pf->flags)) {
 			cgpd_init2(&cgpd, NETVM_OC_LDPF, 0, loc);
 			cgpd.off = NULL;
-			cgpd.field = NETVM_PRP_OFF_BASE + pf->len;
+			cgpd.field = NETVM_PDU_OFF_BASE + pf->len;
 			if (cg_pdop(cg, &cgpd) < 0)
 				return -1;
 			cgpd_init2(&cgpd, NETVM_OC_LDPF, 0, loc);
@@ -2275,7 +2275,7 @@ static int cg_rpf(struct pmlncg *cg, struct pml_locator *loc, int etype)
 	if (PML_RPF_IS_BYTESTR(loc->rpfld)) {
 		if (cg_loclen(cg, loc) < 0)
 			return -1;
-	} else if (oidx != PRP_OI_SOFF) {
+	} else if (oidx != PDU_OI_SOFF) {
 		abort_unless(loc->rpfld == PML_RPF_EXISTS);
 		/*
 		 * If we have a namespace referring to a subfield 

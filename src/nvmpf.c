@@ -1,6 +1,6 @@
 /*
  * ONICS
- * Copyright 2012-2015
+ * Copyright 2012-2022
  * Christopher Adam Telfer
  *
  * nvmpf.c -- A NetVM-based packet filter.  Runs netvm_prog.h-format

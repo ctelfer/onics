@@ -1,6 +1,6 @@
 /*
  * ONICS
- * Copyright 2013-2015
+ * Copyright 2013-2022
  * Christopher Adam Telfer
  *
  * testfld.c -- Test field API.
@@ -48,38 +48,38 @@ int main(int argc, char *argv[])
 		if (pkb_parse(p) < 0)
 			errsys("Error parsing packet\n");
 
-		if (fld_get_bn(p->buf, &p->prp, "eth.src", oeth, 6) < 0)
+		if (fld_get_bn(p->buf, &p->pdus, "eth.src", oeth, 6) < 0)
 			fprintf(stderr, "unable to read eth.src\n");
 		fprintf(stderr, "old eth src addr\n");
 		fhexdump(stderr, NULL, 0, oeth, 6);
 
-		if (fld_get_bn(p->buf, &p->prp, "ip.daddr", oip, 4) < 0)
+		if (fld_get_bn(p->buf, &p->pdus, "ip.daddr", oip, 4) < 0)
 			fprintf(stderr, "unable to read ip.daddr\n");
 		fprintf(stderr, "old ip dest addr\n");
 		fhexdump(stderr, NULL, 0, oip, 4);
 
-		if (fld_get_vn(p->buf, &p->prp, "tcp.ack", &osyn) < 0)
+		if (fld_get_vn(p->buf, &p->pdus, "tcp.ack", &osyn) < 0)
 			fprintf(stderr, "unable to read tcp.ack\n");
 		fprintf(stderr, "old tcp ack flag: %lu\n", (ulong)osyn);
-		if (fld_get_vn(p->buf, &p->prp, "tcp.syn", &osyn) < 0)
+		if (fld_get_vn(p->buf, &p->pdus, "tcp.syn", &osyn) < 0)
 			fprintf(stderr, "unable to read tcp.syn\n");
 		fprintf(stderr, "old tcp syn flag: %lu\n", (ulong)osyn);
 
-		if (fld_set_bn(p->buf, &p->prp, "eth.src", neth, 6) < 0)
+		if (fld_set_bn(p->buf, &p->pdus, "eth.src", neth, 6) < 0)
 			fprintf(stderr, "unable to set eth.src\n");
-		if (fld_set_bn(p->buf, &p->prp, "ip.daddr", nip, 4) < 0)
+		if (fld_set_bn(p->buf, &p->pdus, "ip.daddr", nip, 4) < 0)
 			fprintf(stderr, "unable to set ip.daddr\n");
-		if (fld_set_vn(p->buf, &p->prp, "tcp.syn", osyn^1) < 0)
+		if (fld_set_vn(p->buf, &p->pdus, "tcp.syn", osyn^1) < 0)
 			fprintf(stderr, "unable to toggle tcp.syn\n");
 
 
-		pld = fld_get_pldn(p->buf, &p->prp, "tcp", &len);
+		pld = fld_get_pldn(p->buf, &p->pdus, "tcp", &len);
 		if (pld == NULL)
 			fprintf(stderr, "unable to get 'tcp' payload\n");
 		memmove(pld, "Hello World", (len < 11) ? len : 11);
 
 		/* fixup the network layer to make parse dumping cleaner */
-		prp_fix_cksum(p->layers[PKB_LAYER_NET], p->buf);
+		pdu_fix_cksum(p->layers[PKB_LAYER_NET], p->buf);
 
 		pkb_pack(p);
 		pkb_file_write(p, stdout);

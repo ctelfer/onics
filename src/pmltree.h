@@ -1,6 +1,6 @@
 /*
  * ONICS
- * Copyright 2012-2015
+ * Copyright 2012-2022
  * Christopher Adam Telfer
  *
  * pmltree.h -- API for PML abstract syntax tree manipulation.
@@ -294,7 +294,7 @@ enum {
 enum {
 	PML_RPF_NONE,
 	PML_RPF_EXISTS,
-	/* From here to 'END' must match with NETVM_PRP_* */
+	/* From here to 'END' must match with NETVM_PDU_* */
 	PML_RPF_HLEN,
 	PML_RPF_PLEN,
 	PML_RPF_TLEN,
@@ -305,21 +305,21 @@ enum {
 	PML_RPF_HEADER,
 	PML_RPF_PAYLOAD,
 	PML_RPF_TRAILER,
-	/* END NETVM_PRP_* match */
-	PML_RPF_PARSE,
+	/* END NETVM_PDU_* match */
+	PML_RPF_PDU,
 	PML_RPF_FIRST = PML_RPF_EXISTS,
-	PML_RPF_LAST = PML_RPF_PARSE,
+	PML_RPF_LAST = PML_RPF_PDU,
 };
 #define PML_RPF_IS_BYTESTR(f) (((f) >= PML_RPF_HEADER) && \
-			       ((f) <= PML_RPF_PARSE))
+			       ((f) <= PML_RPF_PDU))
 
 /* get the corresponding netvm offset index for a given reserved field */
 #define PML_RPF_TO_NVMFIELD(f)  ((f) - PML_RPF_HLEN)
 
 /* get the netvm offset index for a given reserved byte string field */
-#define PML_RPF_TO_NVMOFF(f)  (((f) == PML_RPF_PARSE) ? \
-			        NETVM_PRP_SOFF : \
-			        ((f) - PML_RPF_HEADER + NETVM_PRP_SOFF))
+#define PML_RPF_TO_NVMOFF(f)  (((f) == PML_RPF_PDU) ? \
+			        NETVM_PDU_SOFF : \
+			        ((f) - PML_RPF_HEADER + NETVM_PDU_SOFF))
 
 /* get the length field for a given reserved byte string field */
 #define PML_RPF_TO_NVMLEN(f)  ((f) - PML_RPF_HEADER)

@@ -1,6 +1,6 @@
 /*
  * ONICS
- * Copyright 2012-2015
+ * Copyright 2012-2022
  * Christopher Adam Telfer
  *
  * pktbuf.h -- Interface for ONICS packet buffers.
@@ -58,8 +58,8 @@ struct pktbuf {
 	struct xpkt *	xpkt;
 	ulong		xsize;
 	ulong		xhlen;	/* cached when packed */
-	struct prparse  prp;
-	struct prparse *layers[PKB_LAYER_NUM];
+	struct pdu	pdus;
+	struct pdu *	layers[PKB_LAYER_NUM];
 	uint		flags;
 	byte_t		cb[PKB_CB_SIZE]; /* app can put what it wants here */
 };
@@ -179,7 +179,7 @@ void pkb_clear_parse(struct pktbuf *pkb);
 int pkb_is_parsed(struct pktbuf *pkb);
 
 /* Set a layer to a protocol parse.  layer == -1 for auto */
-void pkb_set_layer(struct pktbuf *pkb, struct prparse *prp, int layer);
+void pkb_set_layer(struct pktbuf *pkb, struct pdu *pdu, int layer);
 
 /* Clear a layer pointer */
 void pkb_clr_layer(struct pktbuf *pkb, int layer);
@@ -192,13 +192,13 @@ void pkb_fix_dltype(struct pktbuf *pkb);
 /* PRID of the outermost parse type.  Don't change if no outermost parse. */
 void pkb_fix_dltype_if_parsed(struct pktbuf *pkb);
 
-/* Insert a PRP into a packet after a PDU automatically inserting room */
-/* after pprp.  This will work even if pprp == &pkb->prp.  */
-int pkb_insert_pdu(struct pktbuf *pkb, struct prparse *pprp, int prid);
+/* Insert a PDU into a packet after a PDU automatically inserting room */
+/* after ppdu.  This will work even if ppdu == &pkb->pdus.  */
+int pkb_insert_pdu(struct pktbuf *pkb, struct pdu *ppdu, int prid);
 
 /* Delete a PDU from a packet removing its header and trailer from the */
 /* packet in the process. */
-int pkb_delete_pdu(struct pktbuf *pkb, struct prparse *prp);
+int pkb_delete_pdu(struct pktbuf *pkb, struct pdu *pdu);
 
 /* Obtain the xpkt for a packet buffer to manipulate the tags.  */
 /* This will return NULL if the packet buffer is packed.  */

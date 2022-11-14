@@ -1,6 +1,6 @@
 /*
  * ONICS
- * Copyright 2012-2015
+ * Copyright 2012-2022
  * Christopher Adam Telfer
  *
  * testvm.c -- Test the NetVM with some basic programs.
@@ -59,23 +59,23 @@ struct meminit {
 
 
 struct netvm_inst vm_prog_istcp[] = {
-	NETVM_PDIOP(LDPFI, 0, 0, PRID_TCP, 0, NETVM_PRP_PIDX, 0),
+	NETVM_PDIOP(LDPFI, 0, 0, PRID_TCP, 0, NETVM_PDU_PIDX, 0),
 	NETVM_OP(HALT, 0, 0, 0, 1),
 };
 
 
 struct netvm_inst vm_prog_tcperr[] = {
-	/*0 */ NETVM_PDIOP(LDPFI, 0, 0, PRID_TCP, 0, NETVM_PRP_PIDX, 0),
+	/*0 */ NETVM_PDIOP(LDPFI, 0, 0, PRID_TCP, 0, NETVM_PDU_PIDX, 0),
 	/*1 */ NETVM_OP(DUP, 0, 0, 0, 0),
 	/*2 */ NETVM_BRIFNOT_F(3),
-	/*3 */ NETVM_PDIOP(LDPFI, 0, 0, PRID_TCP, 0, NETVM_PRP_ERR, 0),
+	/*3 */ NETVM_PDIOP(LDPFI, 0, 0, PRID_TCP, 0, NETVM_PDU_ERR, 0),
 	/*4 */ NETVM_OP(NEQI, 0, 0, 0, 0),
 	/*5 */ NETVM_OP(HALT, 0, 0, 0, 1),
 };
 
 
 struct netvm_inst vm_prog_isudp[] = {
-	NETVM_PDIOP(LDPFI, 0, 0, PRID_PCLASS_XPORT, 0, NETVM_PRP_PRID, 0),
+	NETVM_PDIOP(LDPFI, 0, 0, PRID_PCLASS_XPORT, 0, NETVM_PDU_PRID, 0),
 	NETVM_OP(PUSH, 0, 0, 0, PRID_UDP),
 	NETVM_OP(EQ, 0, 0, 0, 0),
 	NETVM_OP(HALT, 0, 0, 0, 1),
@@ -87,14 +87,14 @@ struct netvm_inst vm_prog_fixcksum[] = {
 };
 
 struct netvm_inst vm_prog_toggledf[] = {
-	/*0 */ NETVM_PDIOP(LDPFI, 0, 0, PRID_PCLASS_NET, 0, NETVM_PRP_PRID, 0),
+	/*0 */ NETVM_PDIOP(LDPFI, 0, 0, PRID_PCLASS_NET, 0, NETVM_PDU_PRID, 0),
 	/*1 */ NETVM_OP(NEQI, 0, 0, 0, PRID_IPV4),
 	/*2 */ NETVM_BRIF_F(5), /* end of the program */
 	/* 2 bytes starting 6 bytes from start of first IP hdr of packet 0 */
-	/*3 */ NETVM_PDIOP(LDPDI, 2, 0, PRID_IPV4, 0, NETVM_PRP_SOFF, 6),
+	/*3 */ NETVM_PDIOP(LDPDI, 2, 0, PRID_IPV4, 0, NETVM_PDU_SOFF, 6),
 	/* toggle the DF bit */
 	/*4 */ NETVM_OP(XORI, 0, 0, 0, IPH_DFMASK),
-	/*5 */ NETVM_PDIOP(STPDI, 2, 0, PRID_IPV4, 0, NETVM_PRP_SOFF, 6),
+	/*5 */ NETVM_PDIOP(STPDI, 2, 0, PRID_IPV4, 0, NETVM_PDU_SOFF, 6),
 	/*6 */ NETVM_PDIOP(PKFXCI, 0, 0, PRID_IPV4, 0, 0, 0),
 	/*7 */ NETVM_OP(HALT, 0, 0, 0, 1),
 };
@@ -228,10 +228,10 @@ struct meminit bmi[] = {
 struct netvm_inst vm_prog_bulkmove[] = {
 	/* only consider the 1st TCP packet with at least 16 bytes of payload */
 	/* 0 */ NETVM_PDIOP(LDPFI, 0, 0, PRID_PCLASS_XPORT, 0, 
-			    NETVM_PRP_PRID, 0),
+			    NETVM_PDU_PRID, 0),
 	/* 1 */ NETVM_OP(NEQI, 0, 0, 0, PRID_TCP),
 	/* 2 */ NETVM_BRIF_F(10),
-	/* 3 */ NETVM_PDIOP(LDPFI, 0, 0, PRID_TCP, 0, NETVM_PRP_PLEN, 0),
+	/* 3 */ NETVM_PDIOP(LDPFI, 0, 0, PRID_TCP, 0, NETVM_PDU_PLEN, 0),
 	/* 4 */ NETVM_OP(LTI, 0, 0, 0, 16),
 	/* 5 */ NETVM_BRIF_F(7),
 	/* 6 */ NETVM_OP(LDI, 4, RWSEG, 0, DUP1ST_PNUM),
@@ -245,7 +245,7 @@ struct netvm_inst vm_prog_bulkmove[] = {
 	/*14 */ NETVM_OP(HALT, 0, 0, 0, 1),
 
 	/* First print the first 16 bytes of the payload */
-	/*15 */ NETVM_PDIOP(LDPFI, 0, 0, PRID_TCP, 0, NETVM_PRP_POFF, 0),
+	/*15 */ NETVM_PDIOP(LDPFI, 0, 0, PRID_TCP, 0, NETVM_PDU_POFF, 0),
 	/*16 */ NETVM_OP(ORI, 0, 0, 0, (NETVM_SEG_ISPKT<<NETVM_UA_SEG_OFF)),
 	/*17 */ NETVM_OP(PUSH, 0, 0, 0, BULK_DEST_ADDRLO), /* Address 0 */
 	/*18 */ NETVM_OP(ORI, 0, 0, 0, (RWSEG << NETVM_UA_SEG_OFF)),
@@ -264,7 +264,7 @@ struct netvm_inst vm_prog_bulkmove[] = {
 	/* Next put "hello world" into the beginning of the packet */
 	/*30 */ NETVM_OP(PUSH, 0, 0, 0, BMS1_OFFSET),
 	/*31 */ NETVM_OP(ORI, 0, 0, 0, (ROSEG << NETVM_UA_SEG_OFF)),
-	/*32 */ NETVM_PDIOP(LDPFI, 0, 0, PRID_TCP, 0, NETVM_PRP_POFF, 0),
+	/*32 */ NETVM_PDIOP(LDPFI, 0, 0, PRID_TCP, 0, NETVM_PDU_POFF, 0),
 	/*33 */ NETVM_OP(ORI, 0, 0, 0, (NETVM_SEG_ISPKT<<NETVM_UA_SEG_OFF)),
 	/*34 */ NETVM_OP(PUSH, 0, 0, 0, BMS1_SIZE),
 	/*35 */ NETVM_OP(MOVE, 0, 0, 0, 0),
@@ -305,7 +305,7 @@ struct netvm_inst vm_prog_hexdump[] = {
 	/* 4 */ NETVM_OP(STI, 4, RWSEG, 0, HD_PKNADDR),
 	/* 5 */ NETVM_OP(CPOPI, NETVM_CPI_OUTPORT, NETVM_CPOC_PRDEC, 8, 0),
 	/* 6 */ NETVM_CPOP_PRSTRI(ROSEG, HDS2_OFFSET, HDS2_SIZE),
-	/* 7 */ NETVM_PDIOP(LDPFI, 0, 0, PRID_NONE, 0, NETVM_PRP_PLEN, 0),
+	/* 7 */ NETVM_PDIOP(LDPFI, 0, 0, PRID_NONE, 0, NETVM_PDU_PLEN, 0),
 	/* 8 */ NETVM_OP(CPOPI, NETVM_CPI_OUTPORT, NETVM_CPOC_PRDEC, 8, 0),
 	/* 9 */ NETVM_CPOP_PRSTRI(ROSEG, HDS3_OFFSET, HDS3_SIZE),
 	/*10 */ NETVM_OP(PUSH, 0, 0, 0, 0),
@@ -313,7 +313,7 @@ struct netvm_inst vm_prog_hexdump[] = {
 
 	/* LOOP top */
 	/*12 */ NETVM_OP(LDI, 4, RWSEG, 0, HD_IDX),
-	/*13 */ NETVM_PDIOP(LDPFI, 0, 0, PRID_NONE, 0, NETVM_PRP_PLEN, 0),
+	/*13 */ NETVM_PDIOP(LDPFI, 0, 0, PRID_NONE, 0, NETVM_PDU_PLEN, 0),
 	/*14 */ NETVM_OP(GE, 0, 0, 0, 0),
 	/*15 */ NETVM_BRIF_F(14),
 	/* END LOOP TEST */
@@ -325,7 +325,7 @@ struct netvm_inst vm_prog_hexdump[] = {
 	/*21 */ NETVM_OP(ORI, 0, 0, 0,
 			 ((NETVM_SEG_ISPKT|0) << NETVM_PD_PKT_OFF)),
 	/*22 */ NETVM_OP(PUSH, 0, 0, 0,
-			 NETVM_PDESC_W0(PRID_NONE, 0, NETVM_PRP_POFF)),
+			 NETVM_PDESC_W0(PRID_NONE, 0, NETVM_PDU_POFF)),
 	/*23 */ NETVM_OP(LDPD, 1, 0, 0, 0),
 	/*24 */ NETVM_OP(CPOPI, NETVM_CPI_OUTPORT, NETVM_CPOC_PRHEX, 1, 2),
 
@@ -355,13 +355,13 @@ struct meminit meqsi[] = {
 
 
 struct netvm_inst vm_prog_maskeq[] = {
-	/* 0 */ NETVM_PDIOP(LDPFI, 0, 0, PRID_PCLASS_NET, 0, NETVM_PRP_SOFF, 0),
+	/* 0 */ NETVM_PDIOP(LDPFI, 0, 0, PRID_PCLASS_NET, 0, NETVM_PDU_SOFF, 0),
 	/* 1 */ NETVM_OP(EQI, 0, 0, 0, NETVM_PF_INVALID),
 	/* 2 */ NETVM_BRIF_F(6), 
 
 	/* Compare 1st _SIZE bytes of pkt 0's network header */ 
 	/* use 'x' bit of LDPFI to make the SOFF get generated in UA form */
-	/* 3 */ NETVM_PDIOP(LDPFI, 1, 0, PRID_PCLASS_NET, 0, NETVM_PRP_SOFF, 0),
+	/* 3 */ NETVM_PDIOP(LDPFI, 1, 0, PRID_PCLASS_NET, 0, NETVM_PDU_SOFF, 0),
 	/* 4 */ NETVM_OP(PUSH, 0, 0, 0, NETVM_UADDR(0, ROSEG, MEQ_VAL_OFFSET)), 
 	/* 5 */ NETVM_OP(PUSH, 0, 0, 0, NETVM_UADDR(0, ROSEG, MEQ_MASK_OFFSET)), 
 	/* 6 */ NETVM_OP(PUSH, 0, 0, 0, MEQ_MASK_SIZE), 

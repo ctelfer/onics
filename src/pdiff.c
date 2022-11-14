@@ -1,6 +1,6 @@
 /*
  * ONICS
- * Copyright 2013-2016
+ * Copyright 2013-2022
  * Christopher Adam Telfer
  *
  * pdiff.c -- Compute the difference between two packet streams.
@@ -102,9 +102,9 @@ enum {
 };
 
 
-/* an entry in a list of data about the prparses in a packet */
-struct prpent {
-	struct prparse *	prp;
+/* an entry in a list of data about the pdus in a packet */
+struct pduent {
+	struct pdu *		pdu;
 	struct npf_list		npfl;
 	int			idx;
 	ulong			nbits;
@@ -114,8 +114,8 @@ struct prpent {
 /* an entry with the comparison data for a given packet */
 struct pktent {
 	struct pktbuf *		pkt;
-	struct prpent * 	prparr;
-	int			nprp;
+	struct pduent * 	pduarr;
+	int			npdu;
 	ulong			pasiz;
 	long			eoff;
 	byte_t			hash[32];
@@ -321,34 +321,34 @@ ulong npfl_nbits(struct npf_list *npfl)
 
 void pktent_init(struct pktent *pke, ulong pn, const char *sname)
 {
-	struct prparse *prp;
-	struct prpent *ppe;
+	struct pdu *pdu;
+	struct pduent *ppe;
 	int i;
 
 	hash_packet(pke);
-	pke->nprp = 0;
+	pke->npdu = 0;
 	pke->pasiz = 8;
-	pke->prparr = emalloc(sizeof(struct prpent) * pke->pasiz);
+	pke->pduarr = emalloc(sizeof(struct pduent) * pke->pasiz);
 
-	ppe = pke->prparr;
-	prp_for_each(prp, &pke->pkt->prp) {
-		if (pke->nprp == pke->pasiz) {
+	ppe = pke->pduarr;
+	pdu_for_each(pdu, &pke->pkt->pdus) {
+		if (pke->npdu == pke->pasiz) {
 			pke->pasiz *= 2;
-			pke->prparr = erealloc(pke->prparr,
-					       sizeof(struct prpent) * 
+			pke->pduarr = erealloc(pke->pduarr,
+					       sizeof(struct pduent) * 
 							pke->pasiz);
-			ppe = &pke->prparr[pke->nprp];
+			ppe = &pke->pduarr[pke->npdu];
 		}
-		pke->nprp += 1;
-		ppe->prp = prp;
-		for (i = pke->nprp-2; i >= 0; --i)
-			if (pke->prparr[i].prp->prid == prp->prid)
+		pke->npdu += 1;
+		ppe->pdu = pdu;
+		for (i = pke->npdu-2; i >= 0; --i)
+			if (pke->pduarr[i].pdu->prid == pdu->prid)
 				++ppe->idx;
-		npfl_init(&ppe->npfl, &pke->pkt->prp, pke->pkt->buf);
-		if (npfl_load(&ppe->npfl, prp, 1, nsfilter) < 0)
+		npfl_init(&ppe->npfl, &pke->pkt->pdus, pke->pkt->buf);
+		if (npfl_load(&ppe->npfl, pdu, 1, nsfilter) < 0)
 			errsys("pktent_init() calling npfl_load()");
 		ppe->nbits = npfl_nbits(&ppe->npfl);
-		ppe = &pke->prparr[pke->nprp];
+		ppe = &pke->pduarr[pke->npdu];
 	}
 }
 
@@ -402,13 +402,13 @@ static void pa_clear(struct pktarr *pa)
 
 	pke = pa->pkts;
 	for (np = 0; np < pa->npkts; ++np) {
-		for (i = 0; i < pke->nprp; ++i) {
-			npfl_cache(&pke->prparr[i].npfl);
-			pke->prparr[i].prp = NULL;
-			pke->prparr[i].idx = 0;
-			pke->prparr[i].nbits = 0;
+		for (i = 0; i < pke->npdu; ++i) {
+			npfl_cache(&pke->pduarr[i].npfl);
+			pke->pduarr[i].pdu = NULL;
+			pke->pduarr[i].idx = 0;
+			pke->pduarr[i].nbits = 0;
 		}
-		free(pke->prparr);
+		free(pke->pduarr);
 		pkb_free(pke->pkt);
 		pke++;
 	}
@@ -809,7 +809,7 @@ void fdiff_compare(struct fdiff *fd, double drop_bit_cost, double ins_bit_cost)
 }
 
 
-static void prp_get_name(struct prparse *prp, int idx, char *str, size_t smax)
+static void pdu_get_name(struct pdu *pdu, int idx, char *str, size_t smax)
 {
 	struct ns_namespace *ns;
 	char istr[32];
@@ -819,11 +819,11 @@ static void prp_get_name(struct prparse *prp, int idx, char *str, size_t smax)
 	else
 		str_fmt(istr, sizeof(istr), " -- %d", idx);
 
-	ns = ns_lookup_by_prid(prp->prid);
+	ns = ns_lookup_by_prid(pdu->prid);
 	if (ns != NULL)
 		str_fmt(str, smax, "%s%s", ns->fullname, istr);
 	else
-		str_fmt(str, smax, "PRID-%d%s", prp->prid, istr);
+		str_fmt(str, smax, "PRID-%d%s", pdu->prid, istr);
 
 }
 
@@ -838,10 +838,10 @@ static void emit_field(struct emitter *e, struct npf_list *npfl,
 	ulong sboff;
 	int rv;
 
-	base_off = prp_poff(npfl->plist);
+	base_off = pdu_poff(npfl->plist);
 
 	if (!npf_is_gap(npf)) {
-		rv = ns_tostr(npf->nse, npf->buf, npf->prp, line, sizeof(line),
+		rv = ns_tostr(npf->nse, npf->buf, npf->pdu, line, sizeof(line),
 			      pfx);
 		if (rv >= 0)
 			emit_string(e, line);
@@ -852,7 +852,7 @@ static void emit_field(struct emitter *e, struct npf_list *npfl,
 			len += 8 - (npf->off % 8);
 		len = (len + 7) / 8;
 
-		prp_get_name(npf->prp, 0, line, sizeof(line));
+		pdu_get_name(npf->pdu, 0, line, sizeof(line));
 		sboff = off - base_off;
 		emit_format(e, "%s%s Data -- [%lu:%lu]\n", pfx, line, sboff, len);
 		emit_hex(e, pfx, sboff, npf->buf + off, len);
@@ -870,10 +870,10 @@ static void emit_fmod_gap(struct emitter *e, struct npf_list *npfl1,
 	ulong l = ((f1->len < f2->len) ? f1->len : f2->len) / 8;
 	ulong i = 0;
 	ulong n;
-	ulong sboff1 = f1->off / 8 - prp_poff(npfl1->plist);
-	ulong sboff2 = f2->off / 8 - prp_poff(npfl2->plist);
+	ulong sboff1 = f1->off / 8 - pdu_poff(npfl1->plist);
+	ulong sboff2 = f2->off / 8 - pdu_poff(npfl2->plist);
 
-	prp_get_name(f1->prp, 0, name, sizeof(name));
+	pdu_get_name(f1->pdu, 0, name, sizeof(name));
 
 	while (i < l) {
 		while (i < l && *p1 == *p2) {
@@ -911,8 +911,8 @@ static void mod_fld_report(struct emitter *e, struct npf_list *npfl1,
 }
 
 
-static void mod_hdr_report(struct emitter *e, struct prpent *ppe1, ulong p1n,
-			   struct prpent *ppe2, ulong p2n, 
+static void mod_hdr_report(struct emitter *e, struct pduent *ppe1, ulong p1n,
+			   struct pduent *ppe2, ulong p2n, 
 			   double drop_bit_cost, double ins_bit_cost)
 {
 	struct cpmatrix *cpm;
@@ -937,7 +937,7 @@ static void mod_hdr_report(struct emitter *e, struct prpent *ppe1, ulong p1n,
 		switch (elem->actf) {
 		case PASS: 
 			if (verbosity > 0) {
-				ns_tostr(rnpf->nse, rnpf->buf, rnpf->prp, line,
+				ns_tostr(rnpf->nse, rnpf->buf, rnpf->pdu, line,
 					 sizeof(line), "   ");
 				emit_string(e, line);
 			}
@@ -946,14 +946,14 @@ static void mod_hdr_report(struct emitter *e, struct prpent *ppe1, ulong p1n,
 			break;
 
 		case DROP:
-			ns_tostr(rnpf->nse, rnpf->buf, rnpf->prp, line, 
+			ns_tostr(rnpf->nse, rnpf->buf, rnpf->pdu, line, 
 				 sizeof(line), "-- ");
 			emit_string(e, line);
 			rnpf = npf_next(rnpf);
 			break;
 
 		case INSERT:
-			ns_tostr(cnpf->nse, cnpf->buf, cnpf->prp, line,
+			ns_tostr(cnpf->nse, cnpf->buf, cnpf->pdu, line,
 				 sizeof(line), "++ ");
 			emit_string(e, line);
 			cnpf = npf_next(cnpf);
@@ -984,7 +984,7 @@ void hdiff_init(struct hdiff *hd)
 }
 
 
-static double prp_cmp_long(struct prpent *ppe1, struct prpent *ppe2,
+static double pdu_cmp_long(struct pduent *ppe1, struct pduent *ppe2,
 			   double drop_bit_cost, double ins_bit_cost)
 {
 	double cost;
@@ -996,13 +996,13 @@ static double prp_cmp_long(struct prpent *ppe1, struct prpent *ppe2,
 }
 
 
-static double prp_cmp(struct prpent *ppe1, struct prpent *ppe2,
+static double pdu_cmp(struct pduent *ppe1, struct pduent *ppe2,
 		      double dcost, double icost)
 {
 	struct npfield *npf1, *npf2;
 	double cost = 0.0;
 
-	if (ppe1->prp->prid != ppe2->prp->prid)
+	if (ppe1->pdu->prid != ppe2->pdu->prid)
 		return Infinity;
 
 	npf1 = npfl_first(&ppe1->npfl);
@@ -1014,7 +1014,7 @@ static double prp_cmp(struct prpent *ppe1, struct prpent *ppe2,
 			/* we have a field mismatch: need to do it the */
 			/* long way: sad face */
 			if (!npf_type_eq(npf1, npf2))
-				return prp_cmp_long(ppe1, ppe2, dcost, icost);
+				return pdu_cmp_long(ppe1, ppe2, dcost, icost);
 
 			/* TODO:  better payload comparison/cost */
 			/* right now it is just one large binary field */
@@ -1045,16 +1045,16 @@ void hdiff_load(struct hdiff *hd, struct pktent *pke1, struct pktent *pke2)
 {
 	hd->bpke = pke1;
 	hd->apke = pke2;
-	if (pke1->nprp+1 <= hd->cpm_maxr && pke2->nprp+1 <= hd->cpm_maxc) {
-		hd->cpm.nrows = pke1->nprp + 1;
-		hd->cpm.ncols = pke2->nprp + 1;
+	if (pke1->npdu+1 <= hd->cpm_maxr && pke2->npdu+1 <= hd->cpm_maxc) {
+		hd->cpm.nrows = pke1->npdu + 1;
+		hd->cpm.ncols = pke2->npdu + 1;
 	} else {
 		if (hd->cpm_maxr > 0) {
 			cpm_clear(&hd->cpm);
 			hd->cpm.nrows = 0;
 			hd->cpm.ncols = 0;
 		}
-		cpm_ealloc(&hd->cpm, pke1->nprp + 1, pke2->nprp + 1);
+		cpm_ealloc(&hd->cpm, pke1->npdu + 1, pke2->npdu + 1);
 		hd->cpm_maxr = hd->cpm.nrows;
 		hd->cpm_maxc = hd->cpm.ncols;
 	}
@@ -1072,7 +1072,7 @@ void hdiff_compare(struct hdiff *hd)
 	struct chgpath *ipos, *dpos, *mpos;
 	double drop_bit_cost, adj_drop_bit_cost;
 	double ins_bit_cost, adj_ins_bit_cost;
-	struct prpent *bppe, *appe;
+	struct pduent *bppe, *appe;
 
 	cpm_elem(cpm, 0, 0)->actb = DONE;
 	cpm_elem(cpm, 0, 0)->cost = 0.0;
@@ -1095,25 +1095,25 @@ void hdiff_compare(struct hdiff *hd)
 		dpos = cpm_elem(cpm, i, 0);
 		dpos->actb = DROP;
 		dpos->cost = cpm_elem(cpm, 0, i-1)->cost +
-			     hd->bpke->prparr[i-1].nbits * adj_drop_bit_cost;
+			     hd->bpke->pduarr[i-1].nbits * adj_drop_bit_cost;
 	}
 
 	for (i = 1; i < cpm->ncols; ++i) {
 		ipos = cpm_elem(cpm, 0, i);
 		ipos->actb = INSERT;
 		ipos->cost = cpm_elem(cpm, 0, i-1)->cost +
-			     hd->apke->prparr[i-1].nbits * adj_ins_bit_cost;
+			     hd->apke->pduarr[i-1].nbits * adj_ins_bit_cost;
 	}
 
-	bppe = hd->bpke->prparr;
+	bppe = hd->bpke->pduarr;
 	for (i = 1; i < cpm->nrows; ++i, ++bppe) {
-		appe = hd->apke->prparr;
+		appe = hd->apke->pduarr;
 		for (j = 1; j < cpm->ncols; ++j, ++appe) {
 			ipos = cpm_elem(cpm, i, j-1);
 			dpos = cpm_elem(cpm, i-1, j);
 			mpos = cpm_elem(cpm, i-1, j-1);
 
-			mcost = prp_cmp(bppe, appe, drop_bit_cost,
+			mcost = pdu_cmp(bppe, appe, drop_bit_cost,
 					ins_bit_cost);
 			maction = (mcost == 0.0) ? PASS : MODIFY;
 			mcost += mpos->cost;
@@ -1269,26 +1269,26 @@ void pdiff_compare(struct pdiff *pd)
 }
 
 
-static void print_hdr_desc(struct emitter *e, struct prpent *ppe, 
+static void print_hdr_desc(struct emitter *e, struct pduent *ppe, 
 			   const char *op, const char *pfx)
 {
 	char name[256];
-	struct prparse *prp;
+	struct pdu *pdu;
 	ulong psoff;
 
-	prp = ppe->prp;
-	psoff = prp_poff(ppe->npfl.plist);
+	pdu = ppe->pdu;
+	psoff = pdu_poff(ppe->npfl.plist);
 
-	prp_get_name(prp, ppe->idx, name, sizeof(name));
+	pdu_get_name(pdu, ppe->idx, name, sizeof(name));
 	emit_format(e, "%s*****\n", pfx);
 	emit_format(e, "%s* %s%s -- [%lu:%lu]\n", 
-		    pfx, op, name, prp_soff(prp) - psoff,
-		    prp_totlen(prp));
+		    pfx, op, name, pdu_soff(pdu) - psoff,
+		    pdu_totlen(pdu));
 	emit_format(e, "%s*****\n", pfx);
 }
 
 
-static void print_hdr_op(struct emitter *e, struct prpent *ppe, int action)
+static void print_hdr_op(struct emitter *e, struct pduent *ppe, int action)
 {
 	char *op = "";
 	char *pfx = "";
@@ -1325,7 +1325,7 @@ static void mod_pkt_report(struct pktent *pke1, ulong p1n, struct pktent *pke2,
 {
 	struct cpmatrix *cpm;
 	struct chgpath *elem;
-	struct prpent *rppe, *cppe;
+	struct pduent *rppe, *cppe;
 	double drop_bit_cost;
 	double ins_bit_cost;
 
@@ -1343,8 +1343,8 @@ static void mod_pkt_report(struct pktent *pke1, ulong p1n, struct pktent *pke2,
 	elem = cpm_elem(cpm, 0, 0);
 	while (elem->actf != DONE)
 	{
-		rppe = &pke1->prparr[elem->r];
-		cppe = &pke2->prparr[elem->c];
+		rppe = &pke1->pduarr[elem->r];
+		cppe = &pke2->pduarr[elem->c];
 
 		switch (elem->actf) {
 		case PASS:
@@ -1381,12 +1381,12 @@ static int fld_off_cmp(const void *f1p, const void *f2p)
 }
 
 
-static struct prpent *find_prpe(struct pktent *pke, struct prparse *prp)
+static struct pduent *find_pdue(struct pktent *pke, struct pdu *pdu)
 {
 	int i;
-	struct prpent *ppe;
-	for (i = 0, ppe = pke->prparr; i < pke->nprp; ++i, ++ppe)
-		if (ppe->prp == prp)
+	struct pduent *ppe;
+	for (i = 0, ppe = pke->pduarr; i < pke->npdu; ++i, ++ppe)
+		if (ppe->pdu == pdu)
 			return ppe;
 	abort_unless(0);
 	return NULL;
@@ -1398,15 +1398,15 @@ static void pke_print(struct emitter *e, struct pktent *pke, char *pfx)
 	int i;
 	int j;
 	int n = 0;
-	struct prpent *ppe;
+	struct pduent *ppe;
 	struct npfield *npf;
-	struct prparse *prp, *lastprp;
+	struct pdu *pdu, *lastpdu;
 	ulong soff;
 	ulong psoff;
 	char name[64];
 
 	/* count the # of fields */
-	for (i = 0, ppe = pke->prparr; i < pke->nprp; ++i, ++ppe)
+	for (i = 0, ppe = pke->pduarr; i < pke->npdu; ++i, ++ppe)
 		n += npfl_get_len(&ppe->npfl);
 
 	/* resize the field array if necessary */
@@ -1416,7 +1416,7 @@ static void pke_print(struct emitter *e, struct pktent *pke, char *pfx)
 	}
 
 	/* copy the pointers to the field pointer array */
-	for (i = 0, j = 0, ppe = pke->prparr; i < pke->nprp; ++i, ++ppe)
+	for (i = 0, j = 0, ppe = pke->pduarr; i < pke->npdu; ++i, ++ppe)
 		for (npf = npfl_first(&ppe->npfl) ; !npf_is_end(npf) ;
 		     npf = npf_next(npf))
 			Farr[j++] = npf;
@@ -1428,22 +1428,22 @@ static void pke_print(struct emitter *e, struct pktent *pke, char *pfx)
 	isort_array(Farr, n, sizeof(Farr[0]), fld_off_cmp);
 
 	/* print the fields */
-	lastprp = NULL;
+	lastpdu = NULL;
 	psoff = pkb_get_off(pke->pkt);
 	for (i = 0; i < n; ++i) {
 		npf = Farr[i];
 
 		/* check if field is in a new parse */
-		if (npf->prp != lastprp) {
-			prp = npf->prp;
-			ppe = find_prpe(pke, prp);
-			soff = prp_soff(prp) - psoff;
-			prp_get_name(prp, ppe->idx, name, sizeof(name));
+		if (npf->pdu != lastpdu) {
+			pdu = npf->pdu;
+			ppe = find_pdue(pke, pdu);
+			soff = pdu_soff(pdu) - psoff;
+			pdu_get_name(pdu, ppe->idx, name, sizeof(name));
 			emit_format(e, "%s*****\n", pfx);
 			emit_format(e, "%s* %s: [%lu:%lu]\n", pfx, name, soff, 
-				    prp_totlen(prp));
+				    pdu_totlen(pdu));
 			emit_format(e, "%s*****\n", pfx);
-			lastprp = prp;
+			lastpdu = pdu;
 		}
 
 		emit_field(e, &ppe->npfl, npf, pfx);

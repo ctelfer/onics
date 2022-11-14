@@ -455,7 +455,7 @@ Packet Rules
             Scalar [[c,p]; width=4] -- width 4: 8 (8,0x8)
          Right Operand -- 
             Locator: packet field(tcp) [[v]; width=0]
-            Reserved packet field (parse)
+            Reserved packet field (pdu)
             Offset -- 
                Scalar [[c]; width=4] -- width 4: 5 (5,0x5)
             Length -- 
@@ -506,7 +506,7 @@ Packet Rules
                   Variable: csum [local; width=4, addr=8]
             Right Operand -- 
                Locator: packet field(tcp) [[v]; width=0]
-               Reserved packet field (parse)
+               Reserved packet field (pdu)
                Offset -- 
                   Locator: variable(i) [[]; width=4]
                   Variable -- 
@@ -575,7 +575,7 @@ Packet Rules
                      Variable: csum [local; width=4, addr=8]
                Right Operand -- 
                   Locator: packet field(ip) [[v]; width=0]
-                  Reserved packet field (parse)
+                  Reserved packet field (pdu)
                   Offset -- 
                      Scalar [[c]; width=4] -- width 4: 10 (10,0xa)
                   Length -- 
