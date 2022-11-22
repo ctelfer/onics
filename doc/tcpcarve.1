@@ -1,0 +1,73 @@
+.TH "tcpcarve" 1 "November 2022" "ONICS 1.0"
+.SH NAME
+nftrk - Track network flows and tag packets with a flow ID.
+.P
+.SH SYNOPSYS
+\fBtcpcarve\fP [\fB-hp\fP] [\fB-p prefix\fP] [\fIinfile\fP]
+.P
+.SH DESCRIPTION
+\fBtcpcarve\fP is a utility to extract the application data from a
+TCP stream.  \fBtcpcarve\fP expects to receive either a stream of TCP
+packets from standard input or from a file all from the same TCP
+connection. It reads from standard input unless the \fIinfile\fP
+parameter is present in which case it reads from that file instead.
+.P
+The \fBtcpcarve\fP utility generates a series of numbered files.  It
+creates a new file whenever it observes data in the TCP stream in a "new
+direction".  That is to say, if it was extracting data sent by the
+client of the connection and sees a packet from the server with data, it
+closes the existing file opens a new one and starts filling it with data
+until (from the server) until the client sends data again or until the
+TCP connection ends.
+.P
+By default the files are named "data.NNNN.c2s" or "data.NNNN.s2c" where
+NNNN is a monotonically increasing number regardless of the suffix of
+the file.  The client-sent data goes into files with the suffix ".c2s"
+and the server-sent data goes into files with the suffix ".s2c".  The
+user can override the prefix of the file with the \fB-p\fP option.
+.P
+One
+can easily merge all the from the client or server into a single file by
+concatenating the files in ascending numeric order e.g.:
+.nf
+
+	cat data.*.c2s > client-data.txt
+
+.fi
+However, for request/response protocols like HTTP, the default split
+should probably extract the data stream in a reasonable way.  
+.P
+.SH OPTIONS
+.P
+.IP \fB-h\fP
+Print the usage of the command and exit.
+.IP \fB-p prefix\fP
+Use \fBprefix\fP (which may include directory assuming the directories
+already exists) as the prefix for the files to generate.  If not
+specified, the files will start with "data.".
+.IP \fB-q\fP
+Quiet mode:  do not report non-TCP packets, packets from other flows or
+unexpected packets in the data stream.
+.P
+.SH EXAMPLES
+Extract the TCP connections from a data stream and then extract the
+application data from each TCP stream.
+.nf
+
+	pxtr '{tcp}' | nftrk -q | psplit
+	for f in flow.* ; do
+		fid=`echo $f | sed -e 's/^flow.//' -e 's/.xpkt$//'`
+		tcpcarve -p "tcp-$fid." $f
+	done
+		
+
+.fi
+.P
+.SH AVAILABILITY
+This utility should be available on all supported ONICS platforms.
+.P
+.SH AUTHOR
+Christopher A. Telfer <ctelfer@gmail.com>
+.P
+.SH "SEE ALSO"
+nftrk(1), pml(1), psplit(1), pxtr(1)
