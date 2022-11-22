@@ -413,6 +413,11 @@ int xpkt_add_tag(struct xpkt *x, struct xpkt_tag_hdr *xth, int moveup)
 				break;
 		}
 		if (flen >= tl) {
+			/*
+			 * trav is pointing at the start of the last NOP so
+			 * we need to move back one less word than the new
+			 * tag length.
+			 */
 			memcpy((uint32_t *)trav - (tl - 1), xth, tl * 4);
 		} else {
 			return -1;
