@@ -12,6 +12,7 @@ tests:
 	./seq_test.sh
 	./script_test.sh
 	./util_test.sh
+	./tcpcarve_test.sh
 	@echo All tests passed
 	@echo
 

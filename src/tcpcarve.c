@@ -45,7 +45,7 @@ struct clopt options[] = {
 	CLOPT_I_NOARG('h', NULL, "print help"),
 	CLOPT_I_STRING('p', NULL, "PREFIX",
 		       "Prefix to use for each file"),
-	CLOPT_I_NOARG('q', NULL, 
+	CLOPT_I_NOARG('q', NULL,
 		      "Suppress warnings for missing data or non-TCP packets"),
 };
 struct clopt_parser oparse =
@@ -384,7 +384,7 @@ void carve_app_data()
 		if (pkb_parse(p) == 0 && extract_tuple(p, &conntuple) >= 0)
 			break;
 		if (!quiet)
-			fprintf(stderr, 
+			fprintf(stderr,
 				"Packet %lu is not a TCP packet (skipping)\n",
 				pn);
 		pkb_free(p);
@@ -402,7 +402,7 @@ void carve_app_data()
 		++pn;
 		if (pkb_parse(p) < 0 || extract_tuple(p, &pkttuple) < 0) {
 			if (!quiet)
-				fprintf(stderr, 
+				fprintf(stderr,
 					"Packet %lu is not a TCP packet "
 					"(skipping)\n", pn);
 			pkb_free(p);
@@ -412,7 +412,7 @@ void carve_app_data()
 		pdir = tuple_match(&conntuple, &pkttuple);
 		if (pdir == INVALID) {
 			if (!quiet)
-				fprintf(stderr, 
+				fprintf(stderr,
 					"Packet %lu is from a different "
 					"connection skipping)\n", pn);
 			pkb_free(p);
@@ -424,9 +424,18 @@ void carve_app_data()
 		ts = (pdir == C2S) ? &c2s : &s2c;
 		if (!ts->seen) {
 			ts->seen = 1;
-			ts->nxtseq = ntoh32(tcp->seqn);
-			pkb_free(p);
-			continue;
+			ts->nxtseq = ntoh32(tcp->seqn) + 1;
+			if (!(tcp->flags & TCPF_SYN)) {
+				if (!quiet) {
+					char *origin = pdir == C2S 
+						? "client" 
+						: "server";
+					fprintf(stderr, 
+						"Warning: first packet from %s"
+					        "is not a SYN\n", origin);
+				}
+				--ts->nxtseq;
+			}
 		}
 		if (prp_plen(prp) <= 0) {
 			pkb_free(p);
@@ -434,8 +443,8 @@ void carve_app_data()
 		}
 		if (!(tcp->flags & TCPF_ACK)) {
 			if (!quiet)
-				fprintf(stderr, 
-					"Packet %lu has no SYN or ACK flag"
+				fprintf(stderr,
+					"Data packet %lu has no ACK flag"
 					"(skipping)\n", pn);
 			pkb_free(p);
 			continue;
