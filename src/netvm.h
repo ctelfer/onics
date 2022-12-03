@@ -53,12 +53,12 @@ struct netvm_inst {
 
 /*
  * Most memory operations accept addresses in a unified address space format.
- * This format is a single 32-bit address that can refer to any memory 
+ * This format is a single 32-bit address that can refer to any memory
  * segment or packet buffer.  The format is:
  *
  * MSB                      LSB
  *  [seg desc: 4  address: 28]
- * 
+ *
  * The segment descriptor is a memory segment index with the NETVM_SEG_ISPKT
  * bit (bit 3 in the 4-bit address) cleared or a packet number with the
  * NETVM_SEG_ISPKT bit set.
@@ -74,7 +74,7 @@ struct netvm_inst {
 	 ((addr) & 0x0FFFFFFF))
 
 
-/* 
+/*
  * Some instructions require metadata about a packet and/or its
  * pdu fields.  Such instructions take a protocol descriptor either
  * from the stack or from the instruction itself.  Instructions
@@ -89,12 +89,12 @@ struct netvm_inst {
  * packet number are considered as the NETVM_SEG_ISPKT bit may be set
  * when the 'y' field is used to differentiate between packet and memory
  * segments for LD/ST operations.  (see below)
- * 
+ *
  * Stack protocol descriptor form.  It takes two words:
  *
  * Top of stack:
  *     MSB                                        LSB
- *      PRID: 16      pdu index:8           field:8  
+ *      PRID: 16      pdu index:8           field:8
  *      pkt/seg:4                         offset:28
  * Bottom of stack:
  *
@@ -153,9 +153,9 @@ struct netvm_pdu_desc {
 };
 
 #define NETVM_PDU_LAYER   255	/* find header of type MPKT_LAYER_* */
-/* 
+/*
  * When ptype == NETVM_PDU_LAYER, the header referred to is one of the layer
- * pointers stored in pktbuf.  This allows quick access to the network, 
+ * pointers stored in pktbuf.  This allows quick access to the network,
  * data link, transport, and tunnel headers.  It also allows them to be accessed
  * by layer. (e.g. transport).  In this case the idx field tells which layer.
  */
@@ -193,11 +193,11 @@ enum {
  */
 
 
-/* 
+/*
  * NetVM co-processors extend the base instruction set with additional
  * operations.  Each coprocessor fits in a "slot" of the VM each with
  * a unique co-processor ID (CPI) starting from 0.  Each CP has up to
- * 255 operations (CPOs).  The CPI and CPO can be specified in the x,y 
+ * 255 operations (CPOs).  The CPI and CPO can be specified in the x,y
  * fields of the CPOPI instruction or from the top two arguments on the
  * stack for the CPOP instruction.  Only CPOPI may be used in
  * 'matchonly' in order to ensure that only 'safe' CPOs are called.  The
@@ -207,7 +207,7 @@ enum {
  * Each co-processor also has a co-processor type (CPT) which is a 32-bit ID
  * denoting function, version, etc of the co-processor.  The GETCPT
  * instruction lets the VM query the CPTs of the current VM.  So, a
- * non-matchonly VM can have dynamically discoverable operations. 
+ * non-matchonly VM can have dynamically discoverable operations.
  * NETVM_CPT_NONE (i.e. 0) is a reserved value which indicates the absence
  * of a co-processor in a given CPI.
  *
@@ -220,7 +220,7 @@ typedef void (*netvm_cpop)(struct netvm *vm, struct netvm_coproc *cpc, int cpi,
 /*
  * Methods:
  *  - regi -> Operations to initialize the coprocessor when first registered
- *            with the vm.  Perform any resource allocations here 
+ *            with the vm.  Perform any resource allocations here
  *  - reset -> Operations to run when the VM is resetting
  *  - validate -> Called to validate a coprocessor instruction.  Keep in mind
  *            that the VM can be queried including its 'matchonly' state,
@@ -232,7 +232,7 @@ struct netvm_coproc {
 	uint			numops;
 	netvm_cpop *		ops;
 
-	int			(*regi)(struct netvm_coproc *coproc, 
+	int			(*regi)(struct netvm_coproc *coproc,
 			        	struct netvm *vm, int cpi);
 
 	void			(*reset)(struct netvm_coproc *coproc);
@@ -287,7 +287,7 @@ struct netvm {
 
 
 
-/* 
+/*
  * NetVM Instruction Set
  *
  * Field types:
@@ -325,18 +325,18 @@ enum {
 				/*     NETVM_MAXRET.  If 'w' > 0, also pop */
 				/*     the 'w' values below the stack frame. */
 
-	/* 
-	 * For LDPF and LDPFI, if 'x' is set then generate a unified address 
-	 * by setting the packet number and ISPKT bit in the high byte.  
+	/*
+	 * For LDPF and LDPFI, if 'x' is set then generate a unified address
+	 * by setting the packet number and ISPKT bit in the high byte.
 	 * (note: not all fields are offsets from the packet start.  use
-	 * accordingly). 
+	 * accordingly).
 	 */
 	NETVM_OC_LDPF,		/* [pdesc] load field from pdu */
 	NETVM_OC_LDPFI,		/* load field from pdu (packed pdesc) */
 
 	/*
 	 * For these 5 load operations, x must be in [1,8] or [129,136]
-	 * If x is in [129,136], the result will be sign extended to 64 bits 
+	 * If x is in [129,136], the result will be sign extended to 64 bits
 	 * for a value of x-128 bytes.   The same address conventions are
 	 * followed on the ST, STI, STU, STPD, STPDI, instructions.
 	 */
@@ -418,12 +418,12 @@ enum {
 	NETVM_OC_HALT,		/* halt program and put 'w' in 'status' */
 	NETVM_OC_MAX_MATCH = NETVM_OC_HALT,
 
-	/* 
+	/*
 	 * The following instructions are not allowed in pure match run.
 	 * There are possible 3 reasons for this:
-	 *  1) We cannot validate that the program will terminate in 
+	 *  1) We cannot validate that the program will terminate in
 	 *     # cycles <= # of instructions with these operations.
-	 *  2) These operations could modify memory or the packets. 
+	 *  2) These operations could modify memory or the packets.
 	 *  3) We cannot verify the coprocessor operation statically as
 	 *     the operation gets selected at runtime.
 	 */
@@ -439,7 +439,7 @@ enum {
 				/* instruction. */
 	NETVM_OC_JMP,		/* [addr] branch to absolute address addr */
 
-	NETVM_OC_CALL,		/* [(args..,)v]: branch and link to v */ 
+	NETVM_OC_CALL,		/* [(args..,)v]: branch and link to v */
 				/*   Store next PC on stack, then push */
 				/*   current BP to SP, set BP to new SP */
 	NETVM_OC_RET,		/* [(rets..,)]: return from call */
@@ -501,7 +501,7 @@ enum {
 	NETVM_OC_PKPDI,		/* See prev, but pdesc is immediate */
 
 	NETVM_OC_MAXOP = NETVM_OC_PKPDI
-/* 
+/*
 * Still to consider:
 *
 * REGTO - queue an instruction address on a timer list with one argument
@@ -512,7 +512,7 @@ enum {
 *
 * CURTIME - get the current time (GMT?  Relative?)
 *
-* Instruction store modification? 
+* Instruction store modification?
 */
 };
 

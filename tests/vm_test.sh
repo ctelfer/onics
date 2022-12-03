@@ -47,11 +47,11 @@ bin/testvm -p 2 < $PDIR/sample.xpkt > $TOUT/vm_test_2.out 2> $TOUT/vm_test_2.err
 check_output 2
 echo ---------------------
 echo
-	
+
 
 echo ---------------------
 echo VM Test 3: Fix all checksums
-bin/testvm -p 3 < $PDIR/modified.xpkt 2> $TOUT/vm_test_3.err1 | 
+bin/testvm -p 3 < $PDIR/modified.xpkt 2> $TOUT/vm_test_3.err1 |
 	$OBIN/x2hpkt > $TOUT/vm_test_3.out 2> $TOUT/vm_test_3.err2
 check_output 3
 echo ---------------------
@@ -60,7 +60,7 @@ echo
 
 echo ---------------------
 echo VM Test 4: Toggle DF flag and fix all checksums
-bin/testvm -p 4 < $PDIR/sample.xpkt 2> $TOUT/vm_test_4.err1 | 
+bin/testvm -p 4 < $PDIR/sample.xpkt 2> $TOUT/vm_test_4.err1 |
 	$OBIN/x2hpkt > $TOUT/vm_test_4.out 2> $TOUT/vm_test_4.err2
 check_output 4
 echo ---------------------
@@ -93,7 +93,7 @@ echo
 
 echo ---------------------
 echo VM Test 8: Duplicate the first packet and drop the rest
-bin/testvm -p 8 < $PDIR/sample.xpkt 2> $TOUT/vm_test_8.err1 | 
+bin/testvm -p 8 < $PDIR/sample.xpkt 2> $TOUT/vm_test_8.err1 |
 	$OBIN/x2hpkt > $TOUT/vm_test_8.out 2> $TOUT/vm_test_8.err2
 check_output 8
 echo ---------------------
@@ -102,7 +102,7 @@ echo
 
 echo ---------------------
 echo VM Test 9: Extract first 16 bytes from first data TCP and clobber 12
-bin/testvm -p 9 < $PDIR/sample.xpkt 2> $TOUT/vm_test_9.err1 | 
+bin/testvm -p 9 < $PDIR/sample.xpkt 2> $TOUT/vm_test_9.err1 |
 	$OBIN/x2hpkt > $TOUT/vm_test_9.out 2> $TOUT/vm_test_9.err2
 check_output 9
 echo ---------------------

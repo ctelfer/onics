@@ -89,7 +89,7 @@ int opc_open_stream_rd(FILE *fp, opc_h *h)
 			errno = EIO;
 		goto errfree;
 	}
-	
+
 	if (fh->magic == OPC_MAGIC_SWAP) {
 		pc->swapped = 1;
 		fh->magic = swap32(fh->magic);

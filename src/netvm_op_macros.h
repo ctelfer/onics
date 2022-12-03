@@ -85,13 +85,13 @@ struct pdu *netvm_find_header(struct netvm *vm, struct netvm_pdu_desc *pd,
 
 void netvm_get_pdu_ptr(struct netvm *vm, int onstack, int width, byte_t **p);
 
-void netvm_get_seg_ptr(struct netvm *vm, uint seg, ulong addr, int iswr, 
+void netvm_get_seg_ptr(struct netvm *vm, uint seg, ulong addr, int iswr,
 		       ulong len, byte_t **p);
 
-void netvm_get_mem_ptr(struct netvm *vm, uint seg, ulong addr, int iswr, 
+void netvm_get_mem_ptr(struct netvm *vm, uint seg, ulong addr, int iswr,
 		       ulong len, byte_t **p);
 
-void netvm_get_pkt_ptr(struct netvm *vm, uint pkt, ulong addr, int iswr, 
+void netvm_get_pkt_ptr(struct netvm *vm, uint pkt, ulong addr, int iswr,
 		       ulong len, byte_t **p);
 
 void netvm_get_uaddr_ptr(struct netvm *vm, ulong uaddr, int iswr,

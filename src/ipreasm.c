@@ -276,7 +276,7 @@ static void build_v4_key(byte_t key[FEKSIZE], struct pdu *pdu, byte_t *buf)
 static void build_v6_key(byte_t key[FEKSIZE], struct pdu *pdu, byte_t *buf)
 {
 	struct ipv6h *ip6 = pdu_header(pdu, buf, struct ipv6h);
-	struct ipv6_fragh *v6fh = 
+	struct ipv6_fragh *v6fh =
 		(struct ipv6_fragh *)(buf + pdu->offs[PDU_IPV6FLD_FRAGH]);
 	memset(key, 0, FEKSIZE);
 	memcpy(key, &ip6->saddr, 16);
@@ -372,7 +372,7 @@ static int fe_add_frag(struct fragent *fe, byte_t *bp, uint16_t first,
 
 		if (last < fh0.last) {
 			if (!islast)  {
-				fh = fh_new(fp->buf + FEPOFF, last + 1, 
+				fh = fh_new(fp->buf + FEPOFF, last + 1,
 					    fh0.last, hole);
 				hole = &fh->nhole;
 			} else {
@@ -431,7 +431,7 @@ int fe_add_v4_frag(struct fragent *fe, struct pktbuf *p)
 	} else {
 		return 0;
 	}
-	
+
 }
 
 
@@ -543,7 +543,7 @@ static int reassemble(struct pktbuf **pp)
 	} else {
 		abort_unless(pdu->prid == PRID_IPV6);
 		return reassemble_v6(pp);
-	} 
+	}
 }
 
 

@@ -24,7 +24,7 @@ codegen() {
 		FAIL=1
 	fi
 
-	rm $TOUT/$base.nprg 
+	rm $TOUT/$base.nprg
 
 	if [ $FAIL -eq 0 ] ; then
 		if grep -i DEADC0DE $TOUT/$base.nvas > /dev/null 2>&1
@@ -50,7 +50,7 @@ codegen() {
 
 
 for f in `echo data/pml/pml_test*.pml | sort`
-do 
+do
 	codegen $f
 done
 

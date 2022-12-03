@@ -134,7 +134,7 @@ struct ns_elem *ns_lookup(struct ns_namespace *ns, const char *name)
 			elem = ns->elems[i];
 			if (elem == NULL || elem->name == NULL)
 				continue;
-			if ((strncmp(elem->name, p, e - p) == 0) && 
+			if ((strncmp(elem->name, p, e - p) == 0) &&
 			    (*(elem->name + (e - p)) == '\0'))
 				break;
 		}
@@ -190,7 +190,7 @@ static int pf_get_offlen(struct ns_pktfld *pf, struct pdu *pdu, ulong *off,
 		} else {
 			nb = pf->len;
 			*len = pf->len;
-		} 
+		}
 	}
 
 	abort_unless(nb <= pdu_totlen(pdu));
@@ -219,7 +219,7 @@ static int ns_get_offlen(struct ns_namespace *ns, struct pdu *pdu, ulong *off,
 		*len = pdu->offs[ns->len] - pdu->offs[ns->oidx];
 	} else {
 		*len = ns->len;
-	} 
+	}
 
 	*off = pdu->offs[ns->oidx];
 
@@ -343,7 +343,7 @@ int ns_fmt_raw(struct ns_elem *elem, byte_t *pkt, struct pdu *pdu,
 
 
 
-/* 
+/*
  * pad the string out to a specified width (sizeof(padding)) with
  * ":    .....   ".    return the number of non-null bytes
  * added or -1 if an error.  If the offset is already greater

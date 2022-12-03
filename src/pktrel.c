@@ -56,7 +56,7 @@ void usage(const char *estr)
 	if (estr != NULL)
 		fprintf(stderr, "Error -- %s\n", estr);
 	optparse_print(&g_oparser, ubuf, sizeof(ubuf));
-	fprintf(stderr, "usage: %s [options] [INFILE [OUTFILE]]\n%s\n", 
+	fprintf(stderr, "usage: %s [options] [INFILE [OUTFILE]]\n%s\n",
 	        g_oparser.argv[0], ubuf);
 	fprintf(stderr,
 		"\tOnly the last of the -i, -p, or -r options will be used\n");

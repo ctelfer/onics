@@ -6,11 +6,11 @@ TOUT=tmp
 PDIR=data/packets
 
 
-# $1 - test number 
+# $1 - test number
 # $2 - infile|NONE|PROG_some_expression_here
 # $3 - flags
 # $4 - expected return (optional)
-pml_test() { 
+pml_test() {
 	FAIL=0
 	if [ $# -gt 3 ]
 	then
@@ -49,7 +49,7 @@ pml_test() {
 	then
 		echo SKIPPED
 	else
-		if ! cmp $TOUT/pml_test$1.out data/pml/pml_test$1.out || 
+		if ! cmp $TOUT/pml_test$1.out data/pml/pml_test$1.out ||
 		   ! cmp $TOUT/pml_test$1.err data/pml/pml_test$1.err
 		then
 			echo FAILED

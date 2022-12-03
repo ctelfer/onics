@@ -118,7 +118,7 @@ void parse_args(int argc, char *argv[])
 }
 
 
-static void setup_pkb(struct pktbuf *pkb, void *p, 
+static void setup_pkb(struct pktbuf *pkb, void *p,
 		      struct bpf_hdr *bh)
 {
 	struct xpkt_tag_iface ti;
@@ -142,7 +142,7 @@ static void setup_pkb(struct pktbuf *pkb, void *p,
 	}
 
 
-	xpkt_tag_ts_init(&ts, bh->bh_tstamp.tv_sec, 
+	xpkt_tag_ts_init(&ts, bh->bh_tstamp.tv_sec,
 			 bh->bh_tstamp.tv_usec * 1000);
 	rv = pkb_add_tag(pkb, (struct xpkt_tag_hdr *)&ts);
 	abort_unless(rv == 0);

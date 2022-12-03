@@ -40,7 +40,7 @@ void unload_external_protocols(void);
  *
  *   int load(void);
  *   void unload(void);
- * 
+ *
  */
 
 struct oproto {

@@ -151,8 +151,8 @@ int getpfx(char *pfx, const char *in, uint plen)
 
 
 static const char *errstrs[7] = {
-	"runt", 
-	"header length", 
+	"runt",
+	"header length",
 	"truncated",
 	"checksum",
 	"option length",
@@ -255,8 +255,8 @@ int add_fields(struct pdu *pdu, struct ns_namespace *ns)
 	if (ns == NULL) {
 		ns = ns_lookup_by_prid(pdu->prid);
 		if (ns == NULL)
-			return 0; 
-		
+			return 0;
+
 		if ((f = alloc_field()) == NULL)
 			return -1;
 
@@ -270,7 +270,7 @@ int add_fields(struct pdu *pdu, struct ns_namespace *ns)
 
 		insert_field(f);
 	}
-			
+
 	for (i = 0; i < ns->nelem; ++i) {
 		e = ns->elems[i];
 
@@ -292,7 +292,7 @@ int add_fields(struct pdu *pdu, struct ns_namespace *ns)
 		f->depth = depth;
 
 		insert_field(f);
-			
+
 		if (e->type == NST_NAMESPACE) {
 			subns = (struct ns_namespace *)e;
 			if (add_fields(pdu, subns) < 0)
@@ -352,7 +352,7 @@ void print_fields(ulong eoff)
 
 
 
-/* 
+/*
  * Print fields and data between soff and eoff.
  */
 void dump_data(struct pdu *pdu, ulong soff, ulong eoff, int prhdr)
@@ -460,14 +460,14 @@ void dump_xpkt_meta(struct pktbuf *pkb)
 		switch (t->type) {
 		case XPKT_TAG_NOP: break;
 
-		case XPKT_TAG_TIMESTAMP: 
+		case XPKT_TAG_TIMESTAMP:
 			ts = (struct xpkt_tag_ts *)t;
 			fprintf(outfile,
 			       "# XPKT: Timestamp = %lu sec and %lu nsec\n",
 			       (ulong)ts->sec, (ulong)ts->nsec);
 			break;
 
-		case XPKT_TAG_SNAPINFO: 
+		case XPKT_TAG_SNAPINFO:
 			si = (struct xpkt_tag_snapinfo *)t;
 			fprintf(outfile,
 				"# XPKT: Packet snapped: wire length = %lu\n",

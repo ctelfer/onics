@@ -427,10 +427,10 @@ void carve_app_data()
 			ts->nxtseq = ntoh32(tcp->seqn) + 1;
 			if (!(tcp->flags & TCPF_SYN)) {
 				if (!quiet) {
-					char *origin = pdir == C2S 
-						? "client" 
+					char *origin = pdir == C2S
+						? "client"
 						: "server";
-					fprintf(stderr, 
+					fprintf(stderr,
 						"Warning: first packet from %s"
 					        "is not a SYN\n", origin);
 				}

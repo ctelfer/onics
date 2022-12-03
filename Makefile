@@ -8,8 +8,8 @@ normal:
 	echo "Building documentation..." && make -C doc && \
 	echo "Done" )
 
-test: 
-	make -C tests 
+test:
+	make -C tests
 
 install:
 	(INSTALL_PREFIX=$${INSTALL_PREFIX:-/usr/local} ; \

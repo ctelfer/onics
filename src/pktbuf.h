@@ -114,7 +114,7 @@ void pkb_set_dltype(struct pktbuf *pkb, uint16_t dltype);
 /* Get a pointer to the start of packet data (including starting offset) */
 void *pkb_data(struct pktbuf *pkb);
 
-/* 
+/*
  * Read a packet from a file into a packet buffer
  *      1 on successful read
  *      0 on EOF
@@ -122,7 +122,7 @@ void *pkb_data(struct pktbuf *pkb);
  */
 int pkb_file_read(struct pktbuf *pkb, FILE *fp);
 
-/* 
+/*
  * Read a packet from a file descriptor into a packet buffer
  *      1 on successful read
  *      0 on EOF
@@ -130,8 +130,8 @@ int pkb_file_read(struct pktbuf *pkb, FILE *fp);
  */
 int pkb_fd_read(struct pktbuf *pkb, int fd);
 
-/* 
- * Read a packet from a file and allocate the buffer for it 
+/*
+ * Read a packet from a file and allocate the buffer for it
  *      1 on successful read
  *      0 on EOF
  *     -1 on error
@@ -139,17 +139,17 @@ int pkb_fd_read(struct pktbuf *pkb, int fd);
 int pkb_file_read_a(struct pktbuf **pkb, FILE *fp, pkb_alloc_f alloc,
 		    void *ctx);
 
-/* 
- * Read a packet from a file and allocate the buffer for it 
+/*
+ * Read a packet from a file and allocate the buffer for it
  *      1 on successful read
  *      0 on EOF
  *     -1 on error
  */
 int pkb_fd_read_a(struct pktbuf **pkb, int fd, pkb_alloc_f alloc, void *ctx);
 
-/* 
- * Pack a pktbuf in preparation for transmission 
- * Returns 
+/*
+ * Pack a pktbuf in preparation for transmission
+ * Returns
  *    0 on success
  *   -1 if the packet is too big to send
  *   -2 if the xpkt headers are invalid

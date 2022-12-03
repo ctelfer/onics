@@ -25,7 +25,7 @@
 #include "sysdeps.h"
 
 /*
- * Format:  
+ * Format:
  *  - packet_len(4) 		- must be >= tag len * 4 + 8
  *  - dltype(2)			- a PRID (see prid.h)
  *  - tag_len(2)		- 0 - 65535.  number of tag 4-byte words
@@ -98,7 +98,7 @@ static ONICS_INLINE uint16_t xpkt_tag_size(struct xpkt_tag_hdr *xth)
 void xpkt_unpack_hdr(struct xpkthdr *xh);
 
 
-/* 
+/*
  * Validate the fields in an xpkt header
  * Returns:
  *   0 Success
@@ -120,7 +120,7 @@ void xpkt_unpack_tag(struct xpkt_tag_hdr *xth);
 void xpkt_pack_tag(struct xpkt_tag_hdr *xth);
 
 
-/* 
+/*
  * Unpack and validate a set of xpkt tags from network byte order.
  * The validation step is necessary because the lengths of each
  * tag must be "ok" for the unpack to succeed.
@@ -129,7 +129,7 @@ void xpkt_pack_tag(struct xpkt_tag_hdr *xth);
  * as a uint32_t.  The tlen must be the tag length in 32-bit words.  In
  * other words, it must be the contents of the tag length field in the xpkt
  * header.
- * 
+ *
  * Returns:
  *   0 Success
  *  -1 Tag overflow
@@ -146,7 +146,7 @@ int xpkt_unpack_tags(uint32_t *tags, uint16_t tlen);
  * as a uint32_t.  The tlen must be the tag length in 32-bit words.  In
  * other words, it must be the contents of the tag length field in the xpkt
  * header.
- * 
+ *
  * Returns:
  *   0 Success
  *  -1 Duplicate tag where only one permitted;
@@ -155,15 +155,15 @@ int xpkt_unpack_tags(uint32_t *tags, uint16_t tlen);
 int xpkt_validate_tags(uint32_t *tags, uint16_t tlen);
 
 
-/* 
- * Pack a set of xpkt tags to network byte order.  This routine assumes that 
- * the tags are valid. 
+/*
+ * Pack a set of xpkt tags to network byte order.  This routine assumes that
+ * the tags are valid.
  *
  * The 'tags' parameter must be a pointer to the start of the XPKT tags cast
  * as a uint32_t.  The tlen must be the tag length in 32-bit words.  In
  * other words, it must be the contents of the tag length field in the xpkt
  * header.
- * 
+ *
  */
 void xpkt_pack_tags(uint32_t *tags, uint16_t tlen);
 
@@ -194,7 +194,7 @@ struct xpkt_tag_hdr *xpkt_find_tag(struct xpkt *x, byte_t type, int idx);
 
 /*
  * Return the index of a tag within the xpkt.  (for use with xpkt_del_tag)
- * for example. 
+ * for example.
  * Returns:
  *  >= 0 - The tag index
  *  <  0 - Tag not found within the packet
@@ -204,7 +204,7 @@ int xpkt_find_tag_idx(struct xpkt *x, struct xpkt_tag_hdr *xth);
 /*
  * Insert a tag into the xpkt.  The 'moveup' field determines how the
  * tag will be inserted:
- * - 0 - clobber the first region of nops of sufficient size 
+ * - 0 - clobber the first region of nops of sufficient size
  *       for the tag.
  * - 1 - Push all data after the tags up to make space for the tag.
  *       This method assumes there is sufficient space past the packet

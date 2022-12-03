@@ -111,11 +111,11 @@ void parse_options()
 			infile = stdin;
 		else if ((infile = fopen(g_oparser.argv[rv], "r")) == NULL)
 			errsys("fopen: ");
-	} 
+	}
 	if (rv < g_oparser.argc-1) {
 		if ((outfile = fopen(g_oparser.argv[rv+1], "w")) == NULL)
 			errsys("fopen: ");
-	} 
+	}
 }
 
 
@@ -132,7 +132,7 @@ int readline(char *cp, size_t len)
 		if (ch == EOF)
 			break;
 		if (!isprint(ch) && (ch != '\n') && (ch != '\t'))
-			err("invalid character (%d) on line %lu\n", ch, 
+			err("invalid character (%d) on line %lu\n", ch,
 			    g_lineno);
 		if (ch == '\n')
 			break;
@@ -185,7 +185,7 @@ void write_packet(struct pktbuf *pkb)
 		x = (struct xpkt *)pkb->buf;
 		xpkt_unpack_hdr(&x->hdr);
 		if ((rv = xpkt_validate_hdr(&x->hdr)) < 0)
-			err("Packet %lu has an invalid xpkt header: %d\n", 
+			err("Packet %lu has an invalid xpkt header: %d\n",
 			    g_pktno, rv);
 		if (x->hdr.len != nb)
 			err("Packet %lu's xpkt length doesn't match bytes read"
@@ -289,7 +289,7 @@ int main(int argc, char *argv[])
 		if (*end == ':') {
 			if (g_strict_addr && off != pkb_get_off(pkb))
 				err("Invalid address at line %lu:"
-				    " expected %lu but got %lu\n", g_lineno, 
+				    " expected %lu but got %lu\n", g_lineno,
 				    pkb_get_off(pkb), off);
 			cp = end + 1;
 		} else if (g_strict_addr) {

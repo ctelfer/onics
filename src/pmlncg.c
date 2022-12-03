@@ -289,7 +289,7 @@ static int cg_read_strref_var(struct pmlncg *cg, struct pml_locator *loc,
 		EMIT_XW(cg, LDBPI, 1, lvaraddr(v) + (getlen ? 0 : 1));
 	} else {
 		abort_unless(v->vtype == PML_VTYPE_GLOBAL);
-		EMIT_XYW(cg, LDI, 4, PML_SEG_RWMEM, 
+		EMIT_XYW(cg, LDI, 4, PML_SEG_RWMEM,
 			 v->addr + (getlen ? 4 : 0));
 	}
 
@@ -334,8 +334,8 @@ static int cg_load_strref_val(struct pmlncg *cg, struct pml_locator *loc,
 }
 
 
-/* 
- * rv == 1 means that the function was able to generated optimized string 
+/*
+ * rv == 1 means that the function was able to generated optimized string
  * reference instructions.  rv < 0 means an error occurred.
  */
 static int _cg_i_str_optimized(struct pmlncg *cg, struct pml_locator *loc,
@@ -346,34 +346,34 @@ static int _cg_i_str_optimized(struct pmlncg *cg, struct pml_locator *loc,
 	if (loc->off != NULL || loc->len != NULL)
 		return 0;
 
-	accept = (loc->reftype == PML_REF_LITERAL) && 
+	accept = (loc->reftype == PML_REF_LITERAL) &&
 	         (loc->u.litref->type == PMLTT_BYTESTR);
 	accept |= (loc->reftype == PML_REF_VAR) &&
-	           ((loc->u.varref->etype == PML_ETYPE_BYTESTR) || 
+	           ((loc->u.varref->etype == PML_ETYPE_BYTESTR) ||
 	            (loc->u.varref->etype == PML_ETYPE_STRREF));
 	if (!accept)
 		return 0;
 
 	if (strcmp(intr->name, "str_len") == 0) {
-		LDSREF_LEN(cg, loc); 
+		LDSREF_LEN(cg, loc);
 	} else if (strcmp(intr->name, "str_addr") == 0) {
-		LDSREF_ADDR(cg, loc); 
+		LDSREF_ADDR(cg, loc);
 		EMIT_W(cg, ANDI, NETVM_UA_OFF_MASK);
 	} else if (strcmp(intr->name, "str_ispkt") == 0) {
-		if ((loc->reftype == PML_REF_LITERAL) || 
-		    ((loc->reftype == PML_REF_VAR) && 
+		if ((loc->reftype == PML_REF_LITERAL) ||
+		    ((loc->reftype == PML_REF_VAR) &&
 		     (loc->u.varref->etype != PML_ETYPE_STRREF))) {
 			PUSH(cg, 0);
 		} else {
-			LDSREF_ADDR(cg, loc); 
+			LDSREF_ADDR(cg, loc);
 			EMIT_W(cg, SHRI, NETVM_UA_ISPKT_OFF);
 		}
 	} else if (strcmp(intr->name, "str_seg") == 0) {
-		LDSREF_ADDR(cg, loc); 
+		LDSREF_ADDR(cg, loc);
 		EMIT_W(cg, SHRI, NETVM_UA_SEG_OFF);
 		EMIT_W(cg, ANDI, NETVM_SEG_SEGMASK);
 	} else if (strcmp(intr->name, "str_isnull") == 0) {
-		LDSREF_LEN(cg, loc); 
+		LDSREF_LEN(cg, loc);
 		EMIT_W(cg, EQI, 0);
 	} else {
 		return 0;
@@ -666,7 +666,7 @@ static int _i_pktoff(struct pmlncg *cg, struct pml_call *c,
 	} else {
 		EMIT_NULL(cg, LDPF);
 	}
-		
+
 	return 0;
 }
 
@@ -694,7 +694,7 @@ static int _i_cg_listop(struct pmlncg *cg, struct pml_call *c,
 			return -1;
 		if (strcmp(intr->name, "pkt_enq") == 0) {
 			cpop = NETVM_CPOC_ENQ;
-		} else if (strcmp(intr->name, "pkt_deq") == 0 || 
+		} else if (strcmp(intr->name, "pkt_deq") == 0 ||
 			   strcmp(intr->name, "pkt_pop") == 0) {
 			cpop = NETVM_CPOC_DEQ;
 		} else if (strcmp(intr->name, "pkt_push") == 0) {
@@ -920,7 +920,7 @@ static int _i_cg_meta(struct pmlncg *cg, struct pml_function *f,
 	return 0;
 }
 
-struct cg_meta_ctx _i_ts_sec_ctx = 
+struct cg_meta_ctx _i_ts_sec_ctx =
 	{ 4, XPKT_TAG_TIMESTAMP, 4, TAG_TS, 0x01020000 };
 struct cg_meta_ctx _i_ts_nsec_ctx =
 	{ 4, XPKT_TAG_TIMESTAMP, 8, TAG_TS, 0x01020000 };
@@ -957,21 +957,21 @@ struct cg_meta_ctx _i_wr16_ctx =
 struct cg_meta_ctx _i_wr32_ctx =
 	{ 4, NETVM_CPOC_WRTAG, 0, 0, 0 };
 
-struct cg_intr intrinsics[] = { 
-	{ "str_len", NULL, _i_str, NULL, 2, 
+struct cg_intr intrinsics[] = {
+	{ "str_len", NULL, _i_str, NULL, 2,
 		{ NETVM_OP(SWAP,0,0,0,1),
 		  NETVM_OP(POP,0,0,0,1) } },
-	{ "str_addr", NULL, _i_str, NULL, 2, 
+	{ "str_addr", NULL, _i_str, NULL, 2,
 		{ NETVM_OP(POP,0,0,0,1),
 		  NETVM_OP(ANDI,0,0,0,NETVM_UA_OFF_MASK) } },
-	{ "str_ispkt", NULL, _i_str, NULL, 2, 
-		{ NETVM_OP(POP,0,0,0,1), 
+	{ "str_ispkt", NULL, _i_str, NULL, 2,
+		{ NETVM_OP(POP,0,0,0,1),
 		  NETVM_OP(SHRI,0,0,0,NETVM_UA_ISPKT_OFF) } },
-	{ "str_seg", NULL, _i_str, NULL, 3, 
-		{ NETVM_OP(POP,0,0,0,1), 
+	{ "str_seg", NULL, _i_str, NULL, 3,
+		{ NETVM_OP(POP,0,0,0,1),
 		  NETVM_OP(SHRI,0,0,0,NETVM_UA_SEG_OFF),
 		  NETVM_OP(ANDI,0,0,0,NETVM_SEG_SEGMASK) } },
-	{ "str_isnull", NULL, _i_str, NULL, 3, 
+	{ "str_isnull", NULL, _i_str, NULL, 3,
 		{ NETVM_OP(SWAP,0,0,0,1),
 		  NETVM_OP(POP,0,0,0,1),
 	          NETVM_OP(EQI,0,0,0,0)	} },
@@ -993,7 +993,7 @@ struct cg_intr intrinsics[] = {
 	{ "pkt_deq",    NULL, _i_cg_listop, NULL, 0, { {0} } },
 	{ "pkt_push",   NULL, _i_cg_listop, NULL, 0, { {0} } },
 	{ "pkt_pop",    NULL, _i_cg_listop, NULL, 0, { {0} } },
-	{ "pdu_update", NULL, _i_pdarg, NULL, 1, 
+	{ "pdu_update", NULL, _i_pdarg, NULL, 1,
 		{ NETVM_OP(PKPUP,0,0,0,0) } },
 	{ "pdu_insert", NULL, _i_pdufunc, NULL, 1 /* override */,
 		{ NETVM_OP(PKPI,0,0,0,0), NETVM_OP(PKPII,0,0,0,0) } },
@@ -1001,7 +1001,7 @@ struct cg_intr intrinsics[] = {
 		{ NETVM_OP(PKPD,0,0,0,0), NETVM_OP(PKPDI,0,0,0,0) } },
 	{ "fix_dltype", NULL, _i_scarg, NULL, 1, { NETVM_OP(PKFXD,0,0,0,0) } },
 	{ "fix_len", NULL, _i_pdarg, NULL, 1, { NETVM_OP(PKFXL,0,0,0,0) } },
-	{ "fix_lens",  NULL, _i_scarg, NULL, 4, 
+	{ "fix_lens",  NULL, _i_scarg, NULL, 4,
 		{ NETVM_OP(ORI,0,0,0,NETVM_SEG_ISPKT),
 		  NETVM_OP(SHLI,0,0,0,NETVM_PD_PKT_OFF),
 		  NETVM_OP(PUSH,0,0,0,NETVM_PDESC_W0(PRID_NONE,0,0)),
@@ -1013,8 +1013,8 @@ struct cg_intr intrinsics[] = {
 		  NETVM_OP(PUSH,0,0,0,NETVM_PDESC_W0(PRID_NONE,0,0)),
 		  NETVM_OP(PKFXC,0,0,0,0), } },
 
-	/* 
-	 * these get full regular function implementations and require 
+	/*
+	 * these get full regular function implementations and require
 	 * no special calling conventions.
 	 */
 	{ "meta_get_ts_sec",  _i_cg_mget, NULL, &_i_ts_sec_ctx,  0, { {0} } },
@@ -1043,10 +1043,10 @@ struct cg_intr intrinsics[] = {
 	{ "meta_wr16",        _i_cg_meta, NULL, &_i_wr16_ctx,    0, { {0} } },
 	{ "meta_wr32",        _i_cg_meta, NULL, &_i_wr32_ctx,    0, { {0} } },
 
-	{ "exit", NULL, _i_scarg, 0, 1, 
+	{ "exit", NULL, _i_scarg, 0, 1,
 		{ NETVM_OP(HALT,0,0,0,NVMP_STATUS_EXIT) } },
 	{ "pop", NULL, _i_scarg, 0, 1, { NETVM_OP(POPL,4,0,0,0) } },
-	{ "log2", NULL, _i_scarg, 0, 2, 
+	{ "log2", NULL, _i_scarg, 0, 2,
 		{ NETVM_OP(NLZ,4,0,0,0), NETVM_OP(SUBI,1,0,0,31) } },
 	{ "min", NULL, _i_scarg, 0, 1, { NETVM_OP(MIN,0,0,0,0) } },
 	{ "max", NULL, _i_scarg, 0, 1, { NETVM_OP(MAX,0,0,0,0) } },
@@ -1057,7 +1057,7 @@ struct cg_intr intrinsics[] = {
 struct cg_intr *find_intrinsic(struct pml_function *f)
 {
 	struct cg_intr *intr;
-	for (intr = intrinsics; 
+	for (intr = intrinsics;
 	     intr->name != NULL && (strcmp(intr->name, f->name) != 0);
 	     ++intr) ;
 	return (intr->name == NULL) ? NULL : intr;
@@ -1265,7 +1265,7 @@ static int copy_meminits(struct pml_ast *ast, struct netvm_program *prog,
 		++inits;
 		++prog->ninits;
 	}
-	
+
 	return 0;
 
 err_free:
@@ -1298,7 +1298,7 @@ static void init_segs(struct pmlncg *cg)
 		sd->perms = NETVM_SEG_RD;
 	else
 		sd->perms = 0;
-	
+
 	sd = &prog->sdescs[PML_SEG_RWMEM];
 	sd->len = ast->vars.addr_rw2;
 	if (sd->len > 0)
@@ -1584,7 +1584,7 @@ static int cg_op(struct pmlncg *cg, struct pml_op *op, struct cgestk *es)
 }
 
 
-/* 
+/*
  * generate code for a scalar binary operation where one of the
  * operands is a constant.  If the constant is sufficiently small
  * (i.e. fits in 'w') we can emit less code this way.
@@ -1852,13 +1852,13 @@ static void cgpd_init2(struct cg_pdesc *cgpd, int oc, uint8_t x,
 }
 
 
-/* 
+/*
  * Generate an instruction that takes a packet descriptor argument.
  * Fortunately, all the netvm instructions that we use that take a
  * packet descriptor do so as their top of stack argument.  This function
  * forms the packet desciptor taking into account potentially variable
  * header packet, field index, and offset.
- * 
+ *
  */
 static int cg_pdop(struct pmlncg *cg, struct cg_pdesc *cgpd)
 {
@@ -1900,7 +1900,7 @@ static int cg_pdop(struct pmlncg *cg, struct cg_pdesc *cgpd)
 	}
 
 	if (cgpd->oci >= 0 && !lpkt.onstack && !lidx.onstack && !loff.onstack &&
-	    (cgpd->field <= NETVM_PPD_FLD_MASK) && 
+	    (cgpd->field <= NETVM_PPD_FLD_MASK) &&
 	    (loff.val <= NETVM_PPD_OFF_MASK)) {
 		uint y = lpkt.val & NETVM_PPD_PKT_MASK;
 		uint z = ((lidx.val & NETVM_PPD_IDX_MASK)
@@ -1959,7 +1959,7 @@ static int must_calc_ns_len(struct ns_namespace *ns)
 }
 
 
-/* 
+/*
  * Calculate the adjusted length of the location.
  *  - This is the length of the field minus the offset.
  *  - If the length can be determined statically, return it in *known_len
@@ -2002,7 +2002,7 @@ int cg_adjlen(struct pmlncg *cg, struct pml_locator *loc, ulong *known_len)
 				return -1;
 			if (!loff.onstack) {
 				if (loff.val >= len) {
-					cgerr(cg, 
+					cgerr(cg,
 					      "offset out of range for '%s'"
 					      ": %lu >= %lu", loc->name,
 					      loff.val, len);
@@ -2014,7 +2014,7 @@ int cg_adjlen(struct pmlncg *cg, struct pml_locator *loc, ulong *known_len)
 				EMIT_W(cg, UMINI, len);
 				EMIT_XW(cg, SUBI, 1, len);
 			}
-		} else { 
+		} else {
 			PUSH(cg, len);
 			*known_len = len;
 		}
@@ -2028,7 +2028,7 @@ int cg_adjlen(struct pmlncg *cg, struct pml_locator *loc, ulong *known_len)
 				return -1;
 			if (!loff.onstack) {
 				if (loff.val >= var->width) {
-					cgerr(cg, 
+					cgerr(cg,
 					      "offset out of range for '%s'"
 					      ": %lu >= %lu", loc->name,
 					      (ulong)loff.val,
@@ -2102,7 +2102,7 @@ int cg_adjlen(struct pmlncg *cg, struct pml_locator *loc, ulong *known_len)
 					return -1;
 				if (!loff.onstack) {
 					if (loff.val >= pf->len) {
-						cgerr(cg, 
+						cgerr(cg,
 						      "offset out of range for"
 						      " '%s': %lu >= %lu",
 						      loc->name,
@@ -2128,7 +2128,7 @@ int cg_adjlen(struct pmlncg *cg, struct pml_locator *loc, ulong *known_len)
 }
 
 
-/* 
+/*
  * To generate the actual length of a field we need to take the
  * minimum of the length field given in the locator and the length
  * computed from the location itself.  That's what this function does.
@@ -2162,7 +2162,7 @@ int cg_loclen(struct pmlncg *cg, struct pml_locator *loc)
 		} else {
 			EMIT_NULL(cg, MIN);
 		}
-	} 
+	}
 
 	return 0;
 }
@@ -2266,7 +2266,7 @@ static int cg_rpf(struct pmlncg *cg, struct pml_locator *loc, int etype)
 	else
 		oidx = ((struct ns_pktfld *)e)->oidx;
 
-	cgpd_init2(&cgpd, NETVM_OC_LDPF, 
+	cgpd_init2(&cgpd, NETVM_OC_LDPF,
 	           PML_RPF_IS_BYTESTR(loc->rpfld) != 0, loc);
 
 	if (cg_pdop(cg, &cgpd) < 0)
@@ -2278,7 +2278,7 @@ static int cg_rpf(struct pmlncg *cg, struct pml_locator *loc, int etype)
 	} else if (oidx != PDU_OI_SOFF) {
 		abort_unless(loc->rpfld == PML_RPF_EXISTS);
 		/*
-		 * If we have a namespace referring to a subfield 
+		 * If we have a namespace referring to a subfield
 		 * within a protocol then we have to test explicitly
 		 * for invalid rather than implicitly by getting
 		 * the header's parse index.  See cgpd_init2().
@@ -2331,7 +2331,7 @@ static int cg_pfbitfield(struct pmlncg *cg, struct pml_locator *loc)
   Cases:
   pdesc in instr:
    - etype == SCALAR
-     * len is static 
+     * len is static
        use ldpdi with len = max(4, len)
      * len is dynamic
        use ldpfi, eval len, ldu
@@ -2433,7 +2433,7 @@ static int cg_strref(struct pmlncg *cg, struct pml_locator *loc)
 	struct numval llen;
 
 
-	LDSREF_ADDR(cg, loc); 
+	LDSREF_ADDR(cg, loc);
 	if (loc->off != NULL) {
 		/* XXX assumes var length can't overflow address */
 		/* Our code should ensure that this is true by */
@@ -2441,7 +2441,7 @@ static int cg_strref(struct pmlncg *cg, struct pml_locator *loc)
 		/* the field that it refers to. */
 
 		/* calculate adjusted address */
-		if (cg_expr(cg, (union pml_node *)loc->off, 
+		if (cg_expr(cg, (union pml_node *)loc->off,
 			    PML_ETYPE_SCALAR) < 0)
 			return -1;
 		LDSREF_LEN(cg, loc);
@@ -2449,8 +2449,8 @@ static int cg_strref(struct pmlncg *cg, struct pml_locator *loc)
 		EMIT_NULL(cg, ADD);
 
 		/* get length to end of string */
-		LDSREF_ADDR(cg, loc); 
-		LDSREF_LEN(cg, loc); 
+		LDSREF_ADDR(cg, loc);
+		LDSREF_LEN(cg, loc);
 		EMIT_NULL(cg, ADD);
 		EMIT_W(cg, DUP, 1);
 		EMIT_NULL(cg, SUB);
@@ -2486,8 +2486,8 @@ static int cg_local_varref(struct pmlncg *cg, struct pml_locator *loc,
 		cgerr(cg, "can't generate varref code for an "
 			  "intrinsic function (%s)", v->func->name);
 		return -1;
-	} 
-		
+	}
+
 	if (v->etype == PML_ETYPE_SCALAR) {
 		belowbp = (v->vtype == PML_VTYPE_PARAM);
 		EMIT_XW(cg, LDBPI, belowbp, addr);
@@ -2686,7 +2686,7 @@ static int w_expr_pre(union pml_node *n, void *auxp, void *xstk)
 
 	default:
 		break;
-	}	
+	}
 
 	return 0;
 }
@@ -2708,7 +2708,7 @@ static int w_expr_in(union pml_node *n, void *auxp, void *xstk)
 			EMIT_W(cg, PUSH, 1);
 			es->iaddr = nexti(b);
 			EMIT_W(cg, BRI, 0); /* fill in during post */
-		} else if (op->op == PMLOP_AND) { 
+		} else if (op->op == PMLOP_AND) {
 			EMIT_W(cg, BNZI, 3);
 			EMIT_W(cg, PUSH, 0);
 			es->iaddr = nexti(b);
@@ -3005,7 +3005,7 @@ int cg_assign_global_var(struct pmlncg *cg, struct pml_assign *a)
 	ulong vlen;
 
 	if (v->etype == PML_ETYPE_SCALAR ||
-	    (v->etype == PML_ETYPE_BYTESTR && 
+	    (v->etype == PML_ETYPE_BYTESTR &&
 	     e->expr.etype == PML_ETYPE_SCALAR)) {
 		abort_unless(loc->type == PMLTT_LOCATOR);
 		if (cg_expr(cg, (union pml_node *)e, PML_ETYPE_SCALAR) < 0)
@@ -3077,7 +3077,7 @@ static int pfref_check_fixed(struct pmlncg *cg, struct pml_locator *loc,
 			return 0;
 		len = pf->len;
 	}
-	 
+
 	if (loc->pkt != NULL) {
 		if (!PML_EXPR_IS_LITERAL(loc->pkt))
 			return 0;
@@ -3116,7 +3116,7 @@ static int pfref_check_fixed(struct pmlncg *cg, struct pml_locator *loc,
 			return 0;
 		if (off >= len) {
 			cgerr(cg, "offset out of range for field '%s':"
-				  " %lu >= %lu", 
+				  " %lu >= %lu",
 			      loc->name, (ulong)off, (ulong)len);
 			return -1;
 		}
@@ -3165,7 +3165,7 @@ int cg_assign_pkt_bitfield(struct pmlncg *cg, struct pml_assign *a)
 	if (bytelen > 4) {
 		cgerr(cg, "code gen can not currently support 4-byte bitfields"
 			  "overlapping bytes at both ends");
-		return -1; 
+		return -1;
 	}
 
 	/* so we have bitoff at the front and remlen at the end */
@@ -3231,7 +3231,7 @@ int cg_assign_pktfld(struct pmlncg *cg, struct pml_assign *a)
 			if (cg_pdop(cg, &cgpd) < 0)
 				return -1;
 			return 0;
-		} 
+		}
 	} else if (etype == PML_ETYPE_MASKVAL) {
 		if (typecast(cg, PML_ETYPE_BYTESTR, etype) < 0)
 			return -1;
@@ -3490,7 +3490,7 @@ static int cg_funcs(struct pmlncg *cg)
 			intr = find_intrinsic(f);
 			if (intr == NULL) {
 				cgerr(cg, "cg_funcs: unable to find codegen "
-					  "for intrinsic function '%s'", 
+					  "for intrinsic function '%s'",
 				      f->name);
 				return -1;
 			}
@@ -3545,7 +3545,7 @@ static int add_regexes(struct pmlncg *cg, struct pml_literal **rexarr,
 		--nrex;
 		++rexarr;
 	}
-	
+
 	return 0;
 }
 

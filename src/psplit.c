@@ -35,7 +35,7 @@
  * more than MAXLIVE files open at a time.  To make sure that it can
  * still track more flows than that, it keeps a list of the open files
  * in LRU order.  If there are more than MAXLIVE flows (including
- * packets without any flow ID, which go in a single trace file) then 
+ * packets without any flow ID, which go in a single trace file) then
  * the application closes the LRU file before opening a new one.  It
  * keeps track of all the flows that it has seen whether the file handle
  * for it is open or not in a splay tree.
@@ -192,7 +192,7 @@ struct flowfile *new_flowfile(uint64_t flowid)
 	ff->fp = NULL;
 	ff->npkts = 0;
 	if (flowid != INVALID_FID)
-		rv = str_fmt(ff->filename, MAXFNAME, "%s%lu%s", prefix, 
+		rv = str_fmt(ff->filename, MAXFNAME, "%s%lu%s", prefix,
 			     (ulong)flowid, suffix);
 	else
 		rv = str_fmt(ff->filename, MAXFNAME, "%snofid%s", prefix,
@@ -239,7 +239,7 @@ struct flowfile *find_flowfile(uint64_t flowid)
 	} else {
 		/*
 		 * if the file is not open then open it for appending
-		 * if there are too many open, dequeue the LRU and close 
+		 * if there are too many open, dequeue the LRU and close
 		 * it before opening a new one.
 		 */
 		if (nlive >= MAXLIVE) {

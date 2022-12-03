@@ -37,8 +37,8 @@
 /* --------- Xpkt Coprocessor --------- */
 
 
-/* 
- * Tag descriptor value format: 
+/*
+ * Tag descriptor value format:
  *  | idx(16) | tag type(8) | pkt(8) |
  */
 
@@ -93,9 +93,9 @@ void fini_xpkt_cp(struct netvm_xpkt_cp *cp);
 
 enum {
 	/*
-	 * For all operations except PRSTRI, w is the pad width. 
+	 * For all operations except PRSTRI, w is the pad width.
 	 * pad to the left if (z & NETVM_CPOC_LJUST) and right
-	 * otherwise. Numbers get padded with zeros and other 
+	 * otherwise. Numbers get padded with zeros and other
 	 * types get padded with spaces.
 	 *
 	 * if (z & NETVM_CPOC_NEWLINE) is set, add a newline to the
@@ -125,7 +125,7 @@ enum {
 
 #define NETVM_CPOC_LJUST	1
 #define NETVM_CPOC_NEWLINE	2
-	
+
 
 
 struct netvm_outport_cp {

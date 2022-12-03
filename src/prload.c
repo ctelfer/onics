@@ -121,7 +121,7 @@ void load_external_protocols()
 	DIR *dir;
 	struct dirent *ent;
 	char *path;
-	
+
 	dir = opendir(ONICS_PROTO_DIR);
 	if (dir == NULL)
 		return;

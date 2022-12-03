@@ -94,7 +94,7 @@ void parse_args(int argc, char *argv[])
 void init_ifsock()
 {
 	struct ifreq ifr;
-	struct sockaddr_ll sll; 
+	struct sockaddr_ll sll;
 
 	g_ifsock = socket(AF_PACKET, SOCK_RAW, htons(ETH_P_ALL));
 	if (g_ifsock < 0)

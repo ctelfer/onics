@@ -103,7 +103,7 @@ struct pmllex {
 	struct pmll_val		tokx;
 
 	char			errbuf[PMLLEX_MAXESTR];
-	
+
 	void *			ctx;
 	pmll_eoi_f		eoicb;
 };
@@ -116,7 +116,7 @@ struct pmllex {
 struct keyword {
 	const char *	name;
 	int		tok;
-} keywords[] = { 
+} keywords[] = {
 	{ "BEGIN",	PMLTOK_BEGIN },
 	{ "TICK",	PMLTOK_TICK },
 	{ "END",	PMLTOK_END },
@@ -390,7 +390,7 @@ static void popinput(struct pmllex *lex)
 
 static int addc(struct dynbuf *dyb, int ch)
 {
-	if (dyb->len >= dyb->size) { 
+	if (dyb->len >= dyb->size) {
 		if (dyb_resv(dyb, dyb->size + 32) < 0)
 			return -1;
 		abort_unless(dyb->off == 0);
@@ -516,7 +516,7 @@ static int skip_ws(struct pmllex *lex)
 }
 
 
-/* 
+/*
    check that all the characters except for the last in the lex string are
    hex digits.
  */
@@ -652,7 +652,7 @@ static int setsval(struct pmllex *lex, int countnull)
 	lex->tokx.u.raw.data = dyb_release(sb);
 	if (!countnull)
 		lex->tokx.u.raw.len -= 1;
-	
+
 	return 0;
 }
 
@@ -699,7 +699,7 @@ static int read_str(struct pmllex *lex, int quote)
 			case 'f':  ch = '\f'; break;
 			case 'r':  ch = '\r'; break;
 			case '\n': incr_lineno(lex); break;
-			case 'x': 
+			case 'x':
 				if ((d1 = inp_getc(in)) < 0 || !isxdigit(d1) ||
 				    (d2 = inp_getc(in)) < 0 || !isxdigit(d2)) {
 					pmll_err(lex, 1, "short hex char");
@@ -764,7 +764,7 @@ static int read_op(struct pmllex *lex, int ch)
 		if (ch2 == '-') { tok = PMLTOK_PPBEGIN; break; }
 		goto err; /* no other tokens starting with '?' */
 
-	case '=': 
+	case '=':
 		ch2 = nextc(lex);
 		if (ch2 == '=') { tok = PMLTOK_EQ; break; }
 		if (ch2 == '~') { tok = PMLTOK_MATCH; break; }
@@ -780,16 +780,16 @@ static int read_op(struct pmllex *lex, int ch)
 
 	case '<':
 		ch2 = nextc(lex);
-		if (ch2 == '=') { tok = PMLTOK_LEQ; break; } 
-		if (ch2 == '<') { tok = PMLTOK_SHL; break; } 
+		if (ch2 == '=') { tok = PMLTOK_LEQ; break; }
+		if (ch2 == '<') { tok = PMLTOK_SHL; break; }
 		pushback(lex, ch2);
 		tok = PMLTOK_LT;
 		break;
 
 	case '>':
 		ch2 = nextc(lex);
-		if (ch2 == '=') { tok = PMLTOK_GEQ; break; } 
-		if (ch2 == '>') { tok = PMLTOK_SHR; break; } 
+		if (ch2 == '=') { tok = PMLTOK_GEQ; break; }
+		if (ch2 == '>') { tok = PMLTOK_SHR; break; }
 		pushback(lex, ch2);
 		tok = PMLTOK_GT;
 		break;
@@ -827,7 +827,7 @@ static int read_hexstr(struct pmllex *lex)
 	int ch2;
 	unsigned char v = 0;
 	ulong nx = 0;
-	
+
 	if (ch != 'x') {
 		pmll_err(lex, 1, "invalid token following \\");
 		return -1;
@@ -869,7 +869,7 @@ static int read_ipv4_after_one_octet(struct pmllex *lex)
 	int i, ch;
 	uint v[4];
 	byte_t *p;
-	
+
 	pushback(lex, '.');
 	for (i = 0 ; i < 3; ++i) {
 		if ((ch = nextc(lex)) != '.')
@@ -913,7 +913,7 @@ static int read_num(struct pmllex *lex, int ich)
 				return -1;
 			}
 		}
-	} 
+	}
 
 	while (ch >= 0 && isxdigit(ch))
 		ch = nextc(lex);
@@ -944,7 +944,7 @@ int pmll_nexttok(struct pmllex *lex, struct pmll_val *v)
 {
 	int ch;
 	int rv;
-	
+
 	pmllv_init(&lex->tokx);
 	resetbuf(lex);
 
@@ -973,7 +973,7 @@ int pmll_nexttok(struct pmllex *lex, struct pmll_val *v)
 		*v = lex->tokx;
 		pmllv_init(&lex->tokx);
 	}
-	
+
 	return rv;
 }
 

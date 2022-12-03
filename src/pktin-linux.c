@@ -179,7 +179,7 @@ void init_ifsock()
 {
 	int rv;
 	struct ifreq ifr;
-	struct sockaddr_ll sll; 
+	struct sockaddr_ll sll;
 	struct packet_mreq mr;
 
 	g_ifsock = socket(AF_PACKET, SOCK_RAW, htons(ETH_P_ALL));

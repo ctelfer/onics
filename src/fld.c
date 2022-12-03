@@ -414,7 +414,7 @@ int fld_get_bi(byte_t *sp, struct pdu *plist, struct ns_pktfld *pf, uint idx,
 		if (len > flen)
 			len = flen;
 		memmove(dp, sp + off, len);
-	}	
+	}
 
 	return 0;
 }
@@ -660,7 +660,7 @@ static int add_fields(struct npf_list *npfl, struct pdu *pdu,
 			npf = npf_new(pdu, npfl->buf, (struct ns_elem *)ns);
 			if (npf == NULL)
 				return -1;
-		
+
 			insert_field(npfl, npf);
 		}
 	}
@@ -705,7 +705,7 @@ void npfl_init(struct npf_list *npfl, struct pdu *plist, byte_t *buf)
 	npfl->nfields = 0;
 	npfl->ngaps = 0;
 }
-		      
+
 
 static void clear_nonflds(struct npf_list *npfl, ulong soff, ulong eoff,
 			  int pduonly)
@@ -816,9 +816,9 @@ static int fill_gaps(struct npf_list *npfl, struct pdu *opdu)
 	if (ipdu != NULL && pdu_eoff(ipdu) * 8 >= eoff) {
 		eoff = pdu_soff(ipdu) * 8;
 	} else {
-		/* 
-		 * add parse NPFs as placeholders to simplify gap 
-		 * insertion. We only insert gaps that are in the 
+		/*
+		 * add parse NPFs as placeholders to simplify gap
+		 * insertion. We only insert gaps that are in the
 		 * outer pdu, but not enclosed in any of the inner pdus.
 		 */
 		for ( ; ipdu != NULL; ipdu = pdu_next_in_region(ipdu, opdu)) {
@@ -840,7 +840,7 @@ static int fill_gaps(struct npf_list *npfl, struct pdu *opdu)
 		}
 
 		/* Do NOT skip field offsets for namespace elements */
-		if (after != NULL && 
+		if (after != NULL &&
 		    (after->nse == NULL || after->nse->type == NST_PKTFLD)) {
 			onext = after->off + after->len;
 			if (onext > ohi)
@@ -952,7 +952,7 @@ int npf_eq(struct npfield *npf1, struct npfield *npf2)
 
 	} else if (npf1->len < 32) {
 
-		return getbits(npf1->buf, npf1->off, len) == 
+		return getbits(npf1->buf, npf1->off, len) ==
 		       getbits(npf2->buf, npf2->off, len);
 
 	} else {

@@ -70,34 +70,34 @@ EXAMPLES
     pc2xpkt in.pcap out.xpkt
 
     # Extract the packets 3 through 10 from a packet stream
-    pxtr 3,10 file.xpkt 
-  
+    pxtr 3,10 file.xpkt
+
     # Read from an interface using libpcap and dump to an xpkt file
     pktin eth0 out.xpkt
-  
+
     # Join two xpkt files into one.  (note: you can't do this with pcap
     # files, but can with xpkt)
-    cat XPFILE1 XPFILE2 > XPFILE3 
-  
-    # Send an xpkt file to tcpdump for dissecting (why? to demonstrate tool 
+    cat XPFILE1 XPFILE2 > XPFILE3
+
+    # Send an xpkt file to tcpdump for dissecting (why? to demonstrate tool
     # integration)
-    xpkt2pc XPKTFILE | tcpdump -vvvvs 0 -r - 
-  
+    xpkt2pc XPKTFILE | tcpdump -vvvvs 0 -r -
+
     # Full pipeline of translations:
     # pcap -> xpkt -> hexpkt -> xpkt -> pcap -> tcpdump output -> less
     pc2xpkt in.pcap | x2hpkt -x | h2xpkt | xpkt2pc | tcpdump -nvXs 0 -r - | less
 
     # Create a packet layer by layer and send out eth0
     echo "hello world" | rawpkt | tcpwrap | ipwrap | ethwrap | pktout eth0
-  
-  
+
+
     #
     # Now for some cooler stuff
     #
-  
+
     # Read all packets from one interface, toggle their DF bits and send
     # them out a different interface.
-    pktin eth2 | 
+    pktin eth2 |
       pml -e '?- ip -? { ip.df = ip.df ^ 1 ; fix_csums(0); }' |
       pktout eth3
 
@@ -110,14 +110,14 @@ EXAMPLES
       { n = n + 1; }
     EOF
     pml -f x.pml in.xpkt | ipfrag -m 777 > out.xpkt
-  
+
 
     # Print an error for every TCP packet that has evil in it.
-    pcapin -i IFACE1 | 
+    pcapin -i IFACE1 |
       pml -e '
         int n = 0;
         { n = n + 1; }
-        ?- tcp and tcp.payload =~ `[eE][vV][iI][lL]` -? { 
+        ?- tcp and tcp.payload =~ `[eE][vV][iI][lL]` -? {
             print "Packet ", n, " is evil\n";
         }' >/dev/null
 
@@ -246,12 +246,12 @@ The tools in the suite and their underlying components were designed
 with several principles in mind.
 
  * Self-contained -- The intent is to ultimately have these tools only
-    require a compliant C compiler to build.  
+    require a compliant C compiler to build.
 
  * Pluggable -- One should be able to plug new tools in without changing
     the existing ones.
 
- * Protocol agnostic -- The tools should be able to adapt to 
+ * Protocol agnostic -- The tools should be able to adapt to
     new protocols without changing the main tool code.
 
  * Simple -- Each tool should do a few things well and no more.

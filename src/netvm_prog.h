@@ -27,8 +27,8 @@
  * and then there are rule snippits to run on each packet in the stream.
  * NetVM itself is not tied to this mode of operation.  So, perhaps this file
  * should be renamed to be a bit more clear.  This file format is the one
- * that the NetVM assembler (nvmas) currently targets and th NetVM packet 
- * filter (nvmpf) currently runs.  
+ * that the NetVM assembler (nvmas) currently targets and th NetVM packet
+ * filter (nvmpf) currently runs.
  *
  * This API provides the following:
  *  - An external file format for NetVM programs
@@ -43,8 +43,8 @@
 #include "netvm.h"
 #include <stdio.h>
 
-/* 
- * status conditions to be handled by the runtime environment 
+/*
+ * status conditions to be handled by the runtime environment
  *
  *  - DONE expects a single boolean value on the stack.  It
  *    indicates that the program should halt the current processing
@@ -60,15 +60,15 @@
  *
  *  - SEND expects a packet number on the stack.  It indicates for
  *    the runtime to transmit the packet and then re-enter execution.
- * 
+ *
  *  - SENDKEEP expects a packet number on the stack.  It indicates for
  *    the runtime to transmit the packet and then re-enter execution.
  *    Unlike other transmits, this one should not free the packet buffer.
- * 
+ *
  *  - EXIT expects a value on the stack.  It indicates that all
  *    processing should immediately cease and the process should
  *    should exit with the value on the stack modulo 256.
- */ 
+ */
 #define NVMP_STATUS_DONE   	NETVM_STATUS_STOPPED
 #define NVMP_STATUS_SENDALL	NETVM_STATUS_RTDEF0
 #define NVMP_STATUS_DROPALL	NETVM_STATUS_RTDEF1
@@ -100,7 +100,7 @@ enum {
 	NVMP_EP_NUMEP,
 };
 struct netvm_program {
-	int			matchonly;		
+	int			matchonly;
 	struct netvm_inst *	inst;
 	uint			ninst;
 	uint			eps[NVMP_EP_NUMEP];
@@ -131,7 +131,7 @@ int nvmp_exec(struct netvm *vm, struct netvm_program *prog, int ep, int maxcycle
 	      ulong *vmrv);
 
 /*
- * NetVM Program file format: 
+ * NetVM Program file format:
  *
  * All multibyte fields are stored big endian.
  * For simplicity, each base field is a 32-bit unsigned integer.
@@ -141,7 +141,7 @@ int nvmp_exec(struct netvm *vm, struct netvm_program *prog, int ep, int maxcycle
  *  -- 3 -- number of co-processor requirements
  *  -- 4 -- number of segment sections
  *  -- 5 -- number of mem inits
- *  -- 6 -- mem initialization length 
+ *  -- 6 -- mem initialization length
  *  -- 7 -- initialization entry point
  *  -- 8 -- packet entry point
  *  -- 9 -- tick entry point
@@ -198,8 +198,8 @@ int nvmp_exec(struct netvm *vm, struct netvm_program *prog, int ep, int maxcycle
 #define NVMP_RDE_BADSEGL  12
 #define NVMP_RDE_MITOTLEN 13
 #define NVMP_RDE_MILEN    14
-#define NVMP_RDE_MISEG    15 
-#define NVMP_RDE_MIOFFLEN 17 
+#define NVMP_RDE_MISEG    15
+#define NVMP_RDE_MIOFFLEN 17
 #define NVMP_RDE_OOMEM	  18
 #define NVMP_RDE_BADEP    19
 

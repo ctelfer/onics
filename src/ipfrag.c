@@ -188,7 +188,7 @@ static int frag_action(struct pktbuf *p)
 		/* so if frag6 is non-zero we assume we should fragment. */
 		if (pdu->error != 0 || pdu_totlen(pdu) <= mtu)
 			return PASS;
-		else if (pdu_off_valid(pdu, PDU_IPV6FLD_FRAGH) || 
+		else if (pdu_off_valid(pdu, PDU_IPV6FLD_FRAGH) ||
 			 pdu_off_valid(pdu, PDU_IPV6FLD_AHH))
 			return DROP;
 		else
@@ -269,7 +269,7 @@ static int fragment_v4(struct pktbuf *p)
 		++nextid;
 	}
 
-	/* 
+	/*
 	 * Next we need to generate the new header copying the
 	 * necessary options from the old header.  It may be shorter.
 	 */
@@ -278,9 +278,9 @@ static int fragment_v4(struct pktbuf *p)
 	if (nhlen < 0)
 		return -1;
 	nhlen += 20;
-	
-	/* 
-	 * Next generate first fragment:  original header plus 
+
+	/*
+	 * Next generate first fragment:  original header plus
 	 * (MTU - old_hdr_len) / 8 bytes of data.
 	 */
 	/* Check that fragment won't overflow. */
@@ -306,10 +306,10 @@ static int fragment_v4(struct pktbuf *p)
 	pdu_cut(pdu, p->buf, nhlen, ohlen - nhlen + nb * 8, 1);
 	foff += nb;
 
-	/* 
+	/*
 	 * Now enter a loop to generate the middle fragments.  This is
 	 * simpler because the IP header mostly stays the same.  Only
-	 * the fragment offset will change. 
+	 * the fragment offset will change.
 	 */
 	ip = pdu_header(pdu, p->buf, struct ipv4h);
 	nb = (mtu - nhlen) / 8;
@@ -341,7 +341,7 @@ static ulong find_v6_fragoff(struct pktbuf *p, uint8_t *nxth, uint8_t **fhp)
 	struct pdu *pdu = p->layers[PKB_LAYER_NET];
 	struct ipv6h *ip6;
 	byte_t *o;
-	/* 
+	/*
 	 * see RFC2460. If route header is present, fragment after it.
 	 * Else if hop-by-hop options present, fragment after it.  Else
 	 * fragment after the base header.
@@ -350,7 +350,7 @@ static ulong find_v6_fragoff(struct pktbuf *p, uint8_t *nxth, uint8_t **fhp)
 		o = p->buf + pdu->offs[PDU_IPV6FLD_RTOPT];
 		*nxth = o[0];
 		*fhp = o;
-		return o[1] * 8 + 8 + 
+		return o[1] * 8 + 8 +
 		       pdu->offs[PDU_IPV6FLD_FRAGH] - pdu_soff(pdu);
 	} else if (pdu_off_valid(pdu, PDU_IPV6FLD_HOPOPT)) {
 		o = p->buf + pdu->offs[PDU_IPV6FLD_HOPOPT];
@@ -383,11 +383,11 @@ static int fragment_v6(struct pktbuf *p)
 
 	id = nextid++;
 
-	/* 
+	/*
 	 * Start by finding where the fragment header will go.  We need
 	 * the packet offset, the length of data from l2 through the
 	 * end of said header and the length of the extension headers
-	 * through said fragment header. 
+	 * through said fragment header.
 	 */
 	fho = find_v6_fragoff(p, &nxth, &fhp);
 	hl = fho + 8 + pdu_soff(pdu)- pkb_get_off(p);
@@ -400,7 +400,7 @@ static int fragment_v6(struct pktbuf *p)
 
 	/* insert 8 bytes for the fragment header */
 	*fhp = IPPROT_V6_FRAG_HDR;
-	pdu_inject(pdu, p->buf, fho, 8, 0); 
+	pdu_inject(pdu, p->buf, fho, 8, 0);
 	pdu->offs[PDU_IPV6FLD_FRAGH] = pdu_soff(pdu) + fho;
 
 	/* build the fragment header for the first fragment */

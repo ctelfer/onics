@@ -68,8 +68,8 @@ void pmll_ipath_reset(struct pmllex *lex);
  */
 int pmll_ipath_append(struct pmllex *lex, const char *dir);
 
-/* 
- * Add an input string to the queue.  If 'front' is non-zero then add to the 
+/*
+ * Add an input string to the queue.  If 'front' is non-zero then add to the
  * front of the queue, otherwise add to the back.
  */
 int pmll_add_instr(struct pmllex *lex, const char *s, int front,

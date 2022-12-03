@@ -40,7 +40,7 @@ int main(int argc, char *argv[])
 	uchar nip[4] = "\x0b\x0c\x0d\x0e";
 	ulong len;
 	void *pld;
-	
+
 	register_std_proto();
 	pkb_init_pools(1);
 

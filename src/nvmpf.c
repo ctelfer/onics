@@ -155,7 +155,7 @@ int main(int argc, char *argv[])
 	fclose(pf);
 
 	initvm(&vm, vmstk, array_length(vmstk), &cproc, &fe, stderr, &prog);
-	
+
 	if (ignore_errors)
 		flags |= NVMP_RUN_IGNORE_ERR;
 	if (single_step)

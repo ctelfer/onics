@@ -236,7 +236,7 @@ void parse_args(int argc, char *argv[])
 {
 	int rv;
 	struct clopt *opt;
-	
+
 	progname = argv[0];
 	optparse_reset(&g_oparse, argc, argv);
 	while (!(rv = optparse_next(&g_oparse, &opt))) {

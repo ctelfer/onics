@@ -92,16 +92,16 @@ static int typecheck(int stype, int dtype)
 
 	case PML_ETYPE_BYTESTR:
 		valid = dtype == PML_ETYPE_VOID ||
-		        dtype == PML_ETYPE_SCALAR || 
-		        dtype == PML_ETYPE_BYTESTR || 
+		        dtype == PML_ETYPE_SCALAR ||
+		        dtype == PML_ETYPE_BYTESTR ||
 			dtype == PML_ETYPE_STRREF;
 		break;
 
 	case PML_ETYPE_MASKVAL:
 		valid = dtype == PML_ETYPE_VOID ||
-		        dtype == PML_ETYPE_SCALAR || 
+		        dtype == PML_ETYPE_SCALAR ||
 		        dtype == PML_ETYPE_BYTESTR ||
-		        dtype == PML_ETYPE_MASKVAL; 
+		        dtype == PML_ETYPE_MASKVAL;
 		break;
 
 	case PML_ETYPE_STRREF:
@@ -168,7 +168,7 @@ static union pml_node *symtab_lookup(struct pml_symtab *t, const char *s)
 }
 
 
-static int symtab_add(struct pml_symtab *t, struct pml_sym *sym) 
+static int symtab_add(struct pml_symtab *t, struct pml_sym *sym)
 {
 	uint h;
 	struct hnode *hn;
@@ -185,7 +185,7 @@ static int symtab_add(struct pml_symtab *t, struct pml_sym *sym)
 }
 
 
-static void symtab_rem(struct pml_sym *sym) 
+static void symtab_rem(struct pml_sym *sym)
 {
 	ht_rem(&sym->hn);
 	l_rem(&sym->ln);
@@ -221,7 +221,7 @@ static void symtab_adj_var_addrs(struct pml_symtab *t)
 	abort_unless(t);
 	sym_for_each(n, t) {
 		v = (struct pml_variable *)l_to_node(n);
-		abort_unless(v->vtype == PML_VTYPE_GLOBAL || 
+		abort_unless(v->vtype == PML_VTYPE_GLOBAL ||
 			     v->vtype == PML_VTYPE_CONST);
 		if ((v->vtype == PML_VTYPE_GLOBAL) && (v->init == NULL))
 			v->addr += t->addr_rw1;
@@ -243,10 +243,10 @@ static int add_resv_var(struct pml_ast *ast, const char *name,
 	v->etype = type;
 	v->width = size;
 	v->name = vname;
-	
+
 	rv = symtab_add(t, (struct pml_sym *)v);
 	abort_unless(rv >= 0);
-	
+
 	return 0;
 }
 
@@ -424,25 +424,25 @@ static struct pml_intrinsic stdintr[] = {
 		{ _INTP(pnum) } },
 	{ "meta_set_seq", PML_ETYPE_VOID, 2, 0, NULL,
 		{ _INTP(pnum), _INTP(val) } },
-	{ "meta_has", PML_ETYPE_SCALAR, 2, 0, NULL, 
+	{ "meta_has", PML_ETYPE_SCALAR, 2, 0, NULL,
 		{ _INTP(pnum), _INTP(type), } },
-	{ "meta_add", PML_ETYPE_VOID, 2, 0, NULL, 
+	{ "meta_add", PML_ETYPE_VOID, 2, 0, NULL,
 		{ _INTP(pnum), _INTP(type), } },
-	{ "meta_add_info", PML_ETYPE_VOID, 2, 0, NULL, 
+	{ "meta_add_info", PML_ETYPE_VOID, 2, 0, NULL,
 		{ _INTP(pnum), _INTP(numw), } },
-	{ "meta_rem", PML_ETYPE_VOID, 2, 0, NULL, 
+	{ "meta_rem", PML_ETYPE_VOID, 2, 0, NULL,
 		{ _INTP(pnum), _INTP(type), } },
-	{ "meta_rd8", PML_ETYPE_SCALAR, 3, 0, NULL, 
+	{ "meta_rd8", PML_ETYPE_SCALAR, 3, 0, NULL,
 		{ _INTP(pnum), _INTP(type), _INTP(off) } },
-	{ "meta_rd16", PML_ETYPE_SCALAR, 3, 0, NULL, 
+	{ "meta_rd16", PML_ETYPE_SCALAR, 3, 0, NULL,
 		{ _INTP(pnum), _INTP(type), _INTP(off) } },
-	{ "meta_rd32", PML_ETYPE_SCALAR, 3, 0, NULL, 
+	{ "meta_rd32", PML_ETYPE_SCALAR, 3, 0, NULL,
 		{ _INTP(pnum), _INTP(type), _INTP(off) } },
-	{ "meta_wr8", PML_ETYPE_VOID, 4, 0, NULL, 
+	{ "meta_wr8", PML_ETYPE_VOID, 4, 0, NULL,
 		{ _INTP(pnum), _INTP(type), _INTP(off), _INTP(val) } },
-	{ "meta_wr16", PML_ETYPE_VOID, 4, 0, NULL, 
+	{ "meta_wr16", PML_ETYPE_VOID, 4, 0, NULL,
 		{ _INTP(pnum), _INTP(type), _INTP(off), _INTP(val) } },
-	{ "meta_wr32", PML_ETYPE_VOID, 4, 0, NULL, 
+	{ "meta_wr32", PML_ETYPE_VOID, 4, 0, NULL,
 		{ _INTP(pnum), _INTP(type), _INTP(off), _INTP(val) } },
 	{ "exit", PML_ETYPE_VOID, 1, 0, NULL,
 		{ _INTP(rval) } },
@@ -578,8 +578,8 @@ int pml_check_func_proto(struct pml_ast *ast, struct pml_function *f1,
 	for (i = 0; i < f1->arity; ++i) {
 		v1 = (struct pml_variable *)l_to_node(n1);
 		v2 = (struct pml_variable *)l_to_node(n2);
-		if (v1->etype != v2->etype || 
-		    v1->width != v2->width || 
+		if (v1->etype != v2->etype ||
+		    v1->width != v2->width ||
 		    strcmp(v1->name, v2->name) != 0) {
 			pml_ast_err(ast, "Parameter %d (%s/%s) in function '%s' does"
 					 " not match prototype declaration",
@@ -636,9 +636,9 @@ int pml_ast_add_intrinsic(struct pml_ast *ast, struct pml_intrinsic *intr)
 	int i;
 
 	abort_unless(intr && intr->name && intr->arity >= 0 && ast);
-	abort_unless((intr->flags & 
+	abort_unless((intr->flags &
 			~(PML_FF_INLINE|PML_FF_INTRINSIC|PML_FF_PCONST)) == 0);
-	
+
 
 	if (symtab_lookup(&ast->funcs, intr->name) != NULL) {
 		pml_ast_err(ast, "Duplicate function: %s\n", intr->name);
@@ -691,7 +691,7 @@ int pml_ast_add_var(struct pml_ast *ast, struct pml_variable *var)
 		/* NOTE: pad global vars to PML_SCALAR_SIZE-byte sizes */
 		max = (uint32_t)-1 - ast->vars.addr_rw1 - ast->vars.addr_rw2;
 		if (rup2_32(var->width, PML_LG2_SCALAR_SIZE) > max) {
-			pml_ast_err(ast, 
+			pml_ast_err(ast,
 				    "global read-write address space overflow");
 			return -1;
 		}
@@ -699,7 +699,7 @@ int pml_ast_add_var(struct pml_ast *ast, struct pml_variable *var)
 			var->addr = ast->vars.addr_rw1;
 			ast->vars.addr_rw1 +=
 				rup2_32(var->width, PML_LG2_SCALAR_SIZE);
-		} else { 
+		} else {
 			var->addr = ast->vars.addr_rw2;
 			ast->vars.addr_rw2 +=
 				rup2_32(var->width, PML_LG2_SCALAR_SIZE);
@@ -762,7 +762,7 @@ int pml_ast_add_rule(struct pml_ast *ast, struct pml_rule *rule)
 
 struct pml_variable *pml_func_lookup_param(struct pml_function *f, char *s)
 {
-	struct pml_variable *v = 
+	struct pml_variable *v =
 		(struct pml_variable *)symtab_lookup(&f->vars, s);
 	if (v && v->vtype == PML_VTYPE_PARAM)
 		return v;
@@ -1200,7 +1200,7 @@ struct pml_cfmod *pml_cfmod_alloc(int type, union pml_expr_u *val)
 }
 
 
-union pml_expr_u *pml_binop_alloc(int op, union pml_expr_u *left, 
+union pml_expr_u *pml_binop_alloc(int op, union pml_expr_u *left,
 		                  union pml_expr_u *right)
 {
 	struct pml_op *o = pmln_alloc(PMLTT_BINOP);
@@ -1466,14 +1466,14 @@ static const char *efs(void *p, char s[80])
 				    PML_EFLAG_PCONST|
 				    PML_EFLAG_VARLEN)) == 0);
 
-	snprintf(s, 80, "[%s; width=%lu]", eflag_strs[e->eflags], 
+	snprintf(s, 80, "[%s; width=%lu]", eflag_strs[e->eflags],
 		 e->width);
 	return s;
 }
 
 
 static const char *etype_strs[] = {
-	"unknown", "void", "scalar", "byte string", "masked string", 
+	"unknown", "void", "scalar", "byte string", "masked string",
 	"string reference"
 };
 static const char *ets(void *p) {
@@ -1579,14 +1579,14 @@ static const char *cfm_strs[] = {
 };
 static const char *cfmstr(struct pml_cfmod *m)
 {
-	abort_unless(m && m->cftype >= PML_CFM_UNKNOWN && 
+	abort_unless(m && m->cftype >= PML_CFM_UNKNOWN &&
 		     m->cftype <= PML_CFM_SENDNOFREE);
 	return cfm_strs[m->cftype];
 }
 
 
 static const char *rpfld_strs[] = {
-	"**UNALLOWED**", "exists", 
+	"**UNALLOWED**", "exists",
 	"hlen", "plen", "tlen", "totlen", "error", "prid",
 	"index", "header", "payload", "trailer", "pdu"
 };
@@ -1656,8 +1656,8 @@ void pmlt_print(struct pml_ast *ast, union pml_node *np, uint depth)
 		struct pml_literal *p = &np->literal;
 		indent(depth);
 		printf("Scalar %s -- width %d: %ld (%lu,0x%lx)\n",
-		       efs(p, estr), (unsigned)p->width, 
-		       (long)signxul(p->u.scalar, 32), 
+		       efs(p, estr), (unsigned)p->width,
+		       (long)signxul(p->u.scalar, 32),
 		       (p->u.scalar & 0xFFFFFFFFul),
 		       (p->u.scalar & 0xFFFFFFFFul));
 	} break;
@@ -1719,9 +1719,9 @@ void pmlt_print(struct pml_ast *ast, union pml_node *np, uint depth)
 	case PMLTT_LOCADDR: {
 		struct pml_locator *p = &np->locator;
 		indent(depth);
-		printf("%s: %s(%s) %s\n", 
-		       (p->type == PMLTT_LOCATOR) ? 
-		           "Locator"              : 
+		printf("%s: %s(%s) %s\n",
+		       (p->type == PMLTT_LOCATOR) ?
+		           "Locator"              :
 			   "Location Address",
 		       rts(p), p->name, efs(p, estr));
 
@@ -1825,7 +1825,7 @@ void pmlt_print(struct pml_ast *ast, union pml_node *np, uint depth)
 	case PMLTT_PRINT: {
 		struct pml_print *p = &np->print;
 		indent(depth);
-		printf("Print Statement: type: %s, width:%lu, flags:%s\n", 
+		printf("Print Statement: type: %s, width:%lu, flags:%s\n",
 		       fmtstr(p), p->width, fflagstr(p));
 		if (p->expr != NULL) {
 			indent(depth);
@@ -1944,7 +1944,7 @@ int pmln_walk(union pml_node *np, void *ctx, pml_walk_f pre, pml_walk_f in,
 
 	if (np == NULL)
 		return 0;
-	
+
 	if (pre != NULL) {
 		rv = (*pre)(np, ctx, xstk);
 		if (rv < 0)
@@ -2296,7 +2296,7 @@ static int find_reserved_pktfld(const char *field)
 }
 
 
-struct pml_literal *pml_lookup_ns_literal(struct pml_ast *ast, 
+struct pml_literal *pml_lookup_ns_literal(struct pml_ast *ast,
 					  struct pml_locator *l)
 {
 	struct pml_literal *lit = NULL;
@@ -2411,7 +2411,7 @@ int pml_locator_resolve_nsref(struct pml_ast *ast, struct pml_locator *l)
 	if (e == NULL)
 		return 0;
 
-	if (rpf != PML_RPF_NONE && e->type != NST_NAMESPACE && 
+	if (rpf != PML_RPF_NONE && e->type != NST_NAMESPACE &&
 	    e->type != NST_PKTFLD) {
 		pml_ast_err(ast, "'%s' is an illegal field\n", l->name);
 		return -1;
@@ -2445,7 +2445,7 @@ int pml_locator_resolve_nsref(struct pml_ast *ast, struct pml_locator *l)
 		l->u.nsref = e;
 		l->reftype = PML_REF_PKTFLD;
 		l->rpfld = rpf;
-		if (rpf != PML_RPF_NONE && 
+		if (rpf != PML_RPF_NONE &&
 		    (rpf != PML_RPF_EXISTS || pf->prid == PRID_INVALID)) {
 			pml_ast_err(ast, "'%s' is an invalid protocol field\n",
 				    l->name);
@@ -2510,7 +2510,7 @@ int pml_locator_resolve_nsref(struct pml_ast *ast, struct pml_locator *l)
 
 	case NST_MASKSTR:
 		/* can not have packet, index, offset or length for masks */
-		if (l->pkt != NULL || l->idx != NULL || l->off != NULL || 
+		if (l->pkt != NULL || l->idx != NULL || l->off != NULL ||
 		    l->len != NULL) {
 			pml_ast_err(ast, "fields illegal for mask value\n");
 			return -1;
@@ -2543,7 +2543,7 @@ struct pml_resolve_ctx {
 };
 
 
-static struct pml_variable *rlookup(struct pml_resolve_ctx *ctx, 
+static struct pml_variable *rlookup(struct pml_resolve_ctx *ctx,
 				    const char *name)
 {
 	int i;
@@ -2568,21 +2568,21 @@ static int resolve_locsym(struct pml_resolve_ctx *ctx, struct pml_locator *l)
 	struct pml_symtab *t;
 
 	/* check if already resolved */
-	if ((l->reftype != PML_REF_UNKNOWN) && 
+	if ((l->reftype != PML_REF_UNKNOWN) &&
 	    (l->reftype != PML_REF_UNKNOWN_NS_ELEM))
 		return 0;
 
-	if ((l->reftype == PML_REF_UNKNOWN_NS_ELEM) || 
+	if ((l->reftype == PML_REF_UNKNOWN_NS_ELEM) ||
 	    (l->reftype == PML_REF_UNKNOWN)) {
 		rv = pml_locator_resolve_nsref(ctx->ast, l);
 		if (rv < 0) {
 			pml_ast_err(ctx->ast,
-				    "Internal error resolving field '%s'\n", 
+				    "Internal error resolving field '%s'\n",
 				    l->name);
 			return -1;
 		}
 		if ((rv == 0) && (l->reftype == PML_REF_UNKNOWN_NS_ELEM)) {
-			pml_ast_err(ctx->ast, 
+			pml_ast_err(ctx->ast,
 				    "Unable to resolve protocol field '%s'\n",
 				    l->name);
 			return -1;
@@ -2626,14 +2626,14 @@ int check_nsref_assignment(struct pml_ast *ast, struct pml_assign *a)
 	if (loc->u.nsref->type == NST_NAMESPACE) {
 		/* can't be a reserved non-byte string */
 		if (!PML_RPF_IS_BYTESTR(loc->rpfld)) {
-			pml_ast_err(ast, 
+			pml_ast_err(ast,
 				    "Protocol field '%s' can not be an lvalue",
 				    loc->name);
 			return -1;
 		}
 	} else if (loc->u.nsref->type != NST_PKTFLD) {
 		/* can't be a protocol constant */
-		pml_ast_err(ast, 
+		pml_ast_err(ast,
 			    "Protocol field '%s' is a constant and cannot"
 			    " be an lvalue\n",
 			    loc->name);
@@ -2657,7 +2657,7 @@ static int resolve_node_pre(union pml_node *node, void *ctxp, void *xstk)
 
 		if (m->cftype == PML_CFM_RETURN) {
 			if (ctx->livefunc == NULL) {
-				pml_ast_err(ctx->ast, 
+				pml_ast_err(ctx->ast,
 					    "return statement outside of "
 					    " a function\n");
 				return -1;
@@ -2665,13 +2665,13 @@ static int resolve_node_pre(union pml_node *node, void *ctxp, void *xstk)
 		} else if (m->cftype == PML_CFM_BREAK ||
 			   m->cftype == PML_CFM_CONTINUE) {
 			if (ctx->innerloop == NULL) {
-				pml_ast_err(ctx->ast, 
+				pml_ast_err(ctx->ast,
 					    "'%s' statement outside of "
 					    " a loop\n", cfmstr(m));
 				return -1;
 			}
 		}
-	} 
+	}
 
 	return 0;
 }
@@ -2696,10 +2696,10 @@ static int typecheck_binop(struct pml_ast *ast, struct pml_op *op)
 		}
 		if (a2->etype != PML_ETYPE_BYTESTR &&
 		    a2->etype != PML_ETYPE_MASKVAL) {
-			pml_ast_err(ast, 
+			pml_ast_err(ast,
 				    "%s: Right argument of a match operation "
 				    "must be a byte string blob pointer or "
-				    "masked string: %s instead\n", 
+				    "masked string: %s instead\n",
 				    opstr(op), ets(a2));
 			return -1;
 		}
@@ -2910,11 +2910,11 @@ static int resolve_node_post(union pml_node *node, void *ctxp, void *xstk)
 		struct pml_op *op = (struct pml_op *)node;
 
 		/* propagate CONST & PCONST expression flags */
-		if (PML_EXPR_IS_CONST(op->arg1) && 
+		if (PML_EXPR_IS_CONST(op->arg1) &&
 		    PML_EXPR_IS_CONST(op->arg2)) {
 			op->eflags |= PML_EFLAG_CONST | PML_EFLAG_PCONST;
 			op->eflags |= PML_EFLAG_PCONST;
-		} else if (PML_EXPR_IS_PCONST(op->arg1) && 
+		} else if (PML_EXPR_IS_PCONST(op->arg1) &&
 		           PML_EXPR_IS_PCONST(op->arg2)) {
 			op->eflags |= PML_EFLAG_PCONST;
 		}
@@ -2922,10 +2922,10 @@ static int resolve_node_post(union pml_node *node, void *ctxp, void *xstk)
 		/*
 		 * Convert "==" or "!=" operations to match/notmatch
 		 * if both the left and right hand side args are string
-		 * expression. 
+		 * expression.
 		 */
 		if ((op->op == PMLOP_EQ || op->op == PMLOP_NEQ) &&
-		    PML_EXPR_IS_BYTESTR(op->arg1) && 
+		    PML_EXPR_IS_BYTESTR(op->arg1) &&
 		    PML_EXPR_IS_BYTESTR(op->arg2)) {
 			if (op->op == PMLOP_EQ)
 				op->op = PMLOP_MATCH;
@@ -2991,7 +2991,7 @@ static int resolve_node_post(union pml_node *node, void *ctxp, void *xstk)
 				if (PML_FUNC_IS_INLINE(f))
 					l->eflags |= PML_EFLAG_PCONST;
 			} else if (v->vtype == PML_VTYPE_GLOBAL) {
-				if ((v->etype == PML_ETYPE_SCALAR) && 
+				if ((v->etype == PML_ETYPE_SCALAR) &&
 				    ((l->off != NULL) || (l->len != NULL))) {
 					pml_ast_err(ctx->ast,
 						    "'%s' is a scalar global"
@@ -3018,9 +3018,9 @@ static int resolve_node_post(union pml_node *node, void *ctxp, void *xstk)
 		abort_unless(l->pkt == NULL && l->idx == NULL &&
 			     l->off == NULL && l->len == NULL);
 
-		if ((l->reftype != PML_REF_VAR) || 
+		if ((l->reftype != PML_REF_VAR) ||
 		    (l->u.varref->etype != PML_ETYPE_STRREF)) {
-			pml_ast_err(ctx->ast, 
+			pml_ast_err(ctx->ast,
 				    "'%s' is not an addressable field.\n",
 				    l->name);
 			return -1;
@@ -3040,7 +3040,7 @@ static int resolve_node_post(union pml_node *node, void *ctxp, void *xstk)
 
 	case PMLTT_ASSIGN: {
 		struct pml_assign *a = (struct pml_assign *)node;
-		if ((a->loc->reftype != PML_REF_VAR) && 
+		if ((a->loc->reftype != PML_REF_VAR) &&
 		    (a->loc->reftype != PML_REF_PKTFLD)) {
 			pml_ast_err(ctx->ast, "locator '%s' in assignment is"
 					      " not a valid lvalue\n",
@@ -3052,7 +3052,7 @@ static int resolve_node_post(union pml_node *node, void *ctxp, void *xstk)
 			abort_unless(v != NULL);
 			abort_unless(v->vtype != PML_VTYPE_UNKNOWN);
 			if (v->vtype == PML_VTYPE_CONST) {
-				pml_ast_err(ctx->ast, 
+				pml_ast_err(ctx->ast,
 					    "locator '%s' in assignment is"
 					    "a constant\n", v->name);
 				return -1;
@@ -3164,10 +3164,10 @@ int pml_resolve_refs(struct pml_ast *ast, union pml_node *node)
 
 		if (var->init != NULL) {
 			if (!PML_EXPR_IS_CONST(var->init)) {
-				pml_ast_err(ast, 
+				pml_ast_err(ast,
 					    "Global %s %s initialization value"
-					    " is not constant.\n", 
-					    (var->vtype == PML_VTYPE_GLOBAL 
+					    " is not constant.\n",
+					    (var->vtype == PML_VTYPE_GLOBAL
 						? "global"
 						: "const"),
 					    var->name);
@@ -3188,7 +3188,7 @@ int pml_resolve_refs(struct pml_ast *ast, union pml_node *node)
 					    "expression is larger than the "
 					    "variable (expr = %u, var = %u)\n",
 					    var->name, etype_strs[var->etype],
-					    (uint)var->init->expr.width, 
+					    (uint)var->init->expr.width,
 					    (uint)var->width);
 				goto out;
 			}
@@ -3462,14 +3462,14 @@ static int e_binop(struct pml_ast *ast, struct pml_stack_frame *fr,
 		break;
 	case PMLOP_TIMES: r->val = left * right;
 		break;
-	case PMLOP_DIV: 
+	case PMLOP_DIV:
 		if (!right) {
 			pml_ast_err(ast, "eval: divide by zero error\n");
 			return -1;
 		}
 		r->val = left / right;
 		break;
-	case PMLOP_MOD: 
+	case PMLOP_MOD:
 		if (!right) {
 			pml_ast_err(ast, "eval: divide by zero error\n");
 			return -1;
@@ -3601,7 +3601,7 @@ static int e_const(struct pml_ast *ast, struct pml_stack_frame *fr,
 			return -1;
 
 	} else if (v->etype == PML_ETYPE_BYTESTR ||
-		   v->etype == PML_ETYPE_MASKVAL) { 
+		   v->etype == PML_ETYPE_MASKVAL) {
 
 		if (pml_eval(ast, fr, (union pml_node*)v->init, &lr) < 0)
 			return -1;
@@ -3622,7 +3622,7 @@ static int e_const(struct pml_ast *ast, struct pml_stack_frame *fr,
 		r->bytes.segnum = lr.bytes.segnum;
 		r->bytes.addr = lr.bytes.addr + off;
 		r->bytes.len = len;
-		if (v->etype == PML_ETYPE_MASKVAL) { 
+		if (v->etype == PML_ETYPE_MASKVAL) {
 			r->mask.ispkt = lr.mask.ispkt;
 			r->mask.segnum = lr.mask.segnum;
 			r->mask.addr = lr.mask.addr + off;
@@ -3665,7 +3665,7 @@ static int e_locator(struct pml_ast *ast, struct pml_stack_frame *fr,
 					    "eval: access to global '%s' is "
 					    "out of bounds: [off=%lu,len=%lu,"
 					    "varlen=%lu]\n",
-					    (ulong)off, (ulong)len, 
+					    (ulong)off, (ulong)len,
 					    (ulong)v->width);
 				return -1;
 			}
@@ -3693,7 +3693,7 @@ static int e_locator(struct pml_ast *ast, struct pml_stack_frame *fr,
 			             v->vtype == PML_VTYPE_LOCAL);
 			abort_unless(l->etype == PML_ETYPE_SCALAR);
 			abort_unless(l->off == NULL && l->len == NULL);
-			if (fr->ssz < PML_SCALAR_SIZE || 
+			if (fr->ssz < PML_SCALAR_SIZE ||
 			    fr->ssz - PML_SCALAR_SIZE < v->addr) {
 				pml_ast_err(ast,
 					    "eval: stack overflow in var '%s':"
@@ -3748,7 +3748,7 @@ static int e_locaddr(struct pml_ast *ast, struct pml_stack_frame *fr,
 		abort_unless(lit->type == PMLTT_BYTESTR);
 		r->bytes = lit->u.bytestr;
 	} else if (l->reftype == PML_REF_PKTFLD) {
-		pml_ast_err(ast, 
+		pml_ast_err(ast,
 			    "eval: Packet field addresses unimplemented\n");
 		return -1;
 	} else {
@@ -3781,11 +3781,11 @@ static pml_eval_f evaltab[] = {
 };
 
 
-int pml_eval(struct pml_ast *ast, struct pml_stack_frame *fr, 
+int pml_eval(struct pml_ast *ast, struct pml_stack_frame *fr,
 	     union pml_node *node, struct pml_retval *r)
 {
 	abort_unless(ast && r);
-	if (node == NULL || node->base.type < 0 || 
+	if (node == NULL || node->base.type < 0 ||
 	    node->base.type > PMLTT_RULE) {
 		pml_ast_err(ast, "Invalid node given to pml_eval()\n");
 		return -1;
@@ -3824,7 +3824,7 @@ void pml_ast_mem_init(struct pml_ast *ast)
 
 		vp = dyb->data + v->addr;
 		if (r.etype == PML_ETYPE_SCALAR) {
-			len = (v->width > PML_SCALAR_SIZE ? 
+			len = (v->width > PML_SCALAR_SIZE ?
 				PML_SCALAR_SIZE : v->width);
 			for (i = 0; i < len; ++i) {
 				shift = (PML_SCALAR_SIZE - 1 - i) * 8;
@@ -3988,7 +3988,7 @@ static int pml_cexpr_walker(union pml_node *node, void *astp, void *xstk)
 	case PMLTT_CALL: {
 		struct pml_call *c = &node->call;
 		for_each_arg_safe(n, x, c) {
-			if (pml_opt_l_cexpr((union pml_expr_u *)l_to_node(n), 
+			if (pml_opt_l_cexpr((union pml_expr_u *)l_to_node(n),
 					   astp) < 0)
 				return -1;
 		}

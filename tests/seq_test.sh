@@ -29,16 +29,16 @@ seqtest() {
 
 	if [ "$3" = "NONE" ]
 	then
-		$SDIR/pxseq $4 < $DATA/seqin.xpkt | 
+		$SDIR/pxseq $4 < $DATA/seqin.xpkt |
 			$BDIR/pml -e "$VERIFY" > /dev/null 2>$TOUT/seq$1.err
 	else
-		$SDIR/peseq $3 < $DATA/seqin.xpkt | $SDIR/pxseq $4 | 
+		$SDIR/peseq $3 < $DATA/seqin.xpkt | $SDIR/pxseq $4 |
 			$BDIR/pml -e "$VERIFY" > /dev/null 2>$TOUT/seq$1.err
 	fi
 
-	if [ $? -eq 0 ] 
+	if [ $? -eq 0 ]
 	then
-		if [ -f $DATA/seq$1.err ] 
+		if [ -f $DATA/seq$1.err ]
 		then
 			if cmp $TOUT/seq$1.err $DATA/seq$1.err
 			then

@@ -54,7 +54,7 @@ static void install_mseg(struct netvm *vm, struct netvm_program *prog,
 }
 
 
-static void restore_mseg(struct netvm *vm, 
+static void restore_mseg(struct netvm *vm,
 		         struct netvm_segdesc save[NETVM_MAXMSEGS])
 {
 	int i;
@@ -138,7 +138,7 @@ int nvmp_validate(struct netvm *vm, struct netvm_program *prog)
 	}
 
 	for (i = 0; i < NETVM_MAXCOPROC; ++i)
-		if ((prog->cpreqs[i] != NETVM_CPT_NONE) && 
+		if ((prog->cpreqs[i] != NETVM_CPT_NONE) &&
 		    (vm->coprocs[i]->type != prog->cpreqs[i]))
 			return NETVM_VERR_BADCP;
 
@@ -252,9 +252,9 @@ int nvmp_read(struct netvm_program *prog, FILE *infile, int *eret)
 		e = NVMP_RDE_BADNINST;
 		goto err;
 	}
-	if (((sep != NVMP_EP_INVALID) && (sep >= ninst)) || 
-	    ((pep != NVMP_EP_INVALID) && (pep >= ninst)) || 
-	    ((tep != NVMP_EP_INVALID) && (tep >= ninst)) || 
+	if (((sep != NVMP_EP_INVALID) && (sep >= ninst)) ||
+	    ((pep != NVMP_EP_INVALID) && (pep >= ninst)) ||
+	    ((tep != NVMP_EP_INVALID) && (tep >= ninst)) ||
 	    ((eep != NVMP_EP_INVALID) && (eep >= ninst))) {
 		e = NVMP_RDE_BADEP;
 		goto err;
@@ -436,7 +436,7 @@ int nvmp_write(struct netvm_program *prog, FILE *outfile)
 	milen = NVMP_MIHLEN * prog->ninits;
 	for (i = 0; i < prog->ninits; ++i) {
 		mi = &prog->inits[i];
-		if ((mi->val.len > (SIZE_MAX & ~(size_t)3)) || 
+		if ((mi->val.len > (SIZE_MAX & ~(size_t)3)) ||
 		    (mi->segnum >= NETVM_MAXMSEGS))
 			return -1;
 		if (mi->val.data != NULL) {
@@ -456,7 +456,7 @@ int nvmp_write(struct netvm_program *prog, FILE *outfile)
 
 	/* write header */
 	pack(buf, sizeof(buf), "wbbbbwwwwwwwww",
-	     (ulong)NVMP_MAGIC, NVMP_V2, prog->matchonly, 0, 0, 
+	     (ulong)NVMP_MAGIC, NVMP_V2, prog->matchonly, 0, 0,
 	     (ulong)prog->ninst, ncp, nseg,
 	     (ulong)prog->ninits, milen, eps[0], eps[1], eps[2], eps[3]);
 
@@ -715,7 +715,7 @@ restart:
 		if (debug) {
 			fprintf(dout, "Single stepping netvm program\n");
 			fprintf(dout, "Executing instruction %u\n",
-				(epi == NVMP_EXEC_CONTINUE ? 
+				(epi == NVMP_EXEC_CONTINUE ?
 				 vm->pc : prog->eps[epi]));
 		}
 
@@ -790,7 +790,7 @@ restart:
 		/* make sure there is a top of stack and send one packet */
 		if (rv == 0) {
 			if (debug)
-				fprintf(dout, 
+				fprintf(dout,
 					"Halt status SEND with no "
 					"packet number on the stack\n");
 			return -1;
@@ -801,7 +801,7 @@ restart:
 			        (int)tos);
 
 		S_POP_NOCK(vm, tos);
-		rv = sendpkt(vm, tos, pout, dout, flags, 
+		rv = sendpkt(vm, tos, pout, dout, flags,
 			     (status == NVMP_STATUS_SEND));
 		if (rv < 0 && !ignerr) {
 			return -1;
@@ -924,7 +924,7 @@ int nvmp_run_all(struct netvm *vm, struct netvm_program *prog, FILE *pin,
 				if (!FD_ISSET(pinfd, &rset))
 					continue;
 			}
-			
+
 			rv = pkb_file_read_a(&p, pin, NULL, NULL);
 			if (rv <= 0)
 				break;
@@ -962,7 +962,7 @@ int nvmp_run_all(struct netvm *vm, struct netvm_program *prog, FILE *pin,
 		if (debug)
 			fprintf(dout, "%lu packets processed and %lu passed\n",
 				npkt, npass);
-		
+
 	} else if (prog->eps[NVMP_EP_TICK] != NVMP_EP_INVALID) {
 
 		/* no packet but tick entry point */

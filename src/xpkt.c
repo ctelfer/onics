@@ -320,7 +320,7 @@ struct xpkt_tag_hdr *xpkt_next_tag(struct xpkt *x, struct xpkt_tag_hdr *cur)
 	}
 
 	cur = (struct xpkt_tag_hdr *)((uint32_t *)cur + cur->nwords + 1);
-	abort_unless(x->hdr.tlen - ((uint32_t *)cur - x->tags) >= 
+	abort_unless(x->hdr.tlen - ((uint32_t *)cur - x->tags) >=
 		     cur->nwords + 1);
 	return cur;
 }
@@ -385,7 +385,7 @@ int xpkt_add_tag(struct xpkt *x, struct xpkt_tag_hdr *xth, int moveup)
 	}
 
 	/* check for overflow of packet or tag length fields */
-	if ((x->hdr.len + xpkt_tag_size(xth) < x->hdr.len) || 
+	if ((x->hdr.len + xpkt_tag_size(xth) < x->hdr.len) ||
 	    (x->hdr.tlen + xth->nwords + 1 < x->hdr.tlen))
 		return -1;
 

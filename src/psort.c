@@ -290,7 +290,7 @@ int add_xpkt_key(struct kfxpkt *kxf, struct pktbuf *p, int koff, ulong pn)
 				maxlen -= 2;
 			} else {
 				if (maxlen == 1) {
-					*(p->cb + koff) = 
+					*(p->cb + koff) =
 						(xai->subtype >> 8) & 0xFF;
 					maxlen = 0;
 					++koff;
@@ -346,16 +346,16 @@ int add_nspf_key(struct kfnspf *kpf, struct pktbuf *p, int koff, ulong pn)
 		len = (pf->len + 7) / 8;
 		switch(len) {
 		case 4: *kp++ = (val >> 24) & 0xFF;
-			if (--maxlen <= 0) { 
-				++keytrunc; 
+			if (--maxlen <= 0) {
+				++keytrunc;
 				check_strict("Truncated key", kpf->name, pn);
-				break; 
+				break;
 			}
 		case 3: *kp++ = (val >> 16) & 0xFF;
 			if (--maxlen <= 0) {
 				++keytrunc;
 				check_strict("Truncated key", kpf->name, pn);
-				break; 
+				break;
 			}
 		case 2: *kp++ = (val >> 8) & 0xFF;
 			if (--maxlen <= 0) {

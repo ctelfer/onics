@@ -242,7 +242,7 @@ static int eth_add(struct pdu *reg, byte_t *buf, struct pduspec *ps,
 		return -1;
 	}
 
-	pdu = newpdu(sizeof(struct eth_pdu), PRID_ETHERNET2, 
+	pdu = newpdu(sizeof(struct eth_pdu), PRID_ETHERNET2,
 		     ps->off, ps->hlen, ps->plen, ps->tlen,
 		     &eth_pdu_ops, reg, PDU_ETH_NXFIELDS);
 	if (!pdu)
@@ -304,7 +304,7 @@ static void eth_update(struct pdu *pdu, byte_t *buf)
 		p += 4;
 		poff += 4;
 		etype = ntoh16x(p);
-	} 
+	}
 
 	pdu_poff(pdu) = poff;
 	pdu->offs[PDU_ETHFLD_ETYPE] = poff - 2;
@@ -354,7 +354,7 @@ static void arp_update(struct pdu *pdu, byte_t *buf)
 	if (arp->hwlen * 2 + arp->prlen * 2 > pdu_totlen(pdu) - 8) {
 		pdu->error |= PDU_ERR_TOOSMALL;
 		return;
-	} 
+	}
 	pdu_eoff(pdu) = pdu_toff(pdu) = pdu_poff(pdu) =
 		pdu_soff(pdu) + arp->hwlen * 2 + arp->prlen * 2 + 8;
 	if (memcmp(ethiparpstr, arp, sizeof(ethiparpstr)) == 0)
@@ -388,17 +388,17 @@ static int arp_getspec(struct pdu *pdu, int enclose, struct pduspec *ps)
 
 static int arp_add(struct pdu *reg, byte_t *buf, struct pduspec *ps,
 		   int enclose)
-			       
+
 {
 	struct pdu *pdu;
 	struct arph *arp;
-	
+
 	if (ps->hlen < 8) {
 		errno = EINVAL;
 		return -1;
 	}
 	pdu = newpdu(sizeof(struct arp_pdu), PRID_ARP, ps->off, ps->hlen,
-		     ps->plen, ps->tlen, &arp_pdu_ops, reg, 
+		     ps->plen, ps->tlen, &arp_pdu_ops, reg,
 		     PDU_ARP_NXFIELDS);
 	if (!pdu)
 		return -1;
@@ -565,7 +565,7 @@ static int ipv4_getspec(struct pdu *pdu, int enclose, struct pduspec *ps)
 
 static int ipv4_add(struct pdu *reg, byte_t *buf, struct pduspec *ps,
 		    int enclose)
-				
+
 {
 	struct pdu *pdu, *cld;
 	struct ipv4h *ip;
@@ -574,7 +574,7 @@ static int ipv4_add(struct pdu *reg, byte_t *buf, struct pduspec *ps,
 		errno = EINVAL;
 		return -1;
 	}
-	pdu = newpdu(sizeof(struct ip_pdu), PRID_IPV4, ps->off, ps->hlen, 
+	pdu = newpdu(sizeof(struct ip_pdu), PRID_IPV4, ps->off, ps->hlen,
 		     ps->plen, ps->tlen, &ipv4_pdu_ops, reg,
 		     PDU_IP_NXFIELDS);
 	if (!pdu)
@@ -651,7 +651,7 @@ static void ipv4_update(struct pdu *pdu, byte_t *buf)
 		if ((IPH_RFMASK & fragoff))
 			pdu->error |= PDU_ERR_INVALID;
 	}
-	if (hlen > IPH_MINLEN) 
+	if (hlen > IPH_MINLEN)
 		ipv4_parse_opt(pdu, (byte_t *)(ip + 1), hlen - IPH_MINLEN);
 }
 
@@ -667,7 +667,7 @@ static int ipv4_fixnxt(struct pdu *pdu, byte_t *buf)
 	if (!pdu_list_end(next)) {
 		proto = pridtoiptype(next->prid);
 		ip = pdu_header(pdu, buf, struct ipv4h);
-		sum = hton16(((~ip->proto & 0xFF) << 8) + (proto << 8)) + 
+		sum = hton16(((~ip->proto & 0xFF) << 8) + (proto << 8)) +
 		      ip->cksum;
 		sum = (sum >> 16) + (sum & 0xFFFF);
 		ip->cksum = (sum >> 16) + (sum & 0xFFFF);
@@ -775,7 +775,7 @@ static struct pdu *udp_parse(struct pdu *reg, byte_t *buf, ulong off,
 			     ulong maxlen)
 {
 	struct pdu *pdu;
-	pdu = newpdu(sizeof(*pdu), PRID_UDP, off, 0, maxlen, 0,  
+	pdu = newpdu(sizeof(*pdu), PRID_UDP, off, 0, maxlen, 0,
 		     &udp_pdu_ops, reg, 0);
 	if (!pdu)
 		return NULL;
@@ -797,7 +797,7 @@ static int udp_nxtcld(struct pdu *reg, byte_t *buf, struct pdu *cld,
 	udp = pdu_header(reg, buf, struct udph);
 	dport = ntoh16x(&udp->dport);
 
-	/* 
+	/*
 	 * VXLAN must be:
 	 *   - on the right port
 	 *   - have enough room for the header
@@ -809,7 +809,7 @@ static int udp_nxtcld(struct pdu *reg, byte_t *buf, struct pdu *cld,
 		*off = pdu_poff(reg);
 		*maxlen = pdu_plen(reg);
 		return 1;
-	/* 
+	/*
 	 * MPLS must be:
 	 *   - on the right port
 	 *   - have enough room for the header
@@ -846,7 +846,7 @@ static int udp_add(struct pdu *reg, byte_t *buf, struct pduspec *ps,
 		return -1;
 	}
 
-	pdu = newpdu(sizeof(*pdu), PRID_UDP, ps->off, ps->hlen, ps->plen, 
+	pdu = newpdu(sizeof(*pdu), PRID_UDP, ps->off, ps->hlen, ps->plen,
 		     ps->tlen, &udp_pdu_ops, reg, 0);
 	if (!pdu)
 		return -1;
@@ -888,7 +888,7 @@ static void udp_update(struct pdu *pdu, byte_t *buf)
 		pdu->error |= PDU_ERR_TRUNC | PDU_ERR_CKSUM;
 	} else if (udp->cksum != 0) {
 		ippdu = find_ippdu(pdu->region);
-		if ((ippdu == NULL) || 
+		if ((ippdu == NULL) ||
 		    (pseudo_cksum(pdu, ippdu, buf, IPPROT_UDP) & 0xFFFF) != 0)
 			pdu->error |= PDU_ERR_CKSUM;
 	}
@@ -1004,7 +1004,7 @@ static int tcp_parse_opt(struct pdu *pdu, struct tcph *tcp, size_t olen)
 			    (pdu->offs[PDU_TCPFLD_SACK] != PDU_OFF_INVALID))
 				goto err;
 			pdu->offs[PDU_TCPFLD_SACK] = ooff + (op - osave);
-			pdu->offs[PDU_TCPFLD_SACK_END] = 
+			pdu->offs[PDU_TCPFLD_SACK_END] =
 				pdu->offs[PDU_TCPFLD_SACK] + op[1];
 			break;
 		case TCPOPT_TSTAMP:
@@ -1064,7 +1064,7 @@ static int tcp_add(struct pdu *reg, byte_t *buf, struct pduspec *ps,
 		return -1;
 	}
 
-	pdu = newpdu(sizeof(struct tcp_pdu), PRID_TCP, 
+	pdu = newpdu(sizeof(struct tcp_pdu), PRID_TCP,
 		     ps->off, ps->hlen, ps->plen, ps->tlen,
 		     &tcp_pdu_ops, reg, PDU_TCP_NXFIELDS);
 	if (!pdu)
@@ -1309,7 +1309,7 @@ static int isv6ext(uint8_t proto)
 	return (proto == IPPROT_V6_HOPOPT) ||
 	       (proto == IPPROT_V6_ROUTE_HDR) ||
 	       (proto == IPPROT_V6_FRAG_HDR) ||
-	       (proto == IPPROT_V6_DSTOPS) || 
+	       (proto == IPPROT_V6_DSTOPS) ||
 	       (proto == IPPROT_AH) ||
 	       (proto == IPPROT_ESP);
 }
@@ -1339,12 +1339,12 @@ static int parse_ipv6_hopopt(struct pdu *pdu, struct ipv6h *ip6,
 				return -1;
 			}
 			if ((p[1] != 4) || (ip6->len != 0) ||
-			    pdu_off_valid(pdu, PDU_IPV6FLD_JLEN) || 
+			    pdu_off_valid(pdu, PDU_IPV6FLD_JLEN) ||
 			    (((p - (byte_t *) ip6) & 3) != 2)) {
 				pdu->error |= PDU_ERR_OPTERR | PDU_ERR_HLEN;
 				return -1;
 			}
-			pdu->offs[PDU_IPV6FLD_JLEN] = (p - (byte_t *)ip6) + 
+			pdu->offs[PDU_IPV6FLD_JLEN] = (p - (byte_t *)ip6) +
 				          	      pdu_soff(pdu);
 		}
 		p += p[1] + 2;
@@ -1415,7 +1415,7 @@ static int parse_ipv6_opt(struct pdu *pdu, struct ipv6h *ip6, ulong len)
 			pdu->error |= PDU_ERR_OPTLEN | PDU_ERR_HLEN;
 			return -1;
 		}
-		/* 
+		/*
 		 * four cases for option lengths
 		 *  - AH = p[1] * 4 + 8
 		 *  - ESP = > 12 -> we won't parse past this
@@ -1443,7 +1443,7 @@ static int parse_ipv6_opt(struct pdu *pdu, struct ipv6h *ip6, ulong len)
 			pdu->offs[PDU_IPV6FLD_FRAGH] = pdu_soff(pdu) +
 						       IPV6H_LEN + xlen;
 			olen = 8;
-			
+
 		} else {
 			if (parse_reg_v6_opt(pdu, xlen, nexth, p) < 0)
 				return -1;
@@ -1621,7 +1621,7 @@ static void ipv6_update(struct pdu *pdu, byte_t *buf)
 		}
 		if (jlen < len - IPV6H_LEN) {
 			extra = len - jlen - IPV6H_LEN;
-			pdu_eoff(pdu) = pdu_toff(pdu) = 
+			pdu_eoff(pdu) = pdu_toff(pdu) =
 				pdu_soff(pdu) + IPV6H_LEN + jlen;
 			len -= extra;
 		}
@@ -1666,7 +1666,7 @@ static int ipv6_fixlen(struct pdu *pdu, byte_t *buf)
 		if (pdu->offs[PDU_IPV6FLD_JLEN] > pdu_totlen(pdu) - 2)
 			return -1;
 		hton16i(0, &ip6->len);
-		hton32i(pdu_plen(pdu) + pdu_hlen(pdu) - 40, 
+		hton32i(pdu_plen(pdu) + pdu_hlen(pdu) - 40,
 			buf + pdu->offs[PDU_IPV6FLD_JLEN]);
 	}
 	pdu->error &= ~(PDU_ERR_TRUNC | PDU_ERR_HLEN | PDU_ERR_TOOSMALL);
@@ -1717,7 +1717,7 @@ static int icmp6_nxtcld(struct pdu *reg, byte_t *buf, struct pdu *cld,
 		*off = pdu_poff(reg);
 		*maxlen = pdu_plen(reg);
 		return 1;
-	} else if (pdu_off_valid(reg, PDU_ICMP6FLD_RDRHDR)) { 
+	} else if (pdu_off_valid(reg, PDU_ICMP6FLD_RDRHDR)) {
 		*prid = PRID_IPV6;
 		*off = reg->offs[PDU_ICMP6FLD_RDRHDR] + 8;
 		*maxlen = reg->offs[PDU_ICMP6FLD_RDRHDR_EOFF] - *off;
@@ -1755,7 +1755,7 @@ static int icmp6_add(struct pdu *reg, byte_t *buf, struct pduspec *ps,
 		if (ippdu == NULL)  {
 			pdu->error |= PDU_ERR_CKSUM;
 		} else {
-			icmp6->cksum = pseudo_cksum(pdu, ippdu, buf, 
+			icmp6->cksum = pseudo_cksum(pdu, ippdu, buf,
 						    IPPROT_ICMPV6);
 		}
 	}
@@ -1844,7 +1844,7 @@ static void icmp6_update(struct pdu *pdu, byte_t *buf)
 		pdu->error = PDU_ERR_TOOSMALL;
 		return;
 	}
-	
+
 	ip6pdu = find_ippdu(pdu->region);
 	if ((ip6pdu == NULL) ||
 	    ((pseudo_cksum(pdu, ip6pdu, buf, IPPROT_ICMPV6) & 0xFFFF) != 0)) {
@@ -1913,7 +1913,7 @@ static int icmp6_fixcksum(struct pdu *pdu, byte_t *buf)
 	struct pdu *ippdu;
 	struct icmp6h *icmp6 = pdu_header(pdu, buf, struct icmp6h);
 	ippdu = find_ippdu(pdu->region);
-	if (ippdu == NULL) 
+	if (ippdu == NULL)
 		return -1;
 	icmp6->cksum = 0;
 	icmp6->cksum = pseudo_cksum(pdu, ippdu, buf, IPPROT_ICMPV6);
@@ -2261,7 +2261,7 @@ int mpls_nxtcld(struct pdu *reg, byte_t *buf, struct pdu *cld,
 	p = pdu_payload(reg, buf);
 	if ((*p & 0xF0) == 0x40) {
 		ip = (struct ipv4h *)p;
-		if (IPH_HLEN(*ip) >= IPH_MINLEN && 
+		if (IPH_HLEN(*ip) >= IPH_MINLEN &&
 		    IPH_HLEN(*ip) <= pdu_plen(reg) &&
 		    ntoh16(ip->len) <= pdu_plen(reg)) {
 			*prid = PRID_IPV4;
@@ -2302,7 +2302,7 @@ static int mpls_add(struct pdu *reg, byte_t *buf, struct pduspec *ps,
 		return -1;
 	}
 
-	pdu = newpdu(sizeof(struct mpls_pdu), PRID_MPLS, 
+	pdu = newpdu(sizeof(struct mpls_pdu), PRID_MPLS,
 		     ps->off, ps->hlen, ps->plen, ps->tlen,
 		     &eth_pdu_ops, reg, PDU_MPLS_NXFIELDS);
 	if (!pdu)
@@ -2560,7 +2560,7 @@ struct ns_elem *stdproto_pdu_ns_elems[STDPROTO_NS_ELEN];
 
 /* Ethernet Namespace */
 extern struct ns_elem *stdproto_eth2_ns_elems[STDPROTO_NS_ELEN];
-static struct ns_namespace eth2_ns = 
+static struct ns_namespace eth2_ns =
 	NS_NAMESPACE_I("eth", NULL, PRID_ETHERNET2, PRID_PCLASS_LINK,
 		"Ethernet II", NULL,
 		stdproto_eth2_ns_elems, array_length(stdproto_eth2_ns_elems));
@@ -2572,14 +2572,14 @@ static struct ns_pktfld eth2_ns_src =
 	NS_BYTEFIELD_I("src", &eth2_ns, PRID_ETHERNET2, 6, 6,
 		       "Source Address", &ns_fmt_etha);
 static struct ns_pktfld eth2_ns_ethtype =
-	NS_BYTEFIELD_IDX_I("ethtype", &eth2_ns, PRID_ETHERNET2, 
+	NS_BYTEFIELD_IDX_I("ethtype", &eth2_ns, PRID_ETHERNET2,
 			PDU_ETHFLD_ETYPE, 0, 2,
 		       "Ethernet Type", &ns_fmt_hex);
 
 extern struct ns_elem *stdproto_eth2_vlan0_ns_elems[STDPROTO_NS_SUB_ELEN];
 extern struct ns_elem *stdproto_eth2_vlan1_ns_elems[STDPROTO_NS_SUB_ELEN];
 
-static struct ns_namespace eth2_vlan0_ns = 
+static struct ns_namespace eth2_vlan0_ns =
 	NS_NAMESPACE_IDX_I("vlan0", &eth2_ns, PRID_ETHERNET2, PRID_NONE,
 		PDU_ETHFLD_VLAN0, 4,
 		"Ethernet VLAN 0", NULL,
@@ -2602,11 +2602,11 @@ static struct ns_pktfld eth2_vlan0_vid =
 		PDU_ETHFLD_VLAN0, 2, 4, 12,
 	       "VLAN ID", &ns_fmt_dec);
 struct ns_elem *stdproto_eth2_vlan0_ns_elems[STDPROTO_NS_SUB_ELEN] = {
-	(struct ns_elem *)&eth2_vlan0_tpid, (struct ns_elem *)&eth2_vlan0_pri, 
-	(struct ns_elem *)&eth2_vlan0_cfi, (struct ns_elem *)&eth2_vlan0_vid, 
+	(struct ns_elem *)&eth2_vlan0_tpid, (struct ns_elem *)&eth2_vlan0_pri,
+	(struct ns_elem *)&eth2_vlan0_cfi, (struct ns_elem *)&eth2_vlan0_vid,
 };
 
-static struct ns_namespace eth2_vlan1_ns = 
+static struct ns_namespace eth2_vlan1_ns =
 	NS_NAMESPACE_IDX_I("vlan1", &eth2_ns, PRID_ETHERNET2, PRID_NONE,
 		PDU_ETHFLD_VLAN1, 4,
 		"Ethernet VLAN 1", NULL,
@@ -2629,8 +2629,8 @@ static struct ns_pktfld eth2_vlan1_vid =
 		PDU_ETHFLD_VLAN1, 2, 4, 12,
 	       "VLAN ID", &ns_fmt_dec);
 struct ns_elem *stdproto_eth2_vlan1_ns_elems[STDPROTO_NS_SUB_ELEN] = {
-	(struct ns_elem *)&eth2_vlan1_tpid, (struct ns_elem *)&eth2_vlan1_pri, 
-	(struct ns_elem *)&eth2_vlan1_cfi, (struct ns_elem *)&eth2_vlan1_vid, 
+	(struct ns_elem *)&eth2_vlan1_tpid, (struct ns_elem *)&eth2_vlan1_pri,
+	(struct ns_elem *)&eth2_vlan1_cfi, (struct ns_elem *)&eth2_vlan1_vid,
 };
 
 struct ns_elem *stdproto_eth2_ns_elems[STDPROTO_NS_ELEN] = {
@@ -2642,7 +2642,7 @@ struct ns_elem *stdproto_eth2_ns_elems[STDPROTO_NS_ELEN] = {
 
 /* ARP Namespace */
 extern struct ns_elem *stdproto_arp_ns_elems[STDPROTO_NS_ELEN];
-static struct ns_namespace arp_ns = 
+static struct ns_namespace arp_ns =
 	NS_NAMESPACE_I("arp", NULL, PRID_ARP, PRID_PCLASS_NET,
 	       "Address Resolution Protocol", NULL,
 	       stdproto_arp_ns_elems, array_length(stdproto_arp_ns_elems));
@@ -2664,34 +2664,34 @@ static struct ns_pktfld arp_ns_op =
 		"Operation", &ns_fmt_dec);
 static struct ns_pktfld arp_ns_sndhwaddr =
 	NS_BYTEFIELD_IDX_I("sndhwaddr", &arp_ns, PRID_ARP,
-		PDU_ARPFLD_ETHARP, 8, 6, 
+		PDU_ARPFLD_ETHARP, 8, 6,
 		"Sender HW Address", &ns_fmt_etha);
 static struct ns_pktfld arp_ns_sndpraddr =
 	NS_BYTEFIELD_IDX_I("sndpraddr", &arp_ns, PRID_ARP,
-		PDU_ARPFLD_ETHARP, 14, 4, 
+		PDU_ARPFLD_ETHARP, 14, 4,
 		"Sender IP Address", &ns_fmt_ipv4a);
 static struct ns_pktfld arp_ns_trghwaddr =
 	NS_BYTEFIELD_IDX_I("trghwaddr", &arp_ns, PRID_ARP,
-		PDU_ARPFLD_ETHARP, 18, 6, 
+		PDU_ARPFLD_ETHARP, 18, 6,
 		"Target HW Address", &ns_fmt_etha);
 static struct ns_pktfld arp_ns_trgpraddr =
 	NS_BYTEFIELD_IDX_I("trgpraddr", &arp_ns, PRID_ARP,
-		PDU_ARPFLD_ETHARP, 24, 4, 
+		PDU_ARPFLD_ETHARP, 24, 4,
 		"Target IP Address", &ns_fmt_ipv4a);
 
 struct ns_elem *stdproto_arp_ns_elems[STDPROTO_NS_ELEN] = {
-	(struct ns_elem *)&arp_ns_hwfmt, (struct ns_elem *)&arp_ns_prfmt, 
-	(struct ns_elem *)&arp_ns_hwlen, (struct ns_elem *)&arp_ns_prlen, 
+	(struct ns_elem *)&arp_ns_hwfmt, (struct ns_elem *)&arp_ns_prfmt,
+	(struct ns_elem *)&arp_ns_hwlen, (struct ns_elem *)&arp_ns_prlen,
 	(struct ns_elem *)&arp_ns_op,
-	(struct ns_elem *)&arp_ns_sndhwaddr, 
-	(struct ns_elem *)&arp_ns_sndpraddr, 
-	(struct ns_elem *)&arp_ns_trghwaddr, 
+	(struct ns_elem *)&arp_ns_sndhwaddr,
+	(struct ns_elem *)&arp_ns_sndpraddr,
+	(struct ns_elem *)&arp_ns_trghwaddr,
 	(struct ns_elem *)&arp_ns_trgpraddr,
 };
 
 
 extern struct ns_elem *stdproto_ipv4_ns_elems[STDPROTO_NS_ELEN];
-static struct ns_namespace ipv4_ns = 
+static struct ns_namespace ipv4_ns =
 	NS_NAMESPACE_I("ip", NULL, PRID_IPV4, PRID_PCLASS_NET,
 		"Internet Protocol Version 4", NULL,
 		stdproto_ipv4_ns_elems, array_length(stdproto_ipv4_ns_elems));
@@ -2746,10 +2746,10 @@ static struct ns_pktfld ipv4_ns_opt =
 		PDU_OI_POFF, "IP Options", &ns_fmt_raw);
 
 extern struct ns_elem *stdproto_ipv4_addr_ns_elems[STDPROTO_NS_SUB_ELEN];
-static struct ns_namespace ipv4_addr_ns = 
+static struct ns_namespace ipv4_addr_ns =
 	NS_NAMESPACE_NOFLD("addr", &ipv4_ns, PRID_INVALID, PRID_NONE,
 		"Reserved IP addresses and address masks", NULL,
-		stdproto_ipv4_addr_ns_elems, 
+		stdproto_ipv4_addr_ns_elems,
 		array_length(stdproto_ipv4_addr_ns_elems));
 static struct ns_bytestr ipv4_addr_broadcast =
 	NS_BYTESTR_I_LEN("broadcast", &ipv4_addr_ns, PRID_NONE,
@@ -2775,7 +2775,7 @@ struct ns_elem *stdproto_ipv4_addr_ns_elems[STDPROTO_NS_SUB_ELEN] = {
 struct ns_elem *stdproto_ipv4_ns_elems[STDPROTO_NS_ELEN] = {
 	(struct ns_elem *)&ipv4_ns_vers, (struct ns_elem *)&ipv4_ns_ihl,
 	(struct ns_elem *)&ipv4_ns_diffsrv, (struct ns_elem *)&ipv4_ns_ecn,
-	(struct ns_elem *)&ipv4_ns_len, (struct ns_elem *)&ipv4_ns_id, 
+	(struct ns_elem *)&ipv4_ns_len, (struct ns_elem *)&ipv4_ns_id,
 	(struct ns_elem *)&ipv4_ns_rf, (struct ns_elem *)&ipv4_ns_df,
 	(struct ns_elem *)&ipv4_ns_mf, (struct ns_elem *)&ipv4_ns_fragoff,
 	(struct ns_elem *)&ipv4_ns_ttl, (struct ns_elem *)&ipv4_ns_proto,
@@ -2788,7 +2788,7 @@ struct ns_elem *stdproto_ipv4_ns_elems[STDPROTO_NS_ELEN] = {
 
 
 extern struct ns_elem *stdproto_ipv6_ns_elems[STDPROTO_NS_ELEN];
-static struct ns_namespace ipv6_ns = 
+static struct ns_namespace ipv6_ns =
 	NS_NAMESPACE_I("ip6", NULL, PRID_IPV6, PRID_PCLASS_NET,
 		"Internet Protocol Version 6", NULL,
 	       	stdproto_ipv6_ns_elems, array_length(stdproto_ipv6_ns_elems));
@@ -2830,12 +2830,12 @@ struct ns_elem *stdproto_ipv6_ns_elems[STDPROTO_NS_ELEN] = {
 	(struct ns_elem *)&ipv6_ns_flowid, (struct ns_elem *)&ipv6_ns_len,
 	(struct ns_elem *)&ipv6_ns_nxthdr, (struct ns_elem *)&ipv6_ns_hoplim,
 	(struct ns_elem *)&ipv6_ns_saddr, (struct ns_elem *)&ipv6_ns_daddr,
-	(struct ns_elem *)&ipv6_ns_xnxthdr, (struct ns_elem *)&ipv6_ns_exth, 
+	(struct ns_elem *)&ipv6_ns_xnxthdr, (struct ns_elem *)&ipv6_ns_exth,
 };
 
 
 extern struct ns_elem *stdproto_icmp_ns_elems[STDPROTO_NS_ELEN];
-static struct ns_namespace icmp_ns = 
+static struct ns_namespace icmp_ns =
 	NS_NAMESPACE_I("icmp", NULL, PRID_ICMP, PRID_PCLASS_XPORT,
 		"Internet Control Message Protocol", NULL,
 	       	stdproto_icmp_ns_elems, array_length(stdproto_icmp_ns_elems));
@@ -2850,37 +2850,37 @@ static struct ns_pktfld icmp_ns_cksum =
 	NS_BYTEFIELD_I("cksum", &icmp_ns, PRID_ICMP, 2, 2,
 		"Checksum", &ns_fmt_hex);
 static struct ns_pktfld icmp_ns_id =
-	NS_BYTEFIELD_IDX_I("id", &icmp_ns, PRID_ICMP, 
+	NS_BYTEFIELD_IDX_I("id", &icmp_ns, PRID_ICMP,
 		PDU_ICMPFLD_QUERY, 0, 2, "Identifier", &ns_fmt_dec);
 static struct ns_pktfld icmp_ns_seq =
-	NS_BYTEFIELD_IDX_I("seq", &icmp_ns, PRID_ICMP, 
+	NS_BYTEFIELD_IDX_I("seq", &icmp_ns, PRID_ICMP,
 		PDU_ICMPFLD_QUERY, 2, 2, "Sequence Number", &ns_fmt_dec);
 static struct ns_pktfld icmp_ns_mtu_resv =
-	NS_BYTEFIELD_IDX_I("mtu_resv", &icmp_ns, PRID_ICMP, 
+	NS_BYTEFIELD_IDX_I("mtu_resv", &icmp_ns, PRID_ICMP,
 		PDU_ICMPFLD_MTU, 0, 2, "MTU Reserved", &ns_fmt_dec);
 static struct ns_pktfld icmp_ns_mtu =
-	NS_BYTEFIELD_IDX_I("mtu", &icmp_ns, PRID_ICMP, 
+	NS_BYTEFIELD_IDX_I("mtu", &icmp_ns, PRID_ICMP,
 		PDU_ICMPFLD_MTU, 2, 2, "MTU", &ns_fmt_dec);
 static struct ns_pktfld icmp_ns_ptr =
-	NS_BYTEFIELD_IDX_I("ptr", &icmp_ns, PRID_ICMP, 
+	NS_BYTEFIELD_IDX_I("ptr", &icmp_ns, PRID_ICMP,
 		PDU_ICMPFLD_PPTR, 0, 1, "Pointer", &ns_fmt_dec);
 static struct ns_pktfld icmp_ns_ptr_resv =
-	NS_BYTEFIELD_IDX_I("ptr_resv", &icmp_ns, PRID_ICMP, 
+	NS_BYTEFIELD_IDX_I("ptr_resv", &icmp_ns, PRID_ICMP,
 		PDU_ICMPFLD_PPTR, 1, 3, "Param Prob Reserved", &ns_fmt_dec);
 static struct ns_pktfld icmp_ns_ots =
-	NS_BYTEFIELD_IDX_I("ots", &icmp_ns, PRID_ICMP, 
+	NS_BYTEFIELD_IDX_I("ots", &icmp_ns, PRID_ICMP,
 		PDU_ICMPFLD_TS, 0, 4, "Originate Timestamp", &ns_fmt_dec);
 static struct ns_pktfld icmp_ns_rts =
-	NS_BYTEFIELD_IDX_I("rts", &icmp_ns, PRID_ICMP, 
+	NS_BYTEFIELD_IDX_I("rts", &icmp_ns, PRID_ICMP,
 		PDU_ICMPFLD_TS, 4, 4, "Receive Timestamp", &ns_fmt_dec);
 static struct ns_pktfld icmp_ns_tts =
-	NS_BYTEFIELD_IDX_I("tts", &icmp_ns, PRID_ICMP, 
+	NS_BYTEFIELD_IDX_I("tts", &icmp_ns, PRID_ICMP,
 		PDU_ICMPFLD_TS, 8, 4, "Transmit Timestamp", &ns_fmt_dec);
 static struct ns_pktfld icmp_ns_gw =
-	NS_BYTEFIELD_IDX_I("gw", &icmp_ns, PRID_ICMP, 
+	NS_BYTEFIELD_IDX_I("gw", &icmp_ns, PRID_ICMP,
 		PDU_ICMPFLD_GW, 0, 4, "Gateway", &ns_fmt_ipv4a);
 static struct ns_pktfld icmp_ns_reserved =
-	NS_BYTEFIELD_IDX_I("resv", &icmp_ns, PRID_ICMP, 
+	NS_BYTEFIELD_IDX_I("resv", &icmp_ns, PRID_ICMP,
 		PDU_ICMPFLD_RESERVED, 0, 4, "Reserved", &ns_fmt_hex);
 
 struct ns_elem *stdproto_icmp_ns_elems[STDPROTO_NS_ELEN] = {
@@ -2896,7 +2896,7 @@ struct ns_elem *stdproto_icmp_ns_elems[STDPROTO_NS_ELEN] = {
 
 /* ICMPv6 */
 extern struct ns_elem *stdproto_icmp6_ns_elems[STDPROTO_NS_ELEN];
-static struct ns_namespace icmp6_ns = 
+static struct ns_namespace icmp6_ns =
 	NS_NAMESPACE_I("icmp6", NULL, PRID_ICMP6, PRID_PCLASS_XPORT,
 		"Internet Control Message Protocol v6", NULL,
 		stdproto_icmp6_ns_elems, array_length(stdproto_icmp6_ns_elems));
@@ -2920,7 +2920,7 @@ extern struct ns_elem *
 
 /* ICMPv6 echo request/reply packet fields */
 struct ns_namespace icmp6_echo_ns =
-	NS_NAMESPACE_IDX_I("echo", &icmp6_ns, PRID_ICMP6, PRID_NONE, 
+	NS_NAMESPACE_IDX_I("echo", &icmp6_ns, PRID_ICMP6, PRID_NONE,
 			   PDU_ICMP6FLD_ECHO, 4, "ICMPv6 Echo Info", NULL,
 			   stdproto_icmp6_echo_ns_elems,
 			   array_length(stdproto_icmp6_echo_ns_elems));
@@ -2931,13 +2931,13 @@ static struct ns_pktfld icmp6_echo_seq =
 	NS_BYTEFIELD_IDX_I("seq", &icmp6_echo_ns, PRID_ICMP6, PDU_ICMP6FLD_ECHO,
 			   2, 2, "Sequence Number", &ns_fmt_dec);
 struct ns_elem *stdproto_icmp6_echo_ns_elems[STDPROTO_NS_SUB_ELEN] = {
-	(struct ns_elem *)&icmp6_echo_id, (struct ns_elem *)&icmp6_echo_seq, 
+	(struct ns_elem *)&icmp6_echo_id, (struct ns_elem *)&icmp6_echo_seq,
 };
 
 /* ICMPv6 Router Solicitation packet fields */
 struct ns_namespace icmp6_rsol_ns =
-	NS_NAMESPACE_IDX_I("rsol", &icmp6_ns, PRID_ICMP6, PRID_NONE, 
-			   PDU_ICMP6FLD_RSOL, 4, "NDP Router Solicit", 
+	NS_NAMESPACE_IDX_I("rsol", &icmp6_ns, PRID_ICMP6, PRID_NONE,
+			   PDU_ICMP6FLD_RSOL, 4, "NDP Router Solicit",
 			   NULL, stdproto_icmp6_rsol_ns_elems,
 			   array_length(stdproto_icmp6_rsol_ns_elems));
 static struct ns_pktfld icmp6_rsol_resv =
@@ -2955,7 +2955,7 @@ struct ns_elem *stdproto_icmp6_rsol_ns_elems[STDPROTO_NS_SUB_ELEN] = {
 
 /* ICMPv6 Router Advertisement packet fields */
 struct ns_namespace icmp6_radv_ns =
-	NS_NAMESPACE_IDX_I("radv", &icmp6_ns, PRID_ICMP6, PRID_NONE, 
+	NS_NAMESPACE_IDX_I("radv", &icmp6_ns, PRID_ICMP6, PRID_NONE,
 			   PDU_ICMP6FLD_RADV, 12, "NDP Router Advert", NULL,
 			   stdproto_icmp6_radv_ns_elems,
 			   array_length(stdproto_icmp6_radv_ns_elems));
@@ -2964,15 +2964,15 @@ static struct ns_pktfld icmp6_radv_hoplim =
 			   PDU_ICMP6FLD_RADV, 0, 1, "Current Hop Limit",
 			   &ns_fmt_dec);
 static struct ns_pktfld icmp6_radv_mcfg =
-	NS_BITFIELD_IDX_I("mcfg", &icmp6_radv_ns, PRID_ICMP6, 
+	NS_BITFIELD_IDX_I("mcfg", &icmp6_radv_ns, PRID_ICMP6,
 			  PDU_ICMP6FLD_RADV, 1, 0, 1, "Managed Addr Cfg",
 			  &ns_fmt_dec);
 static struct ns_pktfld icmp6_radv_ocfg =
-	NS_BITFIELD_IDX_I("ocfg", &icmp6_radv_ns, PRID_ICMP6, 
+	NS_BITFIELD_IDX_I("ocfg", &icmp6_radv_ns, PRID_ICMP6,
 			  PDU_ICMP6FLD_RADV, 1, 1, 1, "Other Cfg",
 			  &ns_fmt_dec);
 static struct ns_pktfld icmp6_radv_resv =
-	NS_BITFIELD_IDX_I("resv", &icmp6_radv_ns, PRID_ICMP6, 
+	NS_BITFIELD_IDX_I("resv", &icmp6_radv_ns, PRID_ICMP6,
 			  PDU_ICMP6FLD_RADV, 1, 2, 6, "Reserved",
 			  &ns_fmt_dec);
 static struct ns_pktfld icmp6_radv_tlife =
@@ -3004,12 +3004,12 @@ struct ns_elem *stdproto_icmp6_radv_ns_elems[STDPROTO_NS_SUB_ELEN] = {
 
 /* ICMPv6 NDP packet fields */
 struct ns_namespace icmp6_neigh_ns =
-	NS_NAMESPACE_IDX_I("neigh", &icmp6_ns, PRID_ICMP6, PRID_NONE, 
+	NS_NAMESPACE_IDX_I("neigh", &icmp6_ns, PRID_ICMP6, PRID_NONE,
 			   PDU_ICMP6FLD_NEIGH, 20, "ICMPv6 NDP Neighbor Msg",
 			   NULL, stdproto_icmp6_neigh_ns_elems,
 			   array_length(stdproto_icmp6_neigh_ns_elems));
 static struct ns_pktfld icmp6_neigh_rtr =
-	NS_BITFIELD_IDX_I("rtr", &icmp6_neigh_ns, PRID_ICMP6, 
+	NS_BITFIELD_IDX_I("rtr", &icmp6_neigh_ns, PRID_ICMP6,
 			  PDU_ICMP6FLD_NEIGH, 0, 0, 1, "Router flag",
 			  &ns_fmt_dec);
 static struct ns_pktfld icmp6_neigh_sol =
@@ -3041,7 +3041,7 @@ struct ns_elem *stdproto_icmp6_neigh_ns_elems[STDPROTO_NS_SUB_ELEN] = {
 
 /* ICMPv6 Router Advertisement packet fields */
 struct ns_namespace icmp6_nrdr_ns =
-	NS_NAMESPACE_IDX_I("nrdr", &icmp6_ns, PRID_ICMP6, PRID_NONE, 
+	NS_NAMESPACE_IDX_I("nrdr", &icmp6_ns, PRID_ICMP6, PRID_NONE,
 			   PDU_ICMP6FLD_REDIR, 36, "NDP Neighbor Redirect",
 			   NULL, stdproto_icmp6_nrdr_ns_elems,
 			   array_length(stdproto_icmp6_nrdr_ns_elems));
@@ -3067,7 +3067,7 @@ struct ns_elem *stdproto_icmp6_nrdr_ns_elems[STDPROTO_NS_SUB_ELEN] = {
 
 /* ICMPv6 NDP Source Link Level Address Option fields */
 struct ns_namespace icmp6_ndo_srclla_ns =
-	NS_NAMESPACE_VARLEN_I("srclla", &icmp6_ns, PRID_ICMP6, PRID_NONE, 
+	NS_NAMESPACE_VARLEN_I("srclla", &icmp6_ns, PRID_ICMP6, PRID_NONE,
 			      PDU_ICMP6FLD_SRCLLA, PDU_ICMP6FLD_SRCLLA_EOFF,
 			      "Source Link Layer Address",
 			      NULL, stdproto_icmp6_ndo_srclla_ns_elems,
@@ -3079,7 +3079,7 @@ static struct ns_pktfld icmp6_ndo_srclla_len =
 	NS_BYTEFIELD_IDX_I("len", &icmp6_ndo_srclla_ns, PRID_ICMP6,
 			   PDU_ICMP6FLD_SRCLLA, 1, 1, "Length", &ns_fmt_dec);
 static struct ns_pktfld icmp6_ndo_srclla_addr =
-	NS_BYTEFIELD_VARLEN_I("addr", &icmp6_ndo_srclla_ns, PRID_ICMP6, 
+	NS_BYTEFIELD_VARLEN_I("addr", &icmp6_ndo_srclla_ns, PRID_ICMP6,
 			      PDU_ICMP6FLD_SRCLLA, 2, PDU_ICMP6FLD_SRCLLA_EOFF,
 			      "Link Layer Address", &ns_fmt_etha);
 struct ns_elem *stdproto_icmp6_ndo_srclla_ns_elems[STDPROTO_NS_SUB_ELEN] = {
@@ -3090,7 +3090,7 @@ struct ns_elem *stdproto_icmp6_ndo_srclla_ns_elems[STDPROTO_NS_SUB_ELEN] = {
 
 /* ICMPv6 NDP Target Link Level Address Option fields */
 struct ns_namespace icmp6_ndo_tgtlla_ns =
-	NS_NAMESPACE_VARLEN_I("tgtlla", &icmp6_ns, PRID_ICMP6, PRID_NONE, 
+	NS_NAMESPACE_VARLEN_I("tgtlla", &icmp6_ns, PRID_ICMP6, PRID_NONE,
 			      PDU_ICMP6FLD_TGTLLA, PDU_ICMP6FLD_TGTLLA_EOFF,
 			      "Dest Link Layer Address",
 			      NULL, stdproto_icmp6_ndo_tgtlla_ns_elems,
@@ -3113,8 +3113,8 @@ struct ns_elem *stdproto_icmp6_ndo_tgtlla_ns_elems[STDPROTO_NS_SUB_ELEN] = {
 
 /* ICMPv6 NDP Prefix Information Option fields */
 struct ns_namespace icmp6_ndo_pfxinfo_ns =
-	NS_NAMESPACE_IDX_I("pfxinfo", &icmp6_ns, PRID_ICMP6, PRID_NONE, 
-			   PDU_ICMP6FLD_PFXINFO, ICMP6_ND_PFXINFO_OLEN, 
+	NS_NAMESPACE_IDX_I("pfxinfo", &icmp6_ns, PRID_ICMP6, PRID_NONE,
+			   PDU_ICMP6FLD_PFXINFO, ICMP6_ND_PFXINFO_OLEN,
 			   "Dest Link Layer Address",
 			   NULL, stdproto_icmp6_ndo_pfxinfo_ns_elems,
 			   array_length(stdproto_icmp6_ndo_pfxinfo_ns_elems));
@@ -3138,7 +3138,7 @@ static struct ns_pktfld icmp6_ndo_pfxinfo_auto =
 			  &ns_fmt_dec);
 static struct ns_pktfld icmp6_ndo_pfxinfo_resv =
 	NS_BITFIELD_IDX_I("resv", &icmp6_ndo_pfxinfo_ns, PRID_ICMP6,
-			  PDU_ICMP6FLD_PFXINFO, 3, 2, 6, "Reserved", 
+			  PDU_ICMP6FLD_PFXINFO, 3, 2, 6, "Reserved",
 			  &ns_fmt_hex);
 static struct ns_pktfld icmp6_ndo_pfxinfo_vlife =
 	NS_BYTEFIELD_IDX_I("vlife", &icmp6_ndo_pfxinfo_ns, PRID_ICMP6,
@@ -3171,7 +3171,7 @@ struct ns_elem *stdproto_icmp6_ndo_pfxinfo_ns_elems[STDPROTO_NS_SUB_ELEN] = {
 
 /* ICMPv6 NDP Redirect Option fields */
 struct ns_namespace icmp6_ndo_rdrhdr_ns =
-	NS_NAMESPACE_VARLEN_I("rdrhdr", &icmp6_ns, PRID_ICMP6, PRID_NONE, 
+	NS_NAMESPACE_VARLEN_I("rdrhdr", &icmp6_ns, PRID_ICMP6, PRID_NONE,
 			      PDU_ICMP6FLD_RDRHDR, PDU_ICMP6FLD_RDRHDR_EOFF,
 			      "Redirect Header",
 			      NULL, stdproto_icmp6_ndo_rdrhdr_ns_elems,
@@ -3198,8 +3198,8 @@ struct ns_elem *stdproto_icmp6_ndo_rdrhdr_ns_elems[STDPROTO_NS_SUB_ELEN] = {
 
 /* ICMPv6 NDP MTU Option fields */
 struct ns_namespace icmp6_ndo_mtu_ns =
-	NS_NAMESPACE_IDX_I("omtu", &icmp6_ns, PRID_ICMP6, PRID_NONE, 
-			   PDU_ICMP6FLD_MTU, ICMP6_ND_MTU_OLEN, 
+	NS_NAMESPACE_IDX_I("omtu", &icmp6_ns, PRID_ICMP6, PRID_NONE,
+			   PDU_ICMP6FLD_MTU, ICMP6_ND_MTU_OLEN,
 			   "Maximum Transmission Unit Option",
 			   NULL, stdproto_icmp6_ndo_mtu_ns_elems,
 			   array_length(stdproto_icmp6_ndo_mtu_ns_elems));
@@ -3224,8 +3224,8 @@ struct ns_elem *stdproto_icmp6_ndo_mtu_ns_elems[STDPROTO_NS_SUB_ELEN] = {
 
 /* ICMPv6 NDP Router Advertisement Interval Option fields */
 struct ns_namespace icmp6_ndo_radvivl_ns =
-	NS_NAMESPACE_IDX_I("radvivl", &icmp6_ns, PRID_ICMP6, PRID_NONE, 
-			   PDU_ICMP6FLD_MTU, ICMP6_ND_RADVIVL_OLEN, 
+	NS_NAMESPACE_IDX_I("radvivl", &icmp6_ns, PRID_ICMP6, PRID_NONE,
+			   PDU_ICMP6FLD_MTU, ICMP6_ND_RADVIVL_OLEN,
 			   "Router Advertisement Interval Option",
 			   NULL, stdproto_icmp6_ndo_radvivl_ns_elems,
 			   array_length(stdproto_icmp6_ndo_radvivl_ns_elems));
@@ -3250,8 +3250,8 @@ struct ns_elem *stdproto_icmp6_ndo_radvivl_ns_elems[STDPROTO_NS_SUB_ELEN] = {
 
 /* ICMPv6 NDP Home Agent Info Option fields */
 struct ns_namespace icmp6_ndo_agtinfo_ns =
-	NS_NAMESPACE_IDX_I("agtinfo", &icmp6_ns, PRID_ICMP6, PRID_NONE, 
-			   PDU_ICMP6FLD_AGTINFO, ICMP6_ND_AGTINFO_OLEN, 
+	NS_NAMESPACE_IDX_I("agtinfo", &icmp6_ns, PRID_ICMP6, PRID_NONE,
+			   PDU_ICMP6FLD_AGTINFO, ICMP6_ND_AGTINFO_OLEN,
 			   "Home Agent Information Option",
 			   NULL, stdproto_icmp6_ndo_agtinfo_ns_elems,
 			   array_length(stdproto_icmp6_ndo_agtinfo_ns_elems));
@@ -3290,15 +3290,15 @@ static struct ns_pktfld icmp6_cksum =
 		"Checksum", &ns_fmt_hex);
 static struct ns_pktfld icmp6_eresv =
 	NS_BYTEFIELD_IDX_I("eresv", &icmp6_ns, PRID_ICMP6,
-			   PDU_ICMP6FLD_ERESV, 0, 4, 
+			   PDU_ICMP6FLD_ERESV, 0, 4,
 			   "Error Reserved", &ns_fmt_hex);
 static struct ns_pktfld icmp6_pptr =
 	NS_BYTEFIELD_IDX_I("pptr", &icmp6_ns, PRID_ICMP6,
-			   PDU_ICMP6FLD_PPTR, 0, 4, 
+			   PDU_ICMP6FLD_PPTR, 0, 4,
 			   "Param Prob Ptr", &ns_fmt_dec);
 
 struct ns_elem *stdproto_icmp6_ns_elems[STDPROTO_NS_ELEN] = {
-	(struct ns_elem *)&icmp6_type, (struct ns_elem *)&icmp6_code, 
+	(struct ns_elem *)&icmp6_type, (struct ns_elem *)&icmp6_code,
 	(struct ns_elem *)&icmp6_cksum, (struct ns_elem *)&icmp6_eresv,
 	(struct ns_elem *)&icmp6_pptr,
 	(struct ns_elem *)&icmp6_echo_ns,
@@ -3317,7 +3317,7 @@ struct ns_elem *stdproto_icmp6_ns_elems[STDPROTO_NS_ELEN] = {
 
 
 extern struct ns_elem *stdproto_udp_ns_elems[STDPROTO_NS_ELEN];
-static struct ns_namespace udp_ns = 
+static struct ns_namespace udp_ns =
 	NS_NAMESPACE_I("udp", NULL, PRID_UDP, PRID_PCLASS_XPORT,
 		"User Datagram Protocol", NULL,
 	       	stdproto_udp_ns_elems, array_length(stdproto_udp_ns_elems));
@@ -3336,13 +3336,13 @@ static struct ns_pktfld udp_ns_cksum =
 		"Checksum", &ns_fmt_hex);
 
 struct ns_elem *stdproto_udp_ns_elems[STDPROTO_NS_ELEN] = {
-	(struct ns_elem *)&udp_ns_sport, (struct ns_elem *)&udp_ns_dport, 
+	(struct ns_elem *)&udp_ns_sport, (struct ns_elem *)&udp_ns_dport,
 	(struct ns_elem *)&udp_ns_len, (struct ns_elem *)&udp_ns_cksum
 };
 
 
 extern struct ns_elem *stdproto_tcp_ns_elems[STDPROTO_NS_ELEN];
-static struct ns_namespace tcp_ns = 
+static struct ns_namespace tcp_ns =
 	NS_NAMESPACE_I("tcp", NULL, PRID_TCP, PRID_PCLASS_XPORT,
 		"Transmission Control Protocol", NULL,
 	       	stdproto_tcp_ns_elems, array_length(stdproto_tcp_ns_elems));
@@ -3412,7 +3412,7 @@ extern struct ns_elem *stdproto_tcp_ts_ns_elems[STDPROTO_NS_SUB_ELEN];
 extern struct ns_elem *stdproto_tcp_md5_ns_elems[STDPROTO_NS_SUB_ELEN];
 
 /* TCP MSS Option */
-static struct ns_namespace tcp_mss_ns = 
+static struct ns_namespace tcp_mss_ns =
 	NS_NAMESPACE_IDX_I("mss", &tcp_ns, PRID_TCP, PRID_NONE, PDU_TCPFLD_MSS, 4,
 		"TCP Maximum Segment Size Option", NULL,
 		stdproto_tcp_mss_ns_elems,
@@ -3432,7 +3432,7 @@ struct ns_elem *stdproto_tcp_mss_ns_elems[STDPROTO_NS_SUB_ELEN] = {
 };
 
 /* TCP Window Scale Option */
-static struct ns_namespace tcp_wscale_ns = 
+static struct ns_namespace tcp_wscale_ns =
 	NS_NAMESPACE_IDX_I("wscale", &tcp_ns, PRID_TCP, PRID_NONE,
 		PDU_TCPFLD_WSCALE, 4,
 		"TCP Window Scale Option", NULL,
@@ -3453,7 +3453,7 @@ struct ns_elem *stdproto_tcp_wscale_ns_elems[STDPROTO_NS_SUB_ELEN] = {
 };
 
 /* TCP Selective Acknowledgement Permitted Option */
-static struct ns_namespace tcp_sackok_ns = 
+static struct ns_namespace tcp_sackok_ns =
 	NS_NAMESPACE_IDX_I("sackok", &tcp_ns, PRID_TCP, PRID_NONE,
 		PDU_TCPFLD_SACKOK, 2,
 		"TCP Window Scale Option", NULL,
@@ -3470,7 +3470,7 @@ struct ns_elem *stdproto_tcp_sackok_ns_elems[STDPROTO_NS_SUB_ELEN] = {
 };
 
 /* TCP Selective Acknowledgement Option */
-static struct ns_namespace tcp_sack_ns = 
+static struct ns_namespace tcp_sack_ns =
 	NS_NAMESPACE_VARLEN_I("sack", &tcp_ns, PRID_TCP, PRID_NONE,
 		PDU_TCPFLD_SACK,
 		PDU_TCPFLD_SACK_END,
@@ -3478,14 +3478,14 @@ static struct ns_namespace tcp_sack_ns =
 		stdproto_tcp_sack_ns_elems,
 		array_length(stdproto_tcp_sack_ns_elems));
 static struct ns_pktfld tcp_sack_kind =
-	NS_BYTEFIELD_IDX_I("kind", &tcp_sack_ns, PRID_TCP, PDU_TCPFLD_SACK, 
+	NS_BYTEFIELD_IDX_I("kind", &tcp_sack_ns, PRID_TCP, PDU_TCPFLD_SACK,
 		0, 1, "Kind", &ns_fmt_dec);
 static struct ns_pktfld tcp_sack_len =
 	NS_BYTEFIELD_IDX_I("len", &tcp_sack_ns, PRID_TCP, PDU_TCPFLD_SACK,
 		1, 1, "Length", &ns_fmt_dec);
 static struct ns_pktfld tcp_sack_blocks =
 	NS_BYTEFIELD_VARLEN_I("blocks", &tcp_sack_ns, PRID_TCP, PDU_TCPFLD_SACK,
-		2, PDU_TCPFLD_SACK_END, 
+		2, PDU_TCPFLD_SACK_END,
 		"Selective Acknowledgements", &ns_fmt_raw);
 struct ns_elem *stdproto_tcp_sack_ns_elems[STDPROTO_NS_SUB_ELEN] = {
 	(struct ns_elem *)&tcp_sack_kind, (struct ns_elem *)&tcp_sack_len,
@@ -3494,7 +3494,7 @@ struct ns_elem *stdproto_tcp_sack_ns_elems[STDPROTO_NS_SUB_ELEN] = {
 
 
 /* TCP Timestamp Option */
-static struct ns_namespace tcp_ts_ns = 
+static struct ns_namespace tcp_ts_ns =
 	NS_NAMESPACE_IDX_I("ts", &tcp_ns, PRID_TCP, PRID_NONE,
 		PDU_TCPFLD_TSTAMP, 10,
 		"TCP Timestamp Option", NULL,
@@ -3507,7 +3507,7 @@ static struct ns_pktfld tcp_ts_len =
 	NS_BYTEFIELD_IDX_I("len", &tcp_ts_ns, PRID_TCP, PDU_TCPFLD_TSTAMP,
 		1, 1, "Length", &ns_fmt_dec);
 static struct ns_pktfld tcp_ts_val =
-	NS_BYTEFIELD_IDX_I("val", &tcp_ts_ns, PRID_TCP, PDU_TCPFLD_TSTAMP, 
+	NS_BYTEFIELD_IDX_I("val", &tcp_ts_ns, PRID_TCP, PDU_TCPFLD_TSTAMP,
 		2, 4, "Value", &ns_fmt_dec);
 static struct ns_pktfld tcp_ts_echo =
 	NS_BYTEFIELD_IDX_I("echo", &tcp_ts_ns, PRID_TCP, PDU_TCPFLD_TSTAMP,
@@ -3519,7 +3519,7 @@ struct ns_elem *stdproto_tcp_ts_ns_elems[STDPROTO_NS_SUB_ELEN] = {
 
 
 /* TCP MD5 Signature Option */
-static struct ns_namespace tcp_md5_ns = 
+static struct ns_namespace tcp_md5_ns =
 	NS_NAMESPACE_IDX_I("md5", &tcp_ns, PRID_TCP, PRID_NONE,
 		PDU_TCPFLD_MD5, 18,
 		"TCP MD5 Signature Option", NULL,
@@ -3543,11 +3543,11 @@ struct ns_elem *stdproto_tcp_ns_elems[STDPROTO_NS_ELEN] = {
 	(struct ns_elem *)&tcp_ns_sport, (struct ns_elem *)&tcp_ns_dport,
 	(struct ns_elem *)&tcp_ns_seqn, (struct ns_elem *)&tcp_ns_ackn,
 	(struct ns_elem *)&tcp_ns_doff, (struct ns_elem *)&tcp_ns_resv,
-	(struct ns_elem *)&tcp_ns_cwr, (struct ns_elem *)&tcp_ns_ece, 
-	(struct ns_elem *)&tcp_ns_urg, (struct ns_elem *)&tcp_ns_ack, 
-	(struct ns_elem *)&tcp_ns_psh, (struct ns_elem *)&tcp_ns_rst, 
-	(struct ns_elem *)&tcp_ns_syn, (struct ns_elem *)&tcp_ns_fin, 
-	(struct ns_elem *)&tcp_ns_win, (struct ns_elem *)&tcp_ns_cksum, 
+	(struct ns_elem *)&tcp_ns_cwr, (struct ns_elem *)&tcp_ns_ece,
+	(struct ns_elem *)&tcp_ns_urg, (struct ns_elem *)&tcp_ns_ack,
+	(struct ns_elem *)&tcp_ns_psh, (struct ns_elem *)&tcp_ns_rst,
+	(struct ns_elem *)&tcp_ns_syn, (struct ns_elem *)&tcp_ns_fin,
+	(struct ns_elem *)&tcp_ns_win, (struct ns_elem *)&tcp_ns_cksum,
 	(struct ns_elem *)&tcp_ns_urgp, (struct ns_elem *)&tcp_ns_opt,
 
 	/* Options */
@@ -3562,7 +3562,7 @@ struct ns_elem *stdproto_tcp_ns_elems[STDPROTO_NS_ELEN] = {
 
 /* GRE Namespace */
 extern struct ns_elem *stdproto_gre_ns_elems[STDPROTO_NS_ELEN];
-static struct ns_namespace gre_ns = 
+static struct ns_namespace gre_ns =
 	NS_NAMESPACE_I("gre", NULL, PRID_GRE, PRID_PCLASS_TUNNEL,
 		"Generic Routing Encapsulation", NULL,
 	       	stdproto_gre_ns_elems, array_length(stdproto_gre_ns_elems));
@@ -3597,17 +3597,17 @@ static struct ns_pktfld gre_ns_seq =
 
 
 struct ns_elem *stdproto_gre_ns_elems[STDPROTO_NS_ELEN] = {
-	(struct ns_elem *)&gre_ns_c_flag, (struct ns_elem *)&gre_ns_r_flag, 
-	(struct ns_elem *)&gre_ns_k_flag, (struct ns_elem *)&gre_ns_s_flag, 
-	(struct ns_elem *)&gre_ns_version, (struct ns_elem *)&gre_ns_proto, 
-	(struct ns_elem *)&gre_ns_cksum, (struct ns_elem *)&gre_ns_key, 
+	(struct ns_elem *)&gre_ns_c_flag, (struct ns_elem *)&gre_ns_r_flag,
+	(struct ns_elem *)&gre_ns_k_flag, (struct ns_elem *)&gre_ns_s_flag,
+	(struct ns_elem *)&gre_ns_version, (struct ns_elem *)&gre_ns_proto,
+	(struct ns_elem *)&gre_ns_cksum, (struct ns_elem *)&gre_ns_key,
 	(struct ns_elem *)&gre_ns_seq
 };
 
 
 /* NVGRE Namespace */
 extern struct ns_elem *stdproto_nvgre_ns_elems[STDPROTO_NS_ELEN];
-static struct ns_namespace nvgre_ns = 
+static struct ns_namespace nvgre_ns =
 	NS_NAMESPACE_I("nvgre", NULL, PRID_NVGRE, PRID_PCLASS_TUNNEL,
 		"Network Virtualization Generic Routing Encapsulation", NULL,
 	       	stdproto_nvgre_ns_elems, array_length(stdproto_nvgre_ns_elems));
@@ -3642,13 +3642,13 @@ struct ns_elem *stdproto_nvgre_ns_elems[STDPROTO_NS_ELEN] = {
 	(struct ns_elem *)&nvgre_ns_c_flag, (struct ns_elem *)&nvgre_ns_r_flag,
 	(struct ns_elem *)&nvgre_ns_k_flag, (struct ns_elem *)&nvgre_ns_s_flag,
 	(struct ns_elem *)&nvgre_ns_version, (struct ns_elem *)&nvgre_ns_proto,
-	(struct ns_elem *)&nvgre_ns_vsid, (struct ns_elem *)&nvgre_ns_flowid, 
+	(struct ns_elem *)&nvgre_ns_vsid, (struct ns_elem *)&nvgre_ns_flowid,
 };
 
 
 /* VXLAN Namespace */
 extern struct ns_elem *stdproto_vxlan_ns_elems[STDPROTO_NS_ELEN];
-static struct ns_namespace vxlan_ns = 
+static struct ns_namespace vxlan_ns =
 	NS_NAMESPACE_I("vxlan", NULL, PRID_VXLAN, PRID_PCLASS_TUNNEL,
 		"Virtual Extensible LAN", NULL,
 	       	stdproto_vxlan_ns_elems, array_length(stdproto_vxlan_ns_elems));
@@ -3668,7 +3668,7 @@ struct ns_elem *stdproto_vxlan_ns_elems[STDPROTO_NS_ELEN] = {
 
 /* MPLS Namespace */
 extern struct ns_elem *stdproto_mpls_ns_elems[STDPROTO_NS_ELEN];
-static struct ns_namespace mpls_ns = 
+static struct ns_namespace mpls_ns =
 	NS_NAMESPACE_I("mpls", NULL, PRID_MPLS, PRID_PCLASS_TUNNEL,
 		"Multi-Protocol Label Switching", NULL,
 		stdproto_mpls_ns_elems, array_length(stdproto_mpls_ns_elems));
@@ -3694,7 +3694,7 @@ extern struct ns_elem *stdproto_mpls_lbl5_ns_elems[STDPROTO_NS_SUB_ELEN];
 extern struct ns_elem *stdproto_mpls_lbl6_ns_elems[STDPROTO_NS_SUB_ELEN];
 extern struct ns_elem *stdproto_mpls_lbl7_ns_elems[STDPROTO_NS_SUB_ELEN];
 
-static struct ns_namespace mpls_lbl1_ns = 
+static struct ns_namespace mpls_lbl1_ns =
 	NS_NAMESPACE_IDX_I("mpls1", &mpls_ns, PRID_MPLS, PRID_NONE,
 		PDU_MPLSFLD_LBL1, 4, "MPLS Label 1", NULL,
 		stdproto_mpls_lbl1_ns_elems,
@@ -3718,7 +3718,7 @@ struct ns_elem *stdproto_mpls_lbl1_ns_elems[STDPROTO_NS_SUB_ELEN] = {
 };
 
 
-static struct ns_namespace mpls_lbl2_ns = 
+static struct ns_namespace mpls_lbl2_ns =
 	NS_NAMESPACE_IDX_I("mpls2", &mpls_ns, PRID_MPLS, PRID_NONE,
 		PDU_MPLSFLD_LBL1, 4, "MPLS Label 1", NULL,
 		stdproto_mpls_lbl2_ns_elems,
@@ -3742,7 +3742,7 @@ struct ns_elem *stdproto_mpls_lbl2_ns_elems[STDPROTO_NS_SUB_ELEN] = {
 };
 
 
-static struct ns_namespace mpls_lbl3_ns = 
+static struct ns_namespace mpls_lbl3_ns =
 	NS_NAMESPACE_IDX_I("mpls3", &mpls_ns, PRID_MPLS, PRID_NONE,
 		PDU_MPLSFLD_LBL1, 4, "MPLS Label 1", NULL,
 		stdproto_mpls_lbl3_ns_elems,
@@ -3770,7 +3770,7 @@ struct ns_elem *stdproto_mpls_ns_elems[STDPROTO_NS_ELEN] = {
 	(struct ns_elem *)&mpls_ns_label, (struct ns_elem *)&mpls_ns_tc,
 	(struct ns_elem *)&mpls_ns_bos, (struct ns_elem *)&mpls_ns_ttl,
 	(struct ns_elem *)&mpls_lbl1_ns, (struct ns_elem *)&mpls_lbl2_ns,
-	(struct ns_elem *)&mpls_lbl3_ns, 
+	(struct ns_elem *)&mpls_lbl3_ns,
 };
 
 

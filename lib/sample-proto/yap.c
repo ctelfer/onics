@@ -59,7 +59,7 @@ struct proto_parser_ops yap_ops;
 struct pdu_ops yap_pdu_ops;
 
 
-/* 
+/*
  * This function parses a PDU and stores the parse info in 'pdu'
  */
 static void yap_update(struct pdu *pdu, byte_t *buf)
@@ -124,14 +124,14 @@ static int yap_fixnxt(struct pdu *pdu, byte_t *buf)
 
 
 /*
- * This function creates a copy of a parse.  The protoparse 
+ * This function creates a copy of a parse.  The protoparse
  * API does not know how parses are allocated (or copied).
  * The protocol library handles this detail.
  */
 static struct pdu *yap_copy(struct pdu *opdu)
 {
 	struct pdu *pdu;
-       	pdu = calloc(sizeof(struct pdu), 1);
+	pdu = calloc(sizeof(struct pdu), 1);
 	if (pdu == NULL)
 		return NULL;
 	memcpy(pdu, opdu, sizeof(*pdu));
@@ -337,7 +337,7 @@ static int yap_add(struct pdu *reg, byte_t *buf, struct pduspec *ps,
 /*
  * These are the function pointers for the protocol parser.
  */
-struct proto_parser_ops yap_ops = { 
+struct proto_parser_ops yap_ops = {
 	yap_parse,
 	yap_nxtcld,
 	yap_getspec,
@@ -365,7 +365,7 @@ struct proto_parser_ops yap_ops = {
 /* Forward declaration for the array of subfields from the yap namespace */
 extern struct ns_elem *yap_ns_elems[4];
 
-/* 
+/*
  * parameters are:
  *   - short name
  *   - namespace parent (NULL for the root)

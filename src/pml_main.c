@@ -212,7 +212,7 @@ void parse_pml_program(struct netvm_program *prog)
 	struct pml_ast ast;
 	struct pmll_val extra;
 	char estr[PMLNCG_MAXERR];
-	
+
 	if ((scanner = pmll_alloc()) == NULL)
 		errsys("pmllex_init: ");
 	if (ipath[0] != '\0')
@@ -241,13 +241,13 @@ void parse_pml_program(struct netvm_program *prog)
 		tok = pmll_nexttok(scanner, &extra);
 		if (tok < 0)
 			err("Syntax error on line %lu of %s: '%s'\n",
-			    pmll_get_lineno(scanner), 
+			    pmll_get_lineno(scanner),
 			    pmll_get_iname(scanner),
 			    pmll_get_err(scanner));
 		if (pml_parse(parser, &ast, tok, extra)) {
 			err("parse error on line %lu of %s: %s\n",
 			    pmll_get_lineno(scanner),
-			    pmll_get_iname(scanner), 
+			    pmll_get_iname(scanner),
 			    ast.errbuf);
 		}
 	} while (tok > 0);
@@ -271,7 +271,7 @@ void parse_pml_program(struct netvm_program *prog)
 }
 
 
-void initvm(struct netvm *vm, ulong *stk, uint stksz, 
+void initvm(struct netvm *vm, ulong *stk, uint stksz,
 	    struct netvm_std_coproc *cproc, struct file_emitter *fe,
 	    struct netvm_program *prog)
 {
@@ -366,6 +366,6 @@ int main(int argc, char *argv[])
 	pkb_free_pools();
 	fclose(outfile);
 	fclose(infile);
-	
+
 	return 0;
 }

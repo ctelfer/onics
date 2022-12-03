@@ -104,7 +104,7 @@ struct pmlncg {
  *    entry point before the actual BEGIN code in PML.
  */
 
-/* 
+/*
  * Compile a PML AST to a netvm program that can be stored or run.
  * if 'copy' is set then the operation is non-destructive and the
  * memory initializations get copied from the ast to the program.

@@ -41,30 +41,30 @@
 #include "util.h"
 
 
-/* 
+/*
  * This program computes the edit distance between two packet streams by
- * looking at the data stream at increasing levels of granularity.  It 
+ * looking at the data stream at increasing levels of granularity.  It
  * computes damerau-levenshtein distance between the packets themselves.
  * This means it uses dynamic programming to determine the minimum cost
  * of insertions, deletions, modifications and swaps to transform the
  * first packet stream into the second.  The cost of inserting or deleting
  * a packet is fixed cost heuristically chosen.  The cost for modifying
- * a packet to produce another packet takes the packet scrutiny to 
+ * a packet to produce another packet takes the packet scrutiny to
  * the next layer of examination.
  *
  * Determining packet modification cost occurs by computing edit distance
  * first among the parsed headers in the packet.  The cost of inserting
  * a header is equal to the total cost of inserting a packet times the
- * fraction of the bits in the final packet that were inserted.  For 
+ * fraction of the bits in the final packet that were inserted.  For
  * example, if the target packet was 256 bits long and the cost of inserting
- * a packet were 8, then the cost of inserting a 64-bit header would be 
+ * a packet were 8, then the cost of inserting a 64-bit header would be
  * equal to 8 * 64 / 256 or 2.0.  Similarly, the cost of deleting a header is
  * equal to the cost of deleting an entire packet multiplied by the fraction
  * of bits from the original packet that were removed.  Computing the cost
  * of modifying a header takes the computation to a 3rd level of edit distance
  * calculation.
  *
- * The program only considers it possible to modify one protocol unit into 
+ * The program only considers it possible to modify one protocol unit into
  * another if they are have the exact same PRID.  The modification cost
  * of, say an IPv6 header into an IPv4 header would be infinity.  It will
  * be cheaper to delete the IPv6 header and insert the IPv4 header.  When
@@ -84,7 +84,7 @@
  *
  *
  * TODO:
- *  + Enable ability to report changes as a PML edit script from the 
+ *  + Enable ability to report changes as a PML edit script from the
  *    original packet stream.
  *  + Perhaps operate on a _window_ of the packerts at a time to
  *    support larger streams more scalaby.  (memory usage is proportional
@@ -266,7 +266,7 @@ void parse_args(int argc, char *argv[])
 {
 	int rv;
 	struct clopt *opt;
-	
+
 	progname = argv[0];
 	optparse_reset(&g_oparse, argc, argv);
 	while (!(rv = optparse_next(&g_oparse, &opt))) {
@@ -335,7 +335,7 @@ void pktent_init(struct pktent *pke, ulong pn, const char *sname)
 		if (pke->npdu == pke->pasiz) {
 			pke->pasiz *= 2;
 			pke->pduarr = erealloc(pke->pduarr,
-					       sizeof(struct pduent) * 
+					       sizeof(struct pduent) *
 							pke->pasiz);
 			ppe = &pke->pduarr[pke->npdu];
 		}
@@ -384,7 +384,7 @@ static void read_file(struct pktarr *pa, struct file_info *fi, int max)
 			if (pa->pasz * 2 < pa->pasz)
 				err("Size overflow\n");
 			pa->pasz *= 2;
-			pa->pkts = erealloc(pa->pkts, 
+			pa->pkts = erealloc(pa->pkts,
 					    pa->pasz * sizeof(struct pktent));
 		}
 	}
@@ -426,7 +426,7 @@ static void cpm_ealloc(struct cpmatrix *cpm, ulong nr, ulong nc)
 	struct chgpath **rp;
 	ulong i, j;
 
-	abort_unless(nr > 0 || nc > 0 || 
+	abort_unless(nr > 0 || nc > 0 ||
 		     ULONG_MAX / sizeof(struct chgpath) / nc <= nr);
 
 	cpm->nrows = nr;
@@ -505,7 +505,7 @@ void cpm_backtrace(struct cpmatrix *cpm, ulong *lr, ulong *lc)
 		 * packets at a time.  A packet insertion or drop will cause
 		 * the windows to misalign resulting in an insert+drop every
 		 * 'window_size' packets: technically correct but not optimal.
-		 * 
+		 *
 		 * To attempt to avoid this, search for the last 'PASS'
 		 * packet or, failing that * the last 'MODIFY' packet.  If
 		 * that packet is at least 3/4 of the way through both
@@ -571,7 +571,7 @@ void pdiff_load(struct pdiff *pd, struct file_info *before,
 
 	read_file(&pd->before, before, window_size);
 	read_file(&pd->after, after, window_size);
-	pd->end_early = before->can_rewind && after->can_rewind && 
+	pd->end_early = before->can_rewind && after->can_rewind &&
 			window_size > 0 && (!before->eof || !after->eof);
 	pd->nb = pd->before.npkts;
 	pd->na = pd->after.npkts;
@@ -672,7 +672,7 @@ void fdiff_load(struct fdiff *fd, struct npf_list *fl1, struct npf_list *fl2)
 }
 
 
-static double calc_fmod_cost(struct npfield *f1, double f1cost, 
+static double calc_fmod_cost(struct npfield *f1, double f1cost,
 			     struct npfield *f2, double f2cost)
 {
 	double cost;
@@ -715,15 +715,15 @@ static double calc_fmod_cost(struct npfield *f1, double f1cost,
 		return cost;
 	}
 }
-		  
-		  
+
+
 void fdiff_clear(struct fdiff *fd)
 {
 	fd->before = NULL;
 	fd->after = NULL;
 }
-		  
-		  
+
+
 void fdiff_free(struct fdiff *fd)
 {
 	fd->before = NULL;
@@ -732,7 +732,7 @@ void fdiff_free(struct fdiff *fd)
 	fd->cpm.nrows = 0;
 	fd->cpm.ncols = 0;
 }
-		  
+
 
 double fdiff_cost(struct fdiff *fd)
 {
@@ -762,7 +762,7 @@ void fdiff_compare(struct fdiff *fd, double drop_bit_cost, double ins_bit_cost)
 	for (i = 1; i < cpm->nrows; ++i) {
 		dpos = cpm_elem(cpm, i, 0);
 		dpos->actb = DROP;
-		dpos->cost = cpm_elem(cpm, i-1, 0)->cost + 
+		dpos->cost = cpm_elem(cpm, i-1, 0)->cost +
 			     rnpf->len * adj_drop_bit_cost;
 		rnpf = npf_next(rnpf);
 	}
@@ -771,7 +771,7 @@ void fdiff_compare(struct fdiff *fd, double drop_bit_cost, double ins_bit_cost)
 	for (i = 1; i < cpm->ncols; ++i) {
 		ipos = cpm_elem(cpm, 0, i);
 		ipos->actb = INSERT;
-		ipos->cost = cpm_elem(cpm, 0, i-1)->cost + 
+		ipos->cost = cpm_elem(cpm, 0, i-1)->cost +
 			     cnpf->len * adj_ins_bit_cost;
 		cnpf = npf_next(cnpf);
 	}
@@ -788,7 +788,7 @@ void fdiff_compare(struct fdiff *fd, double drop_bit_cost, double ins_bit_cost)
 				mcost = mpos->cost;
 				maction = PASS;
 			} else if (npf_type_eq(rnpf, cnpf)) {
-				mcost = mpos->cost + 
+				mcost = mpos->cost +
 					calc_fmod_cost(rnpf, drop_bit_cost,
 						       cnpf, ins_bit_cost);
 				maction = MODIFY;
@@ -883,10 +883,10 @@ static void emit_fmod_gap(struct emitter *e, struct npf_list *npfl1,
 		while (i+n < l && p1[n] != p2[n])
 			++n;
 		if (n > 0) {
-			emit_format(e, "%%-%s Data -- [%lu:%lu]\n", name, 
+			emit_format(e, "%%-%s Data -- [%lu:%lu]\n", name,
 				    sboff1 + i, n);
 			emit_hex(e, "%-", sboff1 + i, p1, n);
-			emit_format(e, "%%+%s Data -- [%lu:%lu]\n", name, 
+			emit_format(e, "%%+%s Data -- [%lu:%lu]\n", name,
 				    sboff2 + i, n);
 			emit_hex(e, "%+", sboff2 + i, p2, n);
 			p1 += n;
@@ -912,7 +912,7 @@ static void mod_fld_report(struct emitter *e, struct npf_list *npfl1,
 
 
 static void mod_hdr_report(struct emitter *e, struct pduent *ppe1, ulong p1n,
-			   struct pduent *ppe2, ulong p2n, 
+			   struct pduent *ppe2, ulong p2n,
 			   double drop_bit_cost, double ins_bit_cost)
 {
 	struct cpmatrix *cpm;
@@ -935,7 +935,7 @@ static void mod_hdr_report(struct emitter *e, struct pduent *ppe1, ulong p1n,
 
 	while (elem->actf != DONE) {
 		switch (elem->actf) {
-		case PASS: 
+		case PASS:
 			if (verbosity > 0) {
 				ns_tostr(rnpf->nse, rnpf->buf, rnpf->pdu, line,
 					 sizeof(line), "   ");
@@ -946,7 +946,7 @@ static void mod_hdr_report(struct emitter *e, struct pduent *ppe1, ulong p1n,
 			break;
 
 		case DROP:
-			ns_tostr(rnpf->nse, rnpf->buf, rnpf->pdu, line, 
+			ns_tostr(rnpf->nse, rnpf->buf, rnpf->pdu, line,
 				 sizeof(line), "-- ");
 			emit_string(e, line);
 			rnpf = npf_next(rnpf);
@@ -1077,7 +1077,7 @@ void hdiff_compare(struct hdiff *hd)
 	cpm_elem(cpm, 0, 0)->actb = DONE;
 	cpm_elem(cpm, 0, 0)->cost = 0.0;
 
-	/* 
+	/*
 	 * Each drop costs an amount proportional to the # of bits
 	 * being dropped in from the packet.  Similarly, each insert
 	 * costs an amount proportional to the # of bits inserted.
@@ -1162,12 +1162,12 @@ static int is_reorder_pair(struct pdiff *pd, struct chgpath *e1,
 			   struct chgpath *e2)
 {
 	if (e1->actf == DROP) {
-		return e2->actf == INSERT && 
+		return e2->actf == INSERT &&
 		       e2->shift == 0 &&
 		       pd->mcosts[e1->r][e2->c] == 0.0;
 	} else {
 		abort_unless(e1->actf == INSERT);
-		return e2->actf == DROP && 
+		return e2->actf == DROP &&
 		       e2->shift == 0 &&
 		       pd->mcosts[e2->r][e1->c] == 0.0;
 	}
@@ -1205,7 +1205,7 @@ static void mark_reorders(struct pdiff *pd)
 
 	elem = cpm_elem(cpm, 0, 0);
 	while (elem->actf != DONE) {
-		if (elem->shift == 0 && 
+		if (elem->shift == 0 &&
 		    (elem->actf == DROP || elem->actf == INSERT))
 			find_reorder_pair(pd, elem);
 		elem = elem->next;
@@ -1269,7 +1269,7 @@ void pdiff_compare(struct pdiff *pd)
 }
 
 
-static void print_hdr_desc(struct emitter *e, struct pduent *ppe, 
+static void print_hdr_desc(struct emitter *e, struct pduent *ppe,
 			   const char *op, const char *pfx)
 {
 	char name[256];
@@ -1281,7 +1281,7 @@ static void print_hdr_desc(struct emitter *e, struct pduent *ppe,
 
 	pdu_get_name(pdu, ppe->idx, name, sizeof(name));
 	emit_format(e, "%s*****\n", pfx);
-	emit_format(e, "%s* %s%s -- [%lu:%lu]\n", 
+	emit_format(e, "%s* %s%s -- [%lu:%lu]\n",
 		    pfx, op, name, pdu_soff(pdu) - psoff,
 		    pdu_totlen(pdu));
 	emit_format(e, "%s*****\n", pfx);
@@ -1320,7 +1320,7 @@ static void print_hdr_op(struct emitter *e, struct pduent *ppe, int action)
 }
 
 
-static void mod_pkt_report(struct pktent *pke1, ulong p1n, struct pktent *pke2, 
+static void mod_pkt_report(struct pktent *pke1, ulong p1n, struct pktent *pke2,
 			   ulong p2n, struct emitter *e)
 {
 	struct cpmatrix *cpm;
@@ -1421,8 +1421,8 @@ static void pke_print(struct emitter *e, struct pktent *pke, char *pfx)
 		     npf = npf_next(npf))
 			Farr[j++] = npf;
 
-	/* 
-	 * sort the array by offset: list should be nearly 
+	/*
+	 * sort the array by offset: list should be nearly
 	 * sorted so insertion sort should be very fast.
 	 */
 	isort_array(Farr, n, sizeof(Farr[0]), fld_off_cmp);
@@ -1440,7 +1440,7 @@ static void pke_print(struct emitter *e, struct pktent *pke, char *pfx)
 			soff = pdu_soff(pdu) - psoff;
 			pdu_get_name(pdu, ppe->idx, name, sizeof(name));
 			emit_format(e, "%s*****\n", pfx);
-			emit_format(e, "%s* %s: [%lu:%lu]\n", pfx, name, soff, 
+			emit_format(e, "%s* %s: [%lu:%lu]\n", pfx, name, soff,
 				    pdu_totlen(pdu));
 			emit_format(e, "%s*****\n", pfx);
 			lastpdu = pdu;
@@ -1451,7 +1451,7 @@ static void pke_print(struct emitter *e, struct pktent *pke, char *pfx)
 }
 
 
-static void report_pass(struct emitter *e, struct pdiff *pd, 
+static void report_pass(struct emitter *e, struct pdiff *pd,
 			struct chgpath *elem, ulong poff)
 {
 	struct pktent *pke;
@@ -1469,7 +1469,7 @@ static void report_pass(struct emitter *e, struct pdiff *pd,
 }
 
 
-static void report_drop(struct emitter *e, struct pdiff *pd, 
+static void report_drop(struct emitter *e, struct pdiff *pd,
 			struct chgpath *elem, ulong poff)
 {
 	struct pktent *pke = &pd->before.pkts[elem->r];
@@ -1484,7 +1484,7 @@ static void report_drop(struct emitter *e, struct pdiff *pd,
 			return;
 		emit_string(e, "#####\n");
 		emit_format(e, "# Packet %lu moved forward %ld packet%s\n",
-			    elem->r + 1 + poff, elem->shift, 
+			    elem->r + 1 + poff, elem->shift,
 			    (elem->shift > 1) ? "s" : "");
 		emit_string(e, "#####\n\n");
 	} else {
@@ -1493,14 +1493,14 @@ static void report_drop(struct emitter *e, struct pdiff *pd,
 			return;
 		emit_string(e, "#####\n");
 		emit_format(e, "# Packet %lu moved backwards %ld packet%s\n",
-			    elem->r + 1 + poff, -elem->shift, 
+			    elem->r + 1 + poff, -elem->shift,
 			    elem->shift < -1 ? "s" : "");
 		emit_string(e, "#####\n\n");
 	}
 }
 
 
-static void report_insert(struct emitter *e, struct pdiff *pd, 
+static void report_insert(struct emitter *e, struct pdiff *pd,
 			  struct chgpath *elem, ulong poff)
 {
 	struct pktent *pke = &pd->after.pkts[elem->c];
@@ -1514,7 +1514,7 @@ static void report_insert(struct emitter *e, struct pdiff *pd,
 		/* inserted earlier and dropped later */
 		emit_string(e, "#####\n");
 		emit_format(e, "# Packet %lu moved backwards %lu packet%s\n",
-			    elem->opkt + poff, elem->shift, 
+			    elem->opkt + poff, elem->shift,
 			    (elem->shift > 1) ? "s" : "");
 		emit_string(e, "#####\n");
 		pke_print(e, pke, "<< ");
@@ -1533,7 +1533,7 @@ static void report_insert(struct emitter *e, struct pdiff *pd,
 }
 
 
-static void report_modify(struct emitter *e, struct pdiff *pd, 
+static void report_modify(struct emitter *e, struct pdiff *pd,
 			  struct chgpath *elem, ulong poff)
 {
 	struct pktent *before = &pd->before.pkts[elem->r];
@@ -1554,7 +1554,7 @@ void pdiff_report(struct pdiff *pd, struct emitter *e, ulong f1off)
 	elem = cpm_elem(cpm, 0, 0);
 	while (elem->actf != DONE) {
 		switch (elem->actf) {
-		case PASS: 
+		case PASS:
 			report_pass(e, pd, elem, f1off);
 			break;
 		case DROP:

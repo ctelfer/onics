@@ -100,7 +100,7 @@ uint16_t ones_sum(void *p, ulong len, uint16_t val)
 
 /*
  * 01001011 11001001 11001110
- * off 3 len 2: bitlen = 5 
+ * off 3 len 2: bitlen = 5
  * 00011111  (0x100 >> 3 - 1) == 0x20 - 1 == 31 = 0x1F
  * 11111000  -(0x100 >> 5) == -0x08 == 0xff...f8
  *
@@ -177,7 +177,7 @@ void setbits(byte_t *p, ulong bitoff, uint bitlen, ulong val)
 
 	/* trailer */
 	if (bitlen > 0) {
-		*p = (*p & ~LEFTMASK(bitlen)) | 
+		*p = (*p & ~LEFTMASK(bitlen)) |
 		     ((val & RIGHTMASK(bitlen)) << (8 - bitlen));
 	}
 }
@@ -259,7 +259,7 @@ void shexdump(char *s, size_t ssize, const char *pfx, ulong addr, byte_t *p,
 			s += scl;
 		}
 
-		n = snprintf(s, ssize, 
+		n = snprintf(s, ssize,
 			     "    %06lx:  "
 			     "%02x %02x %02x %02x %02x %02x %02x %02x "
 			     "%02x %02x %02x %02x %02x %02x %02x %02x  "
@@ -334,10 +334,10 @@ void emit_hex(struct emitter *e, const char *pfx, ulong addr, byte_t *p,
 	int i;
 	ulong aoff = 0;
 
-	while (len > 16) { 
+	while (len > 16) {
 		if (pfx != NULL)
 			emit_string(e, pfx);
-		emit_format(e, 
+		emit_format(e,
 			    "    %06lx:  "
 			    "%02x %02x %02x %02x %02x %02x %02x %02x "
 			    "%02x %02x %02x %02x %02x %02x %02x %02x  "
@@ -446,7 +446,7 @@ void e2p_map_del(ushort etype)
 static uint e2p_lkup(ushort etype)
 {
 	void *r;
-	if (e2pmap != NULL && etype && 
+	if (e2pmap != NULL && etype &&
 	    (r = crb_get(e2pmap, int2ptr(etype))) != NULL) {
 		return (uint)ptr2int(r);
 	} else {
@@ -553,7 +553,7 @@ int ip6tostr(char *s, void *ip6a, size_t slen)
 				n = snprintf(s + si, slen - si, "%0x",
 					     (p[i] << 8 | p[i+1]));
 			si += n;
-		}	
+		}
 	}
 	return si;
 }

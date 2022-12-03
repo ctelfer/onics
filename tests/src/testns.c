@@ -93,7 +93,7 @@ struct ns_namespace tcpports =
 		       portsarr, array_length(portsarr));
 struct ns_elem *oddarr[2] = { 0 };
 struct ns_namespace oddrange =
-	NS_NAMESPACE_I("oddrange", NULL, PRID_TCP, PRID_PCLASS_XPORT, NULL, 
+	NS_NAMESPACE_I("oddrange", NULL, PRID_TCP, PRID_PCLASS_XPORT, NULL,
 			NULL, oddarr, array_length(oddarr));
 
 struct ns_scalar sshport = NS_UINT16_I("ssh", NULL, PRID_TCP, 22);

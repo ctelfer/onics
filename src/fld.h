@@ -29,14 +29,14 @@
 #include "ns.h"
 
 
-/* 
+/*
  * Return the offset of a given field in bits from the start of the packet
  * or PDU_OFF_INVALID of the offset is invalid.
  */
 ulong fld_get_off(struct pdu *pdu, struct ns_elem *nse);
 
-/* 
- * Return the length of a given field in bits from the start of the packet 
+/*
+ * Return the length of a given field in bits from the start of the packet
  * or -1 if invalid.
  */
 long fld_get_len(struct pdu *pdu, struct ns_elem *nse);
@@ -60,7 +60,7 @@ struct pdu *fld_get_pdu(struct pdu *plist, struct ns_namespace *ns);
 struct pdu *fld_get_pdun(struct pdu *plist, const char *s);
 
 /*
- * return a pointer to the header of the 'idx'th 'pf' parse 
+ * return a pointer to the header of the 'idx'th 'pf' parse
  * in buffer 'p' with parse 'plist'.  Return NULL if one doesn't exist.
  * If one does exist, return the header length in 'len'
  */
@@ -68,7 +68,7 @@ void *fld_get_hdri(byte_t *p, struct pdu *plist, struct ns_namespace *ns,
 		   uint idx, ulong *len);
 
 /*
- * return a pointer to the payload of the 'idx'th 'pf' parse 
+ * return a pointer to the payload of the 'idx'th 'pf' parse
  * in buffer 'p' with parse 'plist'.  Return NULL if one doesn't exist.
  * If one does exist, return the header length in 'len'
  */
@@ -76,7 +76,7 @@ void *fld_get_pldi(byte_t *p, struct pdu *plist, struct ns_namespace *ns,
 		   uint idx, ulong *len);
 
 /*
- * return a pointer to the trailer of the 'idx'th 'pf' parse 
+ * return a pointer to the trailer of the 'idx'th 'pf' parse
  * in buffer 'p' with parse 'plist'.  Return NULL if one doesn't exist.
  * If one does exist, return the header length in 'len'
  */
@@ -123,7 +123,7 @@ void *fld_get_trln(byte_t *p, struct pdu *plist, const char *s,
 
 
 /*
- * returns a pointer to the 'idx'th 'pf' field in 'p' parsed by 'plist' 
+ * returns a pointer to the 'idx'th 'pf' field in 'p' parsed by 'plist'
  * and the length if not NULL.  If there is an error or the field
  * does not exist, then it returns NULL.
  */

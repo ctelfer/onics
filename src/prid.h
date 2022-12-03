@@ -38,7 +38,7 @@
 #define PRID_PER_PF		256
 
 /*
-   Protocol types for family _RES indices 128-255 are reserved 
+   Protocol types for family _RES indices 128-255 are reserved
    "meta protocol types".  They stand for entire classes of packets
    or special cases like 'no type', 'invalid' or 'any' (for matching).
 

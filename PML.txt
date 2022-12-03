@@ -24,8 +24,8 @@ PML supports an extensible namespace for packet protocols.  When a
 programmer generates the definitions for parsing a protocol, defining
 its fields and its constants through the ONICS protoparse framework, the
 PML parser automatically picks up those definitions and allows the PML
-programmer to access them.  The upshot of all of this for PML is that the 
-actual "vocabulary" of a PML program depends on the protocol definitions 
+programmer to access them.  The upshot of all of this for PML is that the
+actual "vocabulary" of a PML program depends on the protocol definitions
 that the PML compiler/interpreter loads.  This makes the language readily
 extensible to new protocols.  The NetVM can support and future work will
 include making the protocol namespaces and fields discoverable and
@@ -47,10 +47,10 @@ or string reference.  Masked byte strings and regular expressions are
 only available as literal constants (currently).  The void type can only
 be a return type for a function.
 
-PML also supports named constants.  A program can not modify a constant 
-value and said value may not have any associated memory space in the 
-final program.  These values are used like #defines in the C language.  
-A program can define these symbols as PML expressions as long as the 
+PML also supports named constants.  A program can not modify a constant
+value and said value may not have any associated memory space in the
+final program.  These values are used like #defines in the C language.
+A program can define these symbols as PML expressions as long as the
 expression itself is constant and the compiler can determine its final
 value at compile time.  Thus a program can define a constant in terms of
 operations on other constants.
@@ -92,7 +92,7 @@ Each declaration can declare:
   * a function definition
   * an inline macro
   * a constant
-  * a global variable 
+  * a global variable
 
 
 COMMENTS
@@ -123,10 +123,10 @@ A rule definition take the form:
 
   RULE ::= PATTERN '{' [LOCAL_VAR_DECL]* [STATEMENT_LIST]* '}'
 
-A PATTERN must be one of 'BEGIN', 'TICK', 'END' or a PML expression 
+A PATTERN must be one of 'BEGIN', 'TICK', 'END' or a PML expression
 enclosed by '?-' and '-?'.  The order of rule declaration matters because
-the PML program executes rules in their declaration order.  There can be 
-multiple rules with the 'BEGIN', 'TICK' and 'END' pattern.  PML executes 
+the PML program executes rules in their declaration order.  There can be
+multiple rules with the 'BEGIN', 'TICK' and 'END' pattern.  PML executes
 rules with the 'BEGIN' pattern at startup before any packets are read in
 the system.  PML executes the 'TICK' segment, if present, once every
 millisecond.  It exectues rules with the 'END' pattern after it determines
@@ -139,11 +139,11 @@ program runs until the 'TICK' segment invokes the exit() intrinsic.
 PML evaluates a rule with an expression pattern once for every packet
 that it receives.  The PML program evaluates the PATTERN exression (the
 'rule pattern').  If the expression returns non-zero scalar result then
-the program executes the STATEMENT_LIST (the 'rule action').  It is also 
+the program executes the STATEMENT_LIST (the 'rule action').  It is also
 worth noting that PML can coerce any type to an integer value (see below)
 so any PML expression is valid in a rule pattern.  Again, PML evaluates
 the rules in order and a rule's actions (in the STATEMENT_LIST) can cause
-the program to skip later rules.  So order of declaration is important.  
+the program to skip later rules.  So order of declaration is important.
 A PML program can omit the pattern expression which will cause the rule
 action to fire on every packet.
 
@@ -171,7 +171,7 @@ The type void may only be used for a function return value.  The program
 is not able to declare variables of type mstr and regex.  Local
 variables and function parameters may not have type str:  only global
 varaibles can have that type in this version of the language.
-   
+
 
 VARIABLE DECLARATIONS
 ---------------------
@@ -215,9 +215,9 @@ to a string of 0s, uninitialized string references to a null reference.
 EXPRESSIONS
 -----------
 
-In the following, let 'E', 'E1', 'E2' ... refer to expressions.  Tokens of 
-the form *LOC refers to a 'locator'.  This is an rvalue consisting of a 
-variable name or a protocol namespace constant.  
+In the following, let 'E', 'E1', 'E2' ... refer to expressions.  Tokens of
+the form *LOC refers to a 'locator'.  This is an rvalue consisting of a
+variable name or a protocol namespace constant.
 
 In PML an expression is one of:
   - a positive decimal integer
@@ -225,10 +225,10 @@ In PML an expression is one of:
   - a locator (see below)
   - a function or inline macro call of the form:
 	<funcname> '(' [E1, E2...] ')'
-  - a literal byte string:  
+  - a literal byte string:
 	a double quoted string with usual C substitutions
 	  OR
-  	'\x' followed by an even number of hex digits
+	'\x' followed by an even number of hex digits
 	  OR
 	a dotted quad IPv4 address (4 byte string)
 	  OR
@@ -273,10 +273,10 @@ to the type value that the locator refers to.  All string references
 used in expressions have type 'str'.
 
 The match comparison operators (=~ and !~) perform different comparisons
-depending on the type of the right hand expression.  The left-hand 
+depending on the type of the right hand expression.  The left-hand
 expression must have a type of str or sref.  The right hand expression
 must have type str, mstr or regex.  For the rest of this discussion
-Let E1 be the left-hand side expression in the match expression and 
+Let E1 be the left-hand side expression in the match expression and
 let E2 be the right-hand side.
 
 If E2 has type 'str', then PML performs an exact string comparison (the
@@ -286,7 +286,7 @@ masked string value has a 'value' component and a 'mask' component both
 of which are byte strings.  Both 'value' and 'mask' must have the same
 length.  Expression E1 matches an mstr E2 if and only if: 1) the length of
 E1 matches the lengths of E2's value and mask and 2) each bit b1 in
-E1 matches its corresponding bit b2 in E2.value when the corresponding 
+E1 matches its corresponding bit b2 in E2.value when the corresponding
 bit 'm' in E2.mask is set.  Finally, if E2 has type regex then PML
 performs a regular expression mask of the pattern E2 against E1.
 
@@ -318,7 +318,7 @@ following type conversion implicitly:
 
   str->sref - converts the string to a reference to the string.
               This can occur in three ways:
-                1) when assigning a 'str' valued expression to an 
+                1) when assigning a 'str' valued expression to an
                    'sref' variable by the '& VAR = EXPR' statement.
                 2) when passing a string to an sref parameter
                    (denoted with type 'str') in a function call.
@@ -351,14 +351,14 @@ DIRECT ACCESS:
   $(pnum,idx)name.name2...
 		-- could refer to: packet field
 
-SUBSTRING ACCESS: 
+SUBSTRING ACCESS:
 
 (DA is a locator string with a direct access form.  DA must refer to a
 value of type 'str' or 'sref'.)
 
-  DA[off]	
-  DA[off, len]	
-		-- could refer to: variable, protocol, protocol constant 
+  DA[off]
+  DA[off, len]
+		-- could refer to: variable, protocol, protocol constant
 		   packet field. (The form of the direct access
 		   substring restricts possible types for this locator.)
 
@@ -396,7 +396,7 @@ PML has the following types of statements:
 
  - if ( EXPR ) { STATEMENT_LIST1 } [else { STATEMENT_LIST2 }]
 
-   Evaluate EXPR (typecasting to an int if necessary) and if it is 
+   Evaluate EXPR (typecasting to an int if necessary) and if it is
    true (non-zero) then execute STATEMENT_LIST1.  If the 'else' clause
    is present and EXPR is false (0), then execute STATEMENT_LIST2
    instead.
@@ -410,11 +410,11 @@ PML has the following types of statements:
  - print [% FMT %] EXPR [,[% FMT %] EXPR ...] ;
    print [% FMT %] EXPR [,[% FMT %] EXPR ...] , ;
 
-   Evaluate each EXPR and then print its value.  (the output goes to 
+   Evaluate each EXPR and then print its value.  (the output goes to
    standard error by default when PML is running from the command
    line.)  If a FMT directive is present, then it modifies the output
    string.  See FORMATTED PRINTING.  A print statement without a trailing
-   comma automatically appends a newline after printing all of the 
+   comma automatically appends a newline after printing all of the
    expressions.  If trailing comma (between the last expression and
    the semicolon) is present, then the statement does not add a newline
    to the end of the printing.
@@ -454,7 +454,7 @@ PML has the following types of statements:
    remains in the working set.  As with 'send EXPR' execution continues
    after the statement.
 
- - drop [EXPR] ; 
+ - drop [EXPR] ;
 
    As with the 'send' statement, the 'drop' statement has two forms with
    differing control flow semantics.  A 'drop' with no arguments drops
@@ -475,9 +475,9 @@ PML has the following types of statements:
    A break statement outside of any enclosing loop is a compile time
    error.
 
- - continue ; 
+ - continue ;
 
-   Immediately jump to the test of the currently innermost loop and 
+   Immediately jump to the test of the currently innermost loop and
    evaluate it.  This will not send control outside of the current
    function or rule.  A continue statement outside of any enclosing loop
    is a compile time error.
@@ -496,8 +496,8 @@ PML has the following types of statements:
 
    Evaluate EXPR and assign its value to the location denoted by
    LOCATOR.  LOCATOR and EXPR must have the same type or the PML program
-   must be able to type cast the EXPR to the type of LOCATOR.  In 
-   assignment statement that is prefixed with a '&', the expression must 
+   must be able to type cast the EXPR to the type of LOCATOR.  In
+   assignment statement that is prefixed with a '&', the expression must
    have type 'sref' and LOCATOR must be a variable of type 'sref'.  This
    assignment modifies the LOCATOR variable to point to refer to a new
    string.
@@ -508,7 +508,7 @@ PACKET WORKING SET
 
 PML keeps a small, fixed size working set of packet buffers during
 execution.  The packets are indexed numerically from 0 to 15.
-During BEGIN, TICK and END rules the working set start out empty;  none 
+During BEGIN, TICK and END rules the working set start out empty;  none
 of the packet indices refer to live packet buffers.  During packet rules,
 PML sets packet index 0 to refer to the next packet that it pulls from
 ingress.  The remaining packet indices still refer to nothing.
@@ -516,9 +516,9 @@ ingress.  The remaining packet indices still refer to nothing.
 A PML program can make a packet index refer to a packet buffer by
 copying packet buffers or creating packet buffers.  A program creates
 new packets with the pkt_new() and pkt_new_z() intrinsics.  It copies
-packets with the pkt_copy() intrinsic.  A program can also swap the 
+packets with the pkt_copy() intrinsic.  A program can also swap the
 packet buffers that two packet indices refer to through the pkt_swap()
-intrinsic.  
+intrinsic.
 
 In the future, there will also be new intrinsics to save packets to a
 backing store and restore them to the working set.  However, this is not
@@ -533,9 +533,9 @@ libraries extend the PML namespace with strings that refer to the
 protocols themselves, protocol-specific constants and parsed regions
 within packets.  In the ONICS tool-suite, the command-line pml tool uses
 the ONICS 'protoparse' and 'ns' APIs to implement these protocol
-modules.  
+modules.
 
-The term 'protocol namespace' refers to the set of symbols that a PML 
+The term 'protocol namespace' refers to the set of symbols that a PML
 protocol module imports into the PML namespace.  Each protocol namespace
 has members.  One refers to a member in a namespace by following the
 protocol name with a '.' and then the member name.  For example,
@@ -548,18 +548,18 @@ namespace member has one of the following types:
 In PML each protocol is assumed to have an encoding format in the
 packet.  When each packet arrives in PML, the runtime first decodes it
 (using the 'protoparse' library in the CLI version) which produces
-offsets to all of the 'protocol data unit's in the packet.  A protocol 
-data unit is a set of bytes in the packet that are meaningful in the 
-context of a given protocol.  The same bytes in a packet can be members 
-of several protocol data units.  For example, a byte the payload of a TCP 
+offsets to all of the 'protocol data unit's in the packet.  A protocol
+data unit is a set of bytes in the packet that are meaningful in the
+context of a given protocol.  The same bytes in a packet can be members
+of several protocol data units.  For example, a byte the payload of a TCP
 segment might be within a TCP protocol data unit, an IP protocol data unit
 and an Ethernet protocol data unit.
 
 When a PML program uses a protocol name as a locator, the locator's
 expression type is 'int' and it returns a true or false (1 or 0) value
 indicating whether the protocol is present in the given packet (which
-defaults to packet index if not specified 0).  If the PML program gives 
-the protocol name, but also adds an offset/length substring reference, 
+defaults to packet index if not specified 0).  If the PML program gives
+the protocol name, but also adds an offset/length substring reference,
 then the locator type is 'str' and it refers to the portion of the packet
 encapsulated in that protocol (both header and data).
 
@@ -585,7 +585,7 @@ present in the packet.  The members for a protocol P are:
 	     (One can access this as P[0] as well.)
 
 
-Each constant member in a protocol namespace has a type of either 'int', 
+Each constant member in a protocol namespace has a type of either 'int',
 'str' or 'mstr'.  An example of such a constant might be "ip.broadcast"
 which equals a byte string for 255.255.255.255.
 
@@ -593,8 +593,8 @@ Finally, a packet field member in a protocol namespace provides a way to
 access a field within a protocol data unit.  There are two forms of packet
 fields:  byte fields and bit fields.  Byte fields have type 'str',
 start on a byte boundary and have a length in bits that is a multiple of
-8.  Byte fields can have variable lengths.  A bitfield can start at any 
-bit in the packet, but its length (in bits) must be fixed and less than 
+8.  Byte fields can have variable lengths.  A bitfield can start at any
+bit in the packet, but its length (in bits) must be fixed and less than
 or equal to 32.  A bitfield's type is 'int', unlike a bytefield.
 
 A PML program can both read and write packet fields in the packet.  The
@@ -605,7 +605,7 @@ packet field.
 FUNCTION DECLARATIONS
 ---------------------
 
-Functions in PML are subroutines that support direct or indirect 
+Functions in PML are subroutines that support direct or indirect
 recursion.  PML functions, like rules, can have local variables and
 parameters that are of type 'int' or 'sref'.  A PML program can also
 have a prototype declaration of a function to allow other functions to
@@ -634,7 +634,7 @@ program will discard the return value of the return expression (if
 present).  If control reaches the end of STATEMENT_LIST without
 encountering a return statement, then the program returns a value of '0'
 if the return type is 'int' or an empty string reference if the type is
-'str'.  
+'str'.
 
 
 INLINE MACRO DECLARATIONS
@@ -646,7 +646,7 @@ type cast to 'int') instead of a list of statements.  Upon invocation,
 an inline macro actually embeds the expansion of the expression in the
 PML program directly.  The compiler takes care to evaluate each
 parameter to the inline macro exactly once and the inline macro can not
-modify it.  
+modify it.
 
 So an inline macro is a safe macro for arithmetic computations.  It does
 not have the full cost of performing a function call.  More importantly,
@@ -670,7 +670,7 @@ Example:
   const A = 5;
   const B = double(A);		# legal and gets the value 10
   const C = double(tcp.seq);	# illegal, arg not constant so return
-  				#   value isn't constant and so can't 
+				#   value isn't constant and so can't
 				#   init a const
   int D;
   { D = double(tcp.seq); }	# legal: constant expr not required here
@@ -697,9 +697,9 @@ The formats are:
 
  - W is a positive or negative integer.
    * positive = W is the minimum width for the output and
-   		output is right justified within that width
+		output is right justified within that width
    * negative = |W| is the minimum width for the output and
-   		the output is left justified within that width
+		the output is left justified within that width
 
 
 INTRINSICS
@@ -715,76 +715,76 @@ some binary operations quickly.  The intrinsics are given below.
 String Operations
 
   int str_len(str s)
-  	- return the length of a string reference
+	- return the length of a string reference
 
   int str_addr(str s)
-  	- return the address of a string reference
+	- return the address of a string reference
 
   int str_ispkt(str s)
-  	- return whether the string reference refers to a packet
+	- return whether the string reference refers to a packet
 
   int str_seg(str s)
-  	- return the segment index/packet # that the reference refers to
+	- return the segment index/packet # that the reference refers to
 
   int str_isnull(str s)
-  	- return whether the reference is an empty reference
+	- return whether the reference is an empty reference
 
 
 Packet Manipulation
 
   void pkt_new(int pnum, int len)
-  	- create a new packet with 'len' bytes of data
+	- create a new packet with 'len' bytes of data
 
   void pkt_new_z(int pnum, int len)
-  	- create a new packet with 0 bytes but 'len' buffer space bytes
+	- create a new packet with 0 bytes but 'len' buffer space bytes
 
   void pkt_swap(int pn1, int pn2)
-  	- swap two packets by index
+	- swap two packets by index
 
   void pkt_copy(int pndst, int pnsrc)
-  	- copy pnsrc to pndst
+	- copy pnsrc to pndst
 
 
 Packet Buffer / Protocol Unit Manipulation
 
   void pkt_ins_u(int pnum, int off, int len)
-  	- insert 'len' bytes at offset 'off' in packet 'pnum' shifting
+	- insert 'len' bytes at offset 'off' in packet 'pnum' shifting
 	  data up in the buffer
 
   void pkt_ins_d(int pnum, int off, int len)
-  	- insert 'len' bytes at offset 'off' in packet 'pnum' shifting 
+	- insert 'len' bytes at offset 'off' in packet 'pnum' shifting
 	  data down in the buffer
 
   void pkt_cut_u(str s)
-  	- cut the string from its packet shifting bytes up from the
+	- cut the string from its packet shifting bytes up from the
 	  front.  's' must be a reference to packet data.
 
   void pkt_cut_d(str s)
-  	- cut the string from its packet shifting bytes down from the
+	- cut the string from its packet shifting bytes down from the
 	  end.  's' must be a reference to packet data.
 
   void pkt_parse(int pnum)
-  	- reparse a packet 'pnum'
+	- reparse a packet 'pnum'
 
   int pkt_get_off(int pnum, int prid, int idx, int oid)
-  	- get offset 'oid' of the 'idx'th protocol data unit with 
+	- get offset 'oid' of the 'idx'th protocol data unit with
 	  protocol ID 'prid' in packet 'pnum'
 
   void pkt_adj_off(int pnum, int prid, int idx, int oid, int amt)
-  	- add 'amt' to offset 'oid' of the 'idx'th protocol data unit 
+	- add 'amt' to offset 'oid' of the 'idx'th protocol data unit
 	  with protocol ID 'prid' in packet 'pnum'.
 
 
   void fix_dltype(pnum)
-  	- Set the datalink type of the packet to the outermost protocol
+	- Set the datalink type of the packet to the outermost protocol
 	  data unit's protocol ID.
 
   void fix_lens(pnum)
-  	- Walk the protocol data units and fix all length fields within
+	- Walk the protocol data units and fix all length fields within
 	  each unit.
 
   void fix_csums(pnum)
-  	- Walk the protocol data units and fix all the checksum fields
+	- Walk the protocol data units and fix all the checksum fields
 	  within each unit.
 
 
@@ -793,22 +793,22 @@ Special Locator Intrinsics
   These intrinsics are special in that the user does not provide a
   standard data type as an argument to the intrinsic.  The 'pdesc'
   argument must be a packet locator that refers to a protocol or packet
-  field.  Each intrinsic performs an operation on the specific protocol 
+  field.  Each intrinsic performs an operation on the specific protocol
   data unit that the locator identifies.
 
   Examples:
-  	tcp		-> the first TCP PDU of packet 0
+	tcp		-> the first TCP PDU of packet 0
 	$(1,2)ip	-> the 2nd IP PDU of packet 1
 	$(1)icmp6	-> the first ICMPv6 PDU of packet 0
 
   void fix_len(pdesc)
-  	- Fix the length fields in the given PDU.
+	- Fix the length fields in the given PDU.
 
   void fix_csum(pdesc)
-  	- Fix the checksum fields in the given PDU.
+	- Fix the checksum fields in the given PDU.
 
   void pdu_update(pdesc)
-  	- Update the protocol parseable fields for the PDU.  One might use
+	- Update the protocol parseable fields for the PDU.  One might use
 	  this, for example, after inserting IP option data in an IP
 	  header to make PML able to recognize the IP option fields.
 
@@ -833,80 +833,80 @@ Special Locator Intrinsics
 	  applicable.  This intrinsic does not adjust length or
 	  checksum fields (outside of the adjustment for the changed
 	  "next protocol" field.
-	
+
 
 Numeric Operations
 
   int pop(int v)
-  	- returns the number of bits set in 'v'
+	- returns the number of bits set in 'v'
 
   int log2(int v)
-  	- returns the position of the first bit set in 'v' or -1 if v
+	- returns the position of the first bit set in 'v' or -1 if v
 	  == 0.
 
   int min(int x, int y)
-  	- returns the minimum of x and y
+	- returns the minimum of x and y
 
   int max(int x, int y)
-  	- returns the maximum of x and y
+	- returns the maximum of x and y
 
 
 Packet Metadata Intrinsics
 
   Per packet metadata that may or may not be present in a given packet.
   If the data is not present the meta_get_* function returns -1.
-  Similarly, setting the metadata to -1 removes the tag rather than 
+  Similarly, setting the metadata to -1 removes the tag rather than
   setting it.
 
   int meta_get_ts_sec(int pnum)
   int meta_get_ts_nsec(int pnum)
-  	- get the timestamp in seconds/nano-seconds for packet 'pnum'
+	- get the timestamp in seconds/nano-seconds for packet 'pnum'
 
   void meta_set_ts(int pnum, int sec, int nsec)
-  	- set the timestamp for packet 'pnum'
+	- set the timestamp for packet 'pnum'
 
   int meta_get_presnap(int pnum)
-  	- get the pre-snapped packet length for packet 'pnum'
+	- get the pre-snapped packet length for packet 'pnum'
 
   void meta_set_presnap(int pnum, int len)
-  	- set the pre-snapped packet length for packet 'pnum' to 'len'
+	- set the pre-snapped packet length for packet 'pnum' to 'len'
 
   int meta_get_inport(int pnum)
-  	- get the input port for packet 'pnum'.
+	- get the input port for packet 'pnum'.
 
   void meta_set_inport(int pnum, int port)
-  	- set the input port for packet 'pnum' to 'port'.
+	- set the input port for packet 'pnum' to 'port'.
 
   int meta_get_outport(pnum)
-  	- get the output port for packet 'pnum'.
+	- get the output port for packet 'pnum'.
 
   void meta_set_outport(pnum, port)
-  	- set the output port for packet 'pnum' to 'port'.
+	- set the output port for packet 'pnum' to 'port'.
 
   int meta_get_flowid(int pnum)
-  	- get the flow identifier of packet 'pnum'.
-  	
+	- get the flow identifier of packet 'pnum'.
+
   void meta_set_flowid(int pnum, int id)
-  	- set the flow identifier of packet 'pnum' to 'id'.
+	- set the flow identifier of packet 'pnum' to 'id'.
 
   int meta_get_class(int pnum)
-  	- get the traffic class of packet 'pnum'.
+	- get the traffic class of packet 'pnum'.
 
   void meta_set_class(int pnum, int tc)
-  	- set the traffic class of packet 'pnum' to 'tc'.
+	- set the traffic class of packet 'pnum' to 'tc'.
 
   int meta_get_seq(int pnum)
-  	- get the packet sequence number of packet 'pnum'.
+	- get the packet sequence number of packet 'pnum'.
 
   void meta_set_seq(int pnum, int seq)
-  	- set the packet sequence number of packet 'pnum' to 'seq'.
+	- set the packet sequence number of packet 'pnum' to 'seq'.
 
   int  meta_has(pnum, type)
 	- Return whether the packet has a tag of type 'type'
 
   void meta_add(pnum, type)
 	- Add an xpkt tag of type 'type':  limited to timestamp,
-	  snapinfo, iniface, outiface, flow, class, seq, 
+	  snapinfo, iniface, outiface, flow, class, seq,
 	  appinfo (0 extra words).
 
   void meta_add_info(pnum, len)
@@ -938,8 +938,8 @@ Packet Metadata Intrinsics
 	  off must be >= 2
 
 Miscellaneous
-  void exit(int status) 
-  	- abort program with exit status 'status'.
+  void exit(int status)
+	- abort program with exit status 'status'.
 
 
 OPTIMIZATION
@@ -954,7 +954,7 @@ expression is a 'constant expression' if it is:
 	- a const
 	- a binary or unary operator whose operands are constant
 	  expressions
-	- a 'parameter-constant inline macro' all of whose 
+	- a 'parameter-constant inline macro' all of whose
 	  arguments are constant expressions.
 
 A 'parameter-constant inline macro' is an inline macro whose expression
@@ -1002,35 +1002,35 @@ RANDOM NOTES
     - masked byte string	- mstr (NOT DECLARABLE)
     - regular expression	- regex (NOT DECLARABLE)
     - string reference		- sref (declared as 'str' with no [])
-   
+
   Expressions that can return sref:
     - a string variable (possibly sliced)
     - a string refernce variable (also possibly sliced)
     - a non-scalar packet field
     - a function returning a sref
-   
+
 
   Currently:
    - local variables have types int, sref
-   - parameters can have types int, sref 
+   - parameters can have types int, sref
    - global variables have types int, str, sref
    - const's have type int
    - functions can return int, sref, str, void
    - inlines can return int
    - intrinsics can return void, int, sref, str, mstr, regex
-  
-  
+
+
   Type casting:
    - in expressions automatic type conversion can go from:
      * maskval (value only)-> bytestr (max 8 bytes BE)-> scalar (discard)-> void
      * sref (discard)-> void
-  
+
    - in assignment:
      * can convert as with expressions
      * can assign scalars to byte strings (overwrite up to 8 bytes)
      * can assign scalars to srefs (overrite up to 8 bytes)
      * can assign byte strings to string refs (string copy)
-   
+
 
   Value types:
     - local variable    -> scalar, sref
@@ -1039,7 +1039,7 @@ RANDOM NOTES
     - constant          -> scalar
     - protocol constant -> scalar, string, masked string
     - protocol name     -> scalar when no offset/length:  boolean indicating
-    			   presence of the header
+			   presence of the header
 			   byte string when offset length (protocol header)
     - packet field	-> if bitfields then scalar otherwise byte string
     - operator result   -> scalar
@@ -1047,8 +1047,8 @@ RANDOM NOTES
     - function return   -> scalar, sref, void
 
 
-  
-  
+
+
 
 Byte strings:
   - Named constants can refer to byte strings or mask values
@@ -1096,13 +1096,13 @@ Locators (rhs):
 
 
 Each type has a representation on the stack.
-  - scalars = 64-bit value 
+  - scalars = 64-bit value
   - byte strings = 64 bit len then 64-bit UA
   - mask strings = 64 bit len, 64 bit mask addr (UA), 64-bit val addr (UA)
   - string reference = 64-bit len then 64-bit UA
   - in scalar context:
     * for byte strings:  use ldu to convert to scalar
-    * for mask strings:  
+    * for mask strings:
       ** swap the mask and length, drop the mask, use ldu to get scalar
 
 Functions:
@@ -1126,7 +1126,7 @@ Functions:
 
 
 Inlines:
-  - evaluate arguments 
+  - evaluate arguments
   - invoke pushfr
   - encode expression
     * every parameter ref should be replaced with ldbp(i) x = 1, y = (addr+1)
@@ -1149,7 +1149,7 @@ Intrinsics:
   -- str_isnull(str) - return whether the reference is an empty reference
 
   -- void pkt_new(pnum, len) - create a new packet with 'len' bytes of data
-  -- void pkt_new_z(pnum, len) - create a new packet with 0 bytes but 'len' 
+  -- void pkt_new_z(pnum, len) - create a new packet with 0 bytes but 'len'
 				 buffer space bytes
   -- void pkt_swap(pn1, pn2) - swap two packets by index
   -- void pkt_copy(pndst, pnsrc) - copy pnsrc to pndst
@@ -1173,11 +1173,11 @@ Intrinsics:
 
   -- int pkt_nlists() - return the number of packet lists in the system.
   -- int pkt_lempty(listnum) - return whether a given packet list is empty.
-  -- void pkt_enq(listnum, pnum) - enqueue packet 'pnum' to the end of packet 
+  -- void pkt_enq(listnum, pnum) - enqueue packet 'pnum' to the end of packet
 				   list 'listnum'
   -- void pkt_deq(listnum, pnum) - dequeue the next packet from the front of
 				   packet list 'listnum' to packet 'pnum'
-  -- void pkt_push(listnum, pnum) - push packet 'pnum' to the front of packet 
+  -- void pkt_push(listnum, pnum) - push packet 'pnum' to the front of packet
 				   list 'listnum'
   -- void pkt_pop(listnum, pnum) - pop the next packet from the front of
 				   packet list 'listnum' to packet 'pnum'
@@ -1246,7 +1246,7 @@ Formatted printing in PML
  - <w> is a positive or negative integer.
    * positive = min width right justify
    * negative = min width left justify
-   
+
  - print %-15s:"Hello World\n", %12ipv6:ipv6.daddr;
 
 
@@ -1266,7 +1266,7 @@ Metadata:
  - parse info (16, 32, 32)
  - app info (16, 0-1020)
  New locator type?
- Use protoparse for it? 
+ Use protoparse for it?
 
 
 

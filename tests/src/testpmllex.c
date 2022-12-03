@@ -35,24 +35,24 @@ const char *strof(struct pmll_val *v, int tok, char *buf, size_t bsize)
 		bp = v->u.v4addr;
 		snprintf(buf, bsize, "%u.%u.%u.%u", bp[0], bp[1], bp[2], bp[3]);
 		return buf;
-	} else if (tok == PMLTOK_IPV6ADDR) { 
+	} else if (tok == PMLTOK_IPV6ADDR) {
 		bp = v->u.v6addr;
 		snprintf(buf, bsize, "%04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x",
-		         (bp[0] << 8) | bp[1], 
-		         (bp[2] << 8) | bp[3], 
-		         (bp[4] << 8) | bp[5], 
-		         (bp[6] << 8) | bp[7], 
-		         (bp[8] << 8) | bp[9], 
-		         (bp[10] << 8) | bp[11], 
-		         (bp[12] << 8) | bp[13], 
+		         (bp[0] << 8) | bp[1],
+		         (bp[2] << 8) | bp[3],
+		         (bp[4] << 8) | bp[5],
+		         (bp[6] << 8) | bp[7],
+		         (bp[8] << 8) | bp[9],
+		         (bp[10] << 8) | bp[11],
+		         (bp[12] << 8) | bp[13],
 		         (bp[14] << 8) | bp[15]);
 		return buf;
-	} else if (tok == PMLTOK_ETHADDR) { 
+	} else if (tok == PMLTOK_ETHADDR) {
 		bp = v->u.ethaddr;
 		snprintf(buf, bsize, "%02x:%02x:%02x:%02x:%02x:%02x",
 			 bp[0], bp[1], bp[2], bp[3], bp[4], bp[5]);
 		return buf;
-	} else if (tok == PMLTOK_NUM) { 
+	} else if (tok == PMLTOK_NUM) {
 		snprintf(buf, bsize, "%llu", (ullong)v->u.num);
 		return buf;
 	} else {
@@ -61,8 +61,8 @@ const char *strof(struct pmll_val *v, int tok, char *buf, size_t bsize)
 }
 
 
-int main(int argc, char *argv[])                                                                    
-{       
+int main(int argc, char *argv[])
+{
         int x;
 	char buf[256];
 	const char *s;
@@ -71,7 +71,7 @@ int main(int argc, char *argv[])
 
 	lex = pmll_alloc();
         if (lex == NULL)
-                errsys("pmll_new():");                                             
+                errsys("pmll_new():");
 
 	if (pmll_add_infile(lex, stdin, 0, "stdin") < 0)
 		errsys("pmll_add_input_file():");
@@ -86,12 +86,12 @@ int main(int argc, char *argv[])
 		pmllv_clear(&v);
 	}
         if ( x < 0 ) {
-                printf("unknown token on line: %lu\n", pmll_get_lineno(lex));       
+                printf("unknown token on line: %lu\n", pmll_get_lineno(lex));
 		printf("\t%s\n", pmll_get_err(lex));
         } else {
-                printf("End of file\n");                                            
+                printf("End of file\n");
         }
-        pmll_free(lex);                                                    
+        pmll_free(lex);
 
-        return 0;                                                                   
+        return 0;
 }

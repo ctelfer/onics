@@ -63,7 +63,7 @@ static int xpktcp_validate(struct netvm_inst *inst, struct netvm *vm)
 
 	/* Write and store operations not permitted in matchonly mode */
 	if (vm->matchonly) {
-	       if ((inst->y == NETVM_CPOC_STTB)  || 
+	       if ((inst->y == NETVM_CPOC_STTB)  ||
 	           (inst->y == NETVM_CPOC_ADDTAG) ||
 	           (inst->y == NETVM_CPOC_DELTAG) ||
 	           (inst->y == NETVM_CPOC_ADDXTAG) ||
@@ -252,7 +252,7 @@ static void xpktcp_addxtag(struct netvm *vm, struct netvm_coproc *cp, int cpi,
 	case XPKT_TAG_INIFACE:
 		xpkt_tag_iif_init((struct xpkt_tag_iface *)xcp->tag, 0);
 		break;
-	case XPKT_TAG_OUTIFACE:	
+	case XPKT_TAG_OUTIFACE:
 		xpkt_tag_oif_init((struct xpkt_tag_iface *)xcp->tag, 0);
 		break;
 	case XPKT_TAG_FLOW:
@@ -265,7 +265,7 @@ static void xpktcp_addxtag(struct netvm *vm, struct netvm_coproc *cp, int cpi,
 		xpkt_tag_seq_init((struct xpkt_tag_seq *)xcp->tag, 0);
 		break;
 	case XPKT_TAG_PARSEINFO:
-		xpkt_tag_pi_init((struct xpkt_tag_parseinfo *)xcp->tag, 
+		xpkt_tag_pi_init((struct xpkt_tag_parseinfo *)xcp->tag,
 				 PRID_NONE, 0, 0);
 		break;
 	case XPKT_TAG_APPINFO:
@@ -311,7 +311,7 @@ static void xpktcp_rdtag(struct netvm *vm, struct netvm_coproc *cp, int cpi,
 	FATAL(vm, NETVM_ERR_NOPKT, !(pkb = vm->packets[td.pktnum]));
 	xth = pkb_find_tag(pkb, td.type, td.index);
 	FATAL(vm, NETVM_ERR_BADCPOP, (xth == NULL));
-	FATAL(vm, NETVM_ERR_MEMADDR, 
+	FATAL(vm, NETVM_ERR_MEMADDR,
 	      (addr >= 1024 || (addr + (width & 0x7F) > xpkt_tag_size(xth))));
 	xpkt_pack_tag(xth);
 	netvm_p2stk(vm, (byte_t *)xth + addr, width);
@@ -345,7 +345,7 @@ static void xpktcp_wrtag(struct netvm *vm, struct netvm_coproc *cp, int cpi,
 	FATAL(vm, NETVM_ERR_NOPKT, !(pkb = vm->packets[td.pktnum]));
 	xth = pkb_find_tag(pkb, td.type, td.index);
 	FATAL(vm, NETVM_ERR_BADCPOP, (xth == NULL));
-	FATAL(vm, NETVM_ERR_MEMADDR, 
+	FATAL(vm, NETVM_ERR_MEMADDR,
 	      (addr < 2 || addr >= 1024 ||
 	       (addr + (width & 0x7F) > xpkt_tag_size(xth))));
 	xpkt_pack_tag(xth);
@@ -400,7 +400,7 @@ static void outport_reset(struct netvm_coproc *cp)
 
 static int outport_validate(struct netvm_inst *inst, struct netvm *vm)
 {
-	if ((inst->y == NETVM_CPOC_PRBIN) || (inst->y == NETVM_CPOC_PROCT) || 
+	if ((inst->y == NETVM_CPOC_PRBIN) || (inst->y == NETVM_CPOC_PROCT) ||
 	    (inst->y == NETVM_CPOC_PRDEC) || (inst->y == NETVM_CPOC_PRHEX)) {
 		if (inst->w > 64)
 			return NETVM_VERR_CPERR;
@@ -426,9 +426,9 @@ static void nci_prnum(struct netvm *vm, struct netvm_coproc *ncp, int cpi,
 	fmtbuf[0] = '%';
 	i = 1;
 	if (inst->w > 0) {
-		if (inst->z & NETVM_CPOC_LJUST) 
+		if (inst->z & NETVM_CPOC_LJUST)
 			fmtbuf[i++] = '-';
-		i += snprintf(&fmtbuf[i], sizeof(fmtbuf)-i, "0%lul", 
+		i += snprintf(&fmtbuf[i], sizeof(fmtbuf)-i, "0%lul",
 			      (ulong)inst->w);
 	} else {
 		i += snprintf(&fmtbuf[i], sizeof(fmtbuf)-i, "l");
@@ -918,7 +918,7 @@ static void _rex_match(struct netvm *vm, struct netvm_coproc *ncp, int cpi,
 
 	/* regular expression matches reside within the lower 32 bits of */
 	/* address space. */
-	FATAL(vm, NETVM_ERR_MEMADDR, 
+	FATAL(vm, NETVM_ERR_MEMADDR,
 	     (addr & NETVM_UA_OFF_MASK) + len >= NETVM_PF_INVALID);
 
 	if (!inst->z)

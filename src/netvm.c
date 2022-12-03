@@ -40,8 +40,8 @@ int netvm_dbgabrt()
 
 int netvm_valid_width(int width)
 {
-	return ((width & 0x7F) > 0) && 
-	       ((width & 0x7f) <= 4) && 
+	return ((width & 0x7F) > 0) &&
+	       ((width & 0x7f) <= 4) &&
 	       ((width & ~0xFF) == 0);
 }
 
@@ -71,8 +71,8 @@ void netvm_get_pd(struct netvm *vm, struct netvm_pdu_desc *pd, int onstack)
 }
 
 
-/* 
- * find header based on packet number, header type, and index.  So (3,8,1) 
+/*
+ * find header based on packet number, header type, and index.  So (3,8,1)
  * means find the 2nd (0-based counting) TCP (PRID_TCP == 8) header in the 4th
  * packet.
  */
@@ -343,10 +343,10 @@ static void ni_ldpf(struct netvm *vm)
 		val = pdu->prid;
 		break;
 	case NETVM_PDU_PIDX:
-		/* 
-		 * Very special case: 
+		/*
+		 * Very special case:
 		 * if prid == PRID_NONE and index == 0 we are testing
-		 * for the existence of the packet.  Otherwise we 
+		 * for the existence of the packet.  Otherwise we
 		 * count packet headers back to the start.
 		 */
 		if (pd0.prid == PRID_NONE && pd0.idx == 0) {
@@ -403,7 +403,7 @@ void netvm_p2stk(struct netvm *vm, byte_t *p, int width)
 }
 
 
-void netvm_get_mem_ptr(struct netvm *vm, uint seg, ulong addr, int iswr, 
+void netvm_get_mem_ptr(struct netvm *vm, uint seg, ulong addr, int iswr,
 		       ulong len, byte_t **p)
 {
 	struct netvm_mseg *m;
@@ -425,7 +425,7 @@ void netvm_get_mem_ptr(struct netvm *vm, uint seg, ulong addr, int iswr,
 }
 
 
-void netvm_get_pkt_ptr(struct netvm *vm, uint pkt, ulong addr, int iswr, 
+void netvm_get_pkt_ptr(struct netvm *vm, uint pkt, ulong addr, int iswr,
 		       ulong len, byte_t **p)
 {
 	struct pktbuf *pkb;
@@ -441,7 +441,7 @@ void netvm_get_pkt_ptr(struct netvm *vm, uint pkt, ulong addr, int iswr,
 }
 
 
-void netvm_get_seg_ptr(struct netvm *vm, uint seg, ulong addr, int iswr, 
+void netvm_get_seg_ptr(struct netvm *vm, uint seg, ulong addr, int iswr,
 		       ulong len, byte_t **p)
 {
 	if ((seg & NETVM_SEG_ISPKT) == 0)
@@ -587,7 +587,7 @@ static void ni_mskcmp(struct netvm *vm)
 	S_POP(vm, a2);
 	S_POP(vm, a1);
 
-	FATAL(vm, NETVM_ERR_IOVFL, (a1 + len < len) || (a2 + len < len) || 
+	FATAL(vm, NETVM_ERR_IOVFL, (a1 + len < len) || (a2 + len < len) ||
 	      (am + len < len));
 
 	netvm_get_uaddr_ptr(vm, a1, 0, len, &p1);
@@ -1210,7 +1210,7 @@ static void ni_pkfxl(struct netvm *vm)
 		abort_unless(pkb);
 		if (pkb->layers[PKB_LAYER_XPORT])
 			FATAL(vm, NETVM_ERR_FIXLEN,
-			      pdu_fix_len(pkb->layers[PKB_LAYER_XPORT], 
+			      pdu_fix_len(pkb->layers[PKB_LAYER_XPORT],
 					  pkb->buf) < 0);
 		if (pkb->layers[PKB_LAYER_NET])
 			FATAL(vm, NETVM_ERR_FIXLEN,
@@ -1549,7 +1549,7 @@ int netvm_validate(struct netvm *vm)
 	struct netvm_inst *inst;
 	ulong i, maxi, newpc;
 
-	if (!vm || !vm->stack || !vm->inst || (vm->ninst < 1) || 
+	if (!vm || !vm->stack || !vm->inst || (vm->ninst < 1) ||
 	    (vm->ninst > MAXINST))
 		return NETVM_VERR_UNINIT;
 
@@ -1684,7 +1684,7 @@ void netvm_load_pkt(struct netvm *vm, struct pktbuf *pkb, int slot)
 struct pktbuf *netvm_clr_pkt(struct netvm *vm, int slot, int keeppkb)
 {
 	struct pktbuf *pkb = NULL;
-	if ((slot >= 0) && (slot < NETVM_MAXPKTS) && 
+	if ((slot >= 0) && (slot < NETVM_MAXPKTS) &&
 	    (pkb = vm->packets[slot])) {
 		if (keeppkb) {
 			/* adjust header and trailer slack space and copy    */
@@ -1814,7 +1814,7 @@ static void run_max_cycles(struct netvm *vm, int maxcycles)
 				vm->pc = vm->nxtpc;
 				vm->status = NETVM_STATUS_OOCYCLES;
 			}
-		} 
+		}
 	}
 }
 
@@ -1897,8 +1897,8 @@ static const char *rt_error_strings[NETVM_ERR_MAX] = {
 
 const char *netvm_estr(int error)
 {
-	if ((error < NETVM_VERR_MIN) || 
-	    (error >= 0 && error < NETVM_ERR_MIN) || 
+	if ((error < NETVM_VERR_MIN) ||
+	    (error >= 0 && error < NETVM_ERR_MIN) ||
 	    (error > NETVM_ERR_MAX)) {
 		return "Unknown";
 	} else if (error < 0) {

@@ -41,7 +41,7 @@
 #define MAXSTR 256
 
 /*
- Example code: 
+ Example code:
 
 # comment
 .include "filename"
@@ -54,7 +54,7 @@
 .mem name segnum addr nbytes [init]
 .entry (start|packet|tick|end) @label
 
-label:	add 
+label:	add
 	jmpi @label
 	bzi  3
 	cpop 0, 0, z, w
@@ -81,7 +81,7 @@ int skip_errors = 0;
 
 
 /* in argmask */
-#define ARGX 1 
+#define ARGX 1
 #define ARGY 2
 #define ARGZ 4
 #define ARGW 8
@@ -327,7 +327,7 @@ void add_const(struct htab *t, struct constant *c, const char *name, ulong v)
 #define NUMERR		9
 
 
-static const char *estrs[NUMERR] = { 
+static const char *estrs[NUMERR] = {
 	"ok",
 	"Invalid instruction name",
 	"Invalid number of arguments",
@@ -592,7 +592,7 @@ int str2inst(const char *s, struct htab *ct, uint inum, struct netvm_inst *ni)
 		if ((argmask & ARGW) != 0) {
 			if ((rv = intarg(r, ct, &v)) != 0)
 				return rv;
-			if (((argmask & BRREL) != 0) && 
+			if (((argmask & BRREL) != 0) &&
 			    (r->data[0] == '@')) {
 				abort_unless(v < UINT_MAX);
 				ni->w = (uint32_t)(v - inum);
@@ -618,7 +618,7 @@ static int pdesc2str(const struct netvm_inst *ni, char *s, size_t len, int xa)
 		str_fmt(pfx, sizeof(pfx), "%u, ", ni->x);
 
 	/* example: *0:0x0103.0.0[3] */
-	str_fmt(s, len, "%s*%u:%u:%u:%u[%u]", pfx, (ni->y & ~NETVM_SEG_ISPKT), 
+	str_fmt(s, len, "%s*%u:%u:%u:%u[%u]", pfx, (ni->y & ~NETVM_SEG_ISPKT),
 		prid, (ni->z >> NETVM_PPD_IDX_OFF) & NETVM_PPD_IDX_MASK,
 		(ni->z >> NETVM_PPD_FLD_OFF) & NETVM_PPD_FLD_MASK,
 		(ni->w >> NETVM_PPD_OFF_OFF) & NETVM_PPD_OFF_MASK);
@@ -670,7 +670,7 @@ int inst2str(const struct netvm_inst *ni, char *s, size_t len, uint inum)
 	str_fmt(s, len, "%-10s", iname);
 	s += 10;
 	len -= 10;
-	
+
 	if ((argmask & PDONLY) != 0)
 		return pdesc2str(ni, s, len, (argmask & ARGX));
 
@@ -765,7 +765,7 @@ static int do_include(struct asmctx *ctx, char *fn, uint lineno,
 	}
 	if ((fp = fopen(toks[1].data, "r")) == NULL) {
 		logsys(1, "unable to open file %s "
-			  "(included on line %s line %u)", 
+			  "(included on line %s line %u)",
 		       toks[1].data, fn, lineno);
 		return 1;
 	}
@@ -788,7 +788,7 @@ static int do_define(struct asmctx *ctx, char *fn, uint lineno,
 		       fn, lineno);
 		return 1;
 	}
-	if (!isalnum(toks[1].data[0]) || 
+	if (!isalnum(toks[1].data[0]) ||
 	    strspn(toks[1].data, IDCHARS) != toks[1].len) {
 		logrec(1, "invalid .define token "
 			  "in file %s on line %u\n",
@@ -809,7 +809,7 @@ static int do_define(struct asmctx *ctx, char *fn, uint lineno,
 		       toks[1].data, fn, lineno);
 		return 1;
 	} else if (ctx->numc == MAXCONST) {
-		logrec(1, "Out of space for constants adding const '%s'\n", 
+		logrec(1, "Out of space for constants adding const '%s'\n",
 		       toks[1].data);
 		return -1;
 	} else {
@@ -887,11 +887,11 @@ static int do_segment(struct asmctx *ctx, char *fn, uint lineno,
 }
 
 
-static int do_matchonly(struct asmctx *ctx, char *fn, uint lineno, 
+static int do_matchonly(struct asmctx *ctx, char *fn, uint lineno,
 			struct raw toks[], uint nt)
 {
 	if (nt != 1) {
-		logrec(1, "unexpected arguments in .matchonly " 
+		logrec(1, "unexpected arguments in .matchonly "
 			  "directive in file %s on line %u\n",
 		       fn, lineno);
 		return 1;
@@ -901,7 +901,7 @@ static int do_matchonly(struct asmctx *ctx, char *fn, uint lineno,
 }
 
 
-static int do_mem(struct asmctx *ctx, char *fn, uint lineno, 
+static int do_mem(struct asmctx *ctx, char *fn, uint lineno,
 		  struct raw toks[], uint nt)
 {
 	ulong segnum, addr, len;
@@ -929,7 +929,7 @@ static int do_mem(struct asmctx *ctx, char *fn, uint lineno,
 		return 1;
 	}
 
-	if (!isalnum(toks[1].data[0]) || 
+	if (!isalnum(toks[1].data[0]) ||
 	    (toks[1].len > MAXSTR - 6) ||
 	    strspn(toks[1].data, IDCHARS) != toks[1].len) {
 		logrec(1, "invalid .mem name in file %s on line %u\n",
@@ -1074,10 +1074,10 @@ static int do_entry(struct asmctx *ctx, char *fn, uint lineno,
 		       toks[1], fn, lineno);
 		return 1;
 	}
-	if (strcmp(toks[2].data, "") == 0 || 
+	if (strcmp(toks[2].data, "") == 0 ||
 	    toks[2].len == sizeof(ctx->eps[0])) {
 		logrec(1, "invalid entry point '%s' specified"
-			  " in file %s on line %u\n", 
+			  " in file %s on line %u\n",
 		       toks[2].data, fn, lineno);
 		return 1;
 	}
@@ -1257,7 +1257,7 @@ void emit_program(struct asmctx *ctx, FILE *outfile)
 	prog.ninits = ctx->ninits;
 	if (prog.ninits != 0) {
 		mi = ecalloc(sizeof(struct netvm_meminit), prog.ninits);
-		memcpy(mi, ctx->minits, 
+		memcpy(mi, ctx->minits,
 		       sizeof(struct netvm_meminit) * prog.ninits);
 		prog.inits = mi;
 	}
@@ -1290,7 +1290,7 @@ static void write_meminit(FILE *f, struct netvm_meminit *mi, uint idx)
 		while (nc > 0) {
 			snprintf(name, sizeof(name), "mi_%u_%u", idx, subidx);
 			lp = init;
-			for (ilen = 0, llen = 0; llen < 40 && nc > 0; 
+			for (ilen = 0, llen = 0; llen < 40 && nc > 0;
 			     --nc, ++cp) {
 				if (((*cp & 0x80) == 0) && isprint(*cp)) {
 					if (*cp == '"' || *cp == '\\') {
@@ -1335,20 +1335,20 @@ void disassemble(FILE *infile, FILE *outfile)
 		fprintf(outfile, ".matchonly\n");
 	for (i = 0; i < NVMP_EP_NUMEP; ++i)
 		if (prog.eps[i] != NVMP_EP_INVALID)
-			fprintf(outfile, ".entry %s %u\n", epnames[i], 
+			fprintf(outfile, ".entry %s %u\n", epnames[i],
 				prog.eps[i]);
 
 	for (i = 0; i < NETVM_MAXMSEGS; ++i) {
 		sd = &prog.sdescs[i];
 		if (sd->perms == 0)
 			continue;
-		fprintf(outfile, ".segment %u %u %u\n", i, sd->perms, 
+		fprintf(outfile, ".segment %u %u %u\n", i, sd->perms,
 			sd->len);
 	}
 
 	for (i = 0; i < NETVM_MAXCOPROC; ++i) {
 		if (prog.cpreqs[i] != NETVM_CPT_NONE)
-			fprintf(outfile, ".coproc %u %lu\n", i, 
+			fprintf(outfile, ".coproc %u %lu\n", i,
 			        (ulong)prog.cpreqs[i]);
 	}
 
@@ -1370,7 +1370,7 @@ void disassemble(FILE *infile, FILE *outfile)
 			}
 		} else {
 			fprintf(outfile, "#%4u: 0x%02x 0x%02x 0x%02x 0x%02x "
-					 "0x%08lx\n\t%s\n", 
+					 "0x%08lx\n\t%s\n",
 				i, ni->op, ni->x, ni->y, ni->z, (ulong)ni->w,
 				line);
 		}
@@ -1419,7 +1419,7 @@ int main(int argc, char *argv[])
 		} else {
 			infile = fopen(ifn, "r");
 			if (infile == NULL)
-				errsys("Unable to open file '%s' for reading\n", 
+				errsys("Unable to open file '%s' for reading\n",
 				       ifn);
 		}
 	}

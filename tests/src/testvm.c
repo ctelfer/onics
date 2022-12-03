@@ -101,11 +101,11 @@ struct netvm_inst vm_prog_toggledf[] = {
 
 
 struct netvm_inst vm_prog_count10[] = {
-	/*0 */ NETVM_OP(PUSH, 0, 0, 0, '.'), 
+	/*0 */ NETVM_OP(PUSH, 0, 0, 0, '.'),
 	/*1 */ NETVM_OP(STI, 1, RWSEG, 0, 64),
-	/*2 */ NETVM_OP(PUSH, 0, 0, 0, '\n'), 
+	/*2 */ NETVM_OP(PUSH, 0, 0, 0, '\n'),
 	/*3 */ NETVM_OP(STI, 1, RWSEG, 0, 72),
-	/*4 */ NETVM_OP(PUSH, 0, 0, 0, 0), 
+	/*4 */ NETVM_OP(PUSH, 0, 0, 0, 0),
 	/*5 */ NETVM_OP(STI, 4, RWSEG, 0, 0),
 
 	/* top of loop */
@@ -114,17 +114,17 @@ struct netvm_inst vm_prog_count10[] = {
 	/*8 */ NETVM_OP(GEI, 0, 0, 0, 10),
 	/*9 */ NETVM_BRIF_F(7), /* out of loop */
 	/*10*/ NETVM_OP(PUSH, 0, 0, 0, 64), 	/* RWSEG is 0 in seg bits */
-	/*11*/ NETVM_OP(PUSH, 0, 0, 0, 1), 
-	/*12*/ NETVM_OP(CPOPI, NETVM_CPI_OUTPORT, NETVM_CPOC_PRSTR, 0, 0), 
+	/*11*/ NETVM_OP(PUSH, 0, 0, 0, 1),
+	/*12*/ NETVM_OP(CPOPI, NETVM_CPI_OUTPORT, NETVM_CPOC_PRSTR, 0, 0),
 	/*13*/ NETVM_OP(ADDI, 0, 0, 0, 1),
 	/*14*/ NETVM_OP(STI, 4, RWSEG, 0, 0),
 	/*15*/ NETVM_BR_B(9),
 
 	/* out of loop */
-	/*16*/ NETVM_OP(POP, 0, 0, 0, 1), 
+	/*16*/ NETVM_OP(POP, 0, 0, 0, 1),
 	/*17*/ NETVM_OP(PUSH, 0, 0, 0, 72), 	/* RWSEG is 0 in seg bits */
-	/*18*/ NETVM_OP(PUSH, 0, 0, 0, 1), 
-	/*19*/ NETVM_OP(CPOPI, NETVM_CPI_OUTPORT, NETVM_CPOC_PRSTR, 0, 0), 
+	/*18*/ NETVM_OP(PUSH, 0, 0, 0, 1),
+	/*19*/ NETVM_OP(CPOPI, NETVM_CPI_OUTPORT, NETVM_CPOC_PRSTR, 0, 0),
 	/*20*/ NETVM_OP(HALT, 0, 0, 0, 1),
 };
 
@@ -138,7 +138,7 @@ struct meminit hwmi[] = {
 
 
 struct netvm_inst vm_prog_helloworld[] = {
-	/*0 */ NETVM_CPOP_PRSTRI(ROSEG, HWS_OFFSET, HWS_SIZE), 
+	/*0 */ NETVM_CPOP_PRSTRI(ROSEG, HWS_OFFSET, HWS_SIZE),
 	/*1 */ NETVM_OP(HALT, 0, 0, 0, 1),
 };
 
@@ -200,7 +200,7 @@ struct netvm_inst vm_prog_dup1st[] = {
 	/* 2 */ NETVM_OP(DUP, 0, 0, 0, 0),
 	/* 3 */ NETVM_OP(STI, 4, RWSEG, 0, DUP1ST_PNUM),
 	/* 4 */ NETVM_OP(LEI, 0, 0, 0, 1),
-	/* 5 */ NETVM_BRIF_F(4), 
+	/* 5 */ NETVM_BRIF_F(4),
 	/* 6 */ NETVM_OP(PUSH, 0, 0, 0, 0),
 	/* 7 */ NETVM_OP(PKDEL, 0, 0, 0, 0),
 	/* 8 */ NETVM_OP(HALT, 0, 0, 0, 1),
@@ -227,7 +227,7 @@ struct meminit bmi[] = {
 
 struct netvm_inst vm_prog_bulkmove[] = {
 	/* only consider the 1st TCP packet with at least 16 bytes of payload */
-	/* 0 */ NETVM_PDIOP(LDPFI, 0, 0, PRID_PCLASS_XPORT, 0, 
+	/* 0 */ NETVM_PDIOP(LDPFI, 0, 0, PRID_PCLASS_XPORT, 0,
 			    NETVM_PDU_PRID, 0),
 	/* 1 */ NETVM_OP(NEQI, 0, 0, 0, PRID_TCP),
 	/* 2 */ NETVM_BRIF_F(10),
@@ -357,14 +357,14 @@ struct meminit meqsi[] = {
 struct netvm_inst vm_prog_maskeq[] = {
 	/* 0 */ NETVM_PDIOP(LDPFI, 0, 0, PRID_PCLASS_NET, 0, NETVM_PDU_SOFF, 0),
 	/* 1 */ NETVM_OP(EQI, 0, 0, 0, NETVM_PF_INVALID),
-	/* 2 */ NETVM_BRIF_F(6), 
+	/* 2 */ NETVM_BRIF_F(6),
 
-	/* Compare 1st _SIZE bytes of pkt 0's network header */ 
+	/* Compare 1st _SIZE bytes of pkt 0's network header */
 	/* use 'x' bit of LDPFI to make the SOFF get generated in UA form */
 	/* 3 */ NETVM_PDIOP(LDPFI, 1, 0, PRID_PCLASS_NET, 0, NETVM_PDU_SOFF, 0),
-	/* 4 */ NETVM_OP(PUSH, 0, 0, 0, NETVM_UADDR(0, ROSEG, MEQ_VAL_OFFSET)), 
-	/* 5 */ NETVM_OP(PUSH, 0, 0, 0, NETVM_UADDR(0, ROSEG, MEQ_MASK_OFFSET)), 
-	/* 6 */ NETVM_OP(PUSH, 0, 0, 0, MEQ_MASK_SIZE), 
+	/* 4 */ NETVM_OP(PUSH, 0, 0, 0, NETVM_UADDR(0, ROSEG, MEQ_VAL_OFFSET)),
+	/* 5 */ NETVM_OP(PUSH, 0, 0, 0, NETVM_UADDR(0, ROSEG, MEQ_MASK_OFFSET)),
+	/* 6 */ NETVM_OP(PUSH, 0, 0, 0, MEQ_MASK_SIZE),
 	/* 7 */ NETVM_OP(MSKCMP, 0, 0, 0, 0),
 	/* 8 */ NETVM_OP(HALT, 0, 0, 0, 1),
 };
@@ -380,12 +380,12 @@ struct netvm_program {
 	int nmi;
 } vm_progs[] = {
 	{ vm_prog_istcp, array_length(vm_prog_istcp),
-	  "istcp -- Test if the packet has a TCP header", 0, 0, NULL, 0 }, 
+	  "istcp -- Test if the packet has a TCP header", 0, 0, NULL, 0 },
 	{ vm_prog_tcperr, array_length(vm_prog_tcperr),
 	  "tcperr -- Test if the packet is TCP and has errors",
-	    0, 0, NULL, 0 }, 
+	    0, 0, NULL, 0 },
 	{ vm_prog_isudp, array_length(vm_prog_isudp),
-	  "isudp -- Test if the packet is UDP", 0, 0, NULL, 0 }, 
+	  "isudp -- Test if the packet is UDP", 0, 0, NULL, 0 },
 	{ vm_prog_fixcksum, array_length(vm_prog_fixcksum),
 	  "fixcksum -- fix checksums on packets", 0, 1, NULL, 0 },
 	{ vm_prog_toggledf, array_length(vm_prog_toggledf),
@@ -395,20 +395,20 @@ struct netvm_program {
 	  "count10 -- print out 10 '.'s followed by a newline", 1, 1, NULL, 0 },
        	{ vm_prog_helloworld, array_length(vm_prog_helloworld),
 	  "hello-world -- print out 'hello world' from a preinitialized string",
-	   1, 1, hwmi, array_length(hwmi) }, 
+	   1, 1, hwmi, array_length(hwmi) },
 	{ vm_prog_fib, array_length(vm_prog_fib),
-	  "fib -- compute Xth fibonacci number", 1, 1, fibi, 
-	  array_length(fibi) }, 
+	  "fib -- compute Xth fibonacci number", 1, 1, fibi,
+	  array_length(fibi) },
 	{ vm_prog_dup1st, array_length(vm_prog_dup1st),
-	  "dup1st -- duplicate the first packet and discard rest", 0, 1, NULL, 
-	   0 }, 
+	  "dup1st -- duplicate the first packet and discard rest", 0, 1, NULL,
+	   0 },
 	{ vm_prog_bulkmove, array_length(vm_prog_bulkmove),
 	  "bulkmove -- Bulk move data in and out of the 1st 16-byte TCPpacket",
-	  0, 1, bmi, array_length(bmi) }, 
+	  0, 1, bmi, array_length(bmi) },
 	{ vm_prog_hexdump, array_length(vm_prog_hexdump),
-	  "hexdump -- Hex dump the packets", 0, 1, hdi, array_length(hdi)}, 
+	  "hexdump -- Hex dump the packets", 0, 1, hdi, array_length(hdi)},
 	{ vm_prog_maskeq, array_length(vm_prog_maskeq),
-	  "mask equality -- Compare with 45000034 hex", 0, 0, meqsi, 
+	  "mask equality -- Compare with 45000034 hex", 0, 0, meqsi,
 	  array_length(meqsi) },
 };
 unsigned prognum = 0;
@@ -552,9 +552,9 @@ int main(int argc, char *argv[])
 	prog = &vm_progs[prognum];
 	file_emitter_init(&fe, (prog->filter ? stderr : stdout));
 	netvm_init(&vm, vm_stack, array_length(vm_stack));
-	netvm_set_mseg(&vm, 0, vm_memory[0], sizeof(vm_memory[0]), 
+	netvm_set_mseg(&vm, 0, vm_memory[0], sizeof(vm_memory[0]),
 		       NETVM_SEG_RDWR);
-	netvm_set_mseg(&vm, 1, vm_memory[1], sizeof(vm_memory[1]), 
+	netvm_set_mseg(&vm, 1, vm_memory[1], sizeof(vm_memory[1]),
 		       NETVM_SEG_RD|NETVM_SEG_MO);
 	if (init_netvm_std_coproc(&vm, &vmcps) < 0)
 		errsys("Error initializing NetVM coprocessors");

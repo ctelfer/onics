@@ -163,7 +163,7 @@ int main(int argc, char *argv[])
 	do {
 		if (first_dltype != pkb_get_dltype(p))
 			err("Datalink type mismatch.  Pkt 1 type = %d "
-			    "Pkt %u type = %d", 
+			    "Pkt %u type = %d",
 			    first_dltype, pktnum, pkb_get_dltype(p));
 		if (g_dumper != NULL) {
 			pcapph.caplen = pkb_get_len(p);

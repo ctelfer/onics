@@ -64,9 +64,9 @@ int main(int argc, char *argv[])
 	EXPECT(mpdu->prid, PRID_MPLS);
 	mpls = pdu_header(mpdu, pkb->buf, struct mpls_label);
 	mpls->label = hton32(
-			(ntoh32(mpls->label) & (1 << MPLS_BOS_SHF)) | 
-			(1234 << MPLS_LABEL_SHF) | 
-			(1 << MPLS_TC_SHF) | 
+			(ntoh32(mpls->label) & (1 << MPLS_BOS_SHF)) |
+			(1234 << MPLS_LABEL_SHF) |
+			(1 << MPLS_TC_SHF) |
 			(99 << MPLS_TTL_SHF));
 	fix_all(pkb);
 

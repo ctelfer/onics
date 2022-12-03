@@ -2,8 +2,8 @@ Copyright 2009 Chris Telfer
 
 Nettools Open Source Software Project Preliminary Design
 --------------------------------------------------------
-The general idea is a set of small, primarily command-line utilities to 
-manipulate streams of packets.  One could imagine the tool suite as the 
+The general idea is a set of small, primarily command-line utilities to
+manipulate streams of packets.  One could imagine the tool suite as the
 equivalent of tools like ed, sed, awk, cat, more, etc... for packet streams
 rather than text streams.  Long term plans will probably include porting
 versions of these tools into scripting language runtimes (e.g. Ruby or Python)
@@ -24,7 +24,7 @@ Core Components
 
 Catlib
   - A C utility library that I have been working on for over 10 years now
-  - Contains lots of data structure implementations, networking wrappers, 
+  - Contains lots of data structure implementations, networking wrappers,
     pattern matching algorithms, memory management, a C standard library
     replacement, data packing/extraction, etc...
   - Used in my thesis once upon an earlier incarnation
@@ -39,9 +39,9 @@ Lemon Parser generator
   - LALR parser I believe
   - Generates reentrant parsers
   - The only piece of code external to the project I plan to include
-  - The glibc version of the standard C library _might_ be considered another, 
+  - The glibc version of the standard C library _might_ be considered another,
     but I have my own replacement for such in Catlib
- 
+
 
 Packet Buffers
   - Unit of storage for a packet both internal and external
@@ -59,34 +59,34 @@ Protocol Parser
   - Each protocol parser registers the protocols that can precede it
   - Each protocol parser has an operation for determining whether it
     indeed follows a given parent protocol (which can be itself)
-  - All packets have an outermost header parse of type PPT_NONE which 
+  - All packets have an outermost header parse of type PPT_NONE which
     gives the offset and the length of the packet within the buffer
   - Each protocol parser can instantiate a new header parse in an existing
     packet in one of three modes:
-     Fill - the header parse fills up all available space within the 
+     Fill - the header parse fills up all available space within the
             innermost header
-     Wrap - the header parse wraps as tightly as possible around the 
+     Wrap - the header parse wraps as tightly as possible around the
             outermost header
      Set - the header parse is set in place between existing header parses
- 
+
 
 Header Parse
   - Meta information about a particular protocol in a packet
   - A header parse has: header, payload and trailer sections
   - Independent of the data structures that contain the packet
   - Presently assumes a contiguous packet buffer (no scatter-gather)
-  - Contains offsets into a packet buffer for the start of packet, 
-    end of header/start of payload, end of payload/start of trailer and end 
+  - Contains offsets into a packet buffer for the start of packet,
+    end of header/start of payload, end of payload/start of trailer and end
     of protocol.
   - All header parses are nested without overlap within the payloads of other
     header parses.
   - As stated above, the outermost header parse is of PPT_NONE and gives the
     offset of the beginning of the packet in its buffer and the endpoint of
     said packet.
-  - Protocol specific operations include: 
+  - Protocol specific operations include:
     + Update (header parse information) -- Called presumably because the
       packet data has been changed.
-    + Get field -- Gets sub fields within a protocol (e.g. IP options, 
+    + Get field -- Gets sub fields within a protocol (e.g. IP options,
       TCP options)  Returns the field offset and length.
     + Fix length -- fix any length fields in the packet based on adjustments
       to header parse offsets
@@ -95,13 +95,13 @@ Header Parse
     + Free -- free the parse and all associated metadata
   - There are calls to insert and cut space within a set of header parses
     while adjusting all appropriate header parse offsets in the process
-  - There are also calls to move the various header parse offsets while 
+  - There are also calls to move the various header parse offsets while
     correctly checking that inner offsets can't move outside outer offsets
 
 Initial protocol parser list:
   NONE, ARP, IP, Ethernet II, TCP, UDP, ICMP, IPv6, ICMPv6
 Planned some other time:
-  ESP, AH, IPComp, GRE, DCCP, RTP, SCTP, Ethernet SNAP, 802.3 Ethernet, 
+  ESP, AH, IPComp, GRE, DCCP, RTP, SCTP, Ethernet SNAP, 802.3 Ethernet,
   LLC Ethernet, STP, MPLS, etc...
 Extensible framework: easy to add new protocols to the mix as we go along.
 I anticipate this to be a major area for community assistance.
@@ -112,7 +112,7 @@ Metapacket
   - A packet buffer plus header parse
   - Also has pointers to the link layer header, network header, transport
     header for fast access
-  - Includes constructors and destructors based on read packet buffers or 
+  - Includes constructors and destructors based on read packet buffers or
     freshly created packets
   - Basically a wrapper data type to tie packet buffers to header parses
 
@@ -131,7 +131,7 @@ NetVM
   - Simple stack machine
   - Typical mathematical operations, branch instructions, etc
   - Bulk data movement into and out of packets
-  - Can access and manipulate header parse and metapacket information and 
+  - Can access and manipulate header parse and metapacket information and
     operations
   - Bulk data comparisons and masked comparisons
   - Can have up to a 16-packet working set
@@ -140,7 +140,7 @@ NetVM
     * regex matching
     * formatted output
     * read-only segment of memory
-    * DNS resolver 
+    * DNS resolver
     * packet "backing store"
   - Call / Return operations for passing multiple arguments and getting
     multiple return values from functions.
@@ -148,7 +148,7 @@ NetVM
 
 NetVM Match/Action Runtime
   - A runtime for processing a stream of packets according to the following
-    paradigm:  
+    paradigm:
     * For each packet
       * For each match/action program
         * Run the match program in matchonly mode
@@ -161,8 +161,8 @@ NetVM Match/Action Runtime
 Namespace
   - A framework for a hierarchy of names, protocol fields and values
   - A field is a fixed-width/fixed-offset block of data
-  - A value can be a scalar value, list of ranges of scalar values, 
-    an exact octet string, a masked octet string or a list of ranges of 
+  - A value can be a scalar value, list of ranges of scalar values,
+    an exact octet string, a masked octet string or a list of ranges of
     octet strings
   - Namespaces can be globally or locally known and registered
   - This will be used to make the parsing language extensible with new protocols
@@ -181,7 +181,7 @@ NCL - Nettool Classificaiton Language
 
 
 Flow Event Monitor
-  - A simple abstraction to representing the set of flow events (create, 
+  - A simple abstraction to representing the set of flow events (create,
     destroy, handshake, data)
   - Stateful inspection of packets according to protocol
   - Will probably follow the PPT_ model for registering and deregistering
@@ -223,7 +223,7 @@ pml -- Packet Manipulation Language
   - BEGIN and END actions
   - Will have full flow control constructs as well
   - Maybe associative arrays
-  - Pattern matching syntax will initially be NCL but ... 
+  - Pattern matching syntax will initially be NCL but ...
   - Add different pattern languages down the road (tcmpdump, cisco ACLs, etc..)
   - Will have variables and subroutines, etc...
 
@@ -241,7 +241,7 @@ pktmux/pktdemux
 
 
 pktrel
-  - Will read in a packet stream an send the packets out spaced according to 
+  - Will read in a packet stream an send the packets out spaced according to
     deltas in the timestamps between packets
   - Useful for replaying a stream with the correct inter-packet time deltas
 
@@ -254,20 +254,20 @@ pktdiff
   - meta-information in the packet (timestamp, classificaiton tag, etc..) might
     be used to help synchronize stream position informaiton
   - really really useful for testing, but very hard to do right: may require
-    some research into edit-distance when there are different "levels" of 
+    some research into edit-distance when there are different "levels" of
     editing
 
 
 newdata
   - Create a new empty packet with just payload data
-  - idea is that when passing to pmangle, one can build headers on top 
+  - idea is that when passing to pmangle, one can build headers on top
     to create a full packet
   - used to generate individual packets on the fly or from a script
 
 
 tcpstream
   - Generate a stream of tcp packets from a set of data
-  - takes endpoint paramters (addr, port, etc...) 
+  - takes endpoint paramters (addr, port, etc...)
   - Might take traffic parameters such as loss and rexmit
 
 
@@ -306,7 +306,7 @@ Roadmap ideas:
 netvmas/netvmld - NetVM Assembler / NetVM Linker
   - Planned, but not yet designed
   - Will probably leverage the aforementioned loader and linker
-  - May also include external data format for netvm programs 
+  - May also include external data format for netvm programs
     (not currently designed) and match/action programs.
 
 
@@ -316,15 +316,15 @@ NetVM Kernel Retarget
   - Would include runtime
   - Would probably add additional program verification steps
   - Idea is to create a way to push pml programs into the kernel
-    packet streams 
+    packet streams
   - Could alternately be used for more flexible system to route packets to the
     host or some such
 
 
 Kernel Filter Stages
   - The idea would be to create a packet pipelining system within kernel space
-  - would need pml plus pktmux/pktdemux 
-  - would need to add conversion from Packet Buffer to raw device packet 
+  - would need pml plus pktmux/pktdemux
+  - would need to add conversion from Packet Buffer to raw device packet
     and back  (equivalent of pcapin/pcapout for skbuffs or mbufs)
   - goal would be to allow flexible processing/diversion in kernel space
   - might create mechanism to reroute flows through user-space as well using
@@ -333,14 +333,14 @@ Kernel Filter Stages
 
 Scripting Language (Ruby and/or Python) bindings
   - Provide access to metapackets within some HLL
-  - Might provide access to NetVM as well, but probably only useful for 
+  - Might provide access to NetVM as well, but probably only useful for
     matchonly mode, and even then, this is questionable in its usefulness
   - Might provide access to the Flow Event Monitor API
 
 
 
 ----------------
-Possible tools I won't consider without explicit authorization becuase they 
+Possible tools I won't consider without explicit authorization becuase they
 are _way_too_close_ to the work I do at Netronome now:
 ----------------
 

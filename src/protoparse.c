@@ -43,7 +43,7 @@ static struct pdu *none_parse(struct pdu *reg, byte_t *buf, ulong off,
 static int none_getspec(struct pdu *pdu, int enclose, struct pduspec *ps);
 static int none_add(struct pdu *reg, byte_t *buf, struct pduspec *ps,
 		    int enclose);
-				
+
 static struct proto_parser_ops none_proto_parser_ops = {
 	none_parse,
 	nxtcld_fail,
@@ -408,7 +408,7 @@ static struct pdu *default_copy(struct pdu *opdu)
 	ps.plen = pdu_plen(opdu);
 	ps.tlen = pdu_tlen(opdu);
 	return new_pdu(&ps, opdu->ops);
-			
+
 }
 
 

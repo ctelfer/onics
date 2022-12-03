@@ -57,8 +57,8 @@ struct ns_elem {
 };
 
 
-typedef int (*ns_format_f)(struct ns_elem *, byte_t *pkt, struct pdu *, 
-		           char *s, size_t ssize, const char *pfx); 
+typedef int (*ns_format_f)(struct ns_elem *, byte_t *pkt, struct pdu *,
+		           char *s, size_t ssize, const char *pfx);
 
 struct ns_namespace {
 	ushort			type;
@@ -205,7 +205,7 @@ struct ns_bytestr {
 };
 
 #define NS_BYTESTR_I_LEN(name, par, prid, arr, len)			\
-	{ NST_BYTESTR, 0, (par), (name), (prid), { (len), (arr) } } 
+	{ NST_BYTESTR, 0, (par), (name), (prid), { (len), (arr) } }
 #define NS_BYTESTR_I(name, par, prid, arr)				\
 	NS_BYTESTR_I_LEN(name, par, prid, arr, array_length(arr))
 #define NS_ASCIISTR_I(name, par, prid, str)				\
@@ -291,7 +291,7 @@ int ns_fmt_etha(struct ns_elem *elem, byte_t *pkt, struct pdu *pdu, char *s,
 
 /*
  * Given an element, protocol parse, packet body and possibly a prefix,
- * generate a string representation of the field. 
+ * generate a string representation of the field.
  */
 int ns_tostr(struct ns_elem *elem, byte_t *pkt, struct pdu *pdu,
 	     char *s, size_t ssize, const char *pfx);

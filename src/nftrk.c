@@ -133,7 +133,7 @@ void usage(const char *estr)
 	if (estr != NULL)
 		fprintf(stderr, "Error -- %s\n", estr);
 	optparse_print(&g_oparser, ubuf, sizeof(ubuf));
-	fprintf(stderr, "usage: %s [options] [INFILE [OUTFILE]]\n%s", 
+	fprintf(stderr, "usage: %s [options] [INFILE [OUTFILE]]\n%s",
 		g_oparser.argv[0], ubuf);
 	exit(1);
 }
@@ -221,7 +221,7 @@ void reverse_key(struct flow_key *rkey, struct flow_key *key)
 }
 
 
-void build_key_tcp(struct pktbuf *pkb, struct pdu *tcppdu, 
+void build_key_tcp(struct pktbuf *pkb, struct pdu *tcppdu,
 		   struct flow_key *key)
 {
 	struct tcph *tcp = pdu_header(tcppdu, pkb->buf, struct tcph);
@@ -230,7 +230,7 @@ void build_key_tcp(struct pktbuf *pkb, struct pdu *tcppdu,
 }
 
 
-void build_key_udp(struct pktbuf *pkb, struct pdu *udppdu, 
+void build_key_udp(struct pktbuf *pkb, struct pdu *udppdu,
 		   struct flow_key *key)
 {
 	struct udph *udp = pdu_header(udppdu, pkb->buf, struct udph);
@@ -269,12 +269,12 @@ void build_key_ipv4(struct pktbuf *pkb, struct pdu *ippdu, struct flow_key *key)
 		} else if (ICMPT_IS_QUERY(icmp->type)) {
 			key->sport = key->dport = ntoh16(icmp->u.echo.id);
 		}
-	} 
+	}
 }
 
 
 
-void build_key_ipv6(struct pktbuf *pkb, struct pdu *ip6pdu, 
+void build_key_ipv6(struct pktbuf *pkb, struct pdu *ip6pdu,
 		    struct flow_key *key)
 {
 	struct ipv6h *ip6;
@@ -307,7 +307,7 @@ void build_key_ipv6(struct pktbuf *pkb, struct pdu *ip6pdu,
 			i6echo = (struct icmp6_echo *)icmp6;
 			key->sport = key->dport = ntoh16(i6echo->id);
 		}
-	} 
+	}
 }
 
 
@@ -317,8 +317,8 @@ void build_key_arp(struct pktbuf *pkb, struct pdu *arppdu, struct flow_key *key)
 	struct eth_arph *earp;
 
 	arp = pdu_header(arppdu, pkb->buf, struct arph);
-	if ((ntoh16(arp->hwfmt) != ARPT_ETHERNET) || 
-	    (ntoh16(arp->prfmt) != ETHTYPE_IP) || 
+	if ((ntoh16(arp->hwfmt) != ARPT_ETHERNET) ||
+	    (ntoh16(arp->prfmt) != ETHTYPE_IP) ||
 	    (arp->hwlen != 6) || (arp->prlen != 4)) {
 		build_key_eth(pkb, pdu_prev(arppdu), key);
 		return;
@@ -429,16 +429,16 @@ void gen_flow_event(struct flow *f, int evtype)
 
 	flow_key_to_str(&f->key, keystr, sizeof(keystr));
 	if (evtype == FEVT_START) {
-		snprintf(tstr, sizeof(tstr), "Start=%.3lf", 
+		snprintf(tstr, sizeof(tstr), "Start=%.3lf",
 			 dbtime(f->start));
 	} else if (evtype == FEVT_UPDATE) {
 		dur = tm_sub(tm_uget(), f->start);
-		snprintf(tstr, sizeof(tstr), "Start=%.3lf,Dur=%.3lf", 
+		snprintf(tstr, sizeof(tstr), "Start=%.3lf,Dur=%.3lf",
 			 dbtime(f->start), tm_2dbl(dur));
 	} else if (evtype == FEVT_END) {
 		dur = tm_sub(f->end, f->start);
-		snprintf(tstr, sizeof(tstr), 
-			 "Start=%.3lf,End=%.3lf,Dur=%.3lf", 
+		snprintf(tstr, sizeof(tstr),
+			 "Start=%.3lf,End=%.3lf,Dur=%.3lf",
 			 dbtime(f->start), dbtime(f->end), tm_2dbl(dur));
 	}
 
@@ -446,12 +446,12 @@ void gen_flow_event(struct flow *f, int evtype)
 		if (f->issrv)
 			return;
 		pf = f->pair;
-		fprintf(evtfile, "|FLOW %s|%s|%s|C2S:%lu,%lu|S2C:%lu,%lu|\n", 
-			fevt_strs[evtype], keystr, tstr, 
+		fprintf(evtfile, "|FLOW %s|%s|%s|C2S:%lu,%lu|S2C:%lu,%lu|\n",
+			fevt_strs[evtype], keystr, tstr,
 			f->npkts, f->nbytes, pf->npkts, pf->nbytes);
 	} else {
-		fprintf(evtfile, "|FLOW %s|%s|%s|SENT:%lu,%lu|\n", 
-			fevt_strs[evtype], keystr, tstr, 
+		fprintf(evtfile, "|FLOW %s|%s|%s|SENT:%lu,%lu|\n",
+			fevt_strs[evtype], keystr, tstr,
 			f->npkts, f->nbytes);
 	}
 }
@@ -612,16 +612,16 @@ static void live_timeouts(fd_set *rset, int maxfd, cat_time_t *ntick,
 	if (rv < 0)
 		errsys("select(): ");
 
-	for (now = tm_uget(); tm_cmp(*ntick, now) <= 0; 
+	for (now = tm_uget(); tm_cmp(*ntick, now) <= 0;
 	     *ntick = tm_add(*ntick, tm_interval))
 		dispatch_time_events(ft, tm_interval);
 }
 
 
-static void offline_timeouts(struct pktbuf *pkb, cat_time_t *ntick, 
+static void offline_timeouts(struct pktbuf *pkb, cat_time_t *ntick,
 			     struct flowtab *ft)
 {
-	struct xpkt_tag_ts *xts = 
+	struct xpkt_tag_ts *xts =
 		(struct xpkt_tag_ts *)pkb_find_tag(pkb, XPKT_TAG_TIMESTAMP, 0);
 	cat_time_t tm_ts;
 	cat_time_t delta;
